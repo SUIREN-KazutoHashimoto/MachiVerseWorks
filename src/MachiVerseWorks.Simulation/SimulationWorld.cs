@@ -38,11 +38,6 @@ public sealed class SimulationWorld
         return _agents.Add(position, velocity, _spatialIndex);
     }
 
-    public AgentId[] CreateAgents(int count, WorldRect spawnArea)
-    {
-        return CreateAgents(count, spawnArea.ToVolume());
-    }
-
     public AgentId[] CreateAgents(int count, WorldVolume spawnVolume)
     {
         if (count < 0)
@@ -81,11 +76,6 @@ public sealed class SimulationWorld
     public bool TryGetAgentSnapshot(AgentId id, out AgentSnapshot snapshot)
     {
         return _agents.TryGetSnapshot(id, Time.TickCount, out snapshot);
-    }
-
-    public AgentSnapshot[] CreateSnapshot(WorldRect area)
-    {
-        return _agents.CreateSnapshot(area, _spatialIndex, Time.TickCount);
     }
 
     public AgentSnapshot[] CreateSnapshot(WorldVolume volume)
@@ -204,7 +194,7 @@ public sealed class SimulationWorld
         return new WorldVector(
             _random.NextDouble(-1d, 1d),
             _random.NextDouble(-1d, 1d),
-            0d);
+            _random.NextDouble(-1d, 1d));
     }
 
     private static long CalculateExpectedElapsedTicks(ulong tickCount, TimeSpan tickDuration)

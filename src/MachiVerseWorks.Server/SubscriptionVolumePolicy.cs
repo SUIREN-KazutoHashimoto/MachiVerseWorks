@@ -2,32 +2,16 @@ using MachiVerseWorks.Simulation;
 
 namespace MachiVerseWorks.Server;
 
-internal static class SubscriptionAreaPolicy
+internal static class SubscriptionVolumePolicy
 {
-    public const string OutsideSpatialGridDetailCode = "subscriptionAreaOutOfRange";
-    public const string TooManyCellsDetailCode = "subscriptionAreaTooLarge";
+    public const string OutsideSpatialGridDetailCode = "subscriptionVolumeOutOfRange";
+    public const string TooManyCellsDetailCode = "subscriptionVolumeTooLarge";
 
-    public static bool TryValidate(
-        WorldRect area,
-        double cellSize,
-        int maximumCellCount,
-        out string? detailCode)
-    {
-        return TryValidate(area.ToVolume(), cellSize, maximumCellCount, out detailCode);
-    }
-
-    public static bool TryValidate(
-        WorldVolume volume,
-        double cellSize,
-        int maximumCellCount,
-        out string? detailCode)
+    public static bool TryValidate(WorldVolume volume, double cellSize, int maximumCellCount, out string? detailCode)
     {
         if (maximumCellCount <= 0)
         {
-            throw new ArgumentOutOfRangeException(
-                nameof(maximumCellCount),
-                maximumCellCount,
-                "Maximum subscription cell count must be greater than zero.");
+            throw new ArgumentOutOfRangeException(nameof(maximumCellCount), maximumCellCount, "Maximum subscription cell count must be greater than zero.");
         }
 
         SpatialCell minCell;
@@ -46,17 +30,14 @@ internal static class SubscriptionAreaPolicy
         var widthInCells = (long)maxCell.X - minCell.X + 1L;
         var depthInCells = (long)maxCell.Y - minCell.Y + 1L;
         var heightInCells = (long)maxCell.Z - minCell.Z + 1L;
-        if (widthInCells > maximumCellCount ||
-            depthInCells > maximumCellCount ||
-            heightInCells > maximumCellCount)
+        if (widthInCells > maximumCellCount || depthInCells > maximumCellCount || heightInCells > maximumCellCount)
         {
             detailCode = TooManyCellsDetailCode;
             return false;
         }
 
         var horizontalCellCount = widthInCells * depthInCells;
-        if (horizontalCellCount > maximumCellCount ||
-            heightInCells > maximumCellCount / horizontalCellCount)
+        if (horizontalCellCount > maximumCellCount || heightInCells > maximumCellCount / horizontalCellCount)
         {
             detailCode = TooManyCellsDetailCode;
             return false;

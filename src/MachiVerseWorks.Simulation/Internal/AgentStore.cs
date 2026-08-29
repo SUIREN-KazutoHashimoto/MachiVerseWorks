@@ -100,11 +100,6 @@ internal sealed class AgentStore
         return true;
     }
 
-    public AgentSnapshot[] CreateSnapshot(WorldRect area, SpatialIndex spatialIndex, ulong tickCount)
-    {
-        return CreateSnapshot(area.ToVolume(), spatialIndex, tickCount);
-    }
-
     public AgentSnapshot[] CreateSnapshot(WorldVolume volume, SpatialIndex spatialIndex, ulong tickCount)
     {
         var candidates = spatialIndex.Query(volume);

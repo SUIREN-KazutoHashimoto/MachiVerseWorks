@@ -17,7 +17,7 @@ public sealed record HelloAckMessage(
     public MessageType Type => MessageType.HelloAck;
 }
 
-public sealed record SubscribeAreaMessage(
+public sealed record SubscribeVolumeMessage(
     double MinX,
     double MinY,
     double MinZ,
@@ -25,12 +25,7 @@ public sealed record SubscribeAreaMessage(
     double MaxY,
     double MaxZ) : IProtocolMessage
 {
-    public SubscribeAreaMessage(double minX, double minY, double maxX, double maxY)
-        : this(minX, minY, 0d, maxX, maxY, 0d)
-    {
-    }
-
-    public MessageType Type => MessageType.SubscribeArea;
+    public MessageType Type => MessageType.SubscribeVolume;
 }
 
 public sealed record AgentSpawnMessage(
@@ -43,17 +38,6 @@ public sealed record AgentSpawnMessage(
     double VelocityZ,
     ulong TickCount) : IProtocolMessage
 {
-    public AgentSpawnMessage(
-        ulong agentId,
-        double x,
-        double y,
-        double velocityX,
-        double velocityY,
-        ulong tickCount)
-        : this(agentId, x, y, 0d, velocityX, velocityY, 0d, tickCount)
-    {
-    }
-
     public MessageType Type => MessageType.AgentSpawn;
 }
 
@@ -67,17 +51,6 @@ public sealed record AgentUpdateMessage(
     double VelocityZ,
     ulong TickCount) : IProtocolMessage
 {
-    public AgentUpdateMessage(
-        ulong agentId,
-        double x,
-        double y,
-        double velocityX,
-        double velocityY,
-        ulong tickCount)
-        : this(agentId, x, y, 0d, velocityX, velocityY, 0d, tickCount)
-    {
-    }
-
     public MessageType Type => MessageType.AgentUpdate;
 }
 

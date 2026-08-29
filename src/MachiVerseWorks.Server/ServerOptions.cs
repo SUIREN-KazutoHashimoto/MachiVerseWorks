@@ -7,25 +7,9 @@ namespace MachiVerseWorks.Server;
 internal sealed class ServerOptions
 {
     private const int DefaultMaximumSubscriptionCellCount = 32768;
-    private const string DefaultAllowedWebSocketOrigins =
-        "http://127.0.0.1:5173;http://localhost:5173";
+    private const string DefaultAllowedWebSocketOrigins = "http://127.0.0.1:5173;http://localhost:5173";
 
-    private ServerOptions(
-        IPAddress listenAddress,
-        int port,
-        int snapshotRate,
-        int maximumSubscriptionCellCount,
-        IReadOnlyList<string> allowedWebSocketOrigins,
-        int tickRate,
-        ulong seed,
-        double spatialCellSize,
-        int initialAgentCount,
-        double spawnMinX,
-        double spawnMinY,
-        double spawnMinZ,
-        double spawnMaxX,
-        double spawnMaxY,
-        double spawnMaxZ)
+    private ServerOptions(IPAddress listenAddress, int port, int snapshotRate, int maximumSubscriptionCellCount, IReadOnlyList<string> allowedWebSocketOrigins, int tickRate, ulong seed, double spatialCellSize, int initialAgentCount, double spawnMinX, double spawnMinY, double spawnMinZ, double spawnMaxX, double spawnMaxY, double spawnMaxZ)
     {
         ListenAddress = listenAddress;
         Port = port;
@@ -66,10 +50,7 @@ internal sealed class ServerOptions
     {
         ArgumentNullException.ThrowIfNull(configuration);
         var listenAddressText = configuration["Server:ListenAddress"] ?? "127.0.0.1";
-        if (!IPAddress.TryParse(listenAddressText, out var listenAddress))
-        {
-            throw new InvalidOperationException($"Server:ListenAddress must be an IP address, but was '{listenAddressText}'.");
-        }
+        if (!IPAddress.TryParse(listenAddressText, out var listenAddress)) throw new InvalidOperationException($"Server:ListenAddress must be an IP address, but was '{listenAddressText}'.");
         var port = ReadInt32(configuration, "Server:Port", 5080);
         if (port is < 0 or > 65535) throw new InvalidOperationException("Server:Port must be between 0 and 65535.");
         var snapshotRate = ReadInt32(configuration, "Server:SnapshotRate", 10);
@@ -84,29 +65,24 @@ internal sealed class ServerOptions
         if (!double.IsFinite(spatialCellSize) || spatialCellSize <= 0d) throw new InvalidOperationException("Simulation:SpatialCellSize must be finite and greater than zero.");
         var initialAgentCount = ReadInt32(configuration, "Simulation:InitialAgentCount", 1000);
         if (initialAgentCount < 0) throw new InvalidOperationException("Simulation:InitialAgentCount cannot be negative.");
-        var spawnMinX = ReadDouble(configuration, "Simulation:SpawnArea:MinX", -500d);
-        var spawnMinY = ReadDouble(configuration, "Simulation:SpawnArea:MinY", -500d);
-        var spawnMinZ = ReadDouble(configuration, "Simulation:SpawnArea:MinZ", 0d);
-        var spawnMaxX = ReadDouble(configuration, "Simulation:SpawnArea:MaxX", 500d);
-        var spawnMaxY = ReadDouble(configuration, "Simulation:SpawnArea:MaxY", 500d);
-        var spawnMaxZ = ReadDouble(configuration, "Simulation:SpawnArea:MaxZ", 0d);
-        if (!double.IsFinite(spawnMinX) || !double.IsFinite(spawnMinY) || !double.IsFinite(spawnMinZ) ||
-            !double.IsFinite(spawnMaxX) || !double.IsFinite(spawnMaxY) || !double.IsFinite(spawnMaxZ) ||
-            spawnMaxX < spawnMinX || spawnMaxY < spawnMinY || spawnMaxZ < spawnMinZ)
+        var spawnMinX = ReadDouble(configuration, "Simulation:SpawnVolume:MinX", -500d);
+        var spawnMinY = ReadDouble(configuration, "Simulation:SpawnVolume:MinY", -500d);
+        var spawnMinZ = ReadDouble(configuration, "Simulation:SpawnVolume:MinZ", -64d);
+        var spawnMaxX = ReadDouble(configuration, "Simulation:SpawnVolume:MaxX", 500d);
+        var spawnMaxY = ReadDouble(configuration, "Simulation:SpawnVolume:MaxY", 500d);
+        var spawnMaxZ = ReadDouble(configuration, "Simulation:SpawnVolume:MaxZ", 64d);
+        if (!double.IsFinite(spawnMinX) || !double.IsFinite(spawnMinY) || !double.IsFinite(spawnMinZ) || !double.IsFinite(spawnMaxX) || !double.IsFinite(spawnMaxY) || !double.IsFinite(spawnMaxZ) || spawnMaxX < spawnMinX || spawnMaxY < spawnMinY || spawnMaxZ < spawnMinZ)
         {
-            throw new InvalidOperationException("Simulation:SpawnArea must contain finite 3D coordinates with max >= min.");
+            throw new InvalidOperationException("Simulation:SpawnVolume must contain finite 3D coordinates with max >= min.");
         }
-        return new ServerOptions(listenAddress, port, snapshotRate, maximumSubscriptionCellCount, allowedWebSocketOrigins,
-            tickRate, seed, spatialCellSize, initialAgentCount, spawnMinX, spawnMinY, spawnMinZ, spawnMaxX, spawnMaxY, spawnMaxZ);
+        return new ServerOptions(listenAddress, port, snapshotRate, maximumSubscriptionCellCount, allowedWebSocketOrigins, tickRate, seed, spatialCellSize, initialAgentCount, spawnMinX, spawnMinY, spawnMinZ, spawnMaxX, spawnMaxY, spawnMaxZ);
     }
 
     private static string[] ReadAllowedWebSocketOrigins(IConfiguration configuration)
     {
-        var configuredValue = configuration["Server:AllowedWebSocketOrigins"];
-        var value = configuredValue ?? DefaultAllowedWebSocketOrigins;
+        var value = configuration["Server:AllowedWebSocketOrigins"] ?? DefaultAllowedWebSocketOrigins;
         if (string.IsNullOrWhiteSpace(value)) return [];
-        return value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(WebSocketOriginPolicy.NormalizeOrigin).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        return value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(WebSocketOriginPolicy.NormalizeOrigin).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
     private static int ReadInt32(IConfiguration configuration, string key, int defaultValue)

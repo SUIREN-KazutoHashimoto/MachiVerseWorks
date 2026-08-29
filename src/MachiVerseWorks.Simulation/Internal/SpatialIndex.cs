@@ -52,11 +52,6 @@ internal sealed class SpatialIndex
         _cellByAgent[id] = nextCell;
     }
 
-    public List<AgentId> Query(WorldRect area)
-    {
-        return Query(area.ToVolume());
-    }
-
     public List<AgentId> Query(WorldVolume volume)
     {
         var minCell = SpatialGrid.ToCell(new WorldPoint(volume.MinX, volume.MinY, volume.MinZ), _cellSize);

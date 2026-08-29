@@ -2,11 +2,6 @@ namespace MachiVerseWorks.Simulation;
 
 public readonly record struct WorldPoint
 {
-    public WorldPoint(double x, double y)
-        : this(x, y, 0d)
-    {
-    }
-
     public WorldPoint(double x, double y, double z)
     {
         ValidateFinite(x, nameof(x));
@@ -34,11 +29,6 @@ public readonly record struct WorldPoint
 
 public readonly record struct WorldVector
 {
-    public WorldVector(double x, double y)
-        : this(x, y, 0d)
-    {
-    }
-
     public WorldVector(double x, double y, double z)
     {
         ValidateFinite(x, nameof(x));
@@ -64,72 +54,7 @@ public readonly record struct WorldVector
     }
 }
 
-public readonly record struct SpatialCell(int X, int Y, int Z)
-{
-    public SpatialCell(int x, int y)
-        : this(x, y, 0)
-    {
-    }
-}
-
-public readonly record struct WorldRect
-{
-    public WorldRect(double minX, double minY, double maxX, double maxY)
-    {
-        ValidateFinite(minX, nameof(minX));
-        ValidateFinite(minY, nameof(minY));
-        ValidateFinite(maxX, nameof(maxX));
-        ValidateFinite(maxY, nameof(maxY));
-
-        if (maxX < minX)
-        {
-            throw new ArgumentOutOfRangeException(nameof(maxX), maxX, "maxX must be greater than or equal to minX.");
-        }
-
-        if (maxY < minY)
-        {
-            throw new ArgumentOutOfRangeException(nameof(maxY), maxY, "maxY must be greater than or equal to minY.");
-        }
-
-        MinX = minX;
-        MinY = minY;
-        MaxX = maxX;
-        MaxY = maxY;
-    }
-
-    public double MinX { get; }
-
-    public double MinY { get; }
-
-    public double MaxX { get; }
-
-    public double MaxY { get; }
-
-    public double Width => MaxX - MinX;
-
-    public double Height => MaxY - MinY;
-
-    public bool Contains(WorldPoint point)
-    {
-        return point.X >= MinX &&
-            point.X <= MaxX &&
-            point.Y >= MinY &&
-            point.Y <= MaxY;
-    }
-
-    public WorldVolume ToVolume(double minZ = 0d, double maxZ = 0d)
-    {
-        return new WorldVolume(MinX, MinY, minZ, MaxX, MaxY, maxZ);
-    }
-
-    private static void ValidateFinite(double value, string parameterName)
-    {
-        if (!double.IsFinite(value))
-        {
-            throw new ArgumentOutOfRangeException(parameterName, value, "World rectangle coordinates must be finite.");
-        }
-    }
-}
+public readonly record struct SpatialCell(int X, int Y, int Z);
 
 public readonly record struct WorldVolume
 {
