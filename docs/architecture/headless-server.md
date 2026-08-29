@@ -88,6 +88,14 @@ subscription を変更しても known Agent ID set は次の publish まで保�
 
 subscription revision を使い、publish 中に Client が別範囲へ subscription を変更した場合、古い publish 結果で known Agent ID set を上書きしません。
 
+## Snapshot delivery isolation
+
+snapshot publisherはconnectionごとに最大1件のdelivery taskだけをin-flightとして保持します。同じconnectionが配送中なら次のpublish周期はqueueせずdropします。これによりsnapshot backlogを無制限に増やさず、常に新しい周期へ追従できます。一方、異なるconnectionのdeliveryは独立taskとして進むため、slow Clientのnetwork backpressureを他Clientへ伝播させません。
+
+各deliveryではlinked `CancellationTokenSource` を1つだけ作り、各message sendの直前に5秒timeoutを再設定します。message単位でCTS/timerを生成しないため、Agent数に比例するcancellation allocationを避けます。5秒以内に1messageを送信できないconnectionはabortしてregistryから除外します。
+
+shutdown時は新しいscheduleを停止した後、既存in-flight taskを回収してからpublisherを終了します。
+
 ## Send serialization
 
 同一 WebSocket へ handshake/error response と snapshot publisher が同時 send しないよう、connection 単位で send を直列化します。Protocol serialization は send lock の前に行い、WebSocket I/O の ownership だけを排他します。
