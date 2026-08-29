@@ -11,7 +11,7 @@
 ```text
 develop latest
   ↓
-feat / fix / perf / refactor / docs / experiment branch
+feature / fix / perf / refactor / docs / experiment branch
   ↓
 implementation + validation
   ↓
@@ -19,12 +19,35 @@ PR → develop
   ↓
 required checks
   ↓
-merge
+merge commit
 ```
 
 リリース時は `develop` から `main` へ PR を作成します。
 
 リポジトリ初期セットアップ期間は例外として、明示された基盤整備を `main` に直接反映する場合があります。通常開発開始後はこの例外を使用しません。
+
+### ブランチ名
+
+- `feature/<topic>`: 新機能
+- `fix/<topic>`: 不具合修正
+- `perf/<topic>`: 性能改善
+- `refactor/<topic>`: 振る舞いを変えない構造改善
+- `docs/<topic>`: 文書・公開設定
+- `experiment/<topic>`: 採用未確定の実験
+
+新機能ブランチは `feature/*` を正規名とし、`feat/*` は使用しません。
+
+### マージ方式
+
+PR の標準マージ方式は **merge commit** とします。
+
+- 個々の開発コミットと version 推移を残すため、通常は squash merge を使用しない。
+- commit SHA を書き換えないため、通常は rebase merge を使用しない。
+- GitHub が PR マージ時に生成する merge commit は管理上のコミットとして扱い、version `C` を別途加算しない。
+- マージ済みの `feature/*` / `fix/*` / `perf/*` / `refactor/*` / `docs/*` / `experiment/*` は原則削除する。
+- `main` と `develop` は長期ブランチとして削除しない。
+
+GitHub Repository 側で設定する値は [`repository-settings.md`](repository-settings.md) を参照してください。
 
 ## 2. 作業開始前
 
@@ -36,6 +59,7 @@ merge
 4. 関連する仕様 (`docs/specifications/`)
 5. 関連する設計 (`docs/architecture/`)
 6. 重要な採用理由がある場合は ADR (`docs/decisions/`)
+7. 対応する `ROADMAP.md` の Task ID
 
 ファイル名や古い資料だけで現在の挙動を決めつけず、実効コードと test を確認します。
 
@@ -159,6 +183,7 @@ PR本文には最低限、可能な範囲で次を含めます。
 
 - 実装と文書が同じ意味を説明している
 - 必要な test / build / benchmark が成功している
-- runtime 確認が必要な項目は確認済み、または未確認と明示している
+- runtime 確認が必要な項目は確認済み、または未確認と明記している
 - 不要な debug code / experiment flag が残っていない
-- 通常開発期間では `AGENTS.md` の version 規則へ従っている
+- `ROADMAP.md` の Task 状態が同期されている
+- 通常開発期間では `AGENTS.md` と `versioning.md` の version 規則へ従っている

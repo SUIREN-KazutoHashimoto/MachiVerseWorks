@@ -79,14 +79,28 @@
 ```text
 main
   └─ develop
-       └─ feature/* / fix/* / docs/* / refactor/* / experiment/*
+       └─ feature/* / fix/* / perf/* / docs/* / refactor/* / experiment/*
 ```
+
+標準の短命ブランチ名は次の通りとする。
+
+- `feature/*`: 新機能
+- `fix/*`: 不具合修正
+- `perf/*`: 性能改善
+- `refactor/*`: 振る舞いを変えない構造改善
+- `docs/*`: 文書・公開設定
+- `experiment/*`: 採用未確定の実験
 
 - 通常の実装は短命な作業ブランチで行う。
 - `develop` への統合は PR を使用する。
 - リリースは `develop` から `main` への PR を使用する。
+- PR の標準マージ方式は merge commit とし、通常は squash / rebase merge を使用しない。
+- GitHub が PR マージ時に生成する merge commit は管理上のコミットとして扱い、バージョン `C` を別途加算しない。
+- マージ済みの短命ブランチは原則として削除する。
 - 実験コードは実験ブランチに閉じ込め、採用しない場合は本流へ混ぜない。
 - PR をマージする前に、必要な build / test / benchmark / static analysis を確認する。
+
+詳細は `docs/development/git-workflow.md` と `docs/development/repository-settings.md` を参照する。
 
 ## 6. バージョン運用
 
@@ -105,11 +119,15 @@ develop 向け PR   -> 1.5.0
 main 向け PR      -> 2.0.0
 ```
 
-PR に伴う A / B の更新コミットは、PR 作成のためのバージョン更新として扱い、同じ操作で C を別途加算しない。
+PR に伴う A / B の更新コミットは、PR 作成のためのバージョン更新として扱い、同じ操作で C を別途加算しない。PR マージ時に GitHub が生成する merge commit も C の加算対象外とする。
+
+通常開発開始後は、ルート `VERSION` をアプリケーションバージョンの唯一の正本とする。C# Server / Web Client など各成果物は `VERSION` から値を取得し、個別に同じバージョン文字列を手管理しない。Protocol version と Save format version は互換性の意味が異なるため、アプリケーションバージョンとは独立して管理する。
+
+詳細は `docs/development/versioning.md` を参照する。
 
 ### 初期セットアップ例外
 
-リポジトリ初期セットアップ期間中は、明示的に通常開発へ移行するまでバージョンをカウントアップしない。初期セットアップのためだけにバージョンファイルを作成・更新しない。
+リポジトリ初期セットアップ期間中は、明示的に通常開発へ移行するまでバージョンをカウントアップしない。初期セットアップのためだけに `VERSION` を作成・更新しない。
 
 ## 7. 完了条件
 

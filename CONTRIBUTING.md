@@ -16,14 +16,16 @@ MachiVerseWorks への貢献に関心を持っていただきありがとうご�
 
 ## ブランチ名
 
-目安として次の形式を使用します。
+標準として次の形式を使用します。
 
-- `feat/<topic>`: 新機能
+- `feature/<topic>`: 新機能
 - `fix/<topic>`: 不具合修正
 - `perf/<topic>`: 性能改善
 - `refactor/<topic>`: 振る舞いを変えない構造改善
 - `docs/<topic>`: 文書・公開設定
 - `experiment/<topic>`: 採用未確定の実験
+
+通常の作業ブランチは `develop` から作成し、PR で `develop` へ戻します。リリースは `develop` から `main` への PR を使用します。
 
 ## アーキテクチャ境界
 
@@ -48,6 +50,8 @@ PR には可能な範囲で次を含めてください。
 
 CI 成功と、実際の Simulation / Server / Browser の動作確認は同一ではありません。必要な実機確認を行っていない場合は、その旨を明記してください。
 
+PR の標準マージ方式は **merge commit** です。version履歴と個々のコミットを保持するため、通常は squash / rebase merge を使用しません。マージ済みの短命ブランチは原則として削除します。
+
 ## Issue
 
 不具合報告では、可能な範囲で次を記載してください。
@@ -64,13 +68,15 @@ CI 成功と、実際の Simulation / Server / Browser の動作確認は同一�
 
 ## バージョン
 
-通常開発へ移行後は `AGENTS.md` の `A.B.C` ルールに従います。
+通常開発へ移行後は `AGENTS.md` と [`docs/development/versioning.md`](docs/development/versioning.md) の `A.B.C` ルールに従います。
 
 - `A`: `main` 向け PR 作成時に +1。`B` と `C` を 0 にリセット
 - `B`: `develop` 向け PR 作成時に +1。`C` を 0 にリセット
 - `C`: 通常コミット作成時に +1
 
-初期セットアップ期間は、明示的に終了するまでバージョンを更新しません。
+通常開発開始後はルート `VERSION` をアプリケーションバージョンの正本とします。Protocol version と Save format version は独立して管理します。
+
+初期セットアップ期間は、明示的に終了するまでバージョンを更新せず、`VERSION` も作成しません。
 
 ## ライセンス
 
