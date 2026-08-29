@@ -3,6 +3,31 @@ Third-Party Software Notices
 
 This file records attribution and license notices for third-party software or assets redistributed as part of MachiVerseWorks deliverables.
 
-No redistributable third-party components are listed yet because the repository is still in its initial setup phase.
+three.js
+--------
 
-When a dependency or asset is introduced, review its license before distribution and update this file when attribution, license text, or other notice obligations apply. Development-only tools that are not redistributed do not need to be listed here unless their license requires otherwise.
+MachiVerseWorks Web Client includes three.js 0.185.1.
+
+The MIT License
+
+Copyright © 2010-2026 three.js authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+Development-only dependencies are not listed here unless their license requires redistribution notices. Their exact versions remain recorded by the relevant lock or project files.

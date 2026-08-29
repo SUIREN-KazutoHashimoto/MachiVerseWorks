@@ -1,16 +1,25 @@
 # Web Client
 
-ブラウザベースの 3D クライアントを配置する予定です。
+MachiVerseWorks の表示・入力を担当する Web Client です。
 
-表示、入力、snapshot decode、interpolation を担当し、Simulation の正本は持ちません。
+## Phase 1 の技術構成
 
-## Localization
+- Node.js 24 LTS を `.node-version` で完全固定する。
+- Vite + TypeScript の vanilla 構成とし、UI framework は Phase 1 では導入しない。
+- 3D 描画の最小依存として Three.js を使用する。
+- ESLint + typescript-eslint で TypeScript を静的検査する。
+- `package.json` の直接依存は exact version とし、`package-lock.json` をコミットする。
+- 依存更新は Dependabot の npm 設定から行う。
+- アプリケーションversionは `package.json` へ重複管理せず、Vite build 時にリポジトリルート `VERSION` を読む。
 
-将来の多言語対応を見越し、ユーザー向け表示文言の localization は Web Client の責務とします。
+## コマンド
 
-- default locale: `ja-JP`
-- locale resource 入口: `src/web/locales/`
-- Server / Protocol は原則として翻訳済み UI 文言を送らない
-- 数値、日時、単位の表示は Client 側で locale-aware に format する
+```bash
+npm ci
+npm run dev
+npm run lint
+npm run typecheck
+npm run build
+```
 
-詳細は `docs/architecture/localization.md` を参照してください。
+Web Client は Simulation の正本ではありません。Server から受け取った状態の表示と、ユーザー入力の送信に責務を限定します。
