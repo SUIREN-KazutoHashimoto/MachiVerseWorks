@@ -66,7 +66,8 @@ internal sealed class AgentStore
                 _stepOriginalPositions[index] = state.Position;
                 var nextPosition = new WorldPoint(
                     state.Position.X + (state.Velocity.X * tickDurationSeconds),
-                    state.Position.Y + (state.Velocity.Y * tickDurationSeconds));
+                    state.Position.Y + (state.Velocity.Y * tickDurationSeconds),
+                    state.Position.Z + (state.Velocity.Z * tickDurationSeconds));
 
                 spatialIndex.Update(state.Id, nextPosition);
                 state.Position = nextPosition;
@@ -101,7 +102,12 @@ internal sealed class AgentStore
 
     public AgentSnapshot[] CreateSnapshot(WorldRect area, SpatialIndex spatialIndex, ulong tickCount)
     {
-        var candidates = spatialIndex.Query(area);
+        return CreateSnapshot(area.ToVolume(), spatialIndex, tickCount);
+    }
+
+    public AgentSnapshot[] CreateSnapshot(WorldVolume volume, SpatialIndex spatialIndex, ulong tickCount)
+    {
+        var candidates = spatialIndex.Query(volume);
         var snapshots = new List<AgentSnapshot>(candidates.Count);
 
         foreach (var id in candidates)
@@ -112,7 +118,7 @@ internal sealed class AgentStore
             }
 
             var state = _states[index];
-            if (state.IsActive && area.Contains(state.Position))
+            if (state.IsActive && volume.Contains(state.Position))
             {
                 snapshots.Add(new AgentSnapshot(state.Id, state.Position, state.Velocity, tickCount));
             }

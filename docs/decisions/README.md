@@ -7,6 +7,7 @@
 - [`ADR-0001-csharp-headless-simulation-server.md`](ADR-0001-csharp-headless-simulation-server.md): C# 製 Headless Simulation Server を採用する
 - [`ADR-0002-localization-boundary.md`](ADR-0002-localization-boundary.md): localization を Client 境界へ置き、Protocol / Save Data を言語非依存にする
 - [`ADR-0003-versioned-save-data-boundary.md`](ADR-0003-versioned-save-data-boundary.md): Simulation checkpoint と versioned Save Data serialization を分離する
+- [`ADR-0004-3d-world-coordinate-system.md`](ADR-0004-3d-world-coordinate-system.md): Simulation World の正本座標を3D化する
 
 命名例:
 
