@@ -2,5 +2,7 @@ namespace MachiVerseWorks.Persistence;
 
 public static class SaveFormatVersion
 {
-    public const int Current = 3;
+    public const int BuildingPoi = 3;
+    public const int RoadNetwork = 4;
+    public const int Current = RoadNetwork;
 }
