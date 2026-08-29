@@ -6,6 +6,7 @@ internal sealed class AgentStore
 {
     private readonly List<AgentState> _states = [];
     private readonly Dictionary<AgentId, int> _indexById = [];
+    private WorldPoint[] _stepOriginalPositions = [];
     private ulong _nextId = 1;
 
     public int ActiveCount { get; private set; }
@@ -16,8 +17,9 @@ internal sealed class AgentStore
 
     public AgentId Add(WorldPoint position, WorldVector velocity, SpatialIndex spatialIndex)
     {
+        spatialIndex.ValidatePosition(position);
         var id = new AgentId(_nextId);
-        _nextId = checked(_nextId + 1);
+        var nextId = checked(_nextId + 1);
 
         var state = new AgentState(id, position, velocity);
         var index = _states.Count;
@@ -25,6 +27,7 @@ internal sealed class AgentStore
         _indexById.Add(id, index);
         spatialIndex.Register(id, position);
         ActiveCount++;
+        _nextId = nextId;
 
         return id;
     }
@@ -47,21 +50,33 @@ internal sealed class AgentStore
     public void Step(double tickDurationSeconds, SpatialIndex spatialIndex)
     {
         var states = CollectionsMarshal.AsSpan(_states);
+        EnsureStepRollbackCapacity(states.Length);
+        var lastCommittedIndex = -1;
 
-        for (var index = 0; index < states.Length; index++)
+        try
         {
-            ref var state = ref states[index];
-            if (!state.IsActive)
+            for (var index = 0; index < states.Length; index++)
             {
-                continue;
+                ref var state = ref states[index];
+                if (!state.IsActive)
+                {
+                    continue;
+                }
+
+                _stepOriginalPositions[index] = state.Position;
+                var nextPosition = new WorldPoint(
+                    state.Position.X + (state.Velocity.X * tickDurationSeconds),
+                    state.Position.Y + (state.Velocity.Y * tickDurationSeconds));
+
+                spatialIndex.Update(state.Id, nextPosition);
+                state.Position = nextPosition;
+                lastCommittedIndex = index;
             }
-
-            var nextPosition = new WorldPoint(
-                state.Position.X + (state.Velocity.X * tickDurationSeconds),
-                state.Position.Y + (state.Velocity.Y * tickDurationSeconds));
-
-            state.Position = nextPosition;
-            spatialIndex.Update(state.Id, nextPosition);
+        }
+        catch
+        {
+            RollBackStep(states, lastCommittedIndex, spatialIndex);
+            throw;
         }
     }
 
@@ -155,5 +170,46 @@ internal sealed class AgentStore
         }
 
         _nextId = nextId;
+    }
+
+    private void EnsureStepRollbackCapacity(int requiredLength)
+    {
+        if (_stepOriginalPositions.Length >= requiredLength)
+        {
+            return;
+        }
+
+        var newLength = _stepOriginalPositions.Length == 0 ? 4 : _stepOriginalPositions.Length;
+        while (newLength < requiredLength)
+        {
+            if (newLength > Array.MaxLength / 2)
+            {
+                newLength = requiredLength;
+                break;
+            }
+
+            newLength *= 2;
+        }
+
+        Array.Resize(ref _stepOriginalPositions, newLength);
+    }
+
+    private void RollBackStep(
+        Span<AgentState> states,
+        int lastCommittedIndex,
+        SpatialIndex spatialIndex)
+    {
+        for (var index = lastCommittedIndex; index >= 0; index--)
+        {
+            ref var state = ref states[index];
+            if (!state.IsActive)
+            {
+                continue;
+            }
+
+            var originalPosition = _stepOriginalPositions[index];
+            spatialIndex.Update(state.Id, originalPosition);
+            state.Position = originalPosition;
+        }
     }
 }
