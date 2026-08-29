@@ -38,11 +38,20 @@ merge commitを採用する理由は、個々のコミットと `A.B.C` version�
 公開Repositoryとして、利用可能な範囲で次を有効にします。
 
 - Private vulnerability reporting
+- Dependency graph
+- Automatic dependency submission
 - Dependabot alerts
+- Dependabot malware alerts
 - Dependabot security updates
-- Secret scanning
+- Secret scanning / Secret Protection
 - Push protection for secrets
-- Code scanning（このRepositoryでは `.github/workflows/codeql.yml` のadvanced setupを使用）
+- CodeQL code scanning
+
+CodeQL は **Default setup** を正本とします。Repository内の独自Advanced setup workflowは通常使用しません。Default setupで表現できないmanual build、独自query、特殊runnerなどが必要になった場合のみ、設計を見直してAdvanced setupへ切り替えます。
+
+`Grouped security updates` はNuGet / npmなど実際の依存関係が増えた段階で必要性を再評価します。`Dependabot version updates` はRepositoryの `.github/dependabot.yml` を正本とし、package manifest追加時にNuGet / npm設定を追加します。
+
+Copilot AutofixやAI findingsなどの補助機能は任意とし、mergeの必須条件にはしません。
 
 Security機能の提供条件や名称がGitHub側で変わる場合は、その時点のUIに従って同等機能を有効にします。
 
@@ -66,3 +75,4 @@ GitHub設定を変更したら、少なくとも次を確認します。
 4. merge画面でmerge commitだけが標準方式として使用できる。
 5. merge後に短命branchが自動削除される。
 6. Securityページで有効化した機能が表示される。
+7. CodeQLがDefault setupとして有効で、code scanning結果がSecurity画面へ反映される。
