@@ -84,5 +84,5 @@ internal sealed class SavePoiData
 
     public double? Z { get; init; }
 
-    public ulong? BuildingId { get; init; }
+    public required ulong? BuildingId { get; init; }
 }
