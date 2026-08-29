@@ -193,7 +193,7 @@ export class AudioEngine {
   }
 
   public updateEntityPosition(entityId: bigint, position: Point2D): void {
-    validatePoint(position, `Entity ${entityId.toString()} position`);
+    validatePoint(position, 'Entity position');
     for (const emitter of this.emitters.values()) {
       if (emitter.entityId === entityId) {
         this.updateEmitterPosition(emitter.id, position);
