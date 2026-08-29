@@ -22,6 +22,7 @@ MachiVerseWorks の技術アーキテクチャを管理します。
 - [`headless-server.md`](headless-server.md): Headless Server の lifecycle、WebSocket、command queue、snapshot publish
 - [`web-client.md`](web-client.md): Web Clientのconnection、EntityStore、subscription、rendering
 - [`audio.md`](audio.md): AudioEngine、mixer、positional audio、Ambient Zone、voice virtualization
+- [`persistence.md`](persistence.md): Simulation checkpoint、Save Data serializer、validation、format evolution
 - [`localization.md`](localization.md): 多言語対応を見越した言語境界
 
 仕様上の振る舞いそのものは `docs/specifications/` に記述します。

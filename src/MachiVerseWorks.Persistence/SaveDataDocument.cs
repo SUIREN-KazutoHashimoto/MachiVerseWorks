@@ -23,7 +23,7 @@ internal sealed class SaveSimulationData
 
     public ulong? NextAgentId { get; init; }
 
-    public SaveAgentData[]? Agents { get; init; }
+    public SaveAgentData?[]? Agents { get; init; }
 }
 
 internal sealed class SaveAgentData

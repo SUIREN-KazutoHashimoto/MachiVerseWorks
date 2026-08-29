@@ -12,7 +12,11 @@ MachiVerseWorks.Protocol
 MachiVerseWorks.Server
         ↓
 MachiVerseWorks.Simulation
+        ↑
+MachiVerseWorks.Persistence
 ```
+
+`MachiVerseWorks.Persistence` は実行ループを所有せず、Simulation checkpointとversioned Save Dataの変換境界としてSimulationを参照します。将来のServer save/load機能は、この境界を実行ホストから呼び出します。
 
 ## Simulation Core
 
@@ -26,8 +30,23 @@ MachiVerseWorks.Simulation
 - spatial index
 - deterministic / reproducible な処理が必要な領域の管理
 - snapshot 作成に必要な読み取り境界の提供
+- save/load用checkpointの作成・復元境界
 
 Simulation Core は HTTP、WebSocket、ASP.NET Core、DOM、Three.js を知りません。
+
+## Persistence
+
+`MachiVerseWorks.Persistence` は保存形式とSimulation状態の間の境界です。
+
+責務:
+
+- Save format version
+- versioned Save Data schema
+- JSON serialization / deserialization
+- 外部Save Dataのvalidation
+- Simulation checkpointとのmapping
+
+PersistenceはSimulation内部Storeを正本として所有せず、file path、save slot、Web UIも所有しません。
 
 ## Server
 
