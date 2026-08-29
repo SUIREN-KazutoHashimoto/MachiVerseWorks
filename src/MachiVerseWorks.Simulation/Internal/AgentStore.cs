@@ -16,8 +16,9 @@ internal sealed class AgentStore
 
     public AgentId Add(WorldPoint position, WorldVector velocity, SpatialIndex spatialIndex)
     {
+        spatialIndex.ValidatePosition(position);
         var id = new AgentId(_nextId);
-        _nextId = checked(_nextId + 1);
+        var nextId = checked(_nextId + 1);
 
         var state = new AgentState(id, position, velocity);
         var index = _states.Count;
@@ -25,6 +26,7 @@ internal sealed class AgentStore
         _indexById.Add(id, index);
         spatialIndex.Register(id, position);
         ActiveCount++;
+        _nextId = nextId;
 
         return id;
     }
@@ -59,9 +61,23 @@ internal sealed class AgentStore
             var nextPosition = new WorldPoint(
                 state.Position.X + (state.Velocity.X * tickDurationSeconds),
                 state.Position.Y + (state.Velocity.Y * tickDurationSeconds));
+            spatialIndex.ValidatePosition(nextPosition);
+        }
 
-            state.Position = nextPosition;
+        for (var index = 0; index < states.Length; index++)
+        {
+            ref var state = ref states[index];
+            if (!state.IsActive)
+            {
+                continue;
+            }
+
+            var nextPosition = new WorldPoint(
+                state.Position.X + (state.Velocity.X * tickDurationSeconds),
+                state.Position.Y + (state.Velocity.Y * tickDurationSeconds));
+
             spatialIndex.Update(state.Id, nextPosition);
+            state.Position = nextPosition;
         }
     }
 

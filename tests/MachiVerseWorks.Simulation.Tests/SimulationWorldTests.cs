@@ -75,4 +75,45 @@ public sealed class SimulationWorldTests
         Assert.AreEqual(1UL, ids[0].Value);
         Assert.AreEqual(10_000UL, ids[^1].Value);
     }
+
+    [TestMethod]
+    public void InvalidSpatialCreateDoesNotMutateWorldOrRandomState()
+    {
+        var config = new SimulationConfig(seed: 1234);
+        var world = new SimulationWorld(config);
+        var before = world.CreateCheckpoint();
+        var outsideX = ((double)int.MaxValue + 1d) * config.SpatialCellSize;
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            world.CreateAgent(new WorldPoint(outsideX, 0d)));
+
+        var after = world.CreateCheckpoint();
+        Assert.AreEqual(before.TickCount, after.TickCount);
+        Assert.AreEqual(before.ElapsedTicks, after.ElapsedTicks);
+        Assert.AreEqual(before.RandomState, after.RandomState);
+        Assert.AreEqual(before.NextAgentId, after.NextAgentId);
+        Assert.AreEqual(0, world.ActiveAgentCount);
+        Assert.AreEqual(0, world.TotalCreatedAgentCount);
+    }
+
+    [TestMethod]
+    public void SpatialFailureDuringStepLeavesTimeAndAgentPositionUnchanged()
+    {
+        var config = new SimulationConfig(tickRate: 1, spatialCellSize: 64d);
+        var world = new SimulationWorld(config);
+        var insideX = ((double)int.MaxValue + 0.5d) * config.SpatialCellSize;
+        var id = world.CreateAgent(
+            new WorldPoint(insideX, 0d),
+            new WorldVector(config.SpatialCellSize, 0d));
+        Assert.IsTrue(world.TryGetAgentSnapshot(id, out var before));
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => world.Step());
+
+        Assert.AreEqual(0UL, world.Time.TickCount);
+        Assert.AreEqual(TimeSpan.Zero, world.Time.Elapsed);
+        Assert.IsTrue(world.TryGetAgentSnapshot(id, out var after));
+        Assert.AreEqual(before.Position, after.Position);
+        Assert.AreEqual(before.Velocity, after.Velocity);
+        Assert.AreEqual(before.TickCount, after.TickCount);
+    }
 }
