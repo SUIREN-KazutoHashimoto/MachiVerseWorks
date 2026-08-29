@@ -11,6 +11,7 @@
 - [`ci.md`](ci.md): GitHub Actions、CI、CodeQL、Dependency Review の運用
 - [`coding-guidelines.md`](coding-guidelines.md): C# / Simulation / Server / Protocol / Web の共通実装ルール
 - [`performance.md`](performance.md): benchmark、profiling、性能指標、最適化判断の基準
+- [`simulation-core-benchmark.md`](simulation-core-benchmark.md): Phase 2 Simulation Core 最小 PoC の初回性能 baseline
 - [`localization-guidelines.md`](localization-guidelines.md): 将来の多言語対応を壊さない実装ルール
 
 今後ここへ、必要に応じて次の文書を追加します。

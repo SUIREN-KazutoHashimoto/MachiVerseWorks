@@ -1,13 +1,6 @@
-name: Phase 2 benchmark
+name: Simulation benchmark
 
 on:
-  push:
-    branches:
-      - 'feature/phase-2-simulation-core*'
-    paths:
-      - 'src/MachiVerseWorks.Simulation/**'
-      - 'benchmarks/MachiVerseWorks.Benchmarks/**'
-      - '.github/workflows/phase2-benchmark.yml'
   workflow_dispatch:
 
 permissions:
