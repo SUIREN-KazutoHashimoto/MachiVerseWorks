@@ -67,7 +67,9 @@ Server は subscription を受理する前に、矩形が spatial grid の対応
 
 snapshot publish 周期は Simulation tick 周期から分離します。
 
-各 publish では connection の subscription 矩形だけを Simulation Core から snapshot として取得します。
+各 publish では connection の subscription 矩形だけを Simulation Core から snapshot として取得します。connectionごとに同時実行するsnapshot deliveryは1件までとし、前回deliveryがまだ完了している最中に次のpublish周期が来た場合、そのconnectionの新しい周期はqueueせずdropします。別connectionのdeliveryは独立してscheduleするため、1台のslow Clientが他Clientへの配信を停止させません。
+
+各Protocol messageのWebSocket sendには5秒のtimeoutを適用します。timeoutしたconnectionはabortしてregistryから削除します。timeout用のcancellation stateはdelivery単位で再利用し、Agent/message単位のtimer allocationは行いません。
 
 - Client がまだ知らない Agent: `AgentSpawn`
 - Client が既に知っている Agent: `AgentUpdate`
@@ -81,7 +83,7 @@ Simulation の mutable state 自体は network layer へ公開しません。
 
 Server 起動時に Simulation runtime と hosted services を開始します。Simulation tick loop は network I/O と別の hosted service で実行します。
 
-application shutdown 時は cancellation を各長寿命処理へ伝播し、tick loop / command processor / snapshot publisher / WebSocket session を終了させます。
+application shutdown 時は cancellation を各長寿命処理へ伝播し、tick loop / command processor / snapshot publisher / WebSocket session を終了させます。snapshot publisherはshutdown時に既存のin-flight delivery完了を回収します。
 
 ## Phase 4 の範囲外
 
