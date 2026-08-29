@@ -38,20 +38,9 @@ internal sealed class E2eMetrics
         double encodeTimeMs,
         double sendTimeMs)
     {
-        if (agentCount < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(agentCount));
-        }
-
-        if (messageCount < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(messageCount));
-        }
-
-        if (bytes < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(bytes));
-        }
+        ArgumentOutOfRangeException.ThrowIfNegative(agentCount);
+        ArgumentOutOfRangeException.ThrowIfNegative(messageCount);
+        ArgumentOutOfRangeException.ThrowIfNegative(bytes);
 
         if (!double.IsFinite(encodeTimeMs) || encodeTimeMs < 0d)
         {
