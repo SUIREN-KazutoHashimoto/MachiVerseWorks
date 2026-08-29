@@ -2,8 +2,8 @@
 
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 1 — 開発プロジェクト骨格完了  
-> **次の実装タスク:** `SIM-001` — Simulation の tick rate を保持する設定型を作る
+> **現在:** Phase 2 — Simulation Core 最小 PoC完了  
+> **次の実装タスク:** `PRT-001` — Protocol version の表現方法を決める
 
 ## 全体の現在地
 
@@ -11,8 +11,8 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | --- | --- | --- |
 | 0 | リポジトリ初期セットアップ | ✅ 完了 |
 | 1 | 開発プロジェクト骨格 | ✅ 完了 |
-| 2 | Simulation Core 最小 PoC | ⏭️ 次 |
-| 3 | Protocol 最小実装 | ⏳ 待機 |
+| 2 | Simulation Core 最小 PoC | ✅ 完了 |
+| 3 | Protocol 最小実装 | ⏭️ 次 |
 | 4 | Headless Server 最小実装 | ⏳ 待機 |
 | 5 | Web Client 最小実装 | ⏳ 待機 |
 | 6 | End-to-End PoC | ⏳ 待機 |
@@ -124,57 +124,57 @@ Task ID は参照用の固定IDです。並び替えても変更しません。
 ---
 
 <details>
-<summary><strong>Phase 2 — Simulation Core 最小 PoC（次）</strong></summary>
+<summary><strong>Phase 2 — Simulation Core 最小 PoC（完了）</strong></summary>
 
 目標は「都市機能」ではなく、まず多数 Agent を安定して step できる最小コアを作ること。
 
 ### 基本時間・設定
 
-- ⬜ **SIM-001** — Simulation の tick rate を保持する設定型を作る
-- ⬜ **SIM-002** — Simulation seed を保持する設定を追加する
-- ⬜ **SIM-003** — Simulation time / tick counter を表す型を作る
-- ⬜ **SIM-004** — `Step()` で tick を1回進める最小 API を作る
-- ⬜ **SIM-005** — 同一seed・同一入力で同じ結果になるテストを作る
+- ✅ **SIM-001** — Simulation の tick rate を保持する設定型を作る
+- ✅ **SIM-002** — Simulation seed を保持する設定を追加する
+- ✅ **SIM-003** — Simulation time / tick counter を表す型を作る
+- ✅ **SIM-004** — `Step()` で tick を1回進める最小 API を作る
+- ✅ **SIM-005** — 同一seed・同一入力で同じ結果になるテストを作る
 
 ### Agent Store
 
-- ⬜ **SIM-006** — `AgentId` の安定したID型を作る
-- ⬜ **SIM-007** — Agent の最小状態を格納する `AgentStore` を作る
-- ⬜ **SIM-008** — Agent を1体生成できる API を作る
-- ⬜ **SIM-009** — 指定数の Agent を一括生成できるようにする
-- ⬜ **SIM-010** — Agent ID を途中で詰め直さないことをテストする
-- ⬜ **SIM-011** — 1 tick で Agent の最小状態を更新する処理を作る
+- ✅ **SIM-006** — `AgentId` の安定したID型を作る
+- ✅ **SIM-007** — Agent の最小状態を格納する `AgentStore` を作る
+- ✅ **SIM-008** — Agent を1体生成できる API を作る
+- ✅ **SIM-009** — 指定数の Agent を一括生成できるようにする
+- ✅ **SIM-010** — Agent ID を途中で詰め直さないことをテストする
+- ✅ **SIM-011** — 1 tick で Agent の最小状態を更新する処理を作る
 
 ### Spatial Index
 
-- ⬜ **SIM-012** — World 座標を cell / chunk に変換する型を作る
-- ⬜ **SIM-013** — Agent を spatial cell に登録できるようにする
-- ⬜ **SIM-014** — Agent 移動時に cell 所属を更新できるようにする
-- ⬜ **SIM-015** — 矩形範囲の Agent ID を取得する query を作る
-- ⬜ **SIM-016** — spatial query の境界条件テストを追加する
+- ✅ **SIM-012** — World 座標を cell / chunk に変換する型を作る
+- ✅ **SIM-013** — Agent を spatial cell に登録できるようにする
+- ✅ **SIM-014** — Agent 移動時に cell 所属を更新できるようにする
+- ✅ **SIM-015** — 矩形範囲の Agent ID を取得する query を作る
+- ✅ **SIM-016** — spatial query の境界条件テストを追加する
 
 ### Snapshot
 
-- ⬜ **SIM-017** — Client配信用の最小 Agent snapshot 型を定義する
-- ⬜ **SIM-018** — Simulation内部の可変Storeとsnapshotを分離する
-- ⬜ **SIM-019** — 指定範囲だけ snapshot を生成できるようにする
-- ⬜ **SIM-020** — snapshot生成中にSimulation内部状態を外部へ公開しないことをテストする
+- ✅ **SIM-017** — Client配信用の最小 Agent snapshot 型を定義する
+- ✅ **SIM-018** — Simulation内部の可変Storeとsnapshotを分離する
+- ✅ **SIM-019** — 指定範囲だけ snapshot を生成できるようにする
+- ✅ **SIM-020** — snapshot生成中にSimulation内部状態を外部へ公開しないことをテストする
 
 ### 最小性能計測
 
-- ⬜ **SIM-021** — 1,000 Agent の tick benchmark を追加する
-- ⬜ **SIM-022** — 10,000 Agent の tick benchmark を追加する
-- ⬜ **SIM-023** — 100,000 Agent の tick benchmark を追加する
-- ⬜ **SIM-024** — tick時間の p50 / p95 / p99 を記録できるようにする
-- ⬜ **SIM-025** — tickあたり allocation を記録できるようにする
-- ⬜ **SIM-026** — PoCの初回性能結果を文書へ記録する
+- ✅ **SIM-021** — 1,000 Agent の tick benchmark を追加する
+- ✅ **SIM-022** — 10,000 Agent の tick benchmark を追加する
+- ✅ **SIM-023** — 100,000 Agent の tick benchmark を追加する
+- ✅ **SIM-024** — tick時間の p50 / p95 / p99 を記録できるようにする
+- ✅ **SIM-025** — tickあたり allocation を記録できるようにする
+- ✅ **SIM-026** — PoCの初回性能結果を文書へ記録する
 
 </details>
 
 ---
 
 <details>
-<summary><strong>Phase 3 — Protocol 最小実装（待機）</strong></summary>
+<summary><strong>Phase 3 — Protocol 最小実装（次）</strong></summary>
 
 - ⬜ **PRT-001** — Protocol version の表現方法を決める
 - ⬜ **PRT-002** — message type ID の管理方法を決める
