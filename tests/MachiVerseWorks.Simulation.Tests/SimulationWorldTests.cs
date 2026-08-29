@@ -116,4 +116,28 @@ public sealed class SimulationWorldTests
         Assert.AreEqual(before.Velocity, after.Velocity);
         Assert.AreEqual(before.TickCount, after.TickCount);
     }
+
+    [TestMethod]
+    public void LaterSpatialFailureRollsBackEarlierAgentMovement()
+    {
+        var config = new SimulationConfig(tickRate: 1, spatialCellSize: 64d);
+        var world = new SimulationWorld(config);
+        var firstId = world.CreateAgent(
+            new WorldPoint(10d, 20d),
+            new WorldVector(3d, 4d));
+        var insideX = ((double)int.MaxValue + 0.5d) * config.SpatialCellSize;
+        var secondId = world.CreateAgent(
+            new WorldPoint(insideX, 0d),
+            new WorldVector(config.SpatialCellSize, 0d));
+        Assert.IsTrue(world.TryGetAgentSnapshot(firstId, out var firstBefore));
+        Assert.IsTrue(world.TryGetAgentSnapshot(secondId, out var secondBefore));
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => world.Step());
+
+        Assert.AreEqual(0UL, world.Time.TickCount);
+        Assert.IsTrue(world.TryGetAgentSnapshot(firstId, out var firstAfter));
+        Assert.IsTrue(world.TryGetAgentSnapshot(secondId, out var secondAfter));
+        Assert.AreEqual(firstBefore.Position, firstAfter.Position);
+        Assert.AreEqual(secondBefore.Position, secondAfter.Position);
+    }
 }
