@@ -88,6 +88,9 @@ internal sealed class SnapshotPublishService(
     E2eMetrics metrics,
     ILogger<SnapshotPublishService> logger) : BackgroundService
 {
+    private static readonly TimeSpan ClientSendTimeout = TimeSpan.FromSeconds(5);
+    private readonly SnapshotDeliveryScheduler _deliveryScheduler = new();
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         ServerLog.SnapshotPublisherStarted(logger, options.SnapshotRate);
@@ -97,17 +100,23 @@ internal sealed class SnapshotPublishService(
         {
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
-                await PublishAsync(stoppingToken);
+                SchedulePublish(stoppingToken);
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
         }
 
+        var inFlight = _deliveryScheduler.CreateInFlightSnapshot();
+        if (inFlight.Length > 0)
+        {
+            await Task.WhenAll(inFlight);
+        }
+
         ServerLog.SnapshotPublisherStopped(logger);
     }
 
-    private async Task PublishAsync(CancellationToken cancellationToken)
+    private void SchedulePublish(CancellationToken cancellationToken)
     {
         foreach (var connection in connections.CreateSnapshot())
         {
@@ -118,55 +127,66 @@ internal sealed class SnapshotPublishService(
                 continue;
             }
 
+            _deliveryScheduler.TrySchedule(
+                connection.Id,
+                () => PublishConnectionAsync(connection, subscription, cancellationToken));
+        }
+    }
+
+    private async Task PublishConnectionAsync(
+        ClientConnection connection,
+        ClientSubscriptionState subscription,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
             var snapshots = simulation.CreateSnapshot(subscription.Area);
             var plan = SnapshotMessagePlanner.Create(
                 snapshots,
                 subscription.KnownAgentIds,
                 simulation.TickCount);
 
-            try
+            long bytes = 0;
+            double encodeTimeMs = 0d;
+            double sendTimeMs = 0d;
+            foreach (var message in plan.Messages)
             {
-                long bytes = 0;
-                double encodeTimeMs = 0d;
-                double sendTimeMs = 0d;
-                foreach (var message in plan.Messages)
-                {
-                    var sendMetrics = await connection.SendAsync(
-                        message,
-                        connection.NegotiatedVersion,
-                        cancellationToken);
-                    bytes = checked(bytes + sendMetrics.FrameBytes);
-                    encodeTimeMs += sendMetrics.EncodeTimeMs;
-                    sendTimeMs += sendMetrics.SendTimeMs;
-                }
-
-                connection.TryReplaceKnownAgentIds(subscription.Revision, plan.CurrentAgentIds);
-                metrics.RecordSnapshotDelivery(
-                    snapshots.Length,
-                    plan.Messages.Count,
-                    bytes,
-                    encodeTimeMs,
-                    sendTimeMs);
-                ServerLog.SnapshotDeliveryMetrics(
-                    logger,
-                    connection.Id,
-                    snapshots.Length,
-                    plan.Messages.Count,
-                    bytes,
-                    encodeTimeMs,
-                    sendTimeMs);
+                using var sendCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                sendCancellation.CancelAfter(ClientSendTimeout);
+                var sendMetrics = await connection.SendAsync(
+                    message,
+                    connection.NegotiatedVersion,
+                    sendCancellation.Token);
+                bytes = checked(bytes + sendMetrics.FrameBytes);
+                encodeTimeMs += sendMetrics.EncodeTimeMs;
+                sendTimeMs += sendMetrics.SendTimeMs;
             }
-            catch (Exception exception) when (
-                exception is WebSocketException or OperationCanceledException or ObjectDisposedException)
+
+            connection.TryReplaceKnownAgentIds(subscription.Revision, plan.CurrentAgentIds);
+            metrics.RecordSnapshotDelivery(
+                snapshots.Length,
+                plan.Messages.Count,
+                bytes,
+                encodeTimeMs,
+                sendTimeMs);
+            ServerLog.SnapshotDeliveryMetrics(
+                logger,
+                connection.Id,
+                snapshots.Length,
+                plan.Messages.Count,
+                bytes,
+                encodeTimeMs,
+                sendTimeMs);
+        }
+        catch (Exception exception)
+        {
+            if (!cancellationToken.IsCancellationRequested)
             {
-                if (!cancellationToken.IsCancellationRequested)
-                {
-                    ServerLog.SnapshotDeliveryStopped(logger, connection.Id, exception);
-                }
-
-                connection.Abort();
-                connections.Remove(connection.Id);
+                ServerLog.SnapshotDeliveryStopped(logger, connection.Id, exception);
             }
+
+            connection.Abort();
+            connections.Remove(connection.Id);
         }
     }
 }
