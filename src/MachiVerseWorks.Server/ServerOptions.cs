@@ -7,12 +7,18 @@ namespace MachiVerseWorks.Server;
 internal sealed class ServerOptions
 {
     private const int DefaultMaximumSubscriptionCellCount = 4096;
+    private static readonly string[] DefaultAllowedWebSocketOrigins =
+    [
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+    ];
 
     private ServerOptions(
         IPAddress listenAddress,
         int port,
         int snapshotRate,
         int maximumSubscriptionCellCount,
+        IReadOnlyList<string> allowedWebSocketOrigins,
         int tickRate,
         ulong seed,
         double spatialCellSize,
@@ -26,6 +32,7 @@ internal sealed class ServerOptions
         Port = port;
         SnapshotRate = snapshotRate;
         MaximumSubscriptionCellCount = maximumSubscriptionCellCount;
+        AllowedWebSocketOrigins = allowedWebSocketOrigins;
         TickRate = tickRate;
         Seed = seed;
         SpatialCellSize = spatialCellSize;
@@ -43,6 +50,8 @@ internal sealed class ServerOptions
     public int SnapshotRate { get; }
 
     public int MaximumSubscriptionCellCount { get; }
+
+    public IReadOnlyList<string> AllowedWebSocketOrigins { get; }
 
     public int TickRate { get; }
 
@@ -95,6 +104,19 @@ internal sealed class ServerOptions
             throw new InvalidOperationException("Server:MaximumSubscriptionCellCount must be greater than zero.");
         }
 
+        var configuredOrigins = configuration
+            .GetSection("Server:AllowedWebSocketOrigins")
+            .GetChildren()
+            .Select(child => child.Value)
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Select(static value => WebSocketOriginPolicy.NormalizeOrigin(value!))
+            .ToArray();
+        var allowedWebSocketOrigins = configuredOrigins.Length == 0
+            ? DefaultAllowedWebSocketOrigins
+                .Select(WebSocketOriginPolicy.NormalizeOrigin)
+                .ToArray()
+            : configuredOrigins;
+
         var tickRate = ReadInt32(configuration, "Simulation:TickRate", 30);
         if (tickRate is <= 0 or > ushort.MaxValue)
         {
@@ -130,6 +152,7 @@ internal sealed class ServerOptions
             port,
             snapshotRate,
             maximumSubscriptionCellCount,
+            allowedWebSocketOrigins,
             tickRate,
             seed,
             spatialCellSize,
