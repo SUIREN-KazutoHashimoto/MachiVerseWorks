@@ -41,6 +41,11 @@ export function selectVoiceIds(
   if (!Number.isInteger(budget) || budget < 0) {
     throw new RangeError('Voice budget must be a non-negative integer.');
   }
+  validatePoint(listener, 'Voice listener');
+  for (const candidate of candidates) {
+    validatePoint(candidate.position, `Voice candidate ${candidate.id} position`);
+    validateFinite(candidate.priority, `Voice candidate ${candidate.id} priority`);
+  }
 
   const ranked = candidates.map((candidate) => ({
     candidate,
@@ -68,6 +73,17 @@ export function resolveAmbientLayers(
   listener: Point2D,
   parameters: Readonly<Record<string, number>> = {},
 ): readonly ResolvedAmbientLayer[] {
+  validatePoint(listener, 'Ambient listener');
+  for (const [name, value] of Object.entries(parameters)) {
+    validateFinite(value, `Ambient parameter ${name}`);
+  }
+  for (const layer of globalLayers) {
+    validateLayer(layer, 'Global ambient layer');
+  }
+  for (const zone of zones) {
+    validateZone(zone);
+  }
+
   const resolved = new Map<string, ResolvedAmbientLayer>();
 
   for (const layer of globalLayers) {
@@ -153,6 +169,37 @@ function accumulateLayer(
   target.set(layer.key, { ...existing, gain: clamp01(existing.gain + gain) });
 }
 
+function validateZone(zone: AmbientZoneDefinition): void {
+  validateFinite(zone.minX, `Ambient zone ${zone.id} minX`);
+  validateFinite(zone.minY, `Ambient zone ${zone.id} minY`);
+  validateFinite(zone.maxX, `Ambient zone ${zone.id} maxX`);
+  validateFinite(zone.maxY, `Ambient zone ${zone.id} maxY`);
+  validateFinite(zone.priority, `Ambient zone ${zone.id} priority`);
+  validateFinite(zone.fadeDistance, `Ambient zone ${zone.id} fadeDistance`);
+  if (zone.maxX < zone.minX || zone.maxY < zone.minY || zone.fadeDistance < 0) {
+    throw new RangeError(`Ambient zone ${zone.id} has invalid bounds.`);
+  }
+  for (const layer of zone.layers) {
+    validateLayer(layer, `Ambient zone ${zone.id} layer`);
+  }
+}
+
+function validateLayer(layer: AmbientLayerDefinition, label: string): void {
+  validateFinite(layer.gain, `${label} ${layer.key} gain`);
+}
+
+function validatePoint(point: Point2D, label: string): void {
+  validateFinite(point.x, `${label} x`);
+  validateFinite(point.y, `${label} y`);
+}
+
+function validateFinite(value: number, label: string): void {
+  if (!Number.isFinite(value)) {
+    throw new RangeError(`${label} must be finite.`);
+  }
+}
+
 function clamp01(value: number): number {
+  validateFinite(value, 'Normalized audio value');
   return Math.min(1, Math.max(0, value));
 }

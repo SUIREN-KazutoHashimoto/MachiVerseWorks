@@ -15,6 +15,9 @@ export class AmbientSystem {
   public constructor(private readonly audio: AudioEngine) {}
 
   public setGlobalLayers(layers: readonly AmbientLayerDefinition[]): void {
+    for (const layer of layers) {
+      validateLayer(layer, 'Global ambient layer');
+    }
     this.globalLayers = [...layers];
   }
 
@@ -26,10 +29,14 @@ export class AmbientSystem {
   }
 
   public setParameters(parameters: Readonly<Record<string, number>>): void {
+    for (const [name, value] of Object.entries(parameters)) {
+      validateFinite(value, `Ambient parameter ${name}`);
+    }
     this.parameters = { ...parameters };
   }
 
   public async update(listener: Point2D): Promise<void> {
+    validatePoint(listener, 'Ambient listener');
     const mix = resolveAmbientLayers(this.globalLayers, this.zones, listener, this.parameters);
     const nextKeys = new Set(mix.map((layer) => layer.key));
     await Promise.all(
@@ -53,9 +60,28 @@ function validateZone(zone: AmbientZoneDefinition): void {
     !Number.isFinite(zone.maxY) ||
     zone.maxX < zone.minX ||
     zone.maxY < zone.minY ||
+    !Number.isFinite(zone.priority) ||
     !Number.isFinite(zone.fadeDistance) ||
     zone.fadeDistance < 0
   ) {
-    throw new RangeError(`Ambient zone ${zone.id} has invalid bounds.`);
+    throw new RangeError(`Ambient zone ${zone.id} has invalid bounds or priority.`);
+  }
+  for (const layer of zone.layers) {
+    validateLayer(layer, `Ambient zone ${zone.id} layer`);
+  }
+}
+
+function validateLayer(layer: AmbientLayerDefinition, label: string): void {
+  validateFinite(layer.gain, `${label} ${layer.key} gain`);
+}
+
+function validatePoint(point: Point2D, label: string): void {
+  validateFinite(point.x, `${label} x`);
+  validateFinite(point.y, `${label} y`);
+}
+
+function validateFinite(value: number, label: string): void {
+  if (!Number.isFinite(value)) {
+    throw new RangeError(`${label} must be finite.`);
   }
 }
