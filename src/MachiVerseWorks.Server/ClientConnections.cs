@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Threading.Channels;
 using MachiVerseWorks.Protocol;
@@ -81,7 +82,7 @@ internal sealed class ClientConnection : IDisposable
         }
     }
 
-    public async Task SendAsync(
+    public async Task<ProtocolSendMetrics> SendAsync(
         IProtocolMessage message,
         ProtocolVersion version,
         CancellationToken cancellationToken)
@@ -89,7 +90,10 @@ internal sealed class ClientConnection : IDisposable
         BeginSend();
         try
         {
+            var encodeStarted = Stopwatch.GetTimestamp();
             var frame = ProtocolCodec.Serialize(message, version);
+            var encodeTimeMs = Stopwatch.GetElapsedTime(encodeStarted).TotalMilliseconds;
+
             await _sendGate.WaitAsync(cancellationToken);
             try
             {
@@ -98,11 +102,14 @@ internal sealed class ClientConnection : IDisposable
                     throw new WebSocketException(WebSocketError.InvalidState);
                 }
 
+                var sendStarted = Stopwatch.GetTimestamp();
                 await Socket.SendAsync(
                     new ArraySegment<byte>(frame),
                     WebSocketMessageType.Binary,
                     endOfMessage: true,
                     cancellationToken);
+                var sendTimeMs = Stopwatch.GetElapsedTime(sendStarted).TotalMilliseconds;
+                return new ProtocolSendMetrics(frame.Length, encodeTimeMs, sendTimeMs);
             }
             finally
             {

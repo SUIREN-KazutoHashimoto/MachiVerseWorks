@@ -18,6 +18,11 @@ export type ConnectionState =
   | 'connected'
   | 'reconnecting';
 
+export interface FrameDecodeMetrics {
+  readonly frameBytes: number;
+  readonly decodeTimeMs: number;
+}
+
 export interface ConnectionCallbacks {
   readonly onStateChanged: (state: ConnectionState) => void;
   readonly onMessage: (message: ProtocolMessage) => void;
@@ -25,6 +30,7 @@ export interface ConnectionCallbacks {
   readonly onClientError: (error: Error) => void;
   readonly onDisconnected: () => void;
   readonly onHelloAck: (version: ProtocolVersion, tickRate: number) => void;
+  readonly onFrameDecoded: (metrics: FrameDecodeMetrics) => void;
 }
 
 export interface ReconnectOptions {
@@ -123,7 +129,14 @@ export class MachiVerseConnection {
 
     try {
       const buffer = await toArrayBuffer(data);
+      const decodeStartedAt = performance.now();
       const envelope = decodeFrame(buffer);
+      const decodeTimeMs = Math.max(0, performance.now() - decodeStartedAt);
+      this.callbacks.onFrameDecoded({
+        frameBytes: buffer.byteLength,
+        decodeTimeMs,
+      });
+
       if (envelope.message.type === MessageType.Error) {
         this.callbacks.onProtocolError(envelope.message);
         return;

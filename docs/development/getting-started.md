@@ -1,6 +1,6 @@
 # ローカル開発の開始手順
 
-MachiVerseWorks の初回実装をローカルで build / test / 実行するための最小手順です。
+MachiVerseWorks をローカルで build / test / 実行するための最小手順です。
 
 ## 前提
 
@@ -9,11 +9,11 @@ MachiVerseWorks の初回実装をローカルで build / test / 実行するた
 - `src/web/.node-version` が要求する Node.js
 - npm（Node.js 同梱版）
 
-SDK / runtime の version は個別に手入力して管理せず、Repository 内の固定ファイルを正とします。
+SDK / runtime のversionは個別に手入力して管理せず、Repository内の固定ファイルを正とします。
 
 ## Repository の取得
 
-通常開発は `develop` から短命 branch を作成します。
+通常開発は `develop` から短命branchを作成します。
 
 ```bash
 git clone https://github.com/SUIREN-KazutoHashimoto/MachiVerseWorks.git
@@ -34,39 +34,68 @@ dotnet build MachiVerseWorks.slnx --configuration Release --no-restore
 dotnet test MachiVerseWorks.slnx --configuration Release --no-build
 ```
 
-Headless Server を起動する場合は次を実行します。
+## Server + Web Client のローカル起動
+
+Phase 6 の通常確認では2つのterminalを使います。
+
+Terminal 1 でHeadless Serverを起動します。
 
 ```bash
 dotnet run --project src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj
 ```
 
-既定では `http://127.0.0.1:5080` を listen します。別 terminal から health endpoint を確認できます。
+既定では `http://127.0.0.1:5080` をlistenし、WebSocket endpointは `ws://127.0.0.1:5080/ws` です。healthとPhase 6 metricsは別terminalから確認できます。
 
 ```bash
 curl http://127.0.0.1:5080/health
+curl http://127.0.0.1:5080/metrics/e2e
 ```
 
-WebSocket endpoint は `ws://127.0.0.1:5080/ws` です。接続後は MachiVerseWorks Protocol の binary `Hello` frame が最初の message として必要です。
-
-## Web Client
-
-Node.js の version が `src/web/.node-version` と一致することを確認してから実行します。
+Terminal 2 でWeb Clientを起動します。
 
 ```bash
 cd src/web
 node --version
 npm ci
-npm run lint
-npm run typecheck
-npm run build
 npm run dev
 ```
 
-Vite が表示するローカル URL をブラウザで開き、MachiVerseWorks の空の 3D viewport と version 表示を確認します。
+Viteが表示するlocal URLをブラウザで開きます。Web Clientの既定Server URLは `ws://127.0.0.1:5080/ws` なので、追加設定なしで接続します。
+
+ブラウザでは次を確認できます。
+
+- 接続状態とProtocol version
+- subscription内のAgent数
+- drag / wheelによるcamera移動とsubscription更新
+- Protocol decode時間
+- animation frame間隔
+
+Server URLを変更する場合はWeb Client起動時に `VITE_SERVER_URL` を指定します。
+
+## Phase 6 E2E の一括確認
+
+ChromeまたはChromiumが `PATH` にある環境では、Repository rootから次の1コマンドでPhase 6 scenarioを再現できます。
+
+```bash
+bash scripts/run-phase6-e2e.sh
+```
+
+このscriptは1,000 / 10,000 / 100,000 AgentのServerを順に起動し、実Browserで接続、表示state、camera由来subscription、remove、再接続、近傍配信、Server/Client metricsを検証します。詳細は [`e2e-poc.md`](e2e-poc.md) を参照してください。
+
+## Web Client の静的検証
+
+```bash
+cd src/web
+npm ci
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
 
 ## Version
 
-通常開発開始後はルート `VERSION` がアプリケーションversionの唯一の正本です。C# build と Web build はここから version を取得します。個別 `.csproj` や `package.json` に同じ app version を手入力しません。
+通常開発開始後はルート `VERSION` がapplication versionの唯一の正本です。C# buildとWeb buildはここからversionを取得します。個別 `.csproj` や `package.json` に同じapp versionを手入力しません。
 
 ## PR 前の確認
 
@@ -80,7 +109,14 @@ cd src/web
 npm ci
 npm run lint
 npm run typecheck
+npm test
 npm run build
 ```
 
-Repository 内 Markdown link は CI の `repository` job でも検証されます。
+Phase 6以降のEnd-to-End変更では、加えてRepository rootから次を実行します。
+
+```bash
+bash scripts/run-phase6-e2e.sh
+```
+
+Repository内Markdown linkはCIの `repository` jobでも検証されます。

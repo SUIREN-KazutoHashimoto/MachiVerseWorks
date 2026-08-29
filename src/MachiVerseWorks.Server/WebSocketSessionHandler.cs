@@ -239,14 +239,14 @@ internal sealed class WebSocketSessionHandler(
             cancellationToken);
     }
 
-    private static Task SendErrorAsync(
+    private static async Task SendErrorAsync(
         ClientConnection connection,
         ProtocolErrorCode code,
         IReadOnlyList<ProtocolErrorParameter> parameters,
         ProtocolVersion version,
         CancellationToken cancellationToken)
     {
-        return connection.SendAsync(
+        _ = await connection.SendAsync(
             new ProtocolErrorMessage(code, parameters),
             version,
             cancellationToken);

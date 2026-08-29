@@ -24,6 +24,7 @@ public static class ServerApplication
         builder.Services.AddSingleton<SimulationRuntime>();
         builder.Services.AddSingleton<ClientConnectionRegistry>();
         builder.Services.AddSingleton<ClientCommandQueue>();
+        builder.Services.AddSingleton<E2eMetrics>();
         builder.Services.AddSingleton<WebSocketSessionHandler>();
         builder.Services.AddHostedService<SimulationTickService>();
         builder.Services.AddHostedService<ClientCommandProcessor>();
@@ -46,6 +47,8 @@ public static class ServerApplication
                 agents = simulation.ActiveAgentCount,
                 connections = connections.Count,
             }));
+
+        app.MapGet("/metrics/e2e", (E2eMetrics metrics) => Results.Ok(metrics.Capture()));
 
         app.Map("/ws", async context =>
         {

@@ -1,5 +1,6 @@
 import { AmbientSystem } from './ambient-system.ts';
 import { AudioEngine } from './audio-engine.ts';
+import { ClientPerformanceMetrics } from './client-performance.ts';
 import { loadClientConfig } from './config.ts';
 import { MachiVerseConnection } from './connection.ts';
 import { EntityStore } from './entity-store.ts';
@@ -20,6 +21,7 @@ export class Application {
   private readonly store = new EntityStore();
   private readonly audio = new AudioEngine();
   private readonly ambient = new AmbientSystem(this.audio);
+  private readonly performanceMetrics = new ClientPerformanceMetrics();
   private readonly view: WorldView;
   private readonly ui: ClientUi;
   private readonly connection: MachiVerseConnection;
@@ -27,6 +29,7 @@ export class Application {
   private lastSubscriptionAt = Number.NEGATIVE_INFINITY;
   private lastSubscription: WorldRect | null = null;
   private lastAudioSyncAt = Number.NEGATIVE_INFINITY;
+  private lastPerformanceUiAt = Number.NEGATIVE_INFINITY;
   private audioSyncPending = false;
 
   public constructor(host: HTMLElement) {
@@ -53,6 +56,9 @@ export class Application {
         onHelloAck: (version) => {
           this.ui.clearError();
           this.ui.setProtocol(version);
+        },
+        onFrameDecoded: (metrics) => {
+          this.performanceMetrics.recordDecode(metrics.frameBytes, metrics.decodeTimeMs);
         },
       },
     );
@@ -86,10 +92,12 @@ export class Application {
   };
 
   private readonly animate = (now: number): void => {
+    this.performanceMetrics.recordAnimationFrame(now);
     this.updateSubscription(now);
     this.view.render(this.store, now);
     this.audio.syncListenerFromCamera(this.view.camera);
     this.updateAudio(now);
+    this.updatePerformanceUi(now);
     this.animationFrame = window.requestAnimationFrame(this.animate);
   };
 
@@ -122,6 +130,14 @@ export class Application {
     }).finally(() => {
       this.audioSyncPending = false;
     });
+  }
+
+  private updatePerformanceUi(now: number): void {
+    if (now - this.lastPerformanceUiAt < 500) {
+      return;
+    }
+    this.lastPerformanceUiAt = now;
+    this.ui.setPerformanceMetrics(this.performanceMetrics.snapshot());
   }
 
   private handleProtocolMessage(message: ProtocolMessage): void {
