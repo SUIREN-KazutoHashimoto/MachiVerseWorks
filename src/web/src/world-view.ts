@@ -134,23 +134,24 @@ class AgentRenderer {
   private mesh: THREE.InstancedMesh;
   private capacity = 1_024;
   private readonly matrix = new THREE.Matrix4();
+  private positions = new Float32Array(this.capacity * 2);
 
   public constructor(private readonly scene: THREE.Scene) {
     this.mesh = this.createMesh(this.capacity);
     this.scene.add(this.mesh);
   }
 
-  public update(store: EntityStore, now: number): void {
-    this.ensureCapacity(store.size);
-    let index = 0;
-    for (const agent of store.sample(now)) {
-      this.matrix.makeTranslation(agent.x, 2.5, agent.y);
-      this.mesh.setMatrixAt(index, this.matrix);
-      index += 1;
-    }
-    this.mesh.count = index;
-    this.mesh.instanceMatrix.needsUpdate = true;
+public update(store: EntityStore, now: number): void {
+  this.ensureCapacity(store.size);
+  const count = store.writeSampledPositions(now, this.positions);
+  for (let index = 0; index < count; index += 1) {
+    const positionOffset = index * 2;
+    this.matrix.makeTranslation(this.positions[positionOffset], 2.5, this.positions[positionOffset + 1]);
+    this.mesh.setMatrixAt(index, this.matrix);
   }
+  this.mesh.count = count;
+  this.mesh.instanceMatrix.needsUpdate = true;
+}
 
   public dispose(): void {
     this.scene.remove(this.mesh);
@@ -171,6 +172,7 @@ class AgentRenderer {
 
     const previousMesh = this.mesh;
     this.capacity = nextCapacity;
+    this.positions = new Float32Array(nextCapacity * 2);
     this.mesh = this.createMesh(nextCapacity);
     this.scene.remove(previousMesh);
     previousMesh.dispose();

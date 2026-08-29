@@ -31,3 +31,17 @@ test('unknown updates do not implicitly create an entity', () => {
   assert.equal(store.update(snapshot(10, 2n), 100), false);
   assert.equal(store.size, 0);
 });
+
+
+test('hot-path interpolation writes into a reusable position buffer', () => {
+  const store = new EntityStore();
+  store.spawn(snapshot(0, 1n), 0);
+  store.update(snapshot(10, 2n), 100);
+  const positions = new Float32Array(2);
+
+  assert.equal(store.writeSampledPositions(150, positions), 1);
+  assert.equal(positions[0], 5);
+  assert.equal(positions[1], 0);
+  assert.equal(store.writeSampledPositions(200, positions), 1);
+  assert.equal(positions[0], 10);
+});

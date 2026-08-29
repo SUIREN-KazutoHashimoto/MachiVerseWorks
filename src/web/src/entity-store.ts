@@ -83,7 +83,23 @@ export class EntityStore {
     this.agents.clear();
   }
 
-  public *sample(now = performance.now()): IterableIterator<SampledAgent> {
+public writeSampledPositions(now: number, target: Float32Array): number {
+  const requiredValues = this.agents.size * 2;
+  if (target.length < requiredValues) {
+    throw new RangeError(`Target position buffer requires at least ${requiredValues} values.`);
+  }
+
+  let offset = 0;
+  for (const agent of this.agents.values()) {
+    const alpha = clamp((now - agent.receivedAt) / agent.interpolationDurationMs, 0, 1);
+    target[offset] = lerp(agent.previousX, agent.currentX, alpha);
+    target[offset + 1] = lerp(agent.previousY, agent.currentY, alpha);
+    offset += 2;
+  }
+  return offset / 2;
+}
+
+public *sample(now = performance.now()): IterableIterator<SampledAgent> {
     for (const agent of this.agents.values()) {
       const alpha = clamp((now - agent.receivedAt) / agent.interpolationDurationMs, 0, 1);
       yield {

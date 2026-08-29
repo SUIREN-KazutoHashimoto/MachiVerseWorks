@@ -32,8 +32,13 @@ export interface PlaySoundOptions {
 }
 
 export interface ThreeCameraLike {
-  readonly up: { readonly x: number; readonly y: number; readonly z: number };
   readonly matrixWorld: { readonly elements: ArrayLike<number> };
+}
+
+export interface AudioListenerPose {
+  readonly position: { readonly x: number; readonly y: number; readonly z: number };
+  readonly direction: { readonly x: number; readonly y: number; readonly z: number };
+  readonly up: { readonly x: number; readonly y: number; readonly z: number };
 }
 
 export interface AudioEmitterOptions {
@@ -225,17 +230,11 @@ export class AudioEngine {
       return;
     }
 
-    const elements = camera.matrixWorld.elements;
-    if (elements.length < 16) {
-      return;
-    }
-    const position = { x: Number(elements[12]), y: Number(elements[13]), z: Number(elements[14]) };
-    const direction = normalize3(-Number(elements[8]), -Number(elements[9]), -Number(elements[10]));
-    const up = normalize3(
-      Number(elements[0]) * camera.up.x + Number(elements[4]) * camera.up.y + Number(elements[8]) * camera.up.z,
-      Number(elements[1]) * camera.up.x + Number(elements[5]) * camera.up.y + Number(elements[9]) * camera.up.z,
-      Number(elements[2]) * camera.up.x + Number(elements[6]) * camera.up.y + Number(elements[10]) * camera.up.z,
-    );
+const pose = resolveAudioListenerPose(camera);
+if (pose === null) {
+  return;
+}
+const { position, direction, up } = pose;
     const listener = this.context.listener;
     const time = this.context.currentTime;
     listener.positionX.setValueAtTime(position.x, time);
@@ -537,6 +536,18 @@ function normalize3(x: number, y: number, z: number): { readonly x: number; read
     return { x: 0, y: 0, z: -1 };
   }
   return { x: x / length, y: y / length, z: z / length };
+}
+
+export function resolveAudioListenerPose(camera: ThreeCameraLike): AudioListenerPose | null {
+  const elements = camera.matrixWorld.elements;
+  if (elements.length < 16) {
+    return null;
+  }
+  return {
+    position: { x: Number(elements[12]), y: 0, z: Number(elements[14]) },
+    direction: normalize3(-Number(elements[8]), -Number(elements[9]), -Number(elements[10])),
+    up: normalize3(Number(elements[4]), Number(elements[5]), Number(elements[6])),
+  };
 }
 
 export function resolveMasterGain(muted: boolean, volume: number): number {
