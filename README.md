@@ -1,39 +1,92 @@
-# MachiVerseWorks
+<p align="center">
+  <img src="assets/brand/machiverseworks-icon.png" alt="MachiVerseWorks icon" width="132">
+</p>
 
-MachiVerseWorks は、C# 製のヘッドレス・シミュレーションサーバーとブラウザベースの 3D クライアントで構成する、大規模リアルタイム都市シミュレーションです。
+<h1 align="center">MachiVerseWorks</h1>
 
-市民、道路交通、公共交通、物流、産業、電力などの都市活動をサーバー側で継続的にシミュレーションし、クライアント側では必要な範囲のデータを受信して可視化します。
+<p align="center">
+  <strong>City Simulation Project</strong><br>
+  C#製ヘッドレス・シミュレーションサーバーとブラウザ3Dクライアントで構成する、大規模リアルタイム都市シミュレーション。
+</p>
 
-旧 Machi-Sim で得られたドメイン・設計・性能面の知見を引き継ぎつつ、ブラウザ単体実装からシミュレーション本体を分離し、より大規模な都市と多数の Agent を扱える構成へ再設計します。
+<p align="center">
+  <a href="https://github.com/SUIREN-KazutoHashimoto/MachiVerseWorks/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/SUIREN-KazutoHashimoto/MachiVerseWorks/actions/workflows/ci.yml/badge.svg?branch=develop"></a>
+  <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
+  <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512BD4.svg">
+  <img alt="Status: Foundation Complete" src="https://img.shields.io/badge/status-foundation%20complete-2ea44f.svg">
+</p>
+
+<p align="center">
+  <img src="assets/brand/machiverseworks-social-preview.png" alt="MachiVerseWorks — City Simulation Project" width="100%">
+</p>
+
+## MachiVerseWorks とは
+
+MachiVerseWorks は、市民・道路交通・公共交通・物流・産業・電力などの都市活動を、サーバー側で継続的にシミュレーションする都市シミュレーションプロジェクトです。
+
+旧 Machi-Sim で得られたドメイン・設計・性能面の知見を引き継ぎつつ、ブラウザ単体実装からシミュレーション本体を分離。クライアントは必要な空間範囲だけを受信・描画し、より大規模な都市と多数の Agent を扱える構成を目指します。
 
 > [!NOTE]
-> 現在はリポジトリの初期セットアップ段階です。実装・API・プロトコル・仕様は今後変更される可能性があります。
+> **Phase 0 — リポジトリ初期セットアップは完了しています。**  
+> アプリケーション実装はまだ開始前で、次のタスクは [`SKL-001`](ROADMAP.md) — `MachiVerseWorks.slnx` の作成です。
 
-## 基本アーキテクチャ
+## Architecture
 
 ```text
-Browser 3D Client
-        ↑↓
-Protocol / WebSocket
-        ↑↓
-C# Headless Server
-        ↓
-Simulation Core
+┌──────────────────────────────┐
+│      Browser 3D Client       │
+│  TypeScript / Three.js       │
+└──────────────┬───────────────┘
+               │ WebSocket / Binary Protocol
+┌──────────────▼───────────────┐
+│     MachiVerseWorks.Server   │
+│ connection / command / I/O   │
+└──────────────┬───────────────┘
+               │
+┌──────────────▼───────────────┐
+│  MachiVerseWorks.Simulation  │
+│ authoritative world state    │
+└──────────────────────────────┘
+
+       MachiVerseWorks.Protocol
+       = Client / Server contract
 ```
 
-基本方針は次の通りです。
+| Component | Responsibility |
+| --- | --- |
+| **Simulation** | 都市状態の正本、tick、Agent・交通・経済などのシミュレーション |
+| **Server** | 実行ライフサイクル、接続、command受付、snapshot配信 |
+| **Protocol** | Client / Server間の安定した契約とバイナリメッセージ |
+| **Web Client** | 3D描画、入力、補間、UI、ローカライズ |
 
-- `MachiVerseWorks.Simulation` が都市シミュレーションの正本を持つ
-- `MachiVerseWorks.Server` が実行ループ、クライアント接続、command、snapshot 配信を担当する
-- `MachiVerseWorks.Protocol` がクライアント・サーバー間の契約を定義する
-- Web クライアントは表示・入力・補間を担当し、シミュレーション状態を直接所有しない
-- 高頻度データはバイナリ転送を前提とし、クライアントには必要な空間範囲だけを配信する
-- Simulation tick、snapshot publish、render frame を分離する
-- シミュレーション仕様と実装設計をドキュメント上でも分離する
+設計の詳細は [`docs/architecture/overview.md`](docs/architecture/overview.md)、採用理由は [`ADR-0001`](docs/decisions/ADR-0001-csharp-headless-simulation-server.md) を参照してください。
 
-詳細は [`docs/architecture/overview.md`](docs/architecture/overview.md)、採用理由は [`ADR-0001`](docs/decisions/ADR-0001-csharp-headless-simulation-server.md) を参照してください。
+## Design Principles
 
-## リポジトリ構成
+- **Server authoritative** — Web Clientにシミュレーションの正本を持たせない
+- **Spatial subscription** — クライアントには必要な範囲だけを配信する
+- **Separated clocks** — Simulation tick / snapshot publish / render frame を分離する
+- **Measure first** — 最適化は profiler・benchmark・実測値に基づいて行う
+- **Stable data contracts** — Protocol / Save Dataに表示言語やUI文字列を混ぜない
+- **Small, completable tasks** — 巨大な目標ではなく、完了判定できるTask ID単位で進める
+
+## Roadmap
+
+進捗と実装予定は [`ROADMAP.md`](ROADMAP.md) を正本として管理します。
+
+| Phase | 内容 | 状態 |
+| --- | --- | --- |
+| 0 | Repository foundation | ✅ 完了 |
+| 1 | 開発プロジェクト骨格 | ⏭️ 次 |
+| 2 | Simulation Core 最小 PoC | ⏳ 待機 |
+| 3 | Protocol 最小実装 | ⏳ 待機 |
+| 4 | Headless Server 最小実装 | ⏳ 待機 |
+| 5 | Web Client 最小実装 | ⏳ 待機 |
+| 6 | End-to-End PoC | ⏳ 待機 |
+
+大きな機能名を長期間残すのではなく、**単独で実装・検証・完了できる小さなTask**へ分解して進めます。
+
+## Repository
 
 ```text
 MachiVerseWorks/
@@ -44,6 +97,9 @@ MachiVerseWorks/
 │  └─ web/
 ├─ tests/
 ├─ benchmarks/
+├─ assets/
+│  ├─ originals/        # 加工前のブランド原本
+│  └─ brand/            # README / docs向けブランド画像
 ├─ docs/
 │  ├─ product/
 │  ├─ architecture/
@@ -57,67 +113,40 @@ MachiVerseWorks/
 ├─ global.json
 ├─ ROADMAP.md
 ├─ AGENTS.md
-├─ CONTRIBUTING.md
-├─ SECURITY.md
-├─ CODE_OF_CONDUCT.md
-├─ LICENSE
-├─ NOTICE
-├─ THIRD_PARTY_NOTICES.txt
 └─ README.md
 ```
 
-各ディレクトリの役割は、それぞれの `README.md` と [`docs/README.md`](docs/README.md) を参照してください。
+## Development
 
-## Roadmap
+.NET SDK はルートの [`global.json`](global.json) を正本として固定し、現在は **.NET 10** 系を採用しています。Web Client は **TypeScript + Three.js** を前提に設計しています。
 
-実装予定と進捗は [`ROADMAP.md`](ROADMAP.md) で管理します。
+主要な開発ドキュメント:
 
-MachiVerseWorks では、大きな機能名をそのまま長期間未完了のチェック項目にせず、**単独で完了・検証できる小さなTask ID**へ分解して進めます。交通・鉄道・経済などの大テーマは Backlog として保持し、着手するときに細分化します。
-
-## 開発環境
-
-.NET SDK はルートの [`global.json`](global.json) を正本として固定します。現在は .NET 10 系を採用しています。
-
-開発ルールと性能評価方針:
-
-- [開発ルール](AGENTS.md)
+- [AGENTS.md — 開発・エージェント運用ルール](AGENTS.md)
 - [Coding Guidelines](docs/development/coding-guidelines.md)
 - [Performance Guidelines](docs/development/performance.md)
 - [CI / GitHub Actions](docs/development/ci.md)
 - [Git workflow](docs/development/git-workflow.md)
+- [Versioning](docs/development/versioning.md)
 
-## ドキュメント管理方針
+## Documentation
 
-MachiVerseWorks では、旧実装のように巨大な横断設計書へ情報を集約せず、役割ごとに小さな正本ドキュメントを管理します。
+| Directory | Purpose |
+| --- | --- |
+| [`docs/product/`](docs/product/) | プロジェクトの目的・概念・用語 |
+| [`docs/architecture/`](docs/architecture/) | システム構成と技術設計 — **How** |
+| [`docs/specifications/`](docs/specifications/) | シミュレーションの振る舞い — **What / Why** |
+| [`docs/development/`](docs/development/) | 開発・テスト・Git・CI・version運用 |
+| [`docs/decisions/`](docs/decisions/) | Architecture Decision Record |
+| [`docs/archive/`](docs/archive/) | Legacy資料・廃止済み設計・実験記録 |
 
-- `docs/product/`: プロジェクトの目的、概念、用語
-- `docs/architecture/`: システム構成と技術設計（How）
-- `docs/specifications/`: シミュレーションの振る舞いと仕様（What / Why）
-- `docs/development/`: 開発・テスト・Git・バージョン運用
-- `docs/decisions/`: ADR（Architecture Decision Record）
-- `docs/archive/`: 廃止済み設計・旧資料・実験記録
+ドキュメント全体の索引は [`docs/README.md`](docs/README.md) を参照してください。
 
-新しい設計判断は、必要に応じて ADR として理由を残します。
+## Legacy
 
-## 開発方針
+旧ブラウザ単体版は [`Machi-Sim_Legacy`](https://github.com/SUIREN-KazutoHashimoto/Machi-Sim_Legacy) として保存しています。
 
-- サーバー / Simulation Core: C# / .NET
-- Web クライアント: TypeScript + Three.js を想定
-- Simulation Core は HTTP / WebSocket / ASP.NET Core などの通信層へ依存させない
-- ネットワーク配信と描画更新は Simulation tick と分離する
-- 大規模 Agent 処理はデータ指向・割り当て抑制・並列処理を前提に設計する
-- 最適化は計測結果に基づいて行い、可読性や仕様の正しさより先に複雑化しない
-
-具体的な開発ルールは [`AGENTS.md`](AGENTS.md)、開発フローは [`docs/development/git-workflow.md`](docs/development/git-workflow.md) を参照してください。
-
-## 旧 Machi-Sim
-
-旧ブラウザ単体版は Legacy 実装として保存されています。
-
-- [Machi-Sim_Legacy](https://github.com/SUIREN-KazutoHashimoto/Machi-Sim_Legacy)
-- [Legacy からの移行メモ](docs/archive/legacy-machi-sim/README.md)
-
-旧repoのコードや巨大な仕様書をそのまま正本としてコピーせず、必要なドメイン仕様・設計知見だけを新アーキテクチャに合わせて書き直して引き継ぎます。
+旧実装をそのまま移植するのではなく、必要なドメイン仕様・設計知見を選別し、新しいServer-authoritative architectureに合わせて再設計します。移行方針は [`docs/archive/legacy-machi-sim/README.md`](docs/archive/legacy-machi-sim/README.md) に記録しています。
 
 ## Contributing / Security
 
@@ -125,10 +154,10 @@ MachiVerseWorks では、旧実装のように巨大な横断設計書へ情報�
 - 行動規範: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
 - 脆弱性報告: [`SECURITY.md`](SECURITY.md)
 
-## ライセンス
+## License
 
-Apache License 2.0 の下で提供します。
+MachiVerseWorks は **Apache License 2.0** の下で提供します。
 
-- ライセンス全文: [`LICENSE`](LICENSE)
-- プロジェクト帰属表示: [`NOTICE`](NOTICE)
-- 第三者ソフトウェア表示: [`THIRD_PARTY_NOTICES.txt`](THIRD_PARTY_NOTICES.txt)
+- [`LICENSE`](LICENSE)
+- [`NOTICE`](NOTICE)
+- [`THIRD_PARTY_NOTICES.txt`](THIRD_PARTY_NOTICES.txt)
