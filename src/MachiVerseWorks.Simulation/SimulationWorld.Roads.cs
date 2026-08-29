@@ -144,12 +144,12 @@ public sealed partial class SimulationWorld
         }
     }
 
-    private static RoadNodeId EntryNode(SimulationLaneCheckpoint lane, IReadOnlyDictionary<RoadSegmentId, SimulationRoadSegmentCheckpoint> segments)
+    private static RoadNodeId EntryNode(SimulationLaneCheckpoint lane, Dictionary<RoadSegmentId, SimulationRoadSegmentCheckpoint> segments)
     {
         var segment = segments[lane.SegmentId]; return lane.Direction == LaneDirection.Forward ? segment.StartNodeId : segment.EndNodeId;
     }
 
-    private static RoadNodeId ExitNode(SimulationLaneCheckpoint lane, IReadOnlyDictionary<RoadSegmentId, SimulationRoadSegmentCheckpoint> segments)
+    private static RoadNodeId ExitNode(SimulationLaneCheckpoint lane, Dictionary<RoadSegmentId, SimulationRoadSegmentCheckpoint> segments)
     {
         var segment = segments[lane.SegmentId]; return lane.Direction == LaneDirection.Forward ? segment.EndNodeId : segment.StartNodeId;
     }
