@@ -1,41 +1,40 @@
-# ADR-0004: Simulation World の正本座標を3D化する
+# ADR-0004: Simulation World の正本座標をネイティブ3D化する
 
 - Status: Accepted
 - Date: 2026-08-29
 
 ## Context
 
-MachiVerseWorks は既存PoCでSimulationの `X / Y` を水平2D座標として扱い、Web Client側でThree.jsの `X / Z` 平面へ写像している。
+MachiVerseWorks の旧PoCはSimulationの `X / Y` を水平2D座標として扱っていた。今後、地下・高架・多層建物・立体交通を実装するには、rendererだけでなくSimulation、Spatial Index、Protocol、Save Dataまで同一の高さ情報を正本として保持する必要がある。
 
-今後、地下・高架・多層建物・立体的な交通を実装するには、rendererだけではなくSimulation、Spatial Index、Protocol、Save Dataまで同じ高さ情報を正本として保持する必要がある。一方で、Phase 9で重力や地形衝突まで導入すると座標基盤と物理仕様が密結合になる。
+2D APIを残して`Z = 0`へ暗黙変換すると、呼び出し側が高度を指定し忘れてもコンパイル時に検出できず、将来の立体シミュレーションで高度欠落を再導入する危険がある。
 
 ## Decision
 
-Simulation World の正本座標を `X / Y / Z` とする。
+Simulation World をネイティブ3Dのみの契約へ移行する。
 
-- `X / Y` は既存の水平2軸の意味を維持する。
-- `Z` は高度で、正方向を上とする。
-- 単位は全軸とも metre とする。
-- `WorldPoint` / `WorldVector` は全成分の有限値を要求する。
-- Spatial Grid は3軸とも共通の `SpatialCellSize` で3D cellへ分割する。
-- 3D範囲検索は境界包含の `WorldVolume` を正規APIとする。
-- 既存2D APIは移行用互換入口として `Z = 0` に固定して残す。
-- Three.js では `(sim.X, sim.Z, sim.Y)` へ写像する。
-- 自動生成Agentの `VelocityZ` は0とし、Phase 9だけでは飛行・重力等の物理ルールを導入しない。
-- Protocolの3D wire contractは互換性のない変更としてmajor versionを更新する。
-- Save Dataも3D stateを必須化し、Save format versionを更新する。
+- 正本座標は `X / Y / Z`。`Z`は上向きを正とする高度。
+- 単位は全軸とも metre。
+- `WorldPoint` / `WorldVector` / `SpatialCell` は3軸必須。
+- 2引数constructor、`WorldRect`、2D型aliasなどの互換APIは提供しない。
+- 空間範囲、snapshot、subscription、spatial queryは `WorldVolume` のみを使う。
+- Spatial Gridは3軸とも共通の`SpatialCellSize`で分割する。
+- Three.js / Web Audio境界では `(sim.X, sim.Z, sim.Y)` へ明示変換する。
+- 自動生成Agentの`VelocityZ = 0`は生成ポリシーであり、座標モデルは常に3Dとする。
+- Protocolは3D必須wire contractとして2.0、Save Dataは3D必須schemaとしてformat 2を使用する。
+- 旧2D protocol/save/APIへの暗黙fallbackは行わない。
 
 ## Consequences
 
 ### 利点
 
-- 地下・高架・多層構造を後続機能から共通の座標契約で扱える。
-- Simulationからrendererまで高さ情報の欠落箇所を明確にテストできる。
-- 既存の水平 `X / Y` の意味を維持できるため、2D PoCからの移行範囲を限定できる。
-- 物理挙動を後続Taskへ分離でき、Phase 9の責務を座標・配信・保存基盤へ限定できる。
+- 高度の指定漏れをAPI境界で防ぎやすい。
+- 地下・地上・高架が同じ水平座標に存在しても正本状態とSpatial Indexで区別できる。
+- 後続機能が2D互換層を意識せず、最初から立体空間を前提に設計できる。
+- Simulationからrenderer、audio、saveまで3D契約を一貫してテストできる。
 
 ### コスト
 
-- Spatial Indexのcell数は高さ方向にも増えるため、subscription volumeのcell上限を3次元で評価する必要がある。
-- Protocol payloadとSave Dataは大きくなり、benchmarkで回帰を計測する必要がある。
-- Three.js/Web Audio境界ではSimulation軸からrenderer軸への明示的な変換が必要になる。
+- 旧2D呼び出しは明示的にZまたはZ範囲を指定するよう移行が必要。
+- Spatial Indexのcell数は高さ方向にも増えるため、subscription上限を3次元で評価する必要がある。
+- Protocol payloadとSave Dataは増加し、性能回帰をbenchmarkで継続確認する必要がある。
