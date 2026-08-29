@@ -16,6 +16,6 @@
 - versioning.md
 - testing.md
 
-共通の開発ルールはルートの `AGENT.md` を正本とします。
+共通の開発ルールはルートの `AGENTS.md` を正本とします。
 
 .NET SDK の基準はルートの `global.json` を正本とし、CI も同じ設定を使用します。
