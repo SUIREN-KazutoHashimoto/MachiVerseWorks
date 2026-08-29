@@ -16,6 +16,7 @@ MachiVerseWorks の技術アーキテクチャを管理します。
 主要文書:
 
 - [`overview.md`](overview.md): 全体アーキテクチャ
+- [`protocol.md`](protocol.md): Server / Web Client 間 binary protocol の versioning と wire layout
 - [`localization.md`](localization.md): 多言語対応を見越した言語境界
 
 仕様上の振る舞いそのものは `docs/specifications/` に記述します。
