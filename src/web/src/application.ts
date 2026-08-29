@@ -34,7 +34,7 @@ export class Application {
 
   public constructor(host: HTMLElement) {
     this.view = new WorldView(host);
-    this.ui = new ClientUi(host, this.localizer);
+    this.ui = new ClientUi(host, this.localizer, import.meta.env.DEV);
     this.connection = new MachiVerseConnection(
       this.config.serverUrl,
       {
