@@ -19,7 +19,17 @@
 
 - HTTP、WebSocket、ASP.NET Core、ブラウザ固有 API に依存しない。
 - World、Agent、Traffic、Transit、Logistics、Power などの状態とルールを保持する。
-- 外部からは明確な command / step / snapshot 境界を通して操作する。
+- 外部からは明確な command / step / snapshot / checkpoint 境界を通して操作する。
+
+### MachiVerseWorks.Persistence
+
+versioned Save Data と Simulation checkpoint の変換・検証を担当します。
+
+- Save format version を application version / Protocol version とは独立して管理する。
+- Simulation 内部の mutable Store を直接 serializer へ公開しない。
+- Save Data へ locale 依存表示文字列を持ち込まず、stable ID / raw value / state を保存する。
+- World のルールや tick を所有せず、Simulation の正本性を奪わない。
+- ファイル配置、ユーザー操作、HTTP 等の外部I/O方針は実行ホスト側の責務とする。
 
 ### MachiVerseWorks.Server
 

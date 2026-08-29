@@ -2,8 +2,10 @@
   <Project Path="src/MachiVerseWorks.Simulation/MachiVerseWorks.Simulation.csproj" />
   <Project Path="src/MachiVerseWorks.Protocol/MachiVerseWorks.Protocol.csproj" />
   <Project Path="src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj" />
+  <Project Path="src/MachiVerseWorks.Persistence/MachiVerseWorks.Persistence.csproj" />
   <Project Path="benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj" />
   <Project Path="tests/MachiVerseWorks.Simulation.Tests/MachiVerseWorks.Simulation.Tests.csproj" />
   <Project Path="tests/MachiVerseWorks.Protocol.Tests/MachiVerseWorks.Protocol.Tests.csproj" />
   <Project Path="tests/MachiVerseWorks.Server.Tests/MachiVerseWorks.Server.Tests.csproj" />
+  <Project Path="tests/MachiVerseWorks.Persistence.Tests/MachiVerseWorks.Persistence.Tests.csproj" />
 </Solution>

@@ -2,8 +2,8 @@
 
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 7 — 性能基盤の拡張 完了
-> **次の実装タスク:** `SAV-001` — Save Data が保持する最小情報を定義する
+> **現在:** Phase 8 — 保存・復元基盤 完了
+> **次の実装タスク:** 未定 — 将来 Backlog を着手時にTaskへ分解する
 
 ## 全体の現在地
 
@@ -17,7 +17,7 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 5 | Web Client 最小実装 | ✅ 完了 |
 | 6 | End-to-End PoC | ✅ 完了 |
 | 7 | 性能基盤の拡張 | ✅ 完了 |
-| 8 | 保存・復元基盤 | ⏭️ 次 |
+| 8 | 保存・復元基盤 | ✅ 完了 |
 
 ## 状態の見方
 
@@ -325,17 +325,17 @@ PoCを動かした後、計測結果に基づいて必要な項目だけ進め�
 ---
 
 <details>
-<summary><strong>Phase 8 — 保存・復元基盤（次）</strong></summary>
+<summary><strong>Phase 8 — 保存・復元基盤（完了）</strong></summary>
 
-このセクションは End-to-End PoC 後に着手する。
+最小Worldをversioned Save Dataへ保存し、同じSimulation状態と継続実行条件を復元できる基盤を確立する。
 
-- ⬜ **SAV-001** — Save Data が保持する最小情報を定義する
-- ⬜ **SAV-002** — Save format versionを定義する
-- ⬜ **SAV-003** — locale依存表示文字列をSave Dataへ保存しないテストを追加する
-- ⬜ **SAV-004** — 最小Worldを保存できるようにする
-- ⬜ **SAV-005** — 保存した最小Worldを読み込めるようにする
-- ⬜ **SAV-006** — save → load で同じSimulation状態を復元するテストを追加する
-- ⬜ **SAV-007** — 不正Save Dataを安全に拒否するテストを追加する
+- ✅ **SAV-001** — Save Data が保持する最小情報を定義する
+- ✅ **SAV-002** — Save format versionを定義する
+- ✅ **SAV-003** — locale依存表示文字列をSave Dataへ保存しないテストを追加する
+- ✅ **SAV-004** — 最小Worldを保存できるようにする
+- ✅ **SAV-005** — 保存した最小Worldを読み込めるようにする
+- ✅ **SAV-006** — save → load で同じSimulation状態を復元するテストを追加する
+- ✅ **SAV-007** — 不正Save Dataを安全に拒否するテストを追加する
 
 </details>
 
