@@ -38,22 +38,23 @@ public sealed class SimulationWorld
         return _agents.Add(position, velocity, _spatialIndex);
     }
 
-    public AgentId[] CreateAgents(int count, WorldRect spawnArea)
+    public AgentId[] CreateAgents(int count, WorldVolume spawnVolume)
     {
         if (count < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(count), count, "Agent count cannot be negative.");
         }
 
-        _spatialIndex.ValidatePosition(new WorldPoint(spawnArea.MinX, spawnArea.MinY));
-        _spatialIndex.ValidatePosition(new WorldPoint(spawnArea.MaxX, spawnArea.MaxY));
+        _spatialIndex.ValidatePosition(new WorldPoint(spawnVolume.MinX, spawnVolume.MinY, spawnVolume.MinZ));
+        _spatialIndex.ValidatePosition(new WorldPoint(spawnVolume.MaxX, spawnVolume.MaxY, spawnVolume.MaxZ));
 
         var ids = new AgentId[count];
         for (var index = 0; index < ids.Length; index++)
         {
             var position = new WorldPoint(
-                _random.NextDouble(spawnArea.MinX, spawnArea.MaxX),
-                _random.NextDouble(spawnArea.MinY, spawnArea.MaxY));
+                NextCoordinate(spawnVolume.MinX, spawnVolume.MaxX),
+                NextCoordinate(spawnVolume.MinY, spawnVolume.MaxY),
+                NextCoordinate(spawnVolume.MinZ, spawnVolume.MaxZ));
             ids[index] = CreateAgent(position, NextVelocity());
         }
 
@@ -77,9 +78,9 @@ public sealed class SimulationWorld
         return _agents.TryGetSnapshot(id, Time.TickCount, out snapshot);
     }
 
-    public AgentSnapshot[] CreateSnapshot(WorldRect area)
+    public AgentSnapshot[] CreateSnapshot(WorldVolume volume)
     {
-        return _agents.CreateSnapshot(area, _spatialIndex, Time.TickCount);
+        return _agents.CreateSnapshot(volume, _spatialIndex, Time.TickCount);
     }
 
     public SimulationCheckpoint CreateCheckpoint()
@@ -183,11 +184,17 @@ public sealed class SimulationWorld
         return world;
     }
 
+    private double NextCoordinate(double minimum, double maximum)
+    {
+        return minimum == maximum ? minimum : _random.NextDouble(minimum, maximum);
+    }
+
     private WorldVector NextVelocity()
     {
         return new WorldVector(
             _random.NextDouble(-1d, 1d),
-            _random.NextDouble(-1d, 1d));
+            _random.NextDouble(-1d, 1d),
+            0d);
     }
 
     private static long CalculateExpectedElapsedTicks(ulong tickCount, TimeSpan tickDuration)
@@ -212,7 +219,7 @@ public sealed class SimulationWorld
 
     private static void ValidatePoint(WorldPoint point)
     {
-        if (!double.IsFinite(point.X) || !double.IsFinite(point.Y))
+        if (!double.IsFinite(point.X) || !double.IsFinite(point.Y) || !double.IsFinite(point.Z))
         {
             throw new ArgumentOutOfRangeException(nameof(point), "World coordinates must be finite.");
         }
@@ -220,7 +227,7 @@ public sealed class SimulationWorld
 
     private static void ValidateVector(WorldVector vector)
     {
-        if (!double.IsFinite(vector.X) || !double.IsFinite(vector.Y))
+        if (!double.IsFinite(vector.X) || !double.IsFinite(vector.Y) || !double.IsFinite(vector.Z))
         {
             throw new ArgumentOutOfRangeException(nameof(vector), "Velocity components must be finite.");
         }

@@ -52,28 +52,36 @@ internal sealed class SpatialIndex
         _cellByAgent[id] = nextCell;
     }
 
-    public List<AgentId> Query(WorldRect area)
+    public List<AgentId> Query(WorldVolume volume)
     {
-        var minCell = SpatialGrid.ToCell(new WorldPoint(area.MinX, area.MinY), _cellSize);
-        var maxCell = SpatialGrid.ToCell(new WorldPoint(area.MaxX, area.MaxY), _cellSize);
+        var minCell = SpatialGrid.ToCell(new WorldPoint(volume.MinX, volume.MinY, volume.MinZ), _cellSize);
+        var maxCell = SpatialGrid.ToCell(new WorldPoint(volume.MaxX, volume.MaxY, volume.MaxZ), _cellSize);
         var result = new List<AgentId>();
 
-        for (var cellY = minCell.Y; cellY <= maxCell.Y; cellY++)
+        for (var cellZ = minCell.Z; cellZ <= maxCell.Z; cellZ++)
         {
-            for (var cellX = minCell.X; cellX <= maxCell.X; cellX++)
+            for (var cellY = minCell.Y; cellY <= maxCell.Y; cellY++)
             {
-                if (_agentsByCell.TryGetValue(new SpatialCell(cellX, cellY), out var agents))
+                for (var cellX = minCell.X; cellX <= maxCell.X; cellX++)
                 {
-                    result.AddRange(agents);
+                    if (_agentsByCell.TryGetValue(new SpatialCell(cellX, cellY, cellZ), out var agents))
+                    {
+                        result.AddRange(agents);
+                    }
+
+                    if (cellX == int.MaxValue)
+                    {
+                        break;
+                    }
                 }
 
-                if (cellX == int.MaxValue)
+                if (cellY == int.MaxValue)
                 {
                     break;
                 }
             }
 
-            if (cellY == int.MaxValue)
+            if (cellZ == int.MaxValue)
             {
                 break;
             }

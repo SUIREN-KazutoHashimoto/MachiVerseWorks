@@ -36,7 +36,7 @@ find_chrome() {
       return 0
     fi
   done
-  echo "Phase 6 E2E requires Chrome or Chromium in PATH." >&2
+  echo "E2E requires Chrome or Chromium in PATH." >&2
   return 1
 }
 
@@ -75,8 +75,23 @@ run_scenario() {
   local browser_dom="$ARTIFACT_DIR/browser-$name.html"
   local metrics_json="$ARTIFACT_DIR/server-metrics-$name.json"
   local browser_url="http://127.0.0.1:$WEB_PORT/tests/browser/e2e.html?agents=$agents&mode=$mode&server=ws%3A%2F%2F127.0.0.1%3A$SERVER_PORT%2Fws"
+  local spawn_min_x=-500
+  local spawn_min_y=-500
+  local spawn_min_z=0
+  local spawn_max_x=500
+  local spawn_max_y=500
+  local spawn_max_z=0
 
-  echo "Running Phase 6 E2E scenario: agents=$agents mode=$mode"
+  if [[ "$mode" == "altitude" ]]; then
+    spawn_min_x=0
+    spawn_min_y=0
+    spawn_min_z=10
+    spawn_max_x=0
+    spawn_max_y=0
+    spawn_max_z=100
+  fi
+
+  echo "Running E2E scenario: agents=$agents mode=$mode"
   cleanup_server
 
   env \
@@ -84,10 +99,12 @@ run_scenario() {
     Server__SnapshotRate=5 \
     Simulation__TickRate=10 \
     Simulation__InitialAgentCount="$agents" \
-    Simulation__SpawnArea__MinX=-500 \
-    Simulation__SpawnArea__MinY=-500 \
-    Simulation__SpawnArea__MaxX=500 \
-    Simulation__SpawnArea__MaxY=500 \
+    Simulation__SpawnVolume__MinX="$spawn_min_x" \
+    Simulation__SpawnVolume__MinY="$spawn_min_y" \
+    Simulation__SpawnVolume__MinZ="$spawn_min_z" \
+    Simulation__SpawnVolume__MaxX="$spawn_max_x" \
+    Simulation__SpawnVolume__MaxY="$spawn_max_y" \
+    Simulation__SpawnVolume__MaxZ="$spawn_max_z" \
     dotnet run \
       --project "$ROOT_DIR/src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj" \
       --configuration Release --no-build \
@@ -112,13 +129,14 @@ run_scenario() {
     "http://127.0.0.1:$SERVER_PORT/metrics/e2e" \
     >"$metrics_json"
 
-  python - "$metrics_json" "$agents" <<'PY'
+  python - "$metrics_json" "$agents" "$mode" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
 agent_total = int(sys.argv[2])
+mode = sys.argv[3]
 data = json.loads(path.read_text(encoding="utf-8"))
 
 if data["totalSnapshotDeliveries"] <= 0:
@@ -127,7 +145,13 @@ if data["totalMessages"] <= 0 or data["totalBytes"] <= 0:
     raise SystemExit("No protocol traffic was recorded")
 if data["totalEncodeTimeMs"] < 0 or data["totalSendTimeMs"] < 0:
     raise SystemExit("Invalid server timing metrics")
-if data["lastAgentCount"] <= 0 or data["lastAgentCount"] >= agent_total:
+
+if mode == "altitude":
+    if data["lastAgentCount"] != agent_total:
+        raise SystemExit(
+            f"Expected all altitude agents in the final subscription, got {data['lastAgentCount']} of {agent_total}"
+        )
+elif data["lastAgentCount"] <= 0 or data["lastAgentCount"] >= agent_total:
     raise SystemExit(
         f"Expected the final subscription to contain a nearby subset, got {data['lastAgentCount']} of {agent_total}"
     )
@@ -141,5 +165,6 @@ PY
 run_scenario 1000 full
 run_scenario 10000 near
 run_scenario 100000 near
+run_scenario 2 altitude
 
-echo "Phase 6 E2E scenarios passed. Artifacts: $ARTIFACT_DIR"
+echo "E2E scenarios passed. Artifacts: $ARTIFACT_DIR"

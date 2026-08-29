@@ -21,14 +21,9 @@ internal sealed class ServerTestHost : IAsyncDisposable
     }
 
     public WebApplication App { get; }
-
     public Uri HttpAddress { get; }
 
-    public static async Task<ServerTestHost> StartAsync(
-        int initialAgentCount = 4,
-        int tickRate = 30,
-        int snapshotRate = 30,
-        double spawnHalfExtent = 5d)
+    public static async Task<ServerTestHost> StartAsync(int initialAgentCount = 4, int tickRate = 30, int snapshotRate = 30, double spawnHalfExtent = 5d)
     {
         var app = ServerApplication.Build([], builder =>
         {
@@ -40,85 +35,52 @@ internal sealed class ServerTestHost : IAsyncDisposable
                 ["Server:SnapshotRate"] = snapshotRate.ToString(CultureInfo.InvariantCulture),
                 ["Simulation:TickRate"] = tickRate.ToString(CultureInfo.InvariantCulture),
                 ["Simulation:InitialAgentCount"] = initialAgentCount.ToString(CultureInfo.InvariantCulture),
-                ["Simulation:SpawnArea:MinX"] = (-spawnHalfExtent).ToString(CultureInfo.InvariantCulture),
-                ["Simulation:SpawnArea:MinY"] = (-spawnHalfExtent).ToString(CultureInfo.InvariantCulture),
-                ["Simulation:SpawnArea:MaxX"] = spawnHalfExtent.ToString(CultureInfo.InvariantCulture),
-                ["Simulation:SpawnArea:MaxY"] = spawnHalfExtent.ToString(CultureInfo.InvariantCulture),
+                ["Simulation:SpawnVolume:MinX"] = (-spawnHalfExtent).ToString(CultureInfo.InvariantCulture),
+                ["Simulation:SpawnVolume:MinY"] = (-spawnHalfExtent).ToString(CultureInfo.InvariantCulture),
+                ["Simulation:SpawnVolume:MinZ"] = (-spawnHalfExtent).ToString(CultureInfo.InvariantCulture),
+                ["Simulation:SpawnVolume:MaxX"] = spawnHalfExtent.ToString(CultureInfo.InvariantCulture),
+                ["Simulation:SpawnVolume:MaxY"] = spawnHalfExtent.ToString(CultureInfo.InvariantCulture),
+                ["Simulation:SpawnVolume:MaxZ"] = spawnHalfExtent.ToString(CultureInfo.InvariantCulture),
             });
         });
 
         await app.StartAsync();
         var server = app.Services.GetRequiredService<IServer>();
-        var addresses = server.Features.Get<IServerAddressesFeature>()
-            ?? throw new InvalidOperationException("Kestrel did not expose server addresses.");
-        var address = addresses.Addresses.Single();
-        return new ServerTestHost(app, new Uri(address));
+        var addresses = server.Features.Get<IServerAddressesFeature>() ?? throw new InvalidOperationException("Kestrel did not expose server addresses.");
+        return new ServerTestHost(app, new Uri(addresses.Addresses.Single()));
     }
 
-    public HttpClient CreateHttpClient()
-    {
-        return new HttpClient { BaseAddress = HttpAddress };
-    }
+    public HttpClient CreateHttpClient() => new() { BaseAddress = HttpAddress };
 
     public async Task<ClientWebSocket> ConnectWebSocketAsync(string? origin = null)
     {
         var webSocket = new ClientWebSocket();
-        if (origin is not null)
-        {
-            webSocket.Options.SetRequestHeader("Origin", origin);
-        }
-
-        var builder = new UriBuilder(HttpAddress)
-        {
-            Scheme = HttpAddress.Scheme == "https" ? "wss" : "ws",
-            Path = "/ws",
-        };
+        if (origin is not null) webSocket.Options.SetRequestHeader("Origin", origin);
+        var builder = new UriBuilder(HttpAddress) { Scheme = HttpAddress.Scheme == "https" ? "wss" : "ws", Path = "/ws" };
         await webSocket.ConnectAsync(builder.Uri, CancellationToken.None);
         return webSocket;
     }
 
-    public static Task SendAsync(
-        ClientWebSocket socket,
-        IProtocolMessage message,
-        ProtocolVersion? version = null)
+    public static Task SendAsync(ClientWebSocket socket, IProtocolMessage message, ProtocolVersion? version = null)
     {
         var frame = ProtocolCodec.Serialize(message, version);
-        return socket.SendAsync(
-            new ArraySegment<byte>(frame),
-            WebSocketMessageType.Binary,
-            true,
-            CancellationToken.None);
+        return socket.SendAsync(new ArraySegment<byte>(frame), WebSocketMessageType.Binary, true, CancellationToken.None);
     }
 
-    public static async Task<ProtocolEnvelope> ReceiveAsync(
-        ClientWebSocket socket,
-        TimeSpan timeout)
+    public static async Task<ProtocolEnvelope> ReceiveAsync(ClientWebSocket socket, TimeSpan timeout)
     {
         using var cancellation = new CancellationTokenSource(timeout);
         var buffer = new byte[4096];
         using var stream = new MemoryStream();
-
         while (true)
         {
             var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellation.Token);
-            if (result.MessageType == WebSocketMessageType.Close)
-            {
-                throw new InvalidOperationException("Server closed the WebSocket before a protocol message was received.");
-            }
-
+            if (result.MessageType == WebSocketMessageType.Close) throw new InvalidOperationException("Server closed the WebSocket before a protocol message was received.");
             stream.Write(buffer, 0, result.Count);
-            if (result.EndOfMessage)
-            {
-                break;
-            }
+            if (result.EndOfMessage) break;
         }
-
         var frame = stream.ToArray();
-        if (!ProtocolCodec.TryDeserialize(frame, out var envelope, out var error) || envelope is null)
-        {
-            throw new InvalidOperationException($"Server returned an invalid protocol frame: {error}.");
-        }
-
+        if (!ProtocolCodec.TryDeserialize(frame, out var envelope, out var error) || envelope is null) throw new InvalidOperationException($"Server returned an invalid protocol frame: {error}.");
         return envelope;
     }
 
@@ -126,19 +88,12 @@ internal sealed class ServerTestHost : IAsyncDisposable
     {
         await SendAsync(socket, new HelloMessage(), ProtocolVersion.Current);
         var envelope = await ReceiveAsync(socket, TimeSpan.FromSeconds(3));
-        if (envelope.Message is not HelloAckMessage)
-        {
-            throw new InvalidOperationException("Server did not return HelloAck.");
-        }
+        if (envelope.Message is not HelloAckMessage) throw new InvalidOperationException("Server did not return HelloAck.");
     }
 
     public async Task StopAsync()
     {
-        if (_stopped)
-        {
-            return;
-        }
-
+        if (_stopped) return;
         _stopped = true;
         await App.StopAsync();
     }

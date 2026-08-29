@@ -2,7 +2,7 @@
 
 ## 概要
 
-Phase 4 の Server は ASP.NET Core / Kestrel 上で HTTP health endpoint と binary WebSocket endpoint を提供し、1つの `SimulationWorld` を server-authoritative な正本として所有します。
+Headless Server は ASP.NET Core / Kestrel 上で HTTP health endpoint と binary WebSocket endpoint を提供し、1つの `SimulationWorld` を server-authoritative な正本として所有します。Phase 9 以降、位置・速度・subscription・snapshot はフルネイティブ3Dです。
 
 ```text
 Kestrel
@@ -18,7 +18,7 @@ Kestrel
 SimulationTickService ──► SimulationRuntime ◄── SnapshotPublishService
                                │                        │
                                ▼                        ▼
-                         SimulationWorld        subscription snapshot
+                         SimulationWorld        3D volume snapshot
                                                         │
                                                         ▼
                                               spawn/update/remove
@@ -28,9 +28,9 @@ SimulationTickService ──► SimulationRuntime ◄── SnapshotPublishServi
 
 `SimulationRuntime` が `SimulationWorld` を所有します。WebSocket session、connection registry、Protocol message は Simulation の mutable store を直接所有しません。
 
-Phase 4 では tick service と snapshot publisher が別 hosted service で動くため、`SimulationRuntime` が lock boundary を提供します。これにより `Step()` と `CreateSnapshot()` が同時に内部 store を操作しません。
+Phase 4 から継続して tick service と snapshot publisher は別 hosted service で動作し、`SimulationRuntime` が lock boundary を提供します。`Step()` と `CreateSnapshot(WorldVolume)` を同時に内部 store へ適用しません。
 
-snapshot は detached value の配列として lock の外へ出た後に Protocol message へ変換します。network send を Simulation lock 中に実行しないことが重要です。
+snapshot は detached value の配列として lock の外へ出た後に Protocol message へ変換します。network send を Simulation lock 中に実行しません。
 
 ## Simulation tick lifecycle
 
@@ -42,9 +42,11 @@ network receive / send を tick loop 内へ持ち込まず、application stoppin
 
 network receive path から Simulation / connection state を同期的に横断して変更し続けないため、Client command は bounded `Channel<ClientCommand>` へ投入します。
 
-Phase 4 で扱う command は `SubscribeArea` のみです。channel capacity は有限とし、producer が server の処理速度を恒常的に上回った場合に無制限な backlog を作らない構成にしています。
+現在のsubscription commandは `SubscribeVolume` です。2Dの `SubscribeArea` / rectangle互換入口は持ちません。
 
-`SubscribeArea` は command queue へ投入する前に server policy で検証します。矩形の両端が `SpatialGrid` の対応範囲へ変換できることに加え、走査対象セル数を `Server:MaximumSubscriptionCellCount` 以下に制限します。既定値は 4096 cells です。これにより極端な座標で hosted service を停止させたり、巨大矩形で spatial query に過大な走査を要求したりできないようにします。
+`SubscribeVolume` は command queue へ投入する前に server policy で検証します。`minX/minY/minZ/maxX/maxY/maxZ` は有限かつ各軸で `max >= min` を要求し、volume両端が `SpatialGrid` の対応範囲へ変換できることを確認します。
+
+走査対象セル数は `cellsX × cellsY × cellsZ` で数え、`Server:MaximumSubscriptionCellCount` 以下に制限します。既定値は `65,536` cellsです。Web Clientの既定高度範囲と16:9 viewportの最小zoomを収めつつ、極端に巨大なvolumeによる過大なspatial queryを防ぎます。
 
 ## Connection state
 
@@ -53,7 +55,7 @@ Phase 4 で扱う command は `SubscribeArea` のみです。channel capacity �
 - WebSocket
 - handshake 完了状態
 - negotiated Protocol version
-- current subscription area
+- current `WorldVolume` subscription
 - subscription revision
 - Client が既に認識している Agent ID set
 
@@ -72,27 +74,29 @@ connection 切断時は registry から削除し、subscription / known Agent st
 3. compatible なら negotiated version を connection state に保存する。
 4. Server が `HelloAck` と current Simulation tick rate を返す。
 
-handshake 後に frame version が途中で変化した場合は connection を拒否します。
+Phase 9 の current Protocol は `2.0` です。handshake 後に frame version が途中で変化した場合は connection を拒否します。
 
 ## Snapshot publisher
 
 `SnapshotPublishService` は Simulation tick とは別の `PeriodicTimer` で動きます。
 
-publish ごとに connection の subscription を capture し、その矩形だけ `SimulationRuntime.CreateSnapshot()` で取得します。`SnapshotMessagePlanner` は前回 Client が認識していた Agent ID set と比較して次を生成します。
+publish ごとに connection の3D subscription volumeを captureし、そのvolumeだけ `SimulationRuntime.CreateSnapshot()` で取得します。`SnapshotMessagePlanner` は前回 Client が認識していた Agent ID set と比較して次を生成します。
 
 - new ID → `AgentSpawn`
 - existing ID → `AgentUpdate`
 - disappeared ID → `AgentRemove`
 
-subscription を変更しても known Agent ID set は次の publish まで保持します。新範囲の snapshot と比較することで、旧範囲にだけ存在した Agent へ `AgentRemove` を送信できます。
+`AgentSpawn` / `AgentUpdate` は Simulation の `X/Y/Z` と `VelocityX/VelocityY/VelocityZ` を Protocol 2.0へそのまま保持します。
 
-subscription revision を使い、publish 中に Client が別範囲へ subscription を変更した場合、古い publish 結果で known Agent ID set を上書きしません。
+subscription を変更しても known Agent ID set は次の publish まで保持します。新volumeの snapshot と比較することで、旧volumeにだけ存在した Agent へ `AgentRemove` を送信できます。
+
+subscription revision を使い、publish 中に Client が別volumeへ subscription を変更した場合、古い publish 結果で known Agent ID set を上書きしません。
 
 ## Snapshot delivery isolation
 
-snapshot publisherはconnectionごとに最大1件のdelivery taskだけをin-flightとして保持します。同じconnectionが配送中なら次のpublish周期はqueueせずdropします。これによりsnapshot backlogを無制限に増やさず、常に新しい周期へ追従できます。一方、異なるconnectionのdeliveryは独立taskとして進むため、slow Clientのnetwork backpressureを他Clientへ伝播させません。
+snapshot publisherはconnectionごとに最大1件のdelivery taskだけをin-flightとして保持します。同じconnectionが配送中なら次のpublish周期はqueueせずdropします。異なるconnectionのdeliveryは独立taskとして進むため、slow Clientのnetwork backpressureを他Clientへ伝播させません。
 
-各deliveryではlinked `CancellationTokenSource` を1つだけ作り、各message sendの直前に5秒timeoutを再設定します。message単位でCTS/timerを生成しないため、Agent数に比例するcancellation allocationを避けます。5秒以内に1messageを送信できないconnectionはabortしてregistryから除外します。
+各deliveryではlinked `CancellationTokenSource` を1つだけ作り、各message sendの直前に5秒timeoutを再設定します。5秒以内に1messageを送信できないconnectionはabortしてregistryから除外します。
 
 shutdown時は新しいscheduleを停止した後、既存in-flight taskを回収してからpublisherを終了します。
 
@@ -100,11 +104,9 @@ shutdown時は新しいscheduleを停止した後、既存in-flight taskを回�
 
 同一 WebSocket へ handshake/error response と snapshot publisher が同時 send しないよう、connection 単位で send を直列化します。Protocol serialization は send lock の前に行い、WebSocket I/O の ownership だけを排他します。
 
-connection disposal と snapshot send が競合する可能性があるため、send の lifetime を参照カウントします。dispose request 後は新しい send を拒否し、既に開始済みの send がすべて終了してから send semaphore を破棄します。registry snapshot に残った古い参照からの送信拒否は publisher 側で接続終了として処理します。
-
 ## Logging
 
-Server の structured logging は source-generated `LoggerMessage` を使用します。長寿命 service や connection hot path で不要な logging argument allocation を避けます。
+Server の structured logging は source-generated `LoggerMessage` を使用します。
 
 ## Graceful shutdown
 
@@ -112,4 +114,4 @@ application stop では hosted service の cancellation token と WebSocket sess
 
 ## 現段階の制約
 
-Phase 4 は End-to-End PoC 用の最小実装です。snapshot は Agent ごとの frame を送信しており、batching / compression / bandwidth budget はまだ導入していません。これらは実際の snapshot bytes / encode time / send time を Phase 6 / 7 で計測した後に最適化します。
+snapshot は Agent ごとの frame を送信しており、batching / compression / bandwidth budget はまだ導入していません。これらは計測結果を基に後続最適化します。

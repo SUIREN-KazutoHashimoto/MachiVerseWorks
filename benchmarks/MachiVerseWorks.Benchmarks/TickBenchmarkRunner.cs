@@ -62,7 +62,7 @@ internal static class TickBenchmarkRunner
     {
         var world = new SimulationWorld(
             new SimulationConfig(tickRate: 30, seed: 1234, spatialCellSize: 64d));
-        world.CreateAgents(agentCount, new WorldRect(-5_000d, -5_000d, 5_000d, 5_000d));
+        PopulateThreeDimensionalAgents(world, agentCount);
 
         for (var tick = 0; tick < options.WarmupTicks; tick++)
         {
@@ -105,6 +105,21 @@ internal static class TickBenchmarkRunner
             durations[^1],
             1000d / average,
             allocatedPerTick);
+    }
+
+    private static void PopulateThreeDimensionalAgents(SimulationWorld world, int agentCount)
+    {
+        for (var index = 0; index < agentCount; index++)
+        {
+            var x = ((index * 37L) % 10_000L) - 5_000d;
+            var y = ((index * 101L) % 10_000L) - 5_000d;
+            var z = ((index * 17L) % 1_000L) - 500d;
+            var velocity = new WorldVector(
+                ((index % 7) - 3) * 0.15d,
+                ((index % 11) - 5) * 0.1d,
+                ((index % 5) - 2) * 0.2d);
+            world.CreateAgent(new WorldPoint(x, y, z), velocity);
+        }
     }
 
     private static double Percentile(double[] sortedValues, double percentile)

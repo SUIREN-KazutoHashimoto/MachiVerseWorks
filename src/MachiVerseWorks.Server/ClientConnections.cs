@@ -13,7 +13,7 @@ internal sealed class ClientConnection : IDisposable
     private readonly object _lifetimeGate = new();
     private readonly SemaphoreSlim _sendGate = new(1, 1);
     private HashSet<ulong> _knownAgentIds = [];
-    private WorldRect? _subscription;
+    private WorldVolume? _subscription;
     private long _subscriptionRevision;
     private int _activeSendCount;
     private bool _disposeRequested;
@@ -26,11 +26,8 @@ internal sealed class ClientConnection : IDisposable
     }
 
     public Guid Id { get; }
-
     public WebSocket Socket { get; }
-
     public bool HandshakeCompleted { get; private set; }
-
     public ProtocolVersion NegotiatedVersion { get; private set; }
 
     public void CompleteHandshake(ProtocolVersion negotiatedVersion)
@@ -39,11 +36,11 @@ internal sealed class ClientConnection : IDisposable
         HandshakeCompleted = true;
     }
 
-    public void SetSubscription(WorldRect area)
+    public void SetSubscription(WorldVolume volume)
     {
         lock (_stateGate)
         {
-            _subscription = area;
+            _subscription = volume;
             _subscriptionRevision = checked(_subscriptionRevision + 1);
         }
     }
@@ -52,16 +49,12 @@ internal sealed class ClientConnection : IDisposable
     {
         lock (_stateGate)
         {
-            if (_subscription is not WorldRect area)
+            if (_subscription is not WorldVolume volume)
             {
                 state = default;
                 return false;
             }
-
-            state = new ClientSubscriptionState(
-                area,
-                _subscriptionRevision,
-                new HashSet<ulong>(_knownAgentIds));
+            state = new ClientSubscriptionState(volume, _subscriptionRevision, new HashSet<ulong>(_knownAgentIds));
             return true;
         }
     }
@@ -69,24 +62,15 @@ internal sealed class ClientConnection : IDisposable
     public bool TryReplaceKnownAgentIds(long revision, HashSet<ulong> agentIds)
     {
         ArgumentNullException.ThrowIfNull(agentIds);
-
         lock (_stateGate)
         {
             var revisionMatches = _subscriptionRevision == revision;
-
-            // This set represents what was actually delivered to the client after a complete
-            // snapshot plan, independently of which subscription is current now. Committing the
-            // exact delivered set also preserves stale-plan removes, so the next subscription can
-            // choose Spawn/Update/Remove from the client's real state.
             _knownAgentIds = agentIds;
             return revisionMatches;
         }
     }
 
-    public async Task<ProtocolSendMetrics> SendAsync(
-        IProtocolMessage message,
-        ProtocolVersion version,
-        CancellationToken cancellationToken)
+    public async Task<ProtocolSendMetrics> SendAsync(IProtocolMessage message, ProtocolVersion version, CancellationToken cancellationToken)
     {
         BeginSend();
         try
@@ -94,23 +78,13 @@ internal sealed class ClientConnection : IDisposable
             var encodeStarted = Stopwatch.GetTimestamp();
             var frame = ProtocolCodec.Serialize(message, version);
             var encodeTimeMs = Stopwatch.GetElapsedTime(encodeStarted).TotalMilliseconds;
-
             await _sendGate.WaitAsync(cancellationToken);
             try
             {
-                if (Socket.State != WebSocketState.Open)
-                {
-                    throw new WebSocketException(WebSocketError.InvalidState);
-                }
-
+                if (Socket.State != WebSocketState.Open) throw new WebSocketException(WebSocketError.InvalidState);
                 var sendStarted = Stopwatch.GetTimestamp();
-                await Socket.SendAsync(
-                    new ArraySegment<byte>(frame),
-                    WebSocketMessageType.Binary,
-                    endOfMessage: true,
-                    cancellationToken);
-                var sendTimeMs = Stopwatch.GetElapsedTime(sendStarted).TotalMilliseconds;
-                return new ProtocolSendMetrics(frame.Length, encodeTimeMs, sendTimeMs);
+                await Socket.SendAsync(new ArraySegment<byte>(frame), WebSocketMessageType.Binary, endOfMessage: true, cancellationToken);
+                return new ProtocolSendMetrics(frame.Length, encodeTimeMs, Stopwatch.GetElapsedTime(sendStarted).TotalMilliseconds);
             }
             finally
             {
@@ -123,21 +97,14 @@ internal sealed class ClientConnection : IDisposable
         }
     }
 
-    public void Abort()
-    {
-        Socket.Abort();
-    }
+    public void Abort() => Socket.Abort();
 
     public void Dispose()
     {
         var disposeSendGate = false;
         lock (_lifetimeGate)
         {
-            if (_disposeRequested)
-            {
-                return;
-            }
-
+            if (_disposeRequested) return;
             _disposeRequested = true;
             if (_activeSendCount == 0 && !_sendGateDisposed)
             {
@@ -145,12 +112,7 @@ internal sealed class ClientConnection : IDisposable
                 disposeSendGate = true;
             }
         }
-
-        if (disposeSendGate)
-        {
-            _sendGate.Dispose();
-        }
-
+        if (disposeSendGate) _sendGate.Dispose();
         GC.SuppressFinalize(this);
     }
 
@@ -175,23 +137,15 @@ internal sealed class ClientConnection : IDisposable
                 disposeSendGate = true;
             }
         }
-
-        if (disposeSendGate)
-        {
-            _sendGate.Dispose();
-        }
+        if (disposeSendGate) _sendGate.Dispose();
     }
 }
 
-internal readonly record struct ClientSubscriptionState(
-    WorldRect Area,
-    long Revision,
-    HashSet<ulong> KnownAgentIds);
+internal readonly record struct ClientSubscriptionState(WorldVolume Volume, long Revision, HashSet<ulong> KnownAgentIds);
 
 internal sealed class ClientConnectionRegistry
 {
     private readonly ConcurrentDictionary<Guid, ClientConnection> _connections = new();
-
     public int Count => _connections.Count;
 
     public ClientConnection Register(WebSocket socket)
@@ -202,42 +156,26 @@ internal sealed class ClientConnectionRegistry
             connection.Dispose();
             throw new InvalidOperationException("Failed to register a unique client connection.");
         }
-
         return connection;
     }
 
-    public bool TryGet(Guid id, out ClientConnection? connection)
-    {
-        return _connections.TryGetValue(id, out connection);
-    }
-
-    public bool Remove(Guid id)
-    {
-        return _connections.TryRemove(id, out _);
-    }
-
-    public ClientConnection[] CreateSnapshot()
-    {
-        return _connections.Values.ToArray();
-    }
+    public bool TryGet(Guid id, out ClientConnection? connection) => _connections.TryGetValue(id, out connection);
+    public bool Remove(Guid id) => _connections.TryRemove(id, out _);
+    public ClientConnection[] CreateSnapshot() => _connections.Values.ToArray();
 }
 
 internal abstract record ClientCommand(Guid ConnectionId);
-
-internal sealed record SubscribeAreaCommand(
-    Guid ConnectionId,
-    WorldRect Area) : ClientCommand(ConnectionId);
+internal sealed record SubscribeVolumeCommand(Guid ConnectionId, WorldVolume Volume) : ClientCommand(ConnectionId);
 
 internal sealed class ClientCommandQueue
 {
     private const int Capacity = 1024;
-    private readonly Channel<ClientCommand> _channel = Channel.CreateBounded<ClientCommand>(
-        new BoundedChannelOptions(Capacity)
-        {
-            SingleReader = true,
-            SingleWriter = false,
-            FullMode = BoundedChannelFullMode.Wait,
-        });
+    private readonly Channel<ClientCommand> _channel = Channel.CreateBounded<ClientCommand>(new BoundedChannelOptions(Capacity)
+    {
+        SingleReader = true,
+        SingleWriter = false,
+        FullMode = BoundedChannelFullMode.Wait,
+    });
 
     public ValueTask WriteAsync(ClientCommand command, CancellationToken cancellationToken)
     {
@@ -245,16 +183,10 @@ internal sealed class ClientCommandQueue
         return _channel.Writer.WriteAsync(command, cancellationToken);
     }
 
-    public IAsyncEnumerable<ClientCommand> ReadAllAsync(CancellationToken cancellationToken)
-    {
-        return _channel.Reader.ReadAllAsync(cancellationToken);
-    }
+    public IAsyncEnumerable<ClientCommand> ReadAllAsync(CancellationToken cancellationToken) => _channel.Reader.ReadAllAsync(cancellationToken);
 }
 
-internal sealed class ClientCommandProcessor(
-    ClientCommandQueue queue,
-    ClientConnectionRegistry connections,
-    ILogger<ClientCommandProcessor> logger) : BackgroundService
+internal sealed class ClientCommandProcessor(ClientCommandQueue queue, ClientConnectionRegistry connections, ILogger<ClientCommandProcessor> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -262,15 +194,11 @@ internal sealed class ClientCommandProcessor(
         {
             await foreach (var command in queue.ReadAllAsync(stoppingToken))
             {
-                if (!connections.TryGet(command.ConnectionId, out var connection) || connection is null)
-                {
-                    continue;
-                }
-
+                if (!connections.TryGet(command.ConnectionId, out var connection) || connection is null) continue;
                 switch (command)
                 {
-                    case SubscribeAreaCommand subscribe:
-                        connection.SetSubscription(subscribe.Area);
+                    case SubscribeVolumeCommand subscribe:
+                        connection.SetSubscription(subscribe.Volume);
                         break;
                     default:
                         ServerLog.UnsupportedClientCommand(logger, command.GetType().Name);

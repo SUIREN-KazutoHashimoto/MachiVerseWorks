@@ -1,6 +1,6 @@
-# Phase 7 Performance Benchmark Foundation
+# Performance Benchmark Foundation
 
-Phase 7で導入した性能計測基盤の実行方法、保存形式、観測点、最初の改善候補をまとめます。一般的な性能判断ルールは [`performance.md`](performance.md) を正本とします。
+Phase 7で導入した性能計測基盤と、Phase 9の3D Simulation回帰計測条件をまとめます。一般的な性能判断ルールは [`performance.md`](performance.md) を正本とします。
 
 ## 1. BenchmarkDotNet共通設定
 
@@ -43,41 +43,67 @@ GitHub Actionsの `Phase 7 benchmark` workflowは `.artifacts/phase7-benchmarks`
 
 比較用の正式baselineを取る場合は、同一hardware・同一OS・同一runtime・同一commit条件を記録して通常Jobで実行します。
 
-Phase 2の独自tick runnerは既存baseline再現用に残しています。
+独自tick runner:
 
 ```bash
 dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release -- --warmup 60 --ticks 200
 ```
 
-## 3. Phase 7 benchmark scenarios
+## 3. Phase 9 3D benchmark scenarios
+
+Phase 9では、2D互換入口ではなく実際にZ値を分散させた入力で性能回帰を観測します。
 
 ### Snapshot
 
-`SnapshotBenchmarks` は固定seedで1,000 / 10,000 / 100,000 Agentを生成し、中央の固定subscription範囲に対する `SimulationWorld.CreateSnapshot` を測定します。
+`SnapshotBenchmarks` は固定seedで1,000 / 10,000 / 100,000 Agentを3D volumeへ生成し、中央の固定3D subscription volumeに対する `SimulationWorld.CreateSnapshot` を測定します。
 
 ここには次が含まれます。
 
-- spatial query
-- exact area filtering
+- 3D spatial query
+- exact volume filtering
 - `AgentSnapshot`配列生成
 
 ### Spatial query
 
-`SpatialQueryBenchmarks` は `SpatialIndex.Query` 自体を分離して測ります。10,000 / 100,000 Agentと、異なるquery範囲を組み合わせます。
+`SpatialQueryBenchmarks` は `SpatialIndex.Query(WorldVolume)` 自体を分離して測ります。10,000 / 100,000 AgentをX/Y/Zへ分散し、異なるquery volumeを組み合わせます。
 
-Snapshot全体とSpatialIndex単体を分けることで、候補列挙とsnapshot materializationのどちらが支配的か比較できます。
+Snapshot全体とSpatialIndex単体を分けることで、3D cell候補列挙とsnapshot materializationのどちらが支配的か比較できます。
+
+### Tick
+
+独自tick runnerはAgentの初期位置と速度の両方にZ成分を設定します。これにより3軸位置更新と3D Spatial Index cell更新を含むtick costを測定します。
 
 ### Protocol
 
-`ProtocolCodecBenchmarks` は代表的な `AgentUpdateMessage` のencode / decodeを個別に測ります。
+`ProtocolCodecBenchmarks` はZ / VelocityZが非0の代表的な `AgentUpdateMessage` のencode / decodeを個別に測ります。
 
 Network send時間はmicrobenchmarkへ混ぜず、Server側の配信統計で観測します。
 
-## 4. Server snapshot delivery metrics
+## 4. 2D契約からの構造的回帰
 
-Phase 6の `/metrics/e2e` は互換維持し、Phase 7では各snapshot deliveryについてDebug structured logも出力します。
+Phase 9のwire contractは意図的に情報量が増えます。実行時間とは別に、次のpayload増加は仕様上の固定costです。
 
-記録項目:
+| Message | Phase 8まで | Phase 9 | 増加 |
+| --- | ---: | ---: | ---: |
+| SubscribeArea payload | 32 bytes | 48 bytes | +16 bytes / +50% |
+| AgentSpawn / AgentUpdate payload | 48 bytes | 64 bytes | +16 bytes / +33.3% |
+
+Spatial cell keyも `(X,Y)` から `(X,Y,Z)` へ増えるため、cell dictionaryのkeyとhash計算costは増加します。Save Dataは各Agentへ `z` と `velocityZ` を追加するため、JSON byte数も増えます。
+
+CPU時間・allocationの比較はshared runnerの別run同士を直接性能判定に使わず、Phase 8以前のcommitとPhase 9 commitを同一hardware / OS / .NET runtimeでそれぞれ通常Job実行して比較します。最低限、次を比較対象にします。
+
+- 1,000 / 10,000 / 100,000 Agent tick average / p95 / p99 / allocation
+- Spatial query mean / allocated bytes
+- Snapshot mean / allocated bytes
+- Protocol encode / decode mean / allocated bytes
+- Server snapshot delivery bytes / encode time / send time
+- Web decode time / animation frame interval
+
+性能回帰を検知した場合も、3D化で不可避なpayload増加と、実装上の不要なCPU / allocation増加を分離して判断します。
+
+## 5. Server snapshot delivery metrics
+
+`/metrics/e2e` と各snapshot deliveryのDebug structured logで次を記録します。
 
 - connection ID
 - Agent count
@@ -93,9 +119,7 @@ Logging__LogLevel__MachiVerseWorks.Server.SnapshotPublishService=Debug \
   dotnet run --project src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj
 ```
 
-これにより累積値だけでなく、配信単位の変動を時系列で追跡できます。
-
-## 5. Web Client development overlay
+## 6. Web Client development overlay
 
 Vite development modeでは右上に `Performance (DEV)` overlayを表示します。production buildでは表示しません。
 
@@ -104,37 +128,14 @@ Vite development modeでは右上に `Performance (DEV)` overlayを表示しま�
 - snapshot decode time: average / p95 / maximum
 - animation frame interval: average / p95 / maximum
 
-sample総数とdecode総bytesは内部metricsとして維持し、Phase 6 E2Eの計測にも引き続き利用します。
+sample総数とdecode総bytesは内部metricsとして維持し、E2Eの計測にも引き続き利用します。
 
-起動:
+## 7. 性能改善候補
 
-```bash
-cd src/web
-npm run dev
-```
+ServerからClientへのAgent message batchingは引き続き最優先候補です。Phase 9では1 Agentあたりのstate payloadが16 bytes増えるため、frame数削減に加えてbatchingによるheader overhead削減の価値も相対的に高くなります。
 
-FrameはSimulation tick timeではなく、ブラウザの連続する `requestAnimationFrame` timestamp間隔です。
+次点は3D `SpatialIndex.Query` のcell走査数です。subscription volumeが高さ方向へ広がり過ぎると候補cell数が積で増えるため、Serverの `MaximumSubscriptionCellCount` とClientの高度購読範囲をbenchmark結果に合わせて調整します。
 
-## 6. 最初の性能改善候補
+## 8. 完了判定
 
-最優先候補は **ServerからClientへのAgent message batching** とします。
-
-Phase 6の100,000 Agent近傍配信では、1回の近傍snapshotで約1,075 Agentに対して約1,078 message、約68.9 KBを送信し、encode約0.58 msに対してsend約6.08 msでした。この構成ではAgentごとにbinary frameを生成し、messageごとに `WebSocket.SendAsync` を呼び出しています。
-
-したがって最初に検証すべき仮説は「payload byte数そのものより、message/frame数とSendAsync呼び出し回数がServer送信costを押し上げている」です。
-
-次の最適化フェーズでは、複数Agent updateを1 frameへbatchする案を現行方式と同条件で比較し、最低限次を確認してから採用します。
-
-- send time
-- encode time
-- bytes / snapshot
-- message / frame count
-- allocation / GC
-- Client decode time
-- reconnect / removeを含む正しさ
-
-次点の候補は `SnapshotMessagePlanner` の毎snapshot sort・HashSet・List allocationと、Web Clientのvisible Agent全件同期です。これらはBenchmarkDotNet結果とbrowser profilerで支配率を確認してから着手します。
-
-## 7. 完了判定
-
-Phase 7では「速くした」ことではなく、「継続して測り、結果を保存し、次の最適化対象を根拠付きで選べる基盤がある」ことを完了条件とします。
+性能改善そのものではなく、3D化後のtick / spatial query / snapshot / protocolを再現可能な条件で測定でき、2Dから増えた固定costと実行時回帰を区別してレビューできることを完了条件とします。

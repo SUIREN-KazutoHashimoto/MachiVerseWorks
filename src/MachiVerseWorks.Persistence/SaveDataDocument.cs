@@ -34,9 +34,13 @@ internal sealed class SaveAgentData
 
     public double? Y { get; init; }
 
+    public double? Z { get; init; }
+
     public double? VelocityX { get; init; }
 
     public double? VelocityY { get; init; }
+
+    public double? VelocityZ { get; init; }
 
     public bool? IsActive { get; init; }
 }

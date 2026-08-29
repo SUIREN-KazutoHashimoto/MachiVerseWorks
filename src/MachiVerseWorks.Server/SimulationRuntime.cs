@@ -10,21 +10,10 @@ internal sealed class SimulationRuntime
     public SimulationRuntime(ServerOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-
-        _world = new SimulationWorld(new SimulationConfig(
-            options.TickRate,
-            options.Seed,
-            options.SpatialCellSize));
-
+        _world = new SimulationWorld(new SimulationConfig(options.TickRate, options.Seed, options.SpatialCellSize));
         if (options.InitialAgentCount > 0)
         {
-            _world.CreateAgents(
-                options.InitialAgentCount,
-                new WorldRect(
-                    options.SpawnMinX,
-                    options.SpawnMinY,
-                    options.SpawnMaxX,
-                    options.SpawnMaxY));
+            _world.CreateAgents(options.InitialAgentCount, new WorldVolume(options.SpawnMinX, options.SpawnMinY, options.SpawnMinZ, options.SpawnMaxX, options.SpawnMaxY, options.SpawnMaxZ));
         }
     }
 
@@ -32,39 +21,21 @@ internal sealed class SimulationRuntime
 
     public ulong TickCount
     {
-        get
-        {
-            lock (_gate)
-            {
-                return _world.Time.TickCount;
-            }
-        }
+        get { lock (_gate) { return _world.Time.TickCount; } }
     }
 
     public int ActiveAgentCount
     {
-        get
-        {
-            lock (_gate)
-            {
-                return _world.ActiveAgentCount;
-            }
-        }
+        get { lock (_gate) { return _world.ActiveAgentCount; } }
     }
 
     public void Step()
     {
-        lock (_gate)
-        {
-            _world.Step();
-        }
+        lock (_gate) { _world.Step(); }
     }
 
-    public AgentSnapshot[] CreateSnapshot(WorldRect area)
+    public AgentSnapshot[] CreateSnapshot(WorldVolume volume)
     {
-        lock (_gate)
-        {
-            return _world.CreateSnapshot(area);
-        }
+        lock (_gate) { return _world.CreateSnapshot(volume); }
     }
 }

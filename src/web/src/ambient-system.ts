@@ -2,7 +2,7 @@ import {
   resolveAmbientLayers,
   type AmbientLayerDefinition,
   type AmbientZoneDefinition,
-  type Point2D,
+  type Point3D,
 } from './audio-policy.ts';
 import type { AudioEngine } from './audio-engine.ts';
 
@@ -35,7 +35,7 @@ export class AmbientSystem {
     this.parameters = { ...parameters };
   }
 
-  public async update(listener: Point2D): Promise<void> {
+  public async update(listener: Point3D): Promise<void> {
     validatePoint(listener, 'Ambient listener');
     const mix = resolveAmbientLayers(this.globalLayers, this.zones, listener, this.parameters);
     const nextKeys = new Set(mix.map((layer) => layer.key));
@@ -49,17 +49,19 @@ export class AmbientSystem {
     );
     this.activeKeys = nextKeys;
   }
-
 }
 
 function validateZone(zone: AmbientZoneDefinition): void {
   if (
     !Number.isFinite(zone.minX) ||
     !Number.isFinite(zone.minY) ||
+    !Number.isFinite(zone.minZ) ||
     !Number.isFinite(zone.maxX) ||
     !Number.isFinite(zone.maxY) ||
+    !Number.isFinite(zone.maxZ) ||
     zone.maxX < zone.minX ||
     zone.maxY < zone.minY ||
+    zone.maxZ < zone.minZ ||
     !Number.isFinite(zone.priority) ||
     !Number.isFinite(zone.fadeDistance) ||
     zone.fadeDistance < 0
@@ -75,9 +77,10 @@ function validateLayer(layer: AmbientLayerDefinition, label: string): void {
   validateFinite(layer.gain, `${label} ${layer.key} gain`);
 }
 
-function validatePoint(point: Point2D, label: string): void {
+function validatePoint(point: Point3D, label: string): void {
   validateFinite(point.x, `${label} x`);
   validateFinite(point.y, `${label} y`);
+  validateFinite(point.z, `${label} z`);
 }
 
 function validateFinite(value: number, label: string): void {

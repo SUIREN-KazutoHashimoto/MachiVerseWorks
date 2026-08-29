@@ -9,8 +9,10 @@ public class ProtocolCodecBenchmarks
         42,
         125.25d,
         -480.5d,
+        72.75d,
         0.75d,
         -0.25d,
+        1.5d,
         12_345);
 
     private byte[] _frame = [];

@@ -1,5 +1,5 @@
 import manifestJson from '../audio/manifest.json' with { type: 'json' };
-import { selectVoiceIds, type Point2D, type VoiceCandidate } from './audio-policy.ts';
+import { selectVoiceIds, type Point3D, type VoiceCandidate } from './audio-policy.ts';
 
 export type AudioCategory = 'music' | 'ui' | 'ambient' | 'world' | 'voice';
 export type AudioEngineState = 'locked' | 'running' | 'suspended' | 'unavailable';
@@ -28,7 +28,7 @@ interface AudioManifest {
 
 export interface PlaySoundOptions {
   readonly gain?: number;
-  readonly position?: Point2D;
+  readonly position?: Point3D;
 }
 
 export interface ThreeCameraLike {
@@ -36,13 +36,13 @@ export interface ThreeCameraLike {
 }
 
 export interface AudioListenerPose {
-  readonly position: { readonly x: number; readonly y: number; readonly z: number };
-  readonly direction: { readonly x: number; readonly y: number; readonly z: number };
-  readonly up: { readonly x: number; readonly y: number; readonly z: number };
+  readonly position: Point3D;
+  readonly direction: Point3D;
+  readonly up: Point3D;
 }
 
 export interface AudioEmitterOptions {
-  readonly position: Point2D;
+  readonly position: Point3D;
   readonly priority?: number;
   readonly entityId?: bigint;
 }
@@ -52,7 +52,7 @@ interface VirtualEmitter {
   readonly cueId: string;
   readonly priority: number;
   readonly entityId?: bigint;
-  position: Point2D;
+  position: Point3D;
 }
 
 interface ActiveEmitterVoice {
@@ -174,7 +174,7 @@ export class AudioEngine {
     });
   }
 
-  public updateEmitterPosition(id: string, position: Point2D): void {
+  public updateEmitterPosition(id: string, position: Point3D): void {
     validatePoint(position, `Emitter ${id} position`);
     const emitter = this.emitters.get(id);
     if (emitter === undefined) {
@@ -192,7 +192,7 @@ export class AudioEngine {
     this.stopEmitterVoice(id);
   }
 
-  public updateEntityPosition(entityId: bigint, position: Point2D): void {
+  public updateEntityPosition(entityId: bigint, position: Point3D): void {
     validatePoint(position, 'Entity position');
     for (const emitter of this.emitters.values()) {
       if (emitter.entityId === entityId) {
@@ -213,7 +213,7 @@ export class AudioEngine {
     }
   }
 
-  public async syncSpatialVoices(listener: Point2D): Promise<void> {
+  public async syncSpatialVoices(listener: Point3D): Promise<void> {
     validatePoint(listener, 'Audio listener');
     if (this.stateValue !== 'running') {
       this.stopAllEmitterVoices();
@@ -394,7 +394,7 @@ export class AudioEngine {
     }
   }
 
-  private createPanner(cue: AudioCueDefinition, position: Point2D): PannerNode {
+  private createPanner(cue: AudioCueDefinition, position: Point3D): PannerNode {
     validatePoint(position, 'Panner position');
     const referenceDistance = cue.referenceDistance ?? manifest.defaults.referenceDistance;
     const maximumDistance = cue.maximumDistance ?? manifest.defaults.maximumDistance;
@@ -547,15 +547,20 @@ function getCue(cueId: string): AudioCueDefinition {
   return cue;
 }
 
-function setPannerPosition(panner: PannerNode, position: Point2D): void {
-  validatePoint(position, 'Panner position');
+function setPannerPosition(panner: PannerNode, position: Point3D): void {
+  const mapped = simulationToAudioPosition(position);
   const time = panner.context.currentTime;
-  panner.positionX.setValueAtTime(position.x, time);
-  panner.positionY.setValueAtTime(0, time);
-  panner.positionZ.setValueAtTime(position.y, time);
+  panner.positionX.setValueAtTime(mapped.x, time);
+  panner.positionY.setValueAtTime(mapped.y, time);
+  panner.positionZ.setValueAtTime(mapped.z, time);
 }
 
-function normalize3(x: number, y: number, z: number): { readonly x: number; readonly y: number; readonly z: number } {
+export function simulationToAudioPosition(position: Point3D): Point3D {
+  validatePoint(position, 'Audio position');
+  return { x: position.x, y: position.z, z: position.y };
+}
+
+function normalize3(x: number, y: number, z: number): Point3D {
   const length = Math.hypot(x, y, z);
   if (length <= Number.EPSILON) {
     return { x: 0, y: 0, z: -1 };
@@ -576,13 +581,14 @@ export function resolveAudioListenerPose(camera: ThreeCameraLike): AudioListener
     Number(elements[9]),
     Number(elements[10]),
     Number(elements[12]),
+    Number(elements[13]),
     Number(elements[14]),
   ];
   if (!values.every(Number.isFinite)) {
     return null;
   }
   return {
-    position: { x: values[6]!, y: 0, z: values[7]! },
+    position: { x: values[6]!, y: values[7]!, z: values[8]! },
     direction: normalize3(-values[3]!, -values[4]!, -values[5]!),
     up: normalize3(values[0]!, values[1]!, values[2]!),
   };
@@ -593,9 +599,10 @@ export function resolveMasterGain(muted: boolean, volume: number): number {
   return muted ? 0 : normalizedVolume;
 }
 
-function validatePoint(point: Point2D, label: string): void {
+function validatePoint(point: Point3D, label: string): void {
   validateFinite(point.x, `${label} x`);
   validateFinite(point.y, `${label} y`);
+  validateFinite(point.z, `${label} z`);
 }
 
 function validatePositiveFinite(value: number, label: string): void {

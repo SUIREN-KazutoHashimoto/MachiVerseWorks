@@ -3,36 +3,38 @@ import assert from 'node:assert/strict';
 
 import { resolveAmbientLayers, selectVoiceIds } from '../src/audio-policy.ts';
 
-test('voice budget prefers priority, then nearest emitters', () => {
+test('voice budget prefers priority, then nearest emitters in 3D', () => {
   const selected = selectVoiceIds([
-    { id: 'far', position: { x: 100, y: 0 }, priority: 0 },
-    { id: 'near', position: { x: 1, y: 0 }, priority: 0 },
-    { id: 'priority', position: { x: 500, y: 0 }, priority: 10 },
-  ], { x: 0, y: 0 }, 2);
+    { id: 'far-altitude', position: { x: 0, y: 0, z: 100 }, priority: 0 },
+    { id: 'near', position: { x: 1, y: 0, z: 0 }, priority: 0 },
+    { id: 'priority', position: { x: 500, y: 0, z: 500 }, priority: 10 },
+  ], { x: 0, y: 0, z: 0 }, 2);
 
   assert.deepEqual([...selected].sort(), ['near', 'priority']);
 });
 
 test('voice selection rejects non-finite position and priority values', () => {
   assert.throws(
-    () => selectVoiceIds([{ id: 'bad', position: { x: Number.NaN, y: 0 }, priority: 0 }], { x: 0, y: 0 }, 1),
+    () => selectVoiceIds([{ id: 'bad', position: { x: Number.NaN, y: 0, z: 0 }, priority: 0 }], { x: 0, y: 0, z: 0 }, 1),
     RangeError,
   );
   assert.throws(
-    () => selectVoiceIds([{ id: 'bad', position: { x: 0, y: 0 }, priority: Number.POSITIVE_INFINITY }], { x: 0, y: 0 }, 1),
+    () => selectVoiceIds([{ id: 'bad', position: { x: 0, y: 0, z: 0 }, priority: Number.POSITIVE_INFINITY }], { x: 0, y: 0, z: 0 }, 1),
     RangeError,
   );
 });
 
-test('ambient zones blend with priority, edge fade, and external parameters', () => {
+test('ambient zones blend with 3D bounds, priority, edge fade, and external parameters', () => {
   const mix = resolveAmbientLayers(
     [{ key: 'wind', cueId: 'ambient.wind', gain: 0.2 }],
     [{
       id: 'station',
       minX: 0,
       minY: 0,
+      minZ: 0,
       maxX: 100,
       maxY: 100,
+      maxZ: 100,
       priority: 5,
       fadeDistance: 20,
       layers: [
@@ -40,7 +42,7 @@ test('ambient zones blend with priority, edge fade, and external parameters', ()
         { key: 'rain', cueId: 'ambient.rain', gain: 1, parameter: 'rain' },
       ],
     }],
-    { x: 10, y: 50 },
+    { x: 10, y: 50, z: 50 },
     { rain: 0.5 },
   );
 
@@ -51,24 +53,41 @@ test('ambient zones blend with priority, edge fade, and external parameters', ()
   ]);
 });
 
+test('ambient zone excludes a listener outside its altitude range', () => {
+  const mix = resolveAmbientLayers([], [{
+    id: 'elevated',
+    minX: -10,
+    minY: -10,
+    minZ: 50,
+    maxX: 10,
+    maxY: 10,
+    maxZ: 100,
+    priority: 1,
+    fadeDistance: 0,
+    layers: [{ key: 'elevated', cueId: 'ambient.station', gain: 1 }],
+  }], { x: 0, y: 0, z: 0 });
+
+  assert.deepEqual(mix, []);
+});
+
 test('ambient policy rejects non-finite gain, priority, parameter, and listener values', () => {
   assert.throws(
-    () => resolveAmbientLayers([{ key: 'wind', cueId: 'ambient.wind', gain: Number.NaN }], [], { x: 0, y: 0 }),
+    () => resolveAmbientLayers([{ key: 'wind', cueId: 'ambient.wind', gain: Number.NaN }], [], { x: 0, y: 0, z: 0 }),
     RangeError,
   );
   assert.throws(
     () => resolveAmbientLayers([], [{
-      id: 'bad', minX: 0, minY: 0, maxX: 1, maxY: 1,
+      id: 'bad', minX: 0, minY: 0, minZ: 0, maxX: 1, maxY: 1, maxZ: 1,
       priority: Number.POSITIVE_INFINITY, fadeDistance: 0, layers: [],
-    }], { x: 0, y: 0 }),
+    }], { x: 0, y: 0, z: 0 }),
     RangeError,
   );
   assert.throws(
-    () => resolveAmbientLayers([], [], { x: 0, y: 0 }, { rain: Number.NEGATIVE_INFINITY }),
+    () => resolveAmbientLayers([], [], { x: 0, y: 0, z: 0 }, { rain: Number.NEGATIVE_INFINITY }),
     RangeError,
   );
   assert.throws(
-    () => resolveAmbientLayers([], [], { x: Number.NaN, y: 0 }),
+    () => resolveAmbientLayers([], [], { x: 0, y: 0, z: Number.NaN }),
     RangeError,
   );
 });
