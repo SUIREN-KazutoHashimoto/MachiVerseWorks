@@ -2,8 +2,8 @@
 
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 10 — Building / POI Data Model Foundation（進行中）
-> **次の実装タスク:** P10-002〜P10-006 — 実装済み変更のCI検証とcloseout
+> **現在:** Phase 10 — Building / POI Data Model Foundation（完了）
+> **次の実装タスク:** 未選定 — 将来 Backlog から次Phaseを小Taskへ分解する
 
 ## 全体の現在地
 
@@ -19,7 +19,7 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 7 | 性能基盤の拡張 | ✅ 完了 |
 | 8 | 保存・復元基盤 | ✅ 完了 |
 | 9 | 3D Simulation Foundation | ✅ 完了 |
-| 10 | Building / POI Data Model Foundation | ⬜ 進行中 |
+| 10 | Building / POI Data Model Foundation | ✅ 完了 |
 
 Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴として [`docs/archive/roadmap-through-phase9-plan.md`](docs/archive/roadmap-through-phase9-plan.md) に保存しています。
 
@@ -36,22 +36,31 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 
 ---
 
-## Phase 10 — Building / POI Data Model Foundation（進行中）
+## Phase 10 — Building / POI Data Model Foundation（完了）
 
-> **状態: ⬜ 進行中**  
-> Agent needs / schedule、交通、経済など後続Simulationが参照する都市オブジェクトとして、Building / POIのstable ID、native 3D state、参照整合性、checkpoint / Save Data基盤を確立する。
+> **状態: ✅ 完了**  
+> Agent needs / schedule、交通、経済など後続Simulationが参照する都市オブジェクトとして、Building / POIのstable ID、native 3D state、参照整合性、checkpoint / Save Data基盤を確立した。
 
 ### 仕様・Simulation Core
 
 - ✅ **P10-001** — Building / POIの責務、stable ID、3D state、参照整合性、非対象範囲を仕様として固定する
-- ⬜ **P10-002** — `BuildingId` / `PoiId`、kind、snapshot、内部storeを実装し、単調増加IDとdetached snapshotを提供する
-- ⬜ **P10-003** — POI→Building参照の存在・包含・削除整合性をcommand / checkpoint restoreで検証し、次IDを含むcheckpoint round-tripを実装する
+- ✅ **P10-002** — `BuildingId` / `PoiId`、kind、snapshot、内部storeを実装し、単調増加IDとdetached snapshotを提供する
+- ✅ **P10-003** — POI→Building参照の存在・包含・削除整合性をcommand / checkpoint restoreで検証し、次IDを含むcheckpoint round-tripを実装する
 
 ### Save・検証
 
-- ⬜ **P10-004** — Save format 3へ更新し、Building / POI state、次ID、参照、件数上限を保存・復元する
-- ⬜ **P10-005** — Building / POI生成・削除・参照不整合・checkpoint / Save round-trip・resource limitの回帰testを追加する
-- ⬜ **P10-006** — architecture / specification / ROADMAPを同期し、CI build / test成功を確認してPhase 10をcloseoutする
+- ✅ **P10-004** — Save format 3へ更新し、Building / POI state、次ID、参照、件数上限を保存・復元する
+- ✅ **P10-005** — Building / POI生成・削除・参照不整合・checkpoint / Save round-trip・resource limitの回帰testを追加する
+- ✅ **P10-006** — architecture / specification / ROADMAPを同期し、CI build / test成功を確認してPhase 10をcloseoutする
+
+### Phase 10 closeout evidence
+
+- `BuildingId` / `PoiId` はAgentと別namespaceのstable `ulong` IDとして1から単調増加し、削除済みIDを再利用しない。checkpoint / Save Dataではそれぞれのnext IDを保持する。
+- Buildingはnative 3D `WorldVolume`、POIはnative 3D `WorldPoint`を正本として持ち、POI→Building参照は存在・3D包含・削除順序をcommandとcheckpoint restoreの両境界で検証する。
+- Save Dataはformat 3へ更新し、Agent / Building / POIの各collectionをDTO materialization前後で件数制限し、未知field・不正kind・不正参照を拒否する。
+- Building / POIはPhase 10では静的storeとして扱い、`SimulationWorld.Step()`のAgent tick hot pathへ全件走査を追加しない。
+- PR #46のcloseout候補 `e3da025a0a8d9a13c1254262b0e7fe6bd84173b8` で CI のrepository / .NET build / .NET test / Web lint / type check / test / build / ci-gateが成功した。
+- 同closeout候補で Dependency Review、Phase 6 E2E、Phase 7 benchmarkも成功した。
 
 ### Phase 10 の非対象
 
