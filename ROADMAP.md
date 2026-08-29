@@ -247,6 +247,37 @@ Task ID は参照用の固定IDです。並び替えても変更しません。
 - ⬜ **WEB-019** — 接続切断を検知する
 - ⬜ **WEB-020** — 最小の再接続処理を実装する
 
+### Audio Client Foundation
+
+音声は描画と独立した Client presentation system として扱い、Web Audio API を基盤に UI / BGM / 環境音 / World SFX / Voice を同一の mixer graph 上で管理する。多数Agent環境では全EntityへAudioNodeを常設せず、距離・優先度・voice budgetによるvirtualizationを前提とする。
+
+- ⬜ **AUD-001** — Web Clientのaudio architectureとstate ownershipを文書化する
+- ⬜ **AUD-002** — `AudioContext` lifecycleを管理する `AudioEngine` の境界を作る
+- ⬜ **AUD-003** — user gestureによるaudio unlock / resumeを実装する
+- ⬜ **AUD-004** — Master / Music / UI / Ambient / World / Voice のmixer busを作る
+- ⬜ **AUD-005** — audio asset manifestの形式とstable cue IDを定義する
+- ⬜ **AUD-006** — short SFX用のAudioBuffer preload / cache基盤を作る
+- ⬜ **AUD-007** — non-positional soundの最小再生APIを作る
+- ⬜ **AUD-008** — Three.js cameraとaudio listenerを接続する
+- ⬜ **AUD-009** — positional sound emitterの最小再生APIを作る
+- ⬜ **AUD-010** — positional soundのdistance attenuation既定値を定義する
+- ⬜ **AUD-011** — active audio emitterを管理するregistryを作る
+- ⬜ **AUD-012** — concurrent voice budgetとaudio virtualizationを実装する
+- ⬜ **AUD-013** — Entity位置更新をactive positional emitterへ反映する
+- ⬜ **AUD-014** — Entity remove時に関連audio emitterを解放する
+- ⬜ **AUD-015** — global ambient layerを定義・再生できるようにする
+- ⬜ **AUD-016** — locationに紐づくAmbient Zoneのデータモデルを定義する
+- ⬜ **AUD-017** — camera位置からactive Ambient Zoneを選択する
+- ⬜ **AUD-018** — Ambient Zone内で複数ambient layerを合成できるようにする
+- ⬜ **AUD-019** — Ambient Zone切替時のfade / crossfadeを実装する
+- ⬜ **AUD-020** — overlapping Ambient Zoneのpriority / weight解決ルールを定義する
+- ⬜ **AUD-021** — ambient mixへ外部parameterを渡せる境界を作る
+- ⬜ **AUD-022** — master muteとcategory別volumeを実装する
+- ⬜ **AUD-023** — AudioContext非対応・blocked・suspended時のfallbackを実装する
+- ⬜ **AUD-024** — AudioEngine / mixer / voice budgetのunit testを追加する
+- ⬜ **AUD-025** — audio cueにasset pathを直接露出しないことをテストする
+- ⬜ **AUD-026** — Server / Protocolから音声ファイル名を送らずsemantic world eventからcueへ解決する方針を文書化する
+
 </details>
 
 ---
