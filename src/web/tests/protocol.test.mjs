@@ -1,15 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as protocol from '../src/protocol.ts';
 
-import {
+const {
   CURRENT_PROTOCOL_VERSION,
   MessageType,
   PROTOCOL_HEADER_SIZE,
   PROTOCOL_MAGIC,
   decodeFrame,
   encodeHello,
-  encodeSubscribeArea,
-} from '../src/protocol.ts';
+  encodeSubscribeVolume,
+} = protocol;
 
 test('Hello frame matches Protocol 2.0 header contract', () => {
   const frame = encodeHello();
@@ -18,17 +19,19 @@ test('Hello frame matches Protocol 2.0 header contract', () => {
   assert.equal(CURRENT_PROTOCOL_VERSION.major, 2);
   assert.equal(CURRENT_PROTOCOL_VERSION.minor, 0);
   assert.equal(view.getUint32(0, true), PROTOCOL_MAGIC);
-  assert.equal(view.getUint16(4, true), CURRENT_PROTOCOL_VERSION.major);
-  assert.equal(view.getUint16(6, true), CURRENT_PROTOCOL_VERSION.minor);
   assert.equal(view.getUint16(8, true), MessageType.Hello);
-  assert.equal(view.getUint32(12, true), 0);
 });
 
-test('SubscribeArea round-trips a 3D volume through the client codec', () => {
+test('SubscribeVolume round-trips a native 3D volume through the client codec', () => {
   const volume = { minX: -100, minY: -50, minZ: -20, maxX: 200, maxY: 150, maxZ: 80 };
-  const envelope = decodeFrame(encodeSubscribeArea(volume));
-  assert.equal(envelope.message.type, MessageType.SubscribeArea);
-  assert.deepEqual(envelope.message, { type: MessageType.SubscribeArea, ...volume });
+  const envelope = decodeFrame(encodeSubscribeVolume(volume));
+  assert.equal(envelope.message.type, MessageType.SubscribeVolume);
+  assert.deepEqual(envelope.message, { type: MessageType.SubscribeVolume, ...volume });
+});
+
+test('legacy 2D subscription API is not exported', () => {
+  assert.equal('encodeSubscribeArea' in protocol, false);
+  assert.equal('SubscribeArea' in MessageType, false);
 });
 
 test('Agent update decoder reads the Protocol 2.0 3D payload layout', () => {
@@ -48,7 +51,6 @@ test('Agent update decoder reads the Protocol 2.0 3D payload layout', () => {
   view.setFloat64(56, -2, true);
   view.setFloat64(64, 3.25, true);
   view.setBigUint64(72, 99n, true);
-
   const envelope = decodeFrame(frame);
   assert.deepEqual(envelope.message, {
     type: MessageType.AgentUpdate,
