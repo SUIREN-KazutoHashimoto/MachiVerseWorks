@@ -68,16 +68,18 @@ CI baseline:
 
 ## 2. CodeQL
 
-`.github/workflows/codeql.yml` で CodeQL advanced setup を使用します。
+GitHub の **CodeQL Default setup** を正本として使用します。
 
-対象:
+Default setup を採用する理由:
 
-- C#
-- JavaScript / TypeScript
+- Repositoryに存在するCodeQL対応言語をGitHub側で追従できる。
+- 現在のGitHub Actions workflow自体も解析対象にできる。
+- C# / JavaScript / TypeScript の実装追加時に、独自のlanguage detection workflowを維持しなくてよい。
+- GitHub側の標準設定・query更新へ追従しやすい。
 
-実際に対象 source が存在する language job だけを実行します。
+そのため、通常はRepository内にCodeQL Advanced setup用workflowを置きません。将来、manual build、独自query suite、特殊runnerなどDefault setupで表現できない要件が発生した場合のみ、Default setupからAdvanced setupへの切り替えを設計変更として行います。
 
-C# は build mode `none` を使用し、通常の build correctness は `CI` workflow 側で検証します。
+通常のbuild correctnessは引き続き `CI` workflow側で検証します。
 
 ## 3. Dependency Review
 
