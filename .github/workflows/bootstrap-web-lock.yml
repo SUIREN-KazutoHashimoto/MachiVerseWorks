@@ -30,7 +30,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          printf '0.0.2\n' > VERSION
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('VERSION')
+          major, minor, patch = map(int, path.read_text(encoding='utf-8').strip().split('.'))
+          path.write_text(f'{major}.{minor}.{patch + 1}\n', encoding='utf-8')
+          PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add VERSION src/web/package-lock.json
@@ -38,5 +44,5 @@ jobs:
             echo 'No lockfile changes to commit.'
             exit 0
           fi
-          git commit -m 'Web lockfileを生成'
+          git commit -m 'Web lockfileを更新'
           git push
