@@ -68,16 +68,11 @@ CI baseline:
 
 ## 2. CodeQL
 
-`.github/workflows/codeql.yml` で CodeQL advanced setup を使用します。
+CodeQL は GitHub Code Security の **Default setup** を正本として使用します。
 
-対象:
+Repository内にAdvanced setup用の `.github/workflows/codeql.yml` は置きません。Default setupが対象言語とGitHub Actions workflowを解析し、通常のbuild correctnessは `CI` workflow側で検証します。
 
-- C#
-- JavaScript / TypeScript
-
-実際に対象 source が存在する language job だけを実行します。
-
-C# は build mode `none` を使用し、通常の build correctness は `CI` workflow 側で検証します。
+将来、custom query、特殊なbuild手順、独自matrixなどDefault setupで表現できない要件が生じた場合のみAdvanced setupへの移行を再検討します。
 
 ## 3. Dependency Review
 
@@ -92,6 +87,8 @@ C# は build mode `none` を使用し、通常の build correctness は `CI` wor
 `.github/dependabot.yml` では、まず GitHub Actions 自身の更新だけを週次で確認します。
 
 NuGet と npm の Dependabot 設定は、実際の package manifest が追加されたタイミングで有効化します。
+
+GitHub Code Security 側では Dependabot alerts / malware alerts / security updates を有効化しています。
 
 ## 5. Release / Deploy
 
@@ -111,4 +108,4 @@ MachiVerseWorks は旧ブラウザ単体版と異なり、将来的に次の配�
 
 `main` と `develop` は `docs/development/repository-settings.md` の基準で保護します。
 
-最低限 required check とするのは `CI / ci-gate` です。CodeQL / Dependency Review はGitHub側で利用可能な保護設定と実装状況に応じて追加します。
+required check は `CI / ci-gate` とし、CodeQL / Dependency Reviewは現時点ではRulesetのrequired conditionへ追加しません。実装状況と運用実績を見て必要になった時点で再評価します。

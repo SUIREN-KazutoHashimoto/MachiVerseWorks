@@ -6,7 +6,7 @@ MachiVerseWorks のGitHub側設定の基準です。コードやworkflowから�
 
 `main` と `develop` の両方を保護します。
 
-推奨ルール:
+現在のRuleset `Protect main and develop` では次を適用しています。
 
 - Pull Requestを経由しない通常変更を禁止する。
 - required status checkとして `CI / ci-gate` を指定する。
@@ -14,13 +14,15 @@ MachiVerseWorks のGitHub側設定の基準です。コードやworkflowから�
 - unresolved conversation がある場合のmergeを禁止する。
 - force pushを禁止する。
 - branch deletionを禁止する。
-- 現在は少人数開発を前提とし、required approval数は必須にしない。レビュー運用が必要になった時点で追加する。
+- required approval数は0とし、レビュー運用が必要になった時点で追加する。
+- merge方式はmerge commitのみ許可する。
+- bypass actorは設定しない。
 
 `main` はリリース系統なので、運用上は `develop -> main` PR だけを使用します。
 
 ## 2. Pull Request / Merge
 
-RepositoryのPull Requests設定は次を基準とします。
+RepositoryのPull Requests設定は次を基準とし、現在この設定を適用済みです。
 
 | 設定 | 値 |
 | --- | --- |
@@ -29,20 +31,27 @@ RepositoryのPull Requests設定は次を基準とします。
 | Allow rebase merging | OFF |
 | Always suggest updating pull request branches | ON |
 | Automatically delete head branches | ON |
-| Allow auto-merge | 任意。初期はOFFでよい |
+| Allow auto-merge | OFF |
 
 merge commitを採用する理由は、個々のコミットと `A.B.C` version推移を保持するためです。
 
 ## 3. Security
 
-公開Repositoryとして、利用可能な範囲で次を有効にします。
+公開Repositoryとして、利用可能な範囲で次を有効にします。現在、主要項目は有効化済みです。
 
 - Private vulnerability reporting
+- Dependency graph
+- Automatic dependency submission
 - Dependabot alerts
+- Dependabot malware alerts
 - Dependabot security updates
-- Secret scanning
+- Secret Protection
 - Push protection for secrets
-- Code scanning（このRepositoryでは `.github/workflows/codeql.yml` のadvanced setupを使用）
+- Code scanning（GitHub CodeQL Default setup）
+
+CodeQLはGitHub側のDefault setupを正本とします。Repository内にAdvanced setup用の `codeql.yml` は置きません。GitHub Actions workflowもCodeQLの解析対象になります。
+
+`Grouped security updates` と `AI findings` は現段階では必須にせず、依存関係や運用状況に応じて再評価します。
 
 Security機能の提供条件や名称がGitHub側で変わる場合は、その時点のUIに従って同等機能を有効にします。
 
