@@ -4,6 +4,7 @@
     <UseVSTest>true</UseVSTest>
   </PropertyGroup>
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="../../src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj" />
   </ItemGroup>
 </Project>

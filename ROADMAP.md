@@ -2,8 +2,8 @@
 
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 3 — Protocol 最小実装完了  
-> **次の実装タスク:** `SRV-001` — Server project を単独起動できるようにする
+> **現在:** Phase 4 — Headless Server 最小実装完了  
+> **次の実装タスク:** `WEB-001` — Web Client のapplication entry pointを作る
 
 ## 全体の現在地
 
@@ -13,8 +13,8 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 1 | 開発プロジェクト骨格 | ✅ 完了 |
 | 2 | Simulation Core 最小 PoC | ✅ 完了 |
 | 3 | Protocol 最小実装 | ✅ 完了 |
-| 4 | Headless Server 最小実装 | ⏭️ 次 |
-| 5 | Web Client 最小実装 | ⏳ 待機 |
+| 4 | Headless Server 最小実装 | ✅ 完了 |
+| 5 | Web Client 最小実装 | ⏭️ 次 |
 | 6 | End-to-End PoC | ⏳ 待機 |
 | 7 | 性能基盤の拡張 | ⏳ 待機 |
 | 8 | 保存・復元基盤 | ⏳ 待機 |
@@ -198,33 +198,33 @@ Task ID は参照用の固定IDです。並び替えても変更しません。
 ---
 
 <details>
-<summary><strong>Phase 4 — Headless Server 最小実装（次）</strong></summary>
+<summary><strong>Phase 4 — Headless Server 最小実装（完了）</strong></summary>
 
-- ⬜ **SRV-001** — Server project を単独起動できるようにする
-- ⬜ **SRV-002** — 設定ファイルからlisten address / portを読めるようにする
-- ⬜ **SRV-003** — health endpoint を追加する
-- ⬜ **SRV-004** — Simulation Core の lifecycle をServerから開始できるようにする
-- ⬜ **SRV-005** — Simulation tick loop を専用の実行境界で動かす
-- ⬜ **SRV-006** — graceful shutdown でtick loopを停止できるようにする
-- ⬜ **SRV-007** — WebSocket endpoint を追加する
-- ⬜ **SRV-008** — Client接続を登録・解除する仕組みを作る
-- ⬜ **SRV-009** — `Hello` / `HelloAck` の接続ハンドシェイクを実装する
-- ⬜ **SRV-010** — Client command をSimulation側へ渡すqueue/channelを作る
-- ⬜ **SRV-011** — `SubscribeArea` を接続単位で保持する
-- ⬜ **SRV-012** — subscription範囲のsnapshotだけを取得する
-- ⬜ **SRV-013** — snapshot publish周期をSimulation tickから分離する
-- ⬜ **SRV-014** — Agent spawn/update/remove を送信する
-- ⬜ **SRV-015** — 切断時にsubscription stateを破棄する
-- ⬜ **SRV-016** — Server起動・停止のintegration testを追加する
-- ⬜ **SRV-017** — WebSocket handshakeのintegration testを追加する
-- ⬜ **SRV-018** — snapshot送信のintegration testを追加する
+- ✅ **SRV-001** — Server project を単独起動できるようにする
+- ✅ **SRV-002** — 設定ファイルからlisten address / portを読めるようにする
+- ✅ **SRV-003** — health endpoint を追加する
+- ✅ **SRV-004** — Simulation Core の lifecycle をServerから開始できるようにする
+- ✅ **SRV-005** — Simulation tick loop を専用の実行境界で動かす
+- ✅ **SRV-006** — graceful shutdown でtick loopを停止できるようにする
+- ✅ **SRV-007** — WebSocket endpoint を追加する
+- ✅ **SRV-008** — Client接続を登録・解除する仕組みを作る
+- ✅ **SRV-009** — `Hello` / `HelloAck` の接続ハンドシェイクを実装する
+- ✅ **SRV-010** — Client command をSimulation側へ渡すqueue/channelを作る
+- ✅ **SRV-011** — `SubscribeArea` を接続単位で保持する
+- ✅ **SRV-012** — subscription範囲のsnapshotだけを取得する
+- ✅ **SRV-013** — snapshot publish周期をSimulation tickから分離する
+- ✅ **SRV-014** — Agent spawn/update/remove を送信する
+- ✅ **SRV-015** — 切断時にsubscription stateを破棄する
+- ✅ **SRV-016** — Server起動・停止のintegration testを追加する
+- ✅ **SRV-017** — WebSocket handshakeのintegration testを追加する
+- ✅ **SRV-018** — snapshot送信のintegration testを追加する
 
 </details>
 
 ---
 
 <details>
-<summary><strong>Phase 5 — Web Client 最小実装（待機）</strong></summary>
+<summary><strong>Phase 5 — Web Client 最小実装（次）</strong></summary>
 
 - ⬜ **WEB-001** — Web Client のapplication entry pointを作る
 - ⬜ **WEB-002** — locale manifestからdefault localeを初期化する

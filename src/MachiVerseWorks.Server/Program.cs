@@ -1,4 +1,4 @@
-var builder = WebApplication.CreateBuilder(args);
-var app = builder.Build();
+using MachiVerseWorks.Server;
 
-app.Run();
+var app = ServerApplication.Build(args);
+await app.RunAsync();

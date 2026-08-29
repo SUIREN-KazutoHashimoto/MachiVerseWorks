@@ -34,11 +34,19 @@ dotnet build MachiVerseWorks.slnx --configuration Release --no-restore
 dotnet test MachiVerseWorks.slnx --configuration Release --no-build
 ```
 
-`MachiVerseWorks.Server` の最小ホストを起動する場合は次を実行します。
+Headless Server を起動する場合は次を実行します。
 
 ```bash
 dotnet run --project src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj
 ```
+
+既定では `http://127.0.0.1:5080` を listen します。別 terminal から health endpoint を確認できます。
+
+```bash
+curl http://127.0.0.1:5080/health
+```
+
+WebSocket endpoint は `ws://127.0.0.1:5080/ws` です。接続後は MachiVerseWorks Protocol の binary `Hello` frame が最初の message として必要です。
 
 ## Web Client
 
