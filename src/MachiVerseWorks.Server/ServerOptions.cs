@@ -7,12 +7,15 @@ namespace MachiVerseWorks.Server;
 internal sealed class ServerOptions
 {
     private const int DefaultMaximumSubscriptionCellCount = 4096;
+    private const string DefaultAllowedWebSocketOrigins =
+        "http://127.0.0.1:5173;http://localhost:5173";
 
     private ServerOptions(
         IPAddress listenAddress,
         int port,
         int snapshotRate,
         int maximumSubscriptionCellCount,
+        IReadOnlyList<string> allowedWebSocketOrigins,
         int tickRate,
         ulong seed,
         double spatialCellSize,
@@ -26,6 +29,7 @@ internal sealed class ServerOptions
         Port = port;
         SnapshotRate = snapshotRate;
         MaximumSubscriptionCellCount = maximumSubscriptionCellCount;
+        AllowedWebSocketOrigins = allowedWebSocketOrigins;
         TickRate = tickRate;
         Seed = seed;
         SpatialCellSize = spatialCellSize;
@@ -43,6 +47,8 @@ internal sealed class ServerOptions
     public int SnapshotRate { get; }
 
     public int MaximumSubscriptionCellCount { get; }
+
+    public IReadOnlyList<string> AllowedWebSocketOrigins { get; }
 
     public int TickRate { get; }
 
@@ -95,6 +101,8 @@ internal sealed class ServerOptions
             throw new InvalidOperationException("Server:MaximumSubscriptionCellCount must be greater than zero.");
         }
 
+        var allowedWebSocketOrigins = ReadAllowedWebSocketOrigins(configuration);
+
         var tickRate = ReadInt32(configuration, "Simulation:TickRate", 30);
         if (tickRate is <= 0 or > ushort.MaxValue)
         {
@@ -130,6 +138,7 @@ internal sealed class ServerOptions
             port,
             snapshotRate,
             maximumSubscriptionCellCount,
+            allowedWebSocketOrigins,
             tickRate,
             seed,
             spatialCellSize,
@@ -138,6 +147,22 @@ internal sealed class ServerOptions
             spawnMinY,
             spawnMaxX,
             spawnMaxY);
+    }
+
+    private static string[] ReadAllowedWebSocketOrigins(IConfiguration configuration)
+    {
+        var configuredValue = configuration["Server:AllowedWebSocketOrigins"];
+        var value = configuredValue ?? DefaultAllowedWebSocketOrigins;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return [];
+        }
+
+        return value
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(WebSocketOriginPolicy.NormalizeOrigin)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
     private static int ReadInt32(IConfiguration configuration, string key, int defaultValue)

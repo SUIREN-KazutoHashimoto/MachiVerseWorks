@@ -60,9 +60,14 @@ internal sealed class ServerTestHost : IAsyncDisposable
         return new HttpClient { BaseAddress = HttpAddress };
     }
 
-    public async Task<ClientWebSocket> ConnectWebSocketAsync()
+    public async Task<ClientWebSocket> ConnectWebSocketAsync(string? origin = null)
     {
         var webSocket = new ClientWebSocket();
+        if (origin is not null)
+        {
+            webSocket.Options.SetRequestHeader("Origin", origin);
+        }
+
         var builder = new UriBuilder(HttpAddress)
         {
             Scheme = HttpAddress.Scheme == "https" ? "wss" : "ws",
