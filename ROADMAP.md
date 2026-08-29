@@ -2,8 +2,8 @@
 
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 6 — End-to-End PoC 完了
-> **次の実装タスク:** `PER-001` — BenchmarkDotNetの共通設定を作る
+> **現在:** Phase 7 — 性能基盤の拡張 完了
+> **次の実装タスク:** `SAV-001` — Save Data が保持する最小情報を定義する
 
 ## 全体の現在地
 
@@ -16,8 +16,8 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 4 | Headless Server 最小実装 | ✅ 完了 |
 | 5 | Web Client 最小実装 | ✅ 完了 |
 | 6 | End-to-End PoC | ✅ 完了 |
-| 7 | 性能基盤の拡張 | ⏭️ 次 |
-| 8 | 保存・復元基盤 | ⏳ 待機 |
+| 7 | 性能基盤の拡張 | ✅ 完了 |
+| 8 | 保存・復元基盤 | ⏭️ 次 |
 
 ## 状態の見方
 
@@ -305,27 +305,27 @@ Task ID は参照用の固定IDです。並び替えても変更しません。
 ---
 
 <details>
-<summary><strong>Phase 7 — 性能基盤の拡張（次）</strong></summary>
+<summary><strong>Phase 7 — 性能基盤の拡張（完了）</strong></summary>
 
 PoCを動かした後、計測結果に基づいて必要な項目だけ進める。
 
-- ⬜ **PER-001** — BenchmarkDotNetの共通設定を作る
-- ⬜ **PER-002** — Simulation benchmark結果を保存する形式を決める
-- ⬜ **PER-003** — snapshot生成時間のbenchmarkを追加する
-- ⬜ **PER-004** — Protocol encode/decode benchmarkを追加する
-- ⬜ **PER-005** — spatial query benchmarkを追加する
-- ⬜ **PER-006** — GC collection回数を計測結果へ含める
-- ⬜ **PER-007** — Serverのsnapshot配信統計をログへ出せるようにする
-- ⬜ **PER-008** — Web Clientのdecode時間をdevelopment overlayで確認できるようにする
-- ⬜ **PER-009** — Web Clientのrender frame timeをdevelopment overlayで確認できるようにする
-- ⬜ **PER-010** — 最初の性能改善候補をprofile結果から選定する
+- ✅ **PER-001** — BenchmarkDotNetの共通設定を作る
+- ✅ **PER-002** — Simulation benchmark結果を保存する形式を決める
+- ✅ **PER-003** — snapshot生成時間のbenchmarkを追加する
+- ✅ **PER-004** — Protocol encode/decode benchmarkを追加する
+- ✅ **PER-005** — spatial query benchmarkを追加する
+- ✅ **PER-006** — GC collection回数を計測結果へ含める
+- ✅ **PER-007** — Serverのsnapshot配信統計をログへ出せるようにする
+- ✅ **PER-008** — Web Clientのdecode時間をdevelopment overlayで確認できるようにする
+- ✅ **PER-009** — Web Clientのrender frame timeをdevelopment overlayで確認できるようにする
+- ✅ **PER-010** — 最初の性能改善候補をprofile結果から選定する
 
 </details>
 
 ---
 
 <details>
-<summary><strong>Phase 8 — 保存・復元基盤（待機）</strong></summary>
+<summary><strong>Phase 8 — 保存・復元基盤（次）</strong></summary>
 
 このセクションは End-to-End PoC 後に着手する。
 
