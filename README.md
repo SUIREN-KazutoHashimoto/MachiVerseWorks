@@ -56,7 +56,6 @@ MachiVerseWorks/
 ├─ .github/
 ├─ global.json
 ├─ ROADMAP.md
-├─ AGENT.md
 ├─ AGENTS.md
 ├─ CONTRIBUTING.md
 ├─ SECURITY.md
@@ -81,6 +80,7 @@ MachiVerseWorks では、大きな機能名をそのまま長期間未完了の�
 
 開発ルールと性能評価方針:
 
+- [開発ルール](AGENTS.md)
 - [Coding Guidelines](docs/development/coding-guidelines.md)
 - [Performance Guidelines](docs/development/performance.md)
 - [CI / GitHub Actions](docs/development/ci.md)
@@ -108,7 +108,7 @@ MachiVerseWorks では、旧実装のように巨大な横断設計書へ情報�
 - 大規模 Agent 処理はデータ指向・割り当て抑制・並列処理を前提に設計する
 - 最適化は計測結果に基づいて行い、可読性や仕様の正しさより先に複雑化しない
 
-具体的な開発ルールは [`AGENT.md`](AGENT.md)、開発フローは [`docs/development/git-workflow.md`](docs/development/git-workflow.md) を参照してください。
+具体的な開発ルールは [`AGENTS.md`](AGENTS.md)、開発フローは [`docs/development/git-workflow.md`](docs/development/git-workflow.md) を参照してください。
 
 ## 旧 Machi-Sim
 
