@@ -92,7 +92,7 @@ public sealed partial class SimulationWorld
 
     private static void ValidateBuildingKind(BuildingKind kind)
     {
-        if (!Enum.IsDefined(typeof(BuildingKind), kind))
+        if (!Enum.IsDefined(kind))
         {
             throw new ArgumentOutOfRangeException(nameof(kind), kind, "Building kind is not defined.");
         }
@@ -100,7 +100,7 @@ public sealed partial class SimulationWorld
 
     private static void ValidatePoiKind(PoiKind kind)
     {
-        if (!Enum.IsDefined(typeof(PoiKind), kind))
+        if (!Enum.IsDefined(kind))
         {
             throw new ArgumentOutOfRangeException(nameof(kind), kind, "POI kind is not defined.");
         }
