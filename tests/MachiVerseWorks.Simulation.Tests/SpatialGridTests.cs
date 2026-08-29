@@ -5,7 +5,7 @@ namespace MachiVerseWorks.Simulation.Tests;
 [TestClass]
 public sealed class SpatialGridTests
 {
-    [DataTestMethod]
+    [TestMethod]
     [DataRow(0d, 0d, 0, 0)]
     [DataRow(63.999d, 63.999d, 0, 0)]
     [DataRow(64d, 64d, 1, 1)]

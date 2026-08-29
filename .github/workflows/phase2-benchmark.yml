@@ -3,7 +3,7 @@ name: Phase 2 benchmark
 on:
   push:
     branches:
-      - 'feature/phase-2-simulation-core'
+      - 'feature/phase-2-simulation-core*'
     paths:
       - 'src/MachiVerseWorks.Simulation/**'
       - 'benchmarks/MachiVerseWorks.Benchmarks/**'
