@@ -43,7 +43,6 @@ jobs:
           required_files=(
             README.md
             ROADMAP.md
-            AGENT.md
             AGENTS.md
             CONTRIBUTING.md
             SECURITY.md
@@ -66,7 +65,7 @@ jobs:
             fi
           done
 
-          grep -Fq "AGENT.md" AGENTS.md
+          grep -Fq "MachiVerseWorks 開発ルール" AGENTS.md
           grep -Fq "MachiVerseWorks" NOTICE
 
       - name: Validate .NET SDK policy
