@@ -4,6 +4,10 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/MachiVerseWorks.Protocol/MachiVerseWorks.Protocol.csproj" />
     <ProjectReference Include="../../src/MachiVerseWorks.Simulation/MachiVerseWorks.Simulation.csproj" />
   </ItemGroup>
 </Project>
