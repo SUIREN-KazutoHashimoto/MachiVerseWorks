@@ -30,4 +30,17 @@ internal static partial class ServerLog
 
     [LoggerMessage(9, LogLevel.Warning, "Ignoring unsupported client command type {CommandType}.")]
     public static partial void UnsupportedClientCommand(ILogger logger, string commandType);
+
+    [LoggerMessage(
+        10,
+        LogLevel.Debug,
+        "Snapshot delivered to {ConnectionId}: {AgentCount} agents, {MessageCount} messages, {Bytes} bytes, encode {EncodeTimeMs} ms, send {SendTimeMs} ms.")]
+    public static partial void SnapshotDeliveryMetrics(
+        ILogger logger,
+        Guid connectionId,
+        int agentCount,
+        int messageCount,
+        long bytes,
+        double encodeTimeMs,
+        double sendTimeMs);
 }

@@ -147,6 +147,14 @@ internal sealed class SnapshotPublishService(
                     bytes,
                     encodeTimeMs,
                     sendTimeMs);
+                ServerLog.SnapshotDeliveryMetrics(
+                    logger,
+                    connection.Id,
+                    snapshots.Length,
+                    plan.Messages.Count,
+                    bytes,
+                    encodeTimeMs,
+                    sendTimeMs);
             }
             catch (Exception exception) when (
                 exception is WebSocketException or OperationCanceledException or ObjectDisposedException)

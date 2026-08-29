@@ -1,0 +1,60 @@
+name: Phase 7 benchmark
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'benchmarks/**'
+      - 'src/MachiVerseWorks.Protocol/**'
+      - 'src/MachiVerseWorks.Simulation/**'
+      - 'Directory.Packages.props'
+      - '.github/workflows/phase7-benchmark.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore MachiVerseWorks.slnx
+
+      - name: Build benchmarks
+        run: dotnet build benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-restore
+
+      - name: Run BenchmarkDotNet smoke
+        env:
+          MACHIVERSE_BENCHMARK_ARTIFACTS: ${{ github.workspace }}/.artifacts/phase7-benchmarks
+        run: dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-build -- --job Dry --filter '*'
+
+      - name: Verify benchmark exports
+        shell: bash
+        env:
+          MACHIVERSE_BENCHMARK_ARTIFACTS: ${{ github.workspace }}/.artifacts/phase7-benchmarks
+        run: |
+          set -euo pipefail
+          results="$MACHIVERSE_BENCHMARK_ARTIFACTS/results"
+          test -d "$results"
+          find "$results" -type f -name '*.md' -print -quit | grep -q .
+          find "$results" -type f -name '*.json' -print -quit | grep -q .
+          find "$results" -type f -name '*.csv' -print -quit | grep -q .
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase7-benchmark-results
+          path: .artifacts/phase7-benchmarks
+          if-no-files-found: error
+          retention-days: 14

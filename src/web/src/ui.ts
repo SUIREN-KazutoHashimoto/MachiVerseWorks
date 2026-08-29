@@ -9,14 +9,15 @@ export class ClientUi {
   private readonly protocolValue = document.createElement('span');
   private readonly agentsValue = document.createElement('span');
   private readonly audioValue = document.createElement('span');
-  private readonly decodeValue = document.createElement('span');
-  private readonly frameValue = document.createElement('span');
+  private readonly decodeValue: HTMLSpanElement | null;
+  private readonly frameValue: HTMLSpanElement | null;
   private readonly errorValue = document.createElement('div');
   private readonly audioButton = document.createElement('button');
 
   public constructor(
     host: HTMLElement,
     private readonly localizer: Localizer,
+    showPerformanceOverlay = false,
   ) {
     const panel = document.createElement('section');
     panel.className = 'status-panel';
@@ -26,8 +27,6 @@ export class ClientUi {
       this.createStatusRow('status.protocol', this.protocolValue),
       this.createStatusRow('status.agents', this.agentsValue),
       this.createStatusRow('status.audio', this.audioValue),
-      this.createStatusRow('status.decode', this.decodeValue),
-      this.createStatusRow('status.frame', this.frameValue),
     );
 
     this.audioButton.className = 'audio-unlock';
@@ -39,6 +38,26 @@ export class ClientUi {
     this.errorValue.hidden = true;
     panel.append(this.errorValue);
 
+    if (showPerformanceOverlay) {
+      const performancePanel = document.createElement('section');
+      performancePanel.className = 'performance-overlay';
+      performancePanel.setAttribute('aria-label', localizer.t('performance.title'));
+      const title = document.createElement('strong');
+      title.className = 'performance-title';
+      title.textContent = localizer.t('performance.title');
+      this.decodeValue = document.createElement('span');
+      this.frameValue = document.createElement('span');
+      performancePanel.append(
+        title,
+        this.createStatusRow('status.decode', this.decodeValue),
+        this.createStatusRow('status.frame', this.frameValue),
+      );
+      host.append(performancePanel);
+    } else {
+      this.decodeValue = null;
+      this.frameValue = null;
+    }
+
     const hint = document.createElement('div');
     hint.className = 'camera-hint';
     hint.textContent = localizer.t('hint.camera');
@@ -48,8 +67,12 @@ export class ClientUi {
     this.setProtocol(null);
     this.setAgentCount(0);
     this.setAudioState('locked');
-    this.decodeValue.textContent = '—';
-    this.frameValue.textContent = '—';
+    if (this.decodeValue !== null) {
+      this.decodeValue.textContent = '—';
+    }
+    if (this.frameValue !== null) {
+      this.frameValue.textContent = '—';
+    }
   }
 
   public onAudioUnlock(handler: () => void): void {
@@ -75,12 +98,16 @@ export class ClientUi {
   }
 
   public setPerformanceMetrics(metrics: ClientPerformanceSnapshot): void {
-    this.decodeValue.textContent = metrics.decodeSampleCount === 0
-      ? '—'
-      : this.formatTiming(metrics.decodeAverageMs, metrics.decodeMaximumMs);
-    this.frameValue.textContent = metrics.frameSampleCount === 0
-      ? '—'
-      : this.formatTiming(metrics.frameAverageMs, metrics.frameMaximumMs);
+    if (this.decodeValue !== null) {
+      this.decodeValue.textContent = metrics.decodeSampleCount === 0
+        ? '—'
+        : this.formatTiming(metrics.decodeAverageMs, metrics.decodeP95Ms, metrics.decodeMaximumMs);
+    }
+    if (this.frameValue !== null) {
+      this.frameValue.textContent = metrics.frameSampleCount === 0
+        ? '—'
+        : this.formatTiming(metrics.frameAverageMs, metrics.frameP95Ms, metrics.frameMaximumMs);
+    }
   }
 
   public showError(message: string): void {
@@ -93,9 +120,10 @@ export class ClientUi {
     this.errorValue.hidden = true;
   }
 
-  private formatTiming(averageMs: number, maximumMs: number): string {
+  private formatTiming(averageMs: number, p95Ms: number, maximumMs: number): string {
     return this.localizer.t('metrics.time', {
       average: averageMs.toFixed(3),
+      p95: p95Ms.toFixed(3),
       maximum: maximumMs.toFixed(3),
     });
   }

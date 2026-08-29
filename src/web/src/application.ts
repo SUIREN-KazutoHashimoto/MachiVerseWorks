@@ -21,7 +21,7 @@ export class Application {
   private readonly store = new EntityStore();
   private readonly audio = new AudioEngine();
   private readonly ambient = new AmbientSystem(this.audio);
-  private readonly performanceMetrics = new ClientPerformanceMetrics();
+  private readonly performanceMetrics = import.meta.env.DEV ? new ClientPerformanceMetrics() : null;
   private readonly view: WorldView;
   private readonly ui: ClientUi;
   private readonly connection: MachiVerseConnection;
@@ -33,8 +33,9 @@ export class Application {
   private audioSyncPending = false;
 
   public constructor(host: HTMLElement) {
+    const performanceMetrics = this.performanceMetrics;
     this.view = new WorldView(host);
-    this.ui = new ClientUi(host, this.localizer);
+    this.ui = new ClientUi(host, this.localizer, performanceMetrics !== null);
     this.connection = new MachiVerseConnection(
       this.config.serverUrl,
       {
@@ -57,9 +58,13 @@ export class Application {
           this.ui.clearError();
           this.ui.setProtocol(version);
         },
-        onFrameDecoded: (metrics) => {
-          this.performanceMetrics.recordDecode(metrics.frameBytes, metrics.decodeTimeMs);
-        },
+        ...(performanceMetrics === null
+          ? {}
+          : {
+              onFrameDecoded: (metrics: { readonly frameBytes: number; readonly decodeTimeMs: number }) => {
+                performanceMetrics.recordDecode(metrics.frameBytes, metrics.decodeTimeMs);
+              },
+            }),
       },
     );
 
@@ -92,12 +97,17 @@ export class Application {
   };
 
   private readonly animate = (now: number): void => {
-    this.performanceMetrics.recordAnimationFrame(now);
+    const performanceMetrics = this.performanceMetrics;
+    if (performanceMetrics !== null) {
+      performanceMetrics.recordAnimationFrame(now);
+    }
     this.updateSubscription(now);
     this.view.render(this.store, now);
     this.audio.syncListenerFromCamera(this.view.camera);
     this.updateAudio(now);
-    this.updatePerformanceUi(now);
+    if (performanceMetrics !== null) {
+      this.updatePerformanceUi(now, performanceMetrics);
+    }
     this.animationFrame = window.requestAnimationFrame(this.animate);
   };
 
@@ -132,12 +142,12 @@ export class Application {
     });
   }
 
-  private updatePerformanceUi(now: number): void {
+  private updatePerformanceUi(now: number, metrics: ClientPerformanceMetrics): void {
     if (now - this.lastPerformanceUiAt < 500) {
       return;
     }
     this.lastPerformanceUiAt = now;
-    this.ui.setPerformanceMetrics(this.performanceMetrics.snapshot());
+    this.ui.setPerformanceMetrics(metrics.snapshot());
   }
 
   private handleProtocolMessage(message: ProtocolMessage): void {
