@@ -14,4 +14,9 @@
 - power
 - economy
 
+現在の基盤仕様:
+
+- [`simulation-core-poc.md`](simulation-core-poc.md): Simulation Core 最小 PoC
+- [`headless-server-poc.md`](headless-server-poc.md): Headless Server 最小 PoC
+
 このディレクトリでは What / Why を中心に記述し、実装方法の詳細は `docs/architecture/` へ分離します。

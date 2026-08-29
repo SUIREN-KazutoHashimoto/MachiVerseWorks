@@ -1,0 +1,144 @@
+using System.Net.WebSockets;
+using MachiVerseWorks.Protocol;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+
+namespace MachiVerseWorks.Server.Tests;
+
+internal sealed class ServerTestHost : IAsyncDisposable
+{
+    private bool _stopped;
+
+    private ServerTestHost(WebApplication app, Uri httpAddress)
+    {
+        App = app;
+        HttpAddress = httpAddress;
+    }
+
+    public WebApplication App { get; }
+
+    public Uri HttpAddress { get; }
+
+    public static async Task<ServerTestHost> StartAsync(
+        int initialAgentCount = 4,
+        int tickRate = 30,
+        int snapshotRate = 30)
+    {
+        var app = ServerApplication.Build([], builder =>
+        {
+            builder.Logging.ClearProviders();
+            builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Server:ListenAddress"] = "127.0.0.1",
+                ["Server:Port"] = "0",
+                ["Server:SnapshotRate"] = snapshotRate.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["Simulation:TickRate"] = tickRate.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["Simulation:InitialAgentCount"] = initialAgentCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["Simulation:SpawnArea:MinX"] = "-5",
+                ["Simulation:SpawnArea:MinY"] = "-5",
+                ["Simulation:SpawnArea:MaxX"] = "5",
+                ["Simulation:SpawnArea:MaxY"] = "5",
+            });
+        });
+
+        await app.StartAsync();
+        var server = app.Services.GetRequiredService<IServer>();
+        var addresses = server.Features.Get<IServerAddressesFeature>()
+            ?? throw new InvalidOperationException("Kestrel did not expose server addresses.");
+        var address = addresses.Addresses.Single();
+        return new ServerTestHost(app, new Uri(address));
+    }
+
+    public HttpClient CreateHttpClient()
+    {
+        return new HttpClient { BaseAddress = HttpAddress };
+    }
+
+    public async Task<ClientWebSocket> ConnectWebSocketAsync()
+    {
+        var webSocket = new ClientWebSocket();
+        var builder = new UriBuilder(HttpAddress)
+        {
+            Scheme = HttpAddress.Scheme == "https" ? "wss" : "ws",
+            Path = "/ws",
+        };
+        await webSocket.ConnectAsync(builder.Uri, CancellationToken.None);
+        return webSocket;
+    }
+
+    public static Task SendAsync(
+        ClientWebSocket socket,
+        IProtocolMessage message,
+        ProtocolVersion? version = null)
+    {
+        var frame = ProtocolCodec.Serialize(message, version);
+        return socket.SendAsync(
+            new ArraySegment<byte>(frame),
+            WebSocketMessageType.Binary,
+            true,
+            CancellationToken.None);
+    }
+
+    public static async Task<ProtocolEnvelope> ReceiveAsync(
+        ClientWebSocket socket,
+        TimeSpan timeout)
+    {
+        using var cancellation = new CancellationTokenSource(timeout);
+        var buffer = new byte[4096];
+        using var stream = new MemoryStream();
+
+        while (true)
+        {
+            var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellation.Token);
+            if (result.MessageType == WebSocketMessageType.Close)
+            {
+                throw new InvalidOperationException("Server closed the WebSocket before a protocol message was received.");
+            }
+
+            stream.Write(buffer, 0, result.Count);
+            if (result.EndOfMessage)
+            {
+                break;
+            }
+        }
+
+        var frame = stream.ToArray();
+        if (!ProtocolCodec.TryDeserialize(frame, out var envelope, out var error) || envelope is null)
+        {
+            throw new InvalidOperationException($"Server returned an invalid protocol frame: {error}.");
+        }
+
+        return envelope;
+    }
+
+    public static async Task HandshakeAsync(ClientWebSocket socket)
+    {
+        await SendAsync(socket, new HelloMessage(), ProtocolVersion.Current);
+        var envelope = await ReceiveAsync(socket, TimeSpan.FromSeconds(3));
+        if (envelope.Message is not HelloAckMessage)
+        {
+            throw new InvalidOperationException("Server did not return HelloAck.");
+        }
+    }
+
+    public async Task StopAsync()
+    {
+        if (_stopped)
+        {
+            return;
+        }
+
+        _stopped = true;
+        await App.StopAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await StopAsync();
+        await App.DisposeAsync();
+    }
+}
