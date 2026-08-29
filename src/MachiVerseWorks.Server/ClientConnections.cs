@@ -74,6 +74,10 @@ internal sealed class ClientConnection : IDisposable
         {
             if (_subscriptionRevision != revision)
             {
+                // The stale snapshot may already have delivered Spawn messages before the
+                // subscription changed. Preserve those IDs so the next subscription plan can
+                // emit Remove messages instead of leaving ghost entities on the client.
+                _knownAgentIds.UnionWith(agentIds);
                 return false;
             }
 
