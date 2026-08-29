@@ -12,7 +12,7 @@ MachiVerseWorks への貢献に関心を持っていただきありがとうご�
 - 仕様変更時は `docs/specifications/`、設計変更時は `docs/architecture/` を同期してください。
 - 長期間影響する重要な設計判断は `docs/decisions/` に ADR を残してください。
 
-共通ルールの正本は [`AGENT.md`](AGENT.md) です。
+共通ルールの正本は [`AGENTS.md`](AGENTS.md) です。
 
 ## ブランチ名
 
@@ -64,7 +64,7 @@ CI 成功と、実際の Simulation / Server / Browser の動作確認は同一�
 
 ## バージョン
 
-通常開発へ移行後は `AGENT.md` の `A.B.C` ルールに従います。
+通常開発へ移行後は `AGENTS.md` の `A.B.C` ルールに従います。
 
 - `A`: `main` 向け PR 作成時に +1。`B` と `C` を 0 にリセット
 - `B`: `develop` 向け PR 作成時に +1。`C` を 0 にリセット
