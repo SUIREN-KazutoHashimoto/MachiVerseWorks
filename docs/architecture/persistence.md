@@ -44,7 +44,7 @@ checkpoint は保存時点の継続実行に必要な状態を保持する。
 
 Default `Serialize` / `Save` / `Deserialize` / `Load` はすべて `WorldSaveLimits.Default` を使用する。この対称性により、default APIで保存に成功したSaveがdefault loadのresource limitだけを理由に拒否される状態を作らない。
 
-write側はAgent数をserialization前に検証し、byte上限はserialized data確定後かつdestinationへのwrite前に検証する。`Save(Stream, ...)`はlimit超過時に部分データを書かない。
+write側はAgent数をserialization前に検証する。JSONは`MaximumBytes`を総allocation上限とする分割bufferへ直接serializeし、次のwriteで上限を超える時点で`InvalidDataException`として停止する。oversizedなJSON全体を一度確保してから判定しない。`Serialize`はlimit内で完成したbufferだけを最終byte配列へ変換し、`Save(Stream, ...)`は全serialization成功後にdestinationへ転送するため、limit超過時に部分データを書かない。
 
 read側はbyte上限をJSON materialization前に検証し、Agent数は`Utf8JsonReader`でDTO生成前にscanしたうえでDTO→checkpoint変換前にも再確認する。
 

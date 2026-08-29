@@ -114,7 +114,7 @@ jobs:
 
           print(f"Application version: {value}")
 
-      - name: Reject application version regression against PR base
+      - name: Require application version increase against PR base
         if: github.event_name == 'pull_request'
         shell: bash
         env:
@@ -137,12 +137,12 @@ jobs:
                   raise SystemExit(f"Invalid application version: {value}")
               return tuple(int(part) for part in match.groups())
 
-          if parse(current) < parse(base):
+          if parse(current) <= parse(base):
               raise SystemExit(
-                  f"Application VERSION regressed from PR base {base} to {current}."
+                  f"Application VERSION must increase from PR base {base}; current is {current}."
               )
 
-          print(f"Application VERSION monotonicity: base={base}, current={current}")
+          print(f"Application VERSION increase: base={base}, current={current}")
           PY
 
       - name: Validate locale manifest

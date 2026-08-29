@@ -65,9 +65,44 @@ test('AmbientSystem rolls back layers that started before a later layer fails', 
   );
 
   assert.deepEqual([...active], []);
-  assert.deepEqual(calls, ['set:a', 'set:b', 'clear:a']);
+  assert.deepEqual(calls, ['set:a', 'set:b', 'clear:b', 'clear:a']);
 
   ambient.setGlobalLayers([]);
   await ambient.update({ x: 0, y: 0, z: 0 });
   assert.deepEqual([...active], []);
+});
+
+test('AmbientSystem restores the previous cue when the failing layer already caused side effects', async () => {
+  const active = new Map();
+  const calls = [];
+  const audio = {
+    async setAmbientLayer(key, cueId) {
+      calls.push(`set:${key}:${cueId}`);
+      if (cueId === 'ambient.new') {
+        active.delete(key);
+        throw new Error('failed after stopping previous cue');
+      }
+      active.set(key, cueId);
+    },
+    async clearAmbientLayer(key) {
+      calls.push(`clear:${key}`);
+      active.delete(key);
+    },
+  };
+  const ambient = new AmbientSystem(audio);
+  ambient.setGlobalLayers([{ key: 'station', cueId: 'ambient.old', gain: 1 }]);
+  await ambient.update({ x: 0, y: 0, z: 0 });
+  calls.length = 0;
+
+  ambient.setGlobalLayers([{ key: 'station', cueId: 'ambient.new', gain: 1 }]);
+  await assert.rejects(
+    ambient.update({ x: 0, y: 0, z: 0 }),
+    /failed after stopping previous cue/,
+  );
+
+  assert.equal(active.get('station'), 'ambient.old');
+  assert.deepEqual(calls, [
+    'set:station:ambient.new',
+    'set:station:ambient.old',
+  ]);
 });

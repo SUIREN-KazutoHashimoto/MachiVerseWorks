@@ -44,17 +44,22 @@ export class AmbientSystem {
     const previousLayers = new Map(this.activeLayers);
     const desiredLayers = new Map(mix.map((layer) => [layer.key, layer]));
     const appliedLayers: ResolvedAmbientLayer[] = [];
+    let pendingLayer: ResolvedAmbientLayer | undefined;
 
     try {
       for (const layer of mix) {
+        pendingLayer = layer;
         await this.audio.setAmbientLayer(layer.key, layer.cueId, layer.gain, AmbientFadeSeconds);
         appliedLayers.push(layer);
+        pendingLayer = undefined;
       }
     } catch (error) {
       const rollbackFailures: unknown[] = [];
       const trackedLayers = new Map(previousLayers);
-      for (let index = appliedLayers.length - 1; index >= 0; index -= 1) {
-        const layer = appliedLayers[index]!;
+      const rollbackLayers = pendingLayer === undefined
+        ? [...appliedLayers].reverse()
+        : [pendingLayer, ...[...appliedLayers].reverse()];
+      for (const layer of rollbackLayers) {
         const previous = previousLayers.get(layer.key);
         try {
           if (previous === undefined) {
