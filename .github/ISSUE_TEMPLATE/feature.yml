@@ -1,0 +1,68 @@
+name: Feature request
+description: 新機能や改善案を提案します
+title: "[Feature] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提案ありがとうございます。実装案だけでなく、解決したい問題や期待する効果も記載してください。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 解決したい問題
+      description: 現在どのような不便、制約、シミュレーション上の不足があるかを記載してください。
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 提案内容
+      description: 期待する挙動、UI、Simulation / Server / Protocol への変更などを記載してください。
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: areas
+    attributes:
+      label: 関係しそうな領域
+      options:
+        - label: Simulation Core
+        - label: Server / Networking
+        - label: Protocol
+        - label: Web Client / Rendering / UI
+        - label: 都市生成
+        - label: Agent / 生活行動
+        - label: 道路交通
+        - label: 公共交通
+        - label: 物流 / 産業 / 経済
+        - label: 電力 / ライフライン
+        - label: Performance / Scalability
+        - label: Documentation / Tooling
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 代替案
+      description: 検討した別案や既存機能での回避方法があれば記載してください。
+
+  - type: textarea
+    id: performance
+    attributes:
+      label: 性能・規模への考慮
+      description: Agent 数、tick、network bandwidth、rendering 負荷などに影響しそうな点があれば記載してください。
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 補足
+      description: 参考画像、資料、ユースケース、旧 Machi-Sim の関連機能などがあれば記載してください。
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 確認
+      options:
+        - label: 同様の提案がないか既存 Issue を確認しました
+          required: true

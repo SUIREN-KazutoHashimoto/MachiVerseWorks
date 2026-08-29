@@ -1,0 +1,8 @@
+Third-Party Software Notices
+============================
+
+This file records attribution and license notices for third-party software or assets redistributed as part of MachiVerseWorks deliverables.
+
+No redistributable third-party components are listed yet because the repository is still in its initial setup phase.
+
+When a dependency or asset is introduced, review its license before distribution and update this file when attribution, license text, or other notice obligations apply. Development-only tools that are not redistributed do not need to be listed here unless their license requires otherwise.

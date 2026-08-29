@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/SUIREN-KazutoHashimoto/MachiVerseWorks/security/policy
+    about: セキュリティ脆弱性の報告手順を確認してください。公開Issueへ詳細を書き込まないでください。

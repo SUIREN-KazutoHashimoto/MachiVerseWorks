@@ -4,7 +4,7 @@ MachiVerseWorks は、C# 製のヘッドレス・シミュレーションサー�
 
 市民、道路交通、公共交通、物流、産業、電力などの都市活動をサーバー側で継続的にシミュレーションし、クライアント側では必要な範囲のデータを受信して可視化します。
 
-旧 Machi-Sim で得られた設計・性能面の知見を引き継ぎつつ、ブラウザ単体実装からシミュレーション本体を分離し、より大規模な都市と多数の Agent を扱える構成へ再設計します。
+旧 Machi-Sim で得られたドメイン・設計・性能面の知見を引き継ぎつつ、ブラウザ単体実装からシミュレーション本体を分離し、より大規模な都市と多数の Agent を扱える構成へ再設計します。
 
 > [!NOTE]
 > 現在はリポジトリの初期セットアップ段階です。実装・API・プロトコル・仕様は今後変更される可能性があります。
@@ -24,11 +24,14 @@ Simulation Core
 基本方針は次の通りです。
 
 - `MachiVerseWorks.Simulation` が都市シミュレーションの正本を持つ
-- `MachiVerseWorks.Server` が実行ループ、クライアント接続、配信を担当する
+- `MachiVerseWorks.Server` が実行ループ、クライアント接続、command、snapshot 配信を担当する
 - `MachiVerseWorks.Protocol` がクライアント・サーバー間の契約を定義する
 - Web クライアントは表示・入力・補間を担当し、シミュレーション状態を直接所有しない
 - 高頻度データはバイナリ転送を前提とし、クライアントには必要な空間範囲だけを配信する
+- Simulation tick、snapshot publish、render frame を分離する
 - シミュレーション仕様と実装設計をドキュメント上でも分離する
+
+詳細は [`docs/architecture/overview.md`](docs/architecture/overview.md)、採用理由は [`ADR-0001`](docs/decisions/ADR-0001-csharp-headless-simulation-server.md) を参照してください。
 
 ## リポジトリ構成
 
@@ -50,9 +53,15 @@ MachiVerseWorks/
 │  └─ archive/
 ├─ scripts/
 ├─ tools/
+├─ .github/
 ├─ AGENT.md
 ├─ AGENTS.md
+├─ CONTRIBUTING.md
+├─ SECURITY.md
+├─ CODE_OF_CONDUCT.md
 ├─ LICENSE
+├─ NOTICE
+├─ THIRD_PARTY_NOTICES.txt
 └─ README.md
 ```
 
@@ -76,18 +85,31 @@ MachiVerseWorks では、旧実装のように巨大な横断設計書へ情報�
 - サーバー / Simulation Core: C# / .NET
 - Web クライアント: TypeScript + Three.js を想定
 - Simulation Core は HTTP / WebSocket / ASP.NET Core などの通信層へ依存させない
-- ネットワーク配信と描画更新は、Simulation tick と分離する
+- ネットワーク配信と描画更新は Simulation tick と分離する
 - 大規模 Agent 処理はデータ指向・割り当て抑制・並列処理を前提に設計する
 - 最適化は計測結果に基づいて行い、可読性や仕様の正しさより先に複雑化しない
 
-具体的な開発ルールは [`AGENT.md`](AGENT.md) を参照してください。
+具体的な開発ルールは [`AGENT.md`](AGENT.md)、開発フローは [`docs/development/git-workflow.md`](docs/development/git-workflow.md) を参照してください。
 
 ## 旧 Machi-Sim
 
 旧ブラウザ単体版は Legacy 実装として保存されています。
 
-[Machi-Sim_Legacy](https://github.com/SUIREN-KazutoHashimoto/Machi-Sim_Legacy)
+- [Machi-Sim_Legacy](https://github.com/SUIREN-KazutoHashimoto/Machi-Sim_Legacy)
+- [Legacy からの移行メモ](docs/archive/legacy-machi-sim/README.md)
+
+旧repoのコードや巨大な仕様書をそのまま正本としてコピーせず、必要なドメイン仕様・設計知見だけを新アーキテクチャに合わせて書き直して引き継ぎます。
+
+## Contributing / Security
+
+- 貢献方法: [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- 行動規範: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
+- 脆弱性報告: [`SECURITY.md`](SECURITY.md)
 
 ## ライセンス
 
-Apache License 2.0 の下で提供します。詳細は [`LICENSE`](LICENSE) を参照してください。
+Apache License 2.0 の下で提供します。
+
+- ライセンス全文: [`LICENSE`](LICENSE)
+- プロジェクト帰属表示: [`NOTICE`](NOTICE)
+- 第三者ソフトウェア表示: [`THIRD_PARTY_NOTICES.txt`](THIRD_PARTY_NOTICES.txt)

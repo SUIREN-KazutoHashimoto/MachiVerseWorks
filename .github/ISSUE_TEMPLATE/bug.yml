@@ -1,0 +1,100 @@
+name: Bug report
+description: 不具合や想定外の挙動を報告します
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        報告ありがとうございます。再現に必要な情報を可能な範囲で記載してください。
+        セキュリティ脆弱性の詳細は公開 Issue へ記載せず、SECURITY.md の手順を使用してください。
+
+  - type: input
+    id: version
+    attributes:
+      label: Version / Commit
+      description: MachiVerseWorks のバージョン、または確認したコミット SHA を記載してください。初期セットアップ中はコミット SHA だけで構いません。
+      placeholder: "例: 2.3.4 / abc1234"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: 発生箇所
+      options:
+        - Simulation Core
+        - Server
+        - Protocol
+        - Web Client
+        - Build / CI / Tooling
+        - Documentation
+        - 不明 / 複数
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 環境
+      description: OS、.NET、ブラウザ、Node.js、設定値など、関係する情報を記載してください。
+      placeholder: |
+        OS: Windows 11
+        Browser: Chrome ...
+        .NET: ...
+        Seed / config: ...
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 症状
+      description: 何が起きているかを簡潔に記載してください。
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順
+      description: seed、設定、操作手順、発生時刻、対象 ID など、再現に必要な情報を記載してください。
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待する挙動
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の挙動
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: ログ・スクリーンショット・動画
+      description: 必要に応じて添付してください。秘密情報や認証情報は含めないでください。
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 補足
+      description: 発生頻度、影響範囲、回避策、関連 Issue などがあれば記載してください。
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 確認
+      options:
+        - label: 同じ内容の Issue がないか確認しました
+          required: true
+        - label: セキュリティ脆弱性の詳細を公開 Issue へ記載していません
+          required: true
