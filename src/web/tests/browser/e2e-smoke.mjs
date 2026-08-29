@@ -25,6 +25,7 @@ if (!(host instanceof HTMLElement) || !(result instanceof HTMLElement)) {
 const store = new EntityStore();
 const clientMetrics = new ClientPerformanceMetrics();
 const view = new WorldView(host);
+const initialSpawnStates = new Map();
 let connectionState = 'disconnected';
 let protocolError = null;
 let clientError = null;
@@ -40,6 +41,14 @@ const connection = new MachiVerseConnection(
     onMessage: (message) => {
       switch (message.type) {
         case MessageType.AgentSpawn:
+          if (!initialSpawnStates.has(message.agentId)) {
+            initialSpawnStates.set(message.agentId, {
+              agentId: message.agentId,
+              x: message.x,
+              y: message.y,
+              z: message.z,
+            });
+          }
           store.spawn(message);
           break;
         case MessageType.AgentUpdate:
@@ -168,14 +177,18 @@ async function runAltitudeScenario() {
     maxZ: 120,
   });
   await waitUntil(() => store.size === expectedTotal, 'same-horizontal-position altitude agents received');
+  await waitUntil(() => initialSpawnStates.size === expectedTotal, 'initial altitude AgentSpawn states recorded');
   await waitUntil(() => sawUpdate, 'altitude agents received updates');
+
+  const spawnStates = [...initialSpawnStates.values()];
+  assert(spawnStates.every((agent) => agent.x === 0 && agent.y === 0), 'altitude agents spawned at the same horizontal position');
+  const initialAltitudes = new Set(spawnStates.map((agent) => agent.z.toFixed(6)));
+  assert(initialAltitudes.size > 1, 'AgentSpawn preserves distinct altitudes');
 
   const agents = [...store.sample(performance.now())];
   assert(agents.length === expectedTotal, 'all altitude agents are present in EntityStore');
-  assert(agents.every((agent) => Math.abs(agent.x) < 0.000001 && Math.abs(agent.y) < 0.000001), 'altitude agents share horizontal position');
-
   const simulationAltitudes = new Set(agents.map((agent) => agent.z.toFixed(6)));
-  assert(simulationAltitudes.size > 1, 'Protocol and EntityStore preserve distinct altitudes');
+  assert(simulationAltitudes.size === initialAltitudes.size, 'AgentUpdate and EntityStore preserve altitude separation');
 
   const rendererAltitudes = new Set(
     agents.map((agent) => simulationToThreePosition(agent.x, agent.y, agent.z).y.toFixed(6)),
@@ -184,6 +197,7 @@ async function runAltitudeScenario() {
   view.render(store, performance.now());
 
   return {
+    initialAltitudes: [...initialAltitudes],
     simulationAltitudes: [...simulationAltitudes],
     rendererAltitudes: [...rendererAltitudes],
   };
