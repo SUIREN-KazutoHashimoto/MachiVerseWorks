@@ -6,7 +6,6 @@ on:
       - main
       - develop
       - 'release/**'
-      - 'feat/**'
       - 'feature/**'
       - 'fix/**'
       - 'perf/**'
@@ -56,6 +55,9 @@ jobs:
             global.json
             Directory.Build.props
             Directory.Packages.props
+            docs/development/versioning.md
+            docs/development/repository-settings.md
+            scripts/check-markdown-links.py
           )
 
           for file in "${required_files[@]}"; do
@@ -67,6 +69,9 @@ jobs:
 
           grep -Fq "MachiVerseWorks 開発ルール" AGENTS.md
           grep -Fq "MachiVerseWorks" NOTICE
+
+      - name: Validate Markdown links
+        run: python scripts/check-markdown-links.py
 
       - name: Validate .NET SDK policy
         shell: python
@@ -91,6 +96,26 @@ jobs:
               raise SystemExit("sdk.rollForward must be latestFeature")
 
           print(f".NET SDK baseline: {version}")
+
+      - name: Validate application version when present
+        shell: python
+        run: |
+          import re
+          from pathlib import Path
+
+          path = Path("VERSION")
+          if not path.exists():
+              print("VERSION is not present during repository initial setup.")
+              raise SystemExit(0)
+
+          raw = path.read_text(encoding="utf-8")
+          value = raw.rstrip("\r\n")
+          if raw not in {value, value + "\n", value + "\r\n"}:
+              raise SystemExit("VERSION must contain exactly one A.B.C value")
+          if not re.fullmatch(r"\d+\.\d+\.\d+", value):
+              raise SystemExit("VERSION must use A.B.C with three non-negative integers")
+
+          print(f"Application version: {value}")
 
       - name: Validate locale manifest
         shell: python
@@ -249,3 +274,41 @@ jobs:
           name: web-dist
           path: src/web/dist
           retention-days: 7
+
+  gate:
+    name: ci-gate
+    if: always()
+    needs: [repository, detect, dotnet, web]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify CI results
+        shell: bash
+        env:
+          REPOSITORY_RESULT: ${{ needs.repository.result }}
+          DETECT_RESULT: ${{ needs.detect.result }}
+          DOTNET_RESULT: ${{ needs.dotnet.result }}
+          WEB_RESULT: ${{ needs.web.result }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$REPOSITORY_RESULT" != "success" ]]; then
+            echo "::error::repository job result: $REPOSITORY_RESULT"
+            exit 1
+          fi
+
+          if [[ "$DETECT_RESULT" != "success" ]]; then
+            echo "::error::detect job result: $DETECT_RESULT"
+            exit 1
+          fi
+
+          for entry in "dotnet:$DOTNET_RESULT" "web:$WEB_RESULT"; do
+            name="${entry%%:*}"
+            result="${entry#*:}"
+            if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+              echo "::error::$name job result: $result"
+              exit 1
+            fi
+          done
+
+          echo "All required CI checks passed."

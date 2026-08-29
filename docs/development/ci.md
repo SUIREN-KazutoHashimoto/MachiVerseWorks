@@ -8,12 +8,25 @@ MachiVerseWorks の GitHub Actions 運用方針です。
 
 現在の job:
 
-- `repository`: リポジトリ必須ファイルと localization manifest を検証
+- `repository`: 必須ファイル、Markdown local link、.NET SDK、任意の `VERSION`、localization manifest を検証
 - `detect components`: .NET / Web Client の実装有無を検出
 - `dotnet`: C# project が存在する場合だけ restore / build / test
 - `web`: `src/web/package.json` が存在する場合だけ npm install / lint / typecheck / test / build
+- `ci-gate`: 上記jobの結果を集約し、実装有無に関係なく常に1つの最終判定を返す
 
-初期セットアップ中は source project がまだ存在しないため、`repository` と component detection のみ実行されます。
+Branch protection / Ruleset の required check には **`CI / ci-gate`** を指定します。component jobを直接requiredにすると未実装時のskipと相性が悪いため、固定gateを正本とします。
+
+### Repository validation
+
+`repository` jobでは次を検証します。
+
+- 必須Repositoryファイルが存在し空でないこと
+- `scripts/check-markdown-links.py` によるMarkdownのRepository内リンク切れ検出
+- `global.json` のSDK policy
+- `VERSION` が存在する場合の `A.B.C` 形式
+- `src/web/locales/manifest.json` のlocale形式とdefault locale整合性
+
+`VERSION` は初期セットアップ中は存在しなくてよく、通常開発開始時に必須化します。
 
 ### .NET
 
@@ -96,6 +109,6 @@ MachiVerseWorks は旧ブラウザ単体版と異なり、将来的に次の配�
 
 ## 6. Branch protection
 
-通常開発へ移行した後は、少なくとも `develop` で `CI / repository` と実装済み component の build job を required check にすることを推奨します。
+`main` と `develop` は `docs/development/repository-settings.md` の基準で保護します。
 
-`main` は release 系統として扱い、`develop -> main` PR では同じ CI を通します。
+最低限 required check とするのは `CI / ci-gate` です。CodeQL / Dependency Review はGitHub側で利用可能な保護設定と実装状況に応じて追加します。
