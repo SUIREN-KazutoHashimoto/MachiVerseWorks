@@ -39,6 +39,18 @@ jobs:
           MACHIVERSE_BENCHMARK_ARTIFACTS: ${{ github.workspace }}/.artifacts/phase7-benchmarks
         run: dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-build -- --job Dry --filter '*'
 
+      - name: Verify benchmark exports
+        shell: bash
+        env:
+          MACHIVERSE_BENCHMARK_ARTIFACTS: ${{ github.workspace }}/.artifacts/phase7-benchmarks
+        run: |
+          set -euo pipefail
+          results="$MACHIVERSE_BENCHMARK_ARTIFACTS/results"
+          test -d "$results"
+          find "$results" -type f -name '*.md' -print -quit | grep -q .
+          find "$results" -type f -name '*.json' -print -quit | grep -q .
+          find "$results" -type f -name '*.csv' -print -quit | grep -q .
+
       - name: Upload benchmark artifacts
         uses: actions/upload-artifact@v4
         with:

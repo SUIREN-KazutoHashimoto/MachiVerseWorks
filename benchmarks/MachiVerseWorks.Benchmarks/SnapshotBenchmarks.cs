@@ -3,7 +3,7 @@ using MachiVerseWorks.Simulation;
 
 namespace MachiVerseWorks.Benchmarks;
 
-public sealed class SnapshotBenchmarks
+public class SnapshotBenchmarks
 {
     private static readonly WorldRect SpawnArea = new(-5_000d, -5_000d, 5_000d, 5_000d);
     private static readonly WorldRect SubscriptionArea = new(-512d, -512d, 512d, 512d);
