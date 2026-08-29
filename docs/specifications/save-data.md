@@ -106,6 +106,7 @@ Phase 8 version 1 には次を保存しない。
 - 未知field
 - 無効なSimulation設定値
 - 負のelapsed time
+- 次の1 tickで`tickCount`またはelapsed timeがoverflowする状態
 - 0のAgent ID
 - 重複Agent ID
 - `nextAgentId` が保存済みAgent ID以下

@@ -144,9 +144,23 @@ public sealed class SimulationWorld
             checkpoint.TickRate,
             checkpoint.Seed,
             checkpoint.SpatialCellSize);
+        var restoredTime = new SimulationTime(
+            checkpoint.TickCount,
+            TimeSpan.FromTicks(checkpoint.ElapsedTicks));
+        try
+        {
+            _ = restoredTime.Advance(config.TickDuration);
+        }
+        catch (OverflowException)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(checkpoint),
+                "Simulation time must allow at least one additional tick.");
+        }
+
         var world = new SimulationWorld(config)
         {
-            Time = new SimulationTime(checkpoint.TickCount, TimeSpan.FromTicks(checkpoint.ElapsedTicks)),
+            Time = restoredTime,
             _random = new DeterministicRandom(checkpoint.RandomState),
         };
         world._agents.Restore(checkpoint.Agents, checkpoint.NextAgentId, world._spatialIndex);
