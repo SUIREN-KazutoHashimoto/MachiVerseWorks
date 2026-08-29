@@ -164,6 +164,16 @@ public sealed class SimulationWorld
                 "Simulation time must allow at least one additional tick.");
         }
 
+        var expectedElapsedTicks = CalculateExpectedElapsedTicks(
+            checkpoint.TickCount,
+            config.TickDuration);
+        if (checkpoint.ElapsedTicks != expectedElapsedTicks)
+        {
+            throw new ArgumentException(
+                $"Elapsed time {checkpoint.ElapsedTicks} does not match tick count {checkpoint.TickCount} and tick rate {checkpoint.TickRate}.",
+                nameof(checkpoint));
+        }
+
         var world = new SimulationWorld(config)
         {
             Time = restoredTime,
@@ -178,6 +188,26 @@ public sealed class SimulationWorld
         return new WorldVector(
             _random.NextDouble(-1d, 1d),
             _random.NextDouble(-1d, 1d));
+    }
+
+    private static long CalculateExpectedElapsedTicks(ulong tickCount, TimeSpan tickDuration)
+    {
+        var tickDurationTicks = tickDuration.Ticks;
+        if (tickDurationTicks == 0)
+        {
+            return 0;
+        }
+
+        var maximumTickCount = (ulong)(long.MaxValue / tickDurationTicks);
+        if (tickCount > maximumTickCount)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(tickCount),
+                tickCount,
+                "Tick count cannot be represented by the configured elapsed-time range.");
+        }
+
+        return (long)(tickCount * (ulong)tickDurationTicks);
     }
 
     private static void ValidatePoint(WorldPoint point)
