@@ -2,7 +2,7 @@ using MachiVerseWorks.Simulation.Internal;
 
 namespace MachiVerseWorks.Simulation;
 
-public sealed class SimulationWorld
+public sealed partial class SimulationWorld
 {
     private readonly AgentStore _agents = new();
     private readonly SpatialIndex _spatialIndex;
@@ -95,13 +95,19 @@ public sealed class SimulationWorld
             Time.Elapsed.Ticks,
             _random.State,
             _agents.NextId,
-            _agents.CreateCheckpoint());
+            _agents.CreateCheckpoint(),
+            _buildings.NextId,
+            _buildings.CreateCheckpoint(),
+            _pois.NextId,
+            _pois.CreateCheckpoint());
     }
 
     public static SimulationWorld RestoreCheckpoint(SimulationCheckpoint checkpoint)
     {
         ArgumentNullException.ThrowIfNull(checkpoint);
         ArgumentNullException.ThrowIfNull(checkpoint.Agents);
+        ArgumentNullException.ThrowIfNull(checkpoint.Buildings);
+        ArgumentNullException.ThrowIfNull(checkpoint.Pois);
 
         if (checkpoint.ElapsedTicks < 0)
         {
@@ -153,6 +159,8 @@ public sealed class SimulationWorld
             checkpoint.TickRate,
             checkpoint.Seed,
             checkpoint.SpatialCellSize);
+        ValidateUrbanObjectCheckpoint(checkpoint, config.SpatialCellSize);
+
         var restoredTime = new SimulationTime(
             checkpoint.TickCount,
             TimeSpan.FromTicks(checkpoint.ElapsedTicks));
@@ -183,6 +191,7 @@ public sealed class SimulationWorld
             _random = new DeterministicRandom(checkpoint.RandomState),
         };
         world._agents.Restore(checkpoint.Agents, checkpoint.NextAgentId, world._spatialIndex);
+        world.RestoreUrbanObjects(checkpoint);
         return world;
     }
 

@@ -14,6 +14,11 @@ public sealed class WorldSaveSerializerTests
         var ids = world.CreateAgents(8, new WorldVolume(-100d, -100d, -50d, 100d, 100d, 75d));
         Assert.IsTrue(world.RemoveAgent(ids[2]));
         Assert.IsTrue(world.RemoveAgent(ids[6]));
+        var building = world.CreateBuilding(
+            new WorldVolume(-50d, -40d, -10d, 50d, 40d, 30d),
+            BuildingKind.MixedUse);
+        world.CreatePoi(new WorldPoint(0d, 0d, 5d), PoiKind.Workplace, building);
+        world.CreatePoi(new WorldPoint(500d, -500d, 0d), PoiKind.Transit);
         for (var tick = 0; tick < 7; tick++) world.Step();
 
         var restored = WorldSaveSerializer.Deserialize(WorldSaveSerializer.Serialize(world));
@@ -26,6 +31,13 @@ public sealed class WorldSaveSerializerTests
         Assert.IsTrue(world.TryGetAgentSnapshot(originalNextId, out var originalNext));
         Assert.IsTrue(restored.TryGetAgentSnapshot(restoredNextId, out var restoredNext));
         Assert.AreEqual(originalNext, restoredNext);
+
+        Assert.AreEqual(
+            world.CreateBuilding(new WorldVolume(600d, 600d, 0d, 610d, 610d, 10d)),
+            restored.CreateBuilding(new WorldVolume(600d, 600d, 0d, 610d, 610d, 10d)));
+        Assert.AreEqual(
+            world.CreatePoi(new WorldPoint(700d, 700d, 0d)),
+            restored.CreatePoi(new WorldPoint(700d, 700d, 0d)));
     }
 
     [TestMethod]
@@ -40,23 +52,34 @@ public sealed class WorldSaveSerializerTests
     }
 
     [TestMethod]
-    public void SerializedSaveContainsThreeDimensionalFieldsAndNoLocalizedDisplayStrings()
+    public void SerializedSaveContainsBuildingPoiAndThreeDimensionalFieldsWithoutLocalizedDisplayStrings()
     {
         var world = new SimulationWorld(new SimulationConfig(seed: 42));
         world.CreateAgent(new WorldPoint(1d, 2d, 3d), new WorldVector(4d, 5d, 6d));
+        var building = world.CreateBuilding(
+            new WorldVolume(10d, 20d, 30d, 40d, 50d, 60d),
+            BuildingKind.Civic);
+        world.CreatePoi(new WorldPoint(25d, 35d, 45d), PoiKind.Service, building);
 
         var serialized = WorldSaveSerializer.Serialize(world);
         using var document = JsonDocument.Parse(serialized);
-        var agent = document.RootElement.GetProperty("simulation").GetProperty("agents")[0];
+        var simulation = document.RootElement.GetProperty("simulation");
+        var agent = simulation.GetProperty("agents")[0];
+        var savedBuilding = simulation.GetProperty("buildings")[0];
+        var poi = simulation.GetProperty("pois")[0];
         Assert.AreEqual(3d, agent.GetProperty("z").GetDouble());
         Assert.AreEqual(6d, agent.GetProperty("velocityZ").GetDouble());
+        Assert.AreEqual((byte)BuildingKind.Civic, savedBuilding.GetProperty("kind").GetByte());
+        Assert.AreEqual(60d, savedBuilding.GetProperty("maxZ").GetDouble());
+        Assert.AreEqual(building.Value, poi.GetProperty("buildingId").GetUInt64());
+        Assert.AreEqual(45d, poi.GetProperty("z").GetDouble());
         AssertNoStringValuesOrLocalizedPropertyNames(document.RootElement);
     }
 
     [TestMethod]
     public void UnsupportedFormatVersionAndMalformedJsonAreRejected()
     {
-        var unsupported = """{"formatVersion":999,"simulation":{"tickRate":30,"seed":1,"spatialCellSize":64,"tickCount":0,"elapsedTicks":0,"randomState":1,"nextAgentId":1,"agents":[]}}"""u8.ToArray();
+        var unsupported = """{"formatVersion":999,"simulation":{"tickRate":30,"seed":1,"spatialCellSize":64,"tickCount":0,"elapsedTicks":0,"randomState":1,"nextAgentId":1,"agents":[],"nextBuildingId":1,"buildings":[],"nextPoiId":1,"pois":[]}}"""u8.ToArray();
         Assert.ThrowsExactly<InvalidDataException>(() => WorldSaveSerializer.Deserialize(unsupported));
         Assert.ThrowsExactly<InvalidDataException>(() => WorldSaveSerializer.Deserialize("{ not-json"u8.ToArray()));
     }
@@ -66,7 +89,7 @@ public sealed class WorldSaveSerializerTests
     {
         var json = """
             {
-              "formatVersion": 2,
+              "formatVersion": 3,
               "simulation": {
                 "tickRate": 30,
                 "seed": 1,
@@ -77,7 +100,11 @@ public sealed class WorldSaveSerializerTests
                 "nextAgentId": 2,
                 "agents": [
                   { "id": 1, "x": 0, "y": 0, "velocityX": 0, "velocityY": 0, "velocityZ": 0, "isActive": true }
-                ]
+                ],
+                "nextBuildingId": 1,
+                "buildings": [],
+                "nextPoiId": 1,
+                "pois": []
               }
             }
             """u8.ToArray();
@@ -86,11 +113,11 @@ public sealed class WorldSaveSerializerTests
     }
 
     [TestMethod]
-    public void DuplicateAgentIdsAreRejectedByVersionTwoSchema()
+    public void DuplicateAgentIdsAreRejectedByVersionThreeSchema()
     {
         var json = """
             {
-              "formatVersion": 2,
+              "formatVersion": 3,
               "simulation": {
                 "tickRate": 30,
                 "seed": 1,
@@ -102,6 +129,62 @@ public sealed class WorldSaveSerializerTests
                 "agents": [
                   { "id": 1, "x": 0, "y": 0, "z": 0, "velocityX": 0, "velocityY": 0, "velocityZ": 0, "isActive": true },
                   { "id": 1, "x": 1, "y": 1, "z": 1, "velocityX": 0, "velocityY": 0, "velocityZ": 0, "isActive": false }
+                ],
+                "nextBuildingId": 1,
+                "buildings": [],
+                "nextPoiId": 1,
+                "pois": []
+              }
+            }
+            """u8.ToArray();
+
+        Assert.ThrowsExactly<InvalidDataException>(() => WorldSaveSerializer.Deserialize(json));
+    }
+
+    [TestMethod]
+    public void MissingBuildingAndPoiCollectionsAreRejected()
+    {
+        var json = """
+            {
+              "formatVersion": 3,
+              "simulation": {
+                "tickRate": 30,
+                "seed": 1,
+                "spatialCellSize": 64,
+                "tickCount": 0,
+                "elapsedTicks": 0,
+                "randomState": 1,
+                "nextAgentId": 1,
+                "agents": [],
+                "nextBuildingId": 1,
+                "nextPoiId": 1
+              }
+            }
+            """u8.ToArray();
+
+        Assert.ThrowsExactly<InvalidDataException>(() => WorldSaveSerializer.Deserialize(json));
+    }
+
+    [TestMethod]
+    public void PoiReferenceToMissingBuildingIsRejected()
+    {
+        var json = """
+            {
+              "formatVersion": 3,
+              "simulation": {
+                "tickRate": 30,
+                "seed": 1,
+                "spatialCellSize": 64,
+                "tickCount": 0,
+                "elapsedTicks": 0,
+                "randomState": 1,
+                "nextAgentId": 1,
+                "agents": [],
+                "nextBuildingId": 1,
+                "buildings": [],
+                "nextPoiId": 2,
+                "pois": [
+                  { "id": 1, "kind": 0, "x": 0, "y": 0, "z": 0, "buildingId": 99 }
                 ]
               }
             }
@@ -115,7 +198,7 @@ public sealed class WorldSaveSerializerTests
     {
         var json = """
             {
-              "formatVersion": 2,
+              "formatVersion": 3,
               "unexpected": 123,
               "simulation": {
                 "tickRate": 30,
@@ -125,7 +208,11 @@ public sealed class WorldSaveSerializerTests
                 "elapsedTicks": 0,
                 "randomState": 1,
                 "nextAgentId": 1,
-                "agents": []
+                "agents": [],
+                "nextBuildingId": 1,
+                "buildings": [],
+                "nextPoiId": 1,
+                "pois": []
               }
             }
             """u8.ToArray();
@@ -141,7 +228,11 @@ public sealed class WorldSaveSerializerTests
         Assert.AreEqual(expected.ElapsedTicks, actual.ElapsedTicks);
         Assert.AreEqual(expected.RandomState, actual.RandomState);
         Assert.AreEqual(expected.NextAgentId, actual.NextAgentId);
+        Assert.AreEqual(expected.NextBuildingId, actual.NextBuildingId);
+        Assert.AreEqual(expected.NextPoiId, actual.NextPoiId);
         CollectionAssert.AreEqual(expected.Agents.ToArray(), actual.Agents.ToArray());
+        CollectionAssert.AreEqual(expected.Buildings.ToArray(), actual.Buildings.ToArray());
+        CollectionAssert.AreEqual(expected.Pois.ToArray(), actual.Pois.ToArray());
     }
 
     private static void AssertNoStringValuesOrLocalizedPropertyNames(JsonElement element)

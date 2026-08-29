@@ -5,6 +5,7 @@
 想定する主な分野:
 
 - Agent / citizen
+- Building / POI
 - city generation
 - road / traffic
 - pedestrian
@@ -18,9 +19,10 @@
 
 - [`world-coordinate-system.md`](world-coordinate-system.md): ネイティブ3D座標、単位、境界、renderer/audio写像の正本
 - [`simulation-core-poc.md`](simulation-core-poc.md): 現行Simulation Core基盤仕様
+- [`building-poi.md`](building-poi.md): Building / POIのstable ID、3D state、参照整合性仕様
 - [`headless-server-poc.md`](headless-server-poc.md): Headless Server / 3D subscription基盤仕様
 - [`web-client-poc.md`](web-client-poc.md): Web Client + Audio Client Foundationの3D基盤仕様
-- [`save-data.md`](save-data.md): Save format 2、XYZ state、validation仕様
+- [`save-data.md`](save-data.md): Save format 3、Agent / Building / POI state、validation仕様
 
 Protocolのbinary layoutと互換性ルールは[`../architecture/protocol.md`](../architecture/protocol.md)を正本とします。Phase 9以降、Protocol 1.x / `SubscribeArea` / 2D座標を現行契約として扱いません。
 
