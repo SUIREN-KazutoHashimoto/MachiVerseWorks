@@ -6,8 +6,8 @@ namespace MachiVerseWorks.Server.Tests;
 public sealed class ProjectSkeletonTests
 {
     [TestMethod]
-    public void TestInfrastructureIsOperational()
+    public void RuntimeExecutesTargetFrameworkTests()
     {
-        Assert.IsTrue(true);
+        Assert.AreEqual(10, Environment.Version.Major);
     }
 }
