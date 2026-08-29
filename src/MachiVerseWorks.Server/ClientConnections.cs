@@ -72,13 +72,14 @@ internal sealed class ClientConnection : IDisposable
 
         lock (_stateGate)
         {
-            if (_subscriptionRevision != revision)
-            {
-                return false;
-            }
+            var revisionMatches = _subscriptionRevision == revision;
 
+            // This set represents what was actually delivered to the client after a complete
+            // snapshot plan, independently of which subscription is current now. Committing the
+            // exact delivered set also preserves stale-plan removes, so the next subscription can
+            // choose Spawn/Update/Remove from the client's real state.
             _knownAgentIds = agentIds;
-            return true;
+            return revisionMatches;
         }
     }
 
