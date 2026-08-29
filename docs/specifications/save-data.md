@@ -83,6 +83,17 @@ Version 1 の時間は固定tick durationで進む。したがって `elapsedTic
 }
 ```
 
+## 読込時の資源上限
+
+外部Save Dataは構造が正しくても無制限には受け入れない。`WorldSaveLimits` の既定値は次とする。
+
+- 最大UTF-8入力サイズ: 128 MiB
+- 最大Agent数: 1,000,000
+
+byte上限はJSON parse前に適用する。Stream入力は上限を超えて無制限にbufferしない。Agent数は`Utf8JsonReader`によるallocation-freeなtoken scanでDTO deserialization前に検証し、上限を超えた時点で拒否する。DTOからcheckpoint配列へ変換する前にも同じ上限を再確認する。
+
+テストや将来のhost要件では明示的な`WorldSaveLimits`を指定できるが、上限を引き上げる場合は利用可能メモリと想定都市規模を考慮する。
+
 ## 保存しない情報
 
 Phase 8 version 1 には次を保存しない。
@@ -103,6 +114,8 @@ Phase 8 version 1 には次を保存しない。
 少なくとも次は不正Save Dataとして拒否する。
 
 - JSONとして不正
+- configured byte上限超過
+- configured Agent数上限超過
 - current以外の`formatVersion`
 - 必須field欠落
 - 未知field

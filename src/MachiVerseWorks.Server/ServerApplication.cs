@@ -21,6 +21,7 @@ public static class ServerApplication
         });
 
         builder.Services.AddSingleton(options);
+        builder.Services.AddSingleton(new WebSocketOriginPolicy(options.AllowedWebSocketOrigins));
         builder.Services.AddSingleton<SimulationRuntime>();
         builder.Services.AddSingleton<ClientConnectionRegistry>();
         builder.Services.AddSingleton<ClientCommandQueue>();
@@ -55,6 +56,14 @@ public static class ServerApplication
             if (!context.WebSockets.IsWebSocketRequest)
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                return;
+            }
+
+            var originPolicy = context.RequestServices.GetRequiredService<WebSocketOriginPolicy>();
+            var origin = context.Request.Headers["Origin"].ToString();
+            if (!originPolicy.IsAllowed(origin))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
                 return;
             }
 
