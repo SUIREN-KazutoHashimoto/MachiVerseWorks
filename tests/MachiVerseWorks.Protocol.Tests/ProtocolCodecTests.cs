@@ -20,13 +20,19 @@ public sealed class ProtocolCodecTests
     [TestMethod]
     public void MessageTypeIdsRemainStable()
     {
-        Assert.AreEqual((ushort)1, (ushort)MessageType.Hello);
-        Assert.AreEqual((ushort)2, (ushort)MessageType.HelloAck);
-        Assert.AreEqual((ushort)3, (ushort)MessageType.SubscribeArea);
-        Assert.AreEqual((ushort)100, (ushort)MessageType.AgentSpawn);
-        Assert.AreEqual((ushort)101, (ushort)MessageType.AgentUpdate);
-        Assert.AreEqual((ushort)102, (ushort)MessageType.AgentRemove);
-        Assert.AreEqual((ushort)900, (ushort)MessageType.Error);
+        ushort[] expected = [1, 2, 3, 100, 101, 102, 900];
+        ushort[] actual =
+        [
+            (ushort)MessageType.Hello,
+            (ushort)MessageType.HelloAck,
+            (ushort)MessageType.SubscribeArea,
+            (ushort)MessageType.AgentSpawn,
+            (ushort)MessageType.AgentUpdate,
+            (ushort)MessageType.AgentRemove,
+            (ushort)MessageType.Error,
+        ];
+
+        CollectionAssert.AreEqual(expected, actual);
     }
 
     [TestMethod]
