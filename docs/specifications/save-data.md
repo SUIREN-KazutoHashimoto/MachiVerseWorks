@@ -88,7 +88,7 @@ Save format version はルート `VERSION` の application version、および P
 - 最大UTF-8入力サイズ: 128 MiB
 - 最大Agent数: 1,000,000
 
-byte上限はJSON parse前に適用する。Stream入力は上限を超えて無制限にbufferしない。Agent数はcheckpoint配列へ変換する前に検証する。
+byte上限はJSON parse前に適用する。Stream入力は上限を超えて無制限にbufferしない。Agent数は`Utf8JsonReader`によるallocation-freeなtoken scanでDTO deserialization前に検証し、上限を超えた時点で拒否する。DTOからcheckpoint配列へ変換する前にも同じ上限を再確認する。
 
 テストや将来のhost要件では明示的な`WorldSaveLimits`を指定できるが、上限を引き上げる場合は利用可能メモリと想定都市規模を考慮する。
 

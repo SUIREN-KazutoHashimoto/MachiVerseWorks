@@ -54,6 +54,32 @@ public sealed class WorldSaveSerializerLimitTests
     }
 
     [TestMethod]
+    public void AgentCountLimitIsAppliedBeforeAgentDtoMaterialization()
+    {
+        var json = """
+            {
+              "formatVersion": 1,
+              "simulation": {
+                "tickRate": 30,
+                "seed": 1,
+                "spatialCellSize": 64,
+                "tickCount": 0,
+                "elapsedTicks": 0,
+                "randomState": 1,
+                "nextAgentId": 3,
+                "agents": [{}, {}]
+              }
+            }
+            """u8.ToArray();
+        var limits = new WorldSaveLimits(maximumBytes: json.Length, maximumAgentCount: 1);
+
+        var exception = Assert.ThrowsExactly<InvalidDataException>(() =>
+            WorldSaveSerializer.Deserialize(json, limits));
+
+        StringAssert.Contains(exception.Message, "before deserialization");
+    }
+
+    [TestMethod]
     public void InputExactlyAtConfiguredByteLimitIsAccepted()
     {
         var json = """

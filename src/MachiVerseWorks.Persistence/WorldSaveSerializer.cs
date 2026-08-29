@@ -54,6 +54,7 @@ public static class WorldSaveSerializer
 
         try
         {
+            ValidateAgentCountBeforeMaterialization(utf8Json, limits.MaximumAgentCount);
             var document = JsonSerializer.Deserialize<SaveDataDocument>(utf8Json, JsonOptions)
                 ?? throw new InvalidDataException("Save Data document is empty.");
             return RestoreDocument(document, limits);
@@ -197,6 +198,71 @@ public static class WorldSaveSerializer
             agents);
 
         return SimulationWorld.RestoreCheckpoint(checkpoint);
+    }
+
+    private static void ValidateAgentCountBeforeMaterialization(
+        ReadOnlySpan<byte> utf8Json,
+        int maximumAgentCount)
+    {
+        var reader = new Utf8JsonReader(
+            utf8Json,
+            new JsonReaderOptions
+            {
+                CommentHandling = JsonCommentHandling.Disallow,
+                MaxDepth = JsonOptions.MaxDepth,
+            });
+
+        while (reader.Read())
+        {
+            if (reader.TokenType != JsonTokenType.PropertyName ||
+                !reader.ValueTextEquals("agents"))
+            {
+                continue;
+            }
+
+            if (!reader.Read() || reader.TokenType != JsonTokenType.StartArray)
+            {
+                continue;
+            }
+
+            ValidateArrayElementCount(ref reader, maximumAgentCount);
+        }
+    }
+
+    private static void ValidateArrayElementCount(
+        ref Utf8JsonReader reader,
+        int maximumAgentCount)
+    {
+        var arrayDepth = reader.CurrentDepth;
+        var elementCount = 0;
+
+        while (reader.Read())
+        {
+            if (reader.TokenType == JsonTokenType.EndArray && reader.CurrentDepth == arrayDepth)
+            {
+                return;
+            }
+
+            if (reader.CurrentDepth != arrayDepth + 1 ||
+                reader.TokenType is not (
+                    JsonTokenType.StartObject or
+                    JsonTokenType.StartArray or
+                    JsonTokenType.String or
+                    JsonTokenType.Number or
+                    JsonTokenType.True or
+                    JsonTokenType.False or
+                    JsonTokenType.Null))
+            {
+                continue;
+            }
+
+            elementCount++;
+            if (elementCount > maximumAgentCount)
+            {
+                throw new InvalidDataException(
+                    $"Save Data Agent count exceeds the configured {maximumAgentCount}-Agent limit before deserialization.");
+            }
+        }
     }
 
     private static T Require<T>(T? value, string fieldName)
