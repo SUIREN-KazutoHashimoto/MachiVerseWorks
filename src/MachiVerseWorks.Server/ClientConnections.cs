@@ -13,7 +13,7 @@ internal sealed class ClientConnection : IDisposable
     private readonly object _lifetimeGate = new();
     private readonly SemaphoreSlim _sendGate = new(1, 1);
     private HashSet<ulong> _knownAgentIds = [];
-    private WorldRect? _subscription;
+    private WorldVolume? _subscription;
     private long _subscriptionRevision;
     private int _activeSendCount;
     private bool _disposeRequested;
@@ -41,9 +41,14 @@ internal sealed class ClientConnection : IDisposable
 
     public void SetSubscription(WorldRect area)
     {
+        SetSubscription(area.ToVolume());
+    }
+
+    public void SetSubscription(WorldVolume volume)
+    {
         lock (_stateGate)
         {
-            _subscription = area;
+            _subscription = volume;
             _subscriptionRevision = checked(_subscriptionRevision + 1);
         }
     }
@@ -52,14 +57,14 @@ internal sealed class ClientConnection : IDisposable
     {
         lock (_stateGate)
         {
-            if (_subscription is not WorldRect area)
+            if (_subscription is not WorldVolume volume)
             {
                 state = default;
                 return false;
             }
 
             state = new ClientSubscriptionState(
-                area,
+                volume,
                 _subscriptionRevision,
                 new HashSet<ulong>(_knownAgentIds));
             return true;
@@ -73,11 +78,6 @@ internal sealed class ClientConnection : IDisposable
         lock (_stateGate)
         {
             var revisionMatches = _subscriptionRevision == revision;
-
-            // This set represents what was actually delivered to the client after a complete
-            // snapshot plan, independently of which subscription is current now. Committing the
-            // exact delivered set also preserves stale-plan removes, so the next subscription can
-            // choose Spawn/Update/Remove from the client's real state.
             _knownAgentIds = agentIds;
             return revisionMatches;
         }
@@ -184,7 +184,7 @@ internal sealed class ClientConnection : IDisposable
 }
 
 internal readonly record struct ClientSubscriptionState(
-    WorldRect Area,
+    WorldVolume Area,
     long Revision,
     HashSet<ulong> KnownAgentIds);
 
@@ -226,7 +226,13 @@ internal abstract record ClientCommand(Guid ConnectionId);
 
 internal sealed record SubscribeAreaCommand(
     Guid ConnectionId,
-    WorldRect Area) : ClientCommand(ConnectionId);
+    WorldVolume Area) : ClientCommand(ConnectionId)
+{
+    public SubscribeAreaCommand(Guid connectionId, WorldRect area)
+        : this(connectionId, area.ToVolume())
+    {
+    }
+}
 
 internal sealed class ClientCommandQueue
 {

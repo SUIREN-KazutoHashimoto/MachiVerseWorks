@@ -22,8 +22,10 @@ internal sealed class ServerOptions
         int initialAgentCount,
         double spawnMinX,
         double spawnMinY,
+        double spawnMinZ,
         double spawnMaxX,
-        double spawnMaxY)
+        double spawnMaxY,
+        double spawnMaxZ)
     {
         ListenAddress = listenAddress;
         Port = port;
@@ -36,8 +38,10 @@ internal sealed class ServerOptions
         InitialAgentCount = initialAgentCount;
         SpawnMinX = spawnMinX;
         SpawnMinY = spawnMinY;
+        SpawnMinZ = spawnMinZ;
         SpawnMaxX = spawnMaxX;
         SpawnMaxY = spawnMaxY;
+        SpawnMaxZ = spawnMaxZ;
     }
 
     public IPAddress ListenAddress { get; }
@@ -62,9 +66,13 @@ internal sealed class ServerOptions
 
     public double SpawnMinY { get; }
 
+    public double SpawnMinZ { get; }
+
     public double SpawnMaxX { get; }
 
     public double SpawnMaxY { get; }
+
+    public double SpawnMaxZ { get; }
 
     public TimeSpan TickInterval => TimeSpan.FromSeconds(1d / TickRate);
 
@@ -124,13 +132,15 @@ internal sealed class ServerOptions
 
         var spawnMinX = ReadDouble(configuration, "Simulation:SpawnArea:MinX", -500d);
         var spawnMinY = ReadDouble(configuration, "Simulation:SpawnArea:MinY", -500d);
+        var spawnMinZ = ReadDouble(configuration, "Simulation:SpawnArea:MinZ", 0d);
         var spawnMaxX = ReadDouble(configuration, "Simulation:SpawnArea:MaxX", 500d);
         var spawnMaxY = ReadDouble(configuration, "Simulation:SpawnArea:MaxY", 500d);
-        if (!double.IsFinite(spawnMinX) || !double.IsFinite(spawnMinY) ||
-            !double.IsFinite(spawnMaxX) || !double.IsFinite(spawnMaxY) ||
-            spawnMaxX < spawnMinX || spawnMaxY < spawnMinY)
+        var spawnMaxZ = ReadDouble(configuration, "Simulation:SpawnArea:MaxZ", 0d);
+        if (!double.IsFinite(spawnMinX) || !double.IsFinite(spawnMinY) || !double.IsFinite(spawnMinZ) ||
+            !double.IsFinite(spawnMaxX) || !double.IsFinite(spawnMaxY) || !double.IsFinite(spawnMaxZ) ||
+            spawnMaxX < spawnMinX || spawnMaxY < spawnMinY || spawnMaxZ < spawnMinZ)
         {
-            throw new InvalidOperationException("Simulation:SpawnArea must contain finite coordinates with max >= min.");
+            throw new InvalidOperationException("Simulation:SpawnArea must contain finite 3D coordinates with max >= min.");
         }
 
         return new ServerOptions(
@@ -145,8 +155,10 @@ internal sealed class ServerOptions
             initialAgentCount,
             spawnMinX,
             spawnMinY,
+            spawnMinZ,
             spawnMaxX,
-            spawnMaxY);
+            spawnMaxY,
+            spawnMaxZ);
     }
 
     private static string[] ReadAllowedWebSocketOrigins(IConfiguration configuration)

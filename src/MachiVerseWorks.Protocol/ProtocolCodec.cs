@@ -7,8 +7,8 @@ public static class ProtocolCodec
 {
     private const int HelloPayloadLength = 0;
     private const int HelloAckPayloadLength = 6;
-    private const int SubscribeAreaPayloadLength = 32;
-    private const int AgentStatePayloadLength = 48;
+    private const int SubscribeAreaPayloadLength = 48;
+    private const int AgentStatePayloadLength = 64;
     private const int AgentRemovePayloadLength = 16;
     private const int MaximumErrorParameters = 16;
     private const int MaximumErrorParameterKeyBytes = 64;
@@ -141,21 +141,25 @@ public static class ProtocolCodec
                 WriteUInt16(payload[4..], helloAck.TickRate);
                 return;
             case SubscribeAreaMessage subscribeArea:
-                if (!IsFiniteRectangle(
+                if (!IsFiniteVolume(
                         subscribeArea.MinX,
                         subscribeArea.MinY,
+                        subscribeArea.MinZ,
                         subscribeArea.MaxX,
-                        subscribeArea.MaxY))
+                        subscribeArea.MaxY,
+                        subscribeArea.MaxZ))
                 {
                     throw new ArgumentOutOfRangeException(
                         nameof(message),
-                        "Subscribe area coordinates must be finite and ordered.");
+                        "Subscribe volume coordinates must be finite and ordered.");
                 }
 
                 WriteDouble(payload, subscribeArea.MinX);
                 WriteDouble(payload[8..], subscribeArea.MinY);
-                WriteDouble(payload[16..], subscribeArea.MaxX);
-                WriteDouble(payload[24..], subscribeArea.MaxY);
+                WriteDouble(payload[16..], subscribeArea.MinZ);
+                WriteDouble(payload[24..], subscribeArea.MaxX);
+                WriteDouble(payload[32..], subscribeArea.MaxY);
+                WriteDouble(payload[40..], subscribeArea.MaxZ);
                 return;
             case AgentSpawnMessage spawn:
                 WriteAgentStatePayload(
@@ -163,8 +167,10 @@ public static class ProtocolCodec
                     spawn.AgentId,
                     spawn.X,
                     spawn.Y,
+                    spawn.Z,
                     spawn.VelocityX,
                     spawn.VelocityY,
+                    spawn.VelocityZ,
                     spawn.TickCount);
                 return;
             case AgentUpdateMessage update:
@@ -173,8 +179,10 @@ public static class ProtocolCodec
                     update.AgentId,
                     update.X,
                     update.Y,
+                    update.Z,
                     update.VelocityX,
                     update.VelocityY,
+                    update.VelocityZ,
                     update.TickCount);
                 return;
             case AgentRemoveMessage remove:
@@ -196,21 +204,27 @@ public static class ProtocolCodec
         ulong agentId,
         double x,
         double y,
+        double z,
         double velocityX,
         double velocityY,
+        double velocityZ,
         ulong tickCount)
     {
         ValidateFinite(x, nameof(x));
         ValidateFinite(y, nameof(y));
+        ValidateFinite(z, nameof(z));
         ValidateFinite(velocityX, nameof(velocityX));
         ValidateFinite(velocityY, nameof(velocityY));
+        ValidateFinite(velocityZ, nameof(velocityZ));
 
         WriteUInt64(payload, agentId);
         WriteDouble(payload[8..], x);
         WriteDouble(payload[16..], y);
-        WriteDouble(payload[24..], velocityX);
-        WriteDouble(payload[32..], velocityY);
-        WriteUInt64(payload[40..], tickCount);
+        WriteDouble(payload[24..], z);
+        WriteDouble(payload[32..], velocityX);
+        WriteDouble(payload[40..], velocityY);
+        WriteDouble(payload[48..], velocityZ);
+        WriteUInt64(payload[56..], tickCount);
     }
 
     private static void WriteErrorPayload(Span<byte> payload, ProtocolErrorMessage message)
@@ -272,30 +286,32 @@ public static class ProtocolCodec
 
                 var minX = ReadDouble(payload);
                 var minY = ReadDouble(payload[8..]);
-                var maxX = ReadDouble(payload[16..]);
-                var maxY = ReadDouble(payload[24..]);
-                if (!IsFiniteRectangle(minX, minY, maxX, maxY))
+                var minZ = ReadDouble(payload[16..]);
+                var maxX = ReadDouble(payload[24..]);
+                var maxY = ReadDouble(payload[32..]);
+                var maxZ = ReadDouble(payload[40..]);
+                if (!IsFiniteVolume(minX, minY, minZ, maxX, maxY, maxZ))
                 {
                     return InvalidPayload(out message, out error);
                 }
 
-                message = new SubscribeAreaMessage(minX, minY, maxX, maxY);
+                message = new SubscribeAreaMessage(minX, minY, minZ, maxX, maxY, maxZ);
                 error = ProtocolDecodeError.None;
                 return true;
 
             case MessageType.AgentSpawn:
                 return TryReadAgentState(
                     payload,
-                    static (agentId, x, y, velocityX, velocityY, tickCount) =>
-                        new AgentSpawnMessage(agentId, x, y, velocityX, velocityY, tickCount),
+                    static (agentId, x, y, z, velocityX, velocityY, velocityZ, tickCount) =>
+                        new AgentSpawnMessage(agentId, x, y, z, velocityX, velocityY, velocityZ, tickCount),
                     out message,
                     out error);
 
             case MessageType.AgentUpdate:
                 return TryReadAgentState(
                     payload,
-                    static (agentId, x, y, velocityX, velocityY, tickCount) =>
-                        new AgentUpdateMessage(agentId, x, y, velocityX, velocityY, tickCount),
+                    static (agentId, x, y, z, velocityX, velocityY, velocityZ, tickCount) =>
+                        new AgentUpdateMessage(agentId, x, y, z, velocityX, velocityY, velocityZ, tickCount),
                     out message,
                     out error);
 
@@ -321,7 +337,7 @@ public static class ProtocolCodec
 
     private static bool TryReadAgentState(
         ReadOnlySpan<byte> payload,
-        Func<ulong, double, double, double, double, ulong, IProtocolMessage> factory,
+        Func<ulong, double, double, double, double, double, double, ulong, IProtocolMessage> factory,
         out IProtocolMessage message,
         out ProtocolDecodeError error)
     {
@@ -333,19 +349,23 @@ public static class ProtocolCodec
         var agentId = ReadUInt64(payload);
         var x = ReadDouble(payload[8..]);
         var y = ReadDouble(payload[16..]);
-        var velocityX = ReadDouble(payload[24..]);
-        var velocityY = ReadDouble(payload[32..]);
-        var tickCount = ReadUInt64(payload[40..]);
+        var z = ReadDouble(payload[24..]);
+        var velocityX = ReadDouble(payload[32..]);
+        var velocityY = ReadDouble(payload[40..]);
+        var velocityZ = ReadDouble(payload[48..]);
+        var tickCount = ReadUInt64(payload[56..]);
 
         if (!double.IsFinite(x) ||
             !double.IsFinite(y) ||
+            !double.IsFinite(z) ||
             !double.IsFinite(velocityX) ||
-            !double.IsFinite(velocityY))
+            !double.IsFinite(velocityY) ||
+            !double.IsFinite(velocityZ))
         {
             return InvalidPayload(out message, out error);
         }
 
-        message = factory(agentId, x, y, velocityX, velocityY, tickCount);
+        message = factory(agentId, x, y, z, velocityX, velocityY, velocityZ, tickCount);
         error = ProtocolDecodeError.None;
         return true;
     }
@@ -441,14 +461,23 @@ public static class ProtocolCodec
         return false;
     }
 
-    private static bool IsFiniteRectangle(double minX, double minY, double maxX, double maxY)
+    private static bool IsFiniteVolume(
+        double minX,
+        double minY,
+        double minZ,
+        double maxX,
+        double maxY,
+        double maxZ)
     {
         return double.IsFinite(minX) &&
             double.IsFinite(minY) &&
+            double.IsFinite(minZ) &&
             double.IsFinite(maxX) &&
             double.IsFinite(maxY) &&
+            double.IsFinite(maxZ) &&
             maxX >= minX &&
-            maxY >= minY;
+            maxY >= minY &&
+            maxZ >= minZ;
     }
 
     private static void ValidateFinite(double value, string parameterName)

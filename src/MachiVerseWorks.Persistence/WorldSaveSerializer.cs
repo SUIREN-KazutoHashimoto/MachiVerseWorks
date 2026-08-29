@@ -128,8 +128,10 @@ public static class WorldSaveSerializer
                 Id = agent.Id.Value,
                 X = agent.Position.X,
                 Y = agent.Position.Y,
+                Z = agent.Position.Z,
                 VelocityX = agent.Velocity.X,
                 VelocityY = agent.Velocity.Y,
+                VelocityZ = agent.Velocity.Z,
                 IsActive = agent.IsActive,
             };
         }
@@ -180,10 +182,12 @@ public static class WorldSaveSerializer
                 new AgentId(Require(savedAgent.Id, $"agents[{index}].id")),
                 new WorldPoint(
                     Require(savedAgent.X, $"agents[{index}].x"),
-                    Require(savedAgent.Y, $"agents[{index}].y")),
+                    Require(savedAgent.Y, $"agents[{index}].y"),
+                    Require(savedAgent.Z, $"agents[{index}].z")),
                 new WorldVector(
                     Require(savedAgent.VelocityX, $"agents[{index}].velocityX"),
-                    Require(savedAgent.VelocityY, $"agents[{index}].velocityY")),
+                    Require(savedAgent.VelocityY, $"agents[{index}].velocityY"),
+                    Require(savedAgent.VelocityZ, $"agents[{index}].velocityZ")),
                 Require(savedAgent.IsActive, $"agents[{index}].isActive"));
         }
 

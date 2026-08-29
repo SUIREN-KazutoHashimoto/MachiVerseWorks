@@ -124,13 +124,15 @@ internal sealed class WebSocketSessionHandler(
             case SubscribeAreaMessage subscribeArea:
                 try
                 {
-                    var area = new WorldRect(
+                    var volume = new WorldVolume(
                         subscribeArea.MinX,
                         subscribeArea.MinY,
+                        subscribeArea.MinZ,
                         subscribeArea.MaxX,
-                        subscribeArea.MaxY);
+                        subscribeArea.MaxY,
+                        subscribeArea.MaxZ);
                     if (!SubscriptionAreaPolicy.TryValidate(
-                        area,
+                        volume,
                         options.SpatialCellSize,
                         options.MaximumSubscriptionCellCount,
                         out var detailCode))
@@ -150,7 +152,7 @@ internal sealed class WebSocketSessionHandler(
                     }
 
                     await commandQueue.WriteAsync(
-                        new SubscribeAreaCommand(connection.Id, area),
+                        new SubscribeAreaCommand(connection.Id, volume),
                         cancellationToken);
                     return true;
                 }

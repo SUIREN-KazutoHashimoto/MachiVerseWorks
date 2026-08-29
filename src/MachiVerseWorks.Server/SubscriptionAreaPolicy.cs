@@ -13,6 +13,15 @@ internal static class SubscriptionAreaPolicy
         int maximumCellCount,
         out string? detailCode)
     {
+        return TryValidate(area.ToVolume(), cellSize, maximumCellCount, out detailCode);
+    }
+
+    public static bool TryValidate(
+        WorldVolume volume,
+        double cellSize,
+        int maximumCellCount,
+        out string? detailCode)
+    {
         if (maximumCellCount <= 0)
         {
             throw new ArgumentOutOfRangeException(
@@ -25,8 +34,8 @@ internal static class SubscriptionAreaPolicy
         SpatialCell maxCell;
         try
         {
-            minCell = SpatialGrid.ToCell(new WorldPoint(area.MinX, area.MinY), cellSize);
-            maxCell = SpatialGrid.ToCell(new WorldPoint(area.MaxX, area.MaxY), cellSize);
+            minCell = SpatialGrid.ToCell(new WorldPoint(volume.MinX, volume.MinY, volume.MinZ), cellSize);
+            maxCell = SpatialGrid.ToCell(new WorldPoint(volume.MaxX, volume.MaxY, volume.MaxZ), cellSize);
         }
         catch (ArgumentOutOfRangeException)
         {
@@ -35,10 +44,19 @@ internal static class SubscriptionAreaPolicy
         }
 
         var widthInCells = (long)maxCell.X - minCell.X + 1L;
-        var heightInCells = (long)maxCell.Y - minCell.Y + 1L;
+        var depthInCells = (long)maxCell.Y - minCell.Y + 1L;
+        var heightInCells = (long)maxCell.Z - minCell.Z + 1L;
         if (widthInCells > maximumCellCount ||
-            heightInCells > maximumCellCount ||
-            widthInCells * heightInCells > maximumCellCount)
+            depthInCells > maximumCellCount ||
+            heightInCells > maximumCellCount)
+        {
+            detailCode = TooManyCellsDetailCode;
+            return false;
+        }
+
+        var horizontalCellCount = widthInCells * depthInCells;
+        if (horizontalCellCount > maximumCellCount ||
+            heightInCells > maximumCellCount / horizontalCellCount)
         {
             detailCode = TooManyCellsDetailCode;
             return false;

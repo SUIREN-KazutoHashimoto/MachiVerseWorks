@@ -2,7 +2,7 @@ namespace MachiVerseWorks.Protocol;
 
 public readonly record struct ProtocolVersion(ushort Major, ushort Minor)
 {
-    public static ProtocolVersion Current => new(1, 0);
+    public static ProtocolVersion Current => new(2, 0);
 
     public bool CanAccept(ProtocolVersion requestedVersion)
     {

@@ -57,15 +57,19 @@ internal static class SnapshotMessagePlanner
                     agentId,
                     snapshot.Position.X,
                     snapshot.Position.Y,
+                    snapshot.Position.Z,
                     snapshot.Velocity.X,
                     snapshot.Velocity.Y,
+                    snapshot.Velocity.Z,
                     snapshot.TickCount)
                 : new AgentSpawnMessage(
                     agentId,
                     snapshot.Position.X,
                     snapshot.Position.Y,
+                    snapshot.Position.Z,
                     snapshot.Velocity.X,
                     snapshot.Velocity.Y,
+                    snapshot.Velocity.Z,
                     snapshot.TickCount));
         }
 

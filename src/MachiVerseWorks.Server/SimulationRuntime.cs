@@ -20,11 +20,13 @@ internal sealed class SimulationRuntime
         {
             _world.CreateAgents(
                 options.InitialAgentCount,
-                new WorldRect(
+                new WorldVolume(
                     options.SpawnMinX,
                     options.SpawnMinY,
+                    options.SpawnMinZ,
                     options.SpawnMaxX,
-                    options.SpawnMaxY));
+                    options.SpawnMaxY,
+                    options.SpawnMaxZ));
         }
     }
 
@@ -62,9 +64,14 @@ internal sealed class SimulationRuntime
 
     public AgentSnapshot[] CreateSnapshot(WorldRect area)
     {
+        return CreateSnapshot(area.ToVolume());
+    }
+
+    public AgentSnapshot[] CreateSnapshot(WorldVolume volume)
+    {
         lock (_gate)
         {
-            return _world.CreateSnapshot(area);
+            return _world.CreateSnapshot(volume);
         }
     }
 }
