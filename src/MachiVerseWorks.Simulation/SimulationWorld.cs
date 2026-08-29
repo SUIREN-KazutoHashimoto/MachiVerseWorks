@@ -26,6 +26,8 @@ public sealed class SimulationWorld
 
     public AgentId CreateAgent(WorldPoint position)
     {
+        ValidatePoint(position);
+        _spatialIndex.ValidatePosition(position);
         return CreateAgent(position, NextVelocity());
     }
 
@@ -42,6 +44,9 @@ public sealed class SimulationWorld
         {
             throw new ArgumentOutOfRangeException(nameof(count), count, "Agent count cannot be negative.");
         }
+
+        _spatialIndex.ValidatePosition(new WorldPoint(spawnArea.MinX, spawnArea.MinY));
+        _spatialIndex.ValidatePosition(new WorldPoint(spawnArea.MaxX, spawnArea.MaxY));
 
         var ids = new AgentId[count];
         for (var index = 0; index < ids.Length; index++)
@@ -62,8 +67,9 @@ public sealed class SimulationWorld
 
     public void Step()
     {
+        var nextTime = Time.Advance(Config.TickDuration);
         _agents.Step(Config.TickDurationSeconds, _spatialIndex);
-        Time = Time.Advance(Config.TickDuration);
+        Time = nextTime;
     }
 
     public bool TryGetAgentSnapshot(AgentId id, out AgentSnapshot snapshot)

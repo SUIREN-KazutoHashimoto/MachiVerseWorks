@@ -11,6 +11,11 @@ internal sealed class SpatialIndex
         _cellSize = cellSize;
     }
 
+    public void ValidatePosition(WorldPoint position)
+    {
+        _ = SpatialGrid.ToCell(position, _cellSize);
+    }
+
     public void Register(AgentId id, WorldPoint position)
     {
         var cell = SpatialGrid.ToCell(position, _cellSize);
