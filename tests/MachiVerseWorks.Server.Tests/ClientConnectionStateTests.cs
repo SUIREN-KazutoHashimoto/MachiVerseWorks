@@ -12,8 +12,8 @@ public sealed class ClientConnectionStateTests
     {
         using var socket = new StubWebSocket();
         using var connection = new ClientConnection(Guid.NewGuid(), socket);
-        var firstArea = new WorldRect(-100d, -100d, 100d, 100d);
-        var nextArea = new WorldRect(1_000d, 1_000d, 1_100d, 1_100d);
+        var firstArea = new WorldVolume(-100d, -100d, -20d, 100d, 100d, 40d);
+        var nextArea = new WorldVolume(1_000d, 1_000d, 80d, 1_100d, 1_100d, 120d);
 
         connection.SetSubscription(firstArea);
         Assert.IsTrue(connection.TryCaptureSubscription(out var firstSubscription));
@@ -36,8 +36,8 @@ public sealed class ClientConnectionStateTests
     {
         using var socket = new StubWebSocket();
         using var connection = new ClientConnection(Guid.NewGuid(), socket);
-        var firstArea = new WorldRect(-100d, -100d, 100d, 100d);
-        var nextArea = new WorldRect(1_000d, 1_000d, 1_100d, 1_100d);
+        var firstArea = new WorldVolume(-100d, -100d, -20d, 100d, 100d, 40d);
+        var nextArea = new WorldVolume(1_000d, 1_000d, 80d, 1_100d, 1_100d, 120d);
 
         connection.SetSubscription(firstArea);
         Assert.IsTrue(connection.TryCaptureSubscription(out var initialSubscription));
