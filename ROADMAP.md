@@ -79,7 +79,8 @@ Task ID は参照用の固定IDです。並び替えても変更しません。
 
 ---
 
-## Phase 1 — 開発プロジェクト骨格
+<details>
+<summary><strong>Phase 1 — 開発プロジェクト骨格（完了）</strong></summary>
 
 > **状態: ✅ 完了**  
 > 通常開発への移行後、C# Solution と Web Client の最小骨格を作り、既存CIを実際のbuildへ接続する。
@@ -120,6 +121,8 @@ Task ID は参照用の固定IDです。並び替えても変更しません。
 - ✅ **SKL-026** — Dependabot に NuGet 更新設定を追加する
 - ✅ **SKL-027** — Dependabot に npm 更新設定を追加する
 - ✅ **SKL-028** — 初回実装向けのローカル開発手順を `getting-started.md` に記載する
+
+</details>
 
 ---
 
