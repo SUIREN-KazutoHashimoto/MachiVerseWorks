@@ -30,7 +30,7 @@ export interface ConnectionCallbacks {
   readonly onClientError: (error: Error) => void;
   readonly onDisconnected: () => void;
   readonly onHelloAck: (version: ProtocolVersion, tickRate: number) => void;
-  readonly onFrameDecoded: (metrics: FrameDecodeMetrics) => void;
+  readonly onFrameDecoded?: (metrics: FrameDecodeMetrics) => void;
 }
 
 export interface ReconnectOptions {
@@ -129,13 +129,15 @@ export class MachiVerseConnection {
 
     try {
       const buffer = await toArrayBuffer(data);
-      const decodeStartedAt = performance.now();
+      const onFrameDecoded = this.callbacks.onFrameDecoded;
+      const decodeStartedAt = onFrameDecoded === undefined ? 0 : performance.now();
       const envelope = decodeFrame(buffer);
-      const decodeTimeMs = Math.max(0, performance.now() - decodeStartedAt);
-      this.callbacks.onFrameDecoded({
-        frameBytes: buffer.byteLength,
-        decodeTimeMs,
-      });
+      if (onFrameDecoded !== undefined) {
+        onFrameDecoded({
+          frameBytes: buffer.byteLength,
+          decodeTimeMs: Math.max(0, performance.now() - decodeStartedAt),
+        });
+      }
 
       if (envelope.message.type === MessageType.Error) {
         this.callbacks.onProtocolError(envelope.message);
@@ -191,11 +193,16 @@ export class MachiVerseConnection {
   }
 
   private scheduleReconnect(): void {
-    this.cancelReconnect();
-    this.setState('reconnecting');
-    const exponentialDelay = this.reconnectOptions.minimumDelayMs * 2 ** this.reconnectAttempt;
-    const delay = Math.min(exponentialDelay, this.reconnectOptions.maximumDelayMs);
+    if (this.reconnectTimer !== null) {
+      return;
+    }
+
+    const delay = Math.min(
+      this.reconnectOptions.maximumDelayMs,
+      this.reconnectOptions.minimumDelayMs * (2 ** this.reconnectAttempt),
+    );
     this.reconnectAttempt += 1;
+    this.setState('reconnecting');
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
       if (this.shouldReconnect) {
@@ -205,17 +212,17 @@ export class MachiVerseConnection {
   }
 
   private cancelReconnect(): void {
-    if (this.reconnectTimer !== null) {
-      window.clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
+    if (this.reconnectTimer === null) {
+      return;
     }
+    window.clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
   }
 
   private setState(state: ConnectionState): void {
     if (this.state === state) {
       return;
     }
-
     this.state = state;
     this.callbacks.onStateChanged(state);
   }
@@ -225,10 +232,11 @@ async function toArrayBuffer(data: unknown): Promise<ArrayBuffer> {
   if (data instanceof ArrayBuffer) {
     return data;
   }
-
   if (data instanceof Blob) {
     return data.arrayBuffer();
   }
-
-  throw new ProtocolDecodeFailure('WebSocket message is not binary.');
+  if (ArrayBuffer.isView(data)) {
+    return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
+  }
+  throw new ProtocolDecodeFailure('WebSocket frame must be binary.');
 }
