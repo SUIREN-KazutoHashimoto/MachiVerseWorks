@@ -1,0 +1,54 @@
+{
+  "formatVersion": 4,
+  "simulation": {
+    "tickRate": 30,
+    "seed": 12345,
+    "spatialCellSize": 64,
+    "tickCount": 0,
+    "elapsedTicks": 0,
+    "randomState": 12345,
+    "nextAgentId": 1,
+    "agents": [],
+    "nextBuildingId": 2,
+    "buildings": [
+      { "id": 1, "kind": 1, "minX": -20, "minY": 15, "minZ": 0, "maxX": 20, "maxY": 45, "maxZ": 20 }
+    ],
+    "nextPoiId": 2,
+    "pois": [
+      { "id": 1, "kind": 2, "x": 0, "y": 30, "z": 0, "buildingId": 1 }
+    ],
+    "nextRoadNodeId": 10,
+    "roadNodes": [
+      { "id": 1, "kind": 0, "x": -100, "y": 0, "z": 0 },
+      { "id": 2, "kind": 0, "x": 100, "y": 0, "z": 0 },
+      { "id": 3, "kind": 0, "x": 0, "y": -100, "z": 20 },
+      { "id": 4, "kind": 0, "x": 0, "y": 100, "z": 20 },
+      { "id": 5, "kind": 0, "x": -100, "y": 50, "z": -15 },
+      { "id": 6, "kind": 0, "x": 100, "y": 50, "z": -15 },
+      { "id": 7, "kind": 0, "x": -100, "y": -50, "z": 0 },
+      { "id": 8, "kind": 1, "x": 0, "y": -50, "z": 0 },
+      { "id": 9, "kind": 0, "x": 100, "y": -50, "z": 0 }
+    ],
+    "nextRoadSegmentId": 6,
+    "roadSegments": [
+      { "id": 1, "kind": 2, "startNodeId": 1, "endNodeId": 2 },
+      { "id": 2, "kind": 3, "startNodeId": 3, "endNodeId": 4 },
+      { "id": 3, "kind": 1, "startNodeId": 5, "endNodeId": 6 },
+      { "id": 4, "kind": 0, "startNodeId": 7, "endNodeId": 8 },
+      { "id": 5, "kind": 0, "startNodeId": 8, "endNodeId": 9 }
+    ],
+    "nextLaneId": 3,
+    "lanes": [
+      { "id": 1, "segmentId": 4, "direction": 0, "order": 0, "widthMeters": 3.5, "speedLimitMetersPerSecond": 13.8888888889 },
+      { "id": 2, "segmentId": 5, "direction": 0, "order": 0, "widthMeters": 3.5, "speedLimitMetersPerSecond": 13.8888888889 }
+    ],
+    "nextLaneConnectionId": 2,
+    "laneConnections": [
+      { "id": 1, "fromLaneId": 1, "toLaneId": 2, "viaNodeId": 8, "movement": 1 }
+    ],
+    "nextRoadAccessPointId": 2,
+    "roadAccessPoints": [
+      { "id": 1, "segmentId": 1, "segmentOffset": 0.5, "buildingId": 1, "poiId": 1, "mode": 3 }
+    ]
+  }
+}
