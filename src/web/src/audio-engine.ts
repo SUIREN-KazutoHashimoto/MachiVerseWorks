@@ -120,6 +120,14 @@ export class AudioEngine {
 
   public async play(cueId: string, options: PlaySoundOptions = {}): Promise<boolean> {
     const cue = getCue(cueId);
+    const gainMultiplier = options.gain ?? 1;
+    validateFinite(gainMultiplier, 'Sound gain');
+    if (options.position !== undefined) {
+      validatePoint(options.position, 'Sound position');
+    }
+    if (cue.spatial && options.position === undefined) {
+      throw new Error(`Spatial cue ${cueId} requires a position.`);
+    }
     if (this.stateValue !== 'running') {
       return false;
     }
@@ -134,15 +142,11 @@ export class AudioEngine {
     source.buffer = buffer;
     source.loop = cue.loop;
     const gain = context.createGain();
-    gain.gain.value = clamp01(cue.gain * (options.gain ?? 1));
+    gain.gain.value = clamp01(cue.gain * gainMultiplier);
     source.connect(gain);
 
     if (cue.spatial) {
-      const position = options.position;
-      if (position === undefined) {
-        throw new Error(`Spatial cue ${cueId} requires a position.`);
-      }
-      const panner = this.createPanner(cue, position);
+      const panner = this.createPanner(cue, options.position!);
       gain.connect(panner);
       panner.connect(this.getCategoryGain(cue.category));
     } else {
@@ -158,16 +162,20 @@ export class AudioEngine {
     if (!cue.spatial || !cue.loop) {
       throw new Error('Virtual emitters require a spatial looping cue.');
     }
+    validatePoint(options.position, `Emitter ${id} position`);
+    const priority = options.priority ?? 0;
+    validateFinite(priority, `Emitter ${id} priority`);
     this.emitters.set(id, {
       id,
       cueId,
-      priority: options.priority ?? 0,
+      priority,
       entityId: options.entityId,
       position: { ...options.position },
     });
   }
 
   public updateEmitterPosition(id: string, position: Point2D): void {
+    validatePoint(position, `Emitter ${id} position`);
     const emitter = this.emitters.get(id);
     if (emitter === undefined) {
       return;
@@ -185,6 +193,7 @@ export class AudioEngine {
   }
 
   public updateEntityPosition(entityId: bigint, position: Point2D): void {
+    validatePoint(position, 'Entity position');
     for (const emitter of this.emitters.values()) {
       if (emitter.entityId === entityId) {
         this.updateEmitterPosition(emitter.id, position);
@@ -205,6 +214,7 @@ export class AudioEngine {
   }
 
   public async syncSpatialVoices(listener: Point2D): Promise<void> {
+    validatePoint(listener, 'Audio listener');
     if (this.stateValue !== 'running') {
       this.stopAllEmitterVoices();
       return;
@@ -230,11 +240,11 @@ export class AudioEngine {
       return;
     }
 
-const pose = resolveAudioListenerPose(camera);
-if (pose === null) {
-  return;
-}
-const { position, direction, up } = pose;
+    const pose = resolveAudioListenerPose(camera);
+    if (pose === null) {
+      return;
+    }
+    const { position, direction, up } = pose;
     const listener = this.context.listener;
     const time = this.context.currentTime;
     listener.positionX.setValueAtTime(position.x, time);
@@ -249,6 +259,7 @@ const { position, direction, up } = pose;
   }
 
   public async clearAmbientLayer(key: string, fadeSeconds = 1): Promise<void> {
+    validateNonNegativeFinite(fadeSeconds, 'Ambient fade duration');
     this.stopAmbientVoice(key, fadeSeconds);
   }
 
@@ -262,11 +273,12 @@ const { position, direction, up } = pose;
     if (cue.category !== 'ambient' || cue.spatial || !cue.loop) {
       throw new Error('Ambient layers require a non-spatial looping ambient cue.');
     }
+    const desiredGain = clamp01(gainValue);
+    validateNonNegativeFinite(fadeSeconds, 'Ambient fade duration');
     if (this.stateValue !== 'running') {
       return;
     }
 
-    const desiredGain = clamp01(gainValue);
     let voice = this.ambientVoices.get(key);
     if (voice !== undefined && voice.cueId !== cueId) {
       this.stopAmbientVoice(key, fadeSeconds);
@@ -283,7 +295,7 @@ const { position, direction, up } = pose;
     const now = this.context.currentTime;
     voice.gain.gain.cancelScheduledValues(now);
     voice.gain.gain.setValueAtTime(voice.gain.gain.value, now);
-    voice.gain.gain.linearRampToValueAtTime(desiredGain * cue.gain, now + Math.max(0, fadeSeconds));
+    voice.gain.gain.linearRampToValueAtTime(desiredGain * cue.gain, now + fadeSeconds);
     if (desiredGain === 0) {
       this.stopAmbientVoice(key, fadeSeconds);
     }
@@ -383,13 +395,24 @@ const { position, direction, up } = pose;
   }
 
   private createPanner(cue: AudioCueDefinition, position: Point2D): PannerNode {
+    validatePoint(position, 'Panner position');
+    const referenceDistance = cue.referenceDistance ?? manifest.defaults.referenceDistance;
+    const maximumDistance = cue.maximumDistance ?? manifest.defaults.maximumDistance;
+    const rolloffFactor = cue.rolloffFactor ?? manifest.defaults.rolloffFactor;
+    validatePositiveFinite(referenceDistance, 'Audio reference distance');
+    validatePositiveFinite(maximumDistance, 'Audio maximum distance');
+    validateNonNegativeFinite(rolloffFactor, 'Audio rolloff factor');
+    if (maximumDistance < referenceDistance) {
+      throw new RangeError('Audio maximum distance must be greater than or equal to reference distance.');
+    }
+
     const context = this.ensureContext();
     const panner = context.createPanner();
     panner.panningModel = 'HRTF';
     panner.distanceModel = 'inverse';
-    panner.refDistance = cue.referenceDistance ?? manifest.defaults.referenceDistance;
-    panner.maxDistance = cue.maximumDistance ?? manifest.defaults.maximumDistance;
-    panner.rolloffFactor = cue.rolloffFactor ?? manifest.defaults.rolloffFactor;
+    panner.refDistance = referenceDistance;
+    panner.maxDistance = maximumDistance;
+    panner.rolloffFactor = rolloffFactor;
     setPannerPosition(panner, position);
     return panner;
   }
@@ -520,10 +543,12 @@ function getCue(cueId: string): AudioCueDefinition {
   if (cue === undefined) {
     throw new Error(`Unknown audio cue ID: ${cueId}.`);
   }
+  validateFinite(cue.gain, `Audio cue ${cueId} gain`);
   return cue;
 }
 
 function setPannerPosition(panner: PannerNode, position: Point2D): void {
+  validatePoint(position, 'Panner position');
   const time = panner.context.currentTime;
   panner.positionX.setValueAtTime(position.x, time);
   panner.positionY.setValueAtTime(0, time);
@@ -543,17 +568,57 @@ export function resolveAudioListenerPose(camera: ThreeCameraLike): AudioListener
   if (elements.length < 16) {
     return null;
   }
+  const values = [
+    Number(elements[4]),
+    Number(elements[5]),
+    Number(elements[6]),
+    Number(elements[8]),
+    Number(elements[9]),
+    Number(elements[10]),
+    Number(elements[12]),
+    Number(elements[14]),
+  ];
+  if (!values.every(Number.isFinite)) {
+    return null;
+  }
   return {
-    position: { x: Number(elements[12]), y: 0, z: Number(elements[14]) },
-    direction: normalize3(-Number(elements[8]), -Number(elements[9]), -Number(elements[10])),
-    up: normalize3(Number(elements[4]), Number(elements[5]), Number(elements[6])),
+    position: { x: values[6]!, y: 0, z: values[7]! },
+    direction: normalize3(-values[3]!, -values[4]!, -values[5]!),
+    up: normalize3(values[0]!, values[1]!, values[2]!),
   };
 }
 
 export function resolveMasterGain(muted: boolean, volume: number): number {
-  return muted ? 0 : clamp01(volume);
+  const normalizedVolume = clamp01(volume);
+  return muted ? 0 : normalizedVolume;
+}
+
+function validatePoint(point: Point2D, label: string): void {
+  validateFinite(point.x, `${label} x`);
+  validateFinite(point.y, `${label} y`);
+}
+
+function validatePositiveFinite(value: number, label: string): void {
+  validateFinite(value, label);
+  if (value <= 0) {
+    throw new RangeError(`${label} must be greater than zero.`);
+  }
+}
+
+function validateNonNegativeFinite(value: number, label: string): void {
+  validateFinite(value, label);
+  if (value < 0) {
+    throw new RangeError(`${label} must be non-negative.`);
+  }
+}
+
+function validateFinite(value: number, label: string): void {
+  if (!Number.isFinite(value)) {
+    throw new RangeError(`${label} must be finite.`);
+  }
 }
 
 function clamp01(value: number): number {
+  validateFinite(value, 'Audio gain');
   return Math.min(1, Math.max(0, value));
 }

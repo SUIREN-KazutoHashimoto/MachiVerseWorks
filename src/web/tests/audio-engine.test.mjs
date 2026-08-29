@@ -15,6 +15,13 @@ test('master mixer gain respects mute and clamps volume', () => {
   assert.equal(resolveMasterGain(true, 0.6), 0);
 });
 
+test('audio gain boundaries reject non-finite values', () => {
+  const engine = new AudioEngine();
+  assert.throws(() => resolveMasterGain(false, Number.NaN), RangeError);
+  assert.throws(() => resolveMasterGain(true, Number.POSITIVE_INFINITY), RangeError);
+  assert.throws(() => engine.setMasterVolume(Number.NaN), RangeError);
+  assert.throws(() => engine.setCategoryVolume('world', Number.NEGATIVE_INFINITY), RangeError);
+});
 
 test('listener pose uses the ground-plane position and orthogonal camera basis', () => {
   const pose = resolveAudioListenerPose({
@@ -37,4 +44,16 @@ test('listener pose uses the ground-plane position and orthogonal camera basis',
     (pose?.direction.y ?? 0) * (pose?.up.y ?? 0) +
     (pose?.direction.z ?? 0) * (pose?.up.z ?? 0);
   assert.equal(Math.abs(dot), 0);
+});
+
+test('listener pose rejects non-finite camera matrix values', () => {
+  const elements = [
+    1, 0, 0, 0,
+    0, 0, -1, 0,
+    0, 1, 0, 0,
+    12, 500, 34, 1,
+  ];
+  elements[12] = Number.NaN;
+
+  assert.equal(resolveAudioListenerPose({ matrixWorld: { elements } }), null);
 });
