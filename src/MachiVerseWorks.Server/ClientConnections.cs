@@ -9,11 +9,14 @@ namespace MachiVerseWorks.Server;
 internal sealed class ClientConnection : IDisposable
 {
     private readonly object _stateGate = new();
+    private readonly object _lifetimeGate = new();
     private readonly SemaphoreSlim _sendGate = new(1, 1);
     private HashSet<ulong> _knownAgentIds = [];
     private WorldRect? _subscription;
     private long _subscriptionRevision;
-    private int _disposeRequested;
+    private int _activeSendCount;
+    private bool _disposeRequested;
+    private bool _sendGateDisposed;
 
     public ClientConnection(Guid id, WebSocket socket)
     {
@@ -40,7 +43,6 @@ internal sealed class ClientConnection : IDisposable
         lock (_stateGate)
         {
             _subscription = area;
-            _knownAgentIds.Clear();
             _subscriptionRevision = checked(_subscriptionRevision + 1);
         }
     }
@@ -84,32 +86,32 @@ internal sealed class ClientConnection : IDisposable
         ProtocolVersion version,
         CancellationToken cancellationToken)
     {
-        ObjectDisposedException.ThrowIf(
-            Volatile.Read(ref _disposeRequested) != 0,
-            this);
-
-        var frame = ProtocolCodec.Serialize(message, version);
-        await _sendGate.WaitAsync(cancellationToken);
+        BeginSend();
         try
         {
-            ObjectDisposedException.ThrowIf(
-                Volatile.Read(ref _disposeRequested) != 0,
-                this);
-
-            if (Socket.State != WebSocketState.Open)
+            var frame = ProtocolCodec.Serialize(message, version);
+            await _sendGate.WaitAsync(cancellationToken);
+            try
             {
-                throw new WebSocketException(WebSocketError.InvalidState);
-            }
+                if (Socket.State != WebSocketState.Open)
+                {
+                    throw new WebSocketException(WebSocketError.InvalidState);
+                }
 
-            await Socket.SendAsync(
-                new ArraySegment<byte>(frame),
-                WebSocketMessageType.Binary,
-                endOfMessage: true,
-                cancellationToken);
+                await Socket.SendAsync(
+                    new ArraySegment<byte>(frame),
+                    WebSocketMessageType.Binary,
+                    endOfMessage: true,
+                    cancellationToken);
+            }
+            finally
+            {
+                _sendGate.Release();
+            }
         }
         finally
         {
-            _sendGate.Release();
+            EndSend();
         }
     }
 
@@ -120,14 +122,56 @@ internal sealed class ClientConnection : IDisposable
 
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposeRequested, 1) != 0)
+        var disposeSendGate = false;
+        lock (_lifetimeGate)
         {
-            return;
+            if (_disposeRequested)
+            {
+                return;
+            }
+
+            _disposeRequested = true;
+            if (_activeSendCount == 0 && !_sendGateDisposed)
+            {
+                _sendGateDisposed = true;
+                disposeSendGate = true;
+            }
         }
 
-        _sendGate.Wait();
-        _sendGate.Release();
-        _sendGate.Dispose();
+        if (disposeSendGate)
+        {
+            _sendGate.Dispose();
+        }
+
+        GC.SuppressFinalize(this);
+    }
+
+    private void BeginSend()
+    {
+        lock (_lifetimeGate)
+        {
+            ObjectDisposedException.ThrowIf(_disposeRequested, this);
+            _activeSendCount = checked(_activeSendCount + 1);
+        }
+    }
+
+    private void EndSend()
+    {
+        var disposeSendGate = false;
+        lock (_lifetimeGate)
+        {
+            _activeSendCount--;
+            if (_disposeRequested && _activeSendCount == 0 && !_sendGateDisposed)
+            {
+                _sendGateDisposed = true;
+                disposeSendGate = true;
+            }
+        }
+
+        if (disposeSendGate)
+        {
+            _sendGate.Dispose();
+        }
     }
 }
 

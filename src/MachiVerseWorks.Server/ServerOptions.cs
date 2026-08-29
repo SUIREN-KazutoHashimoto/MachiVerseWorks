@@ -6,10 +6,13 @@ namespace MachiVerseWorks.Server;
 
 internal sealed class ServerOptions
 {
+    private const int DefaultMaximumSubscriptionCellCount = 4096;
+
     private ServerOptions(
         IPAddress listenAddress,
         int port,
         int snapshotRate,
+        int maximumSubscriptionCellCount,
         int tickRate,
         ulong seed,
         double spatialCellSize,
@@ -22,6 +25,7 @@ internal sealed class ServerOptions
         ListenAddress = listenAddress;
         Port = port;
         SnapshotRate = snapshotRate;
+        MaximumSubscriptionCellCount = maximumSubscriptionCellCount;
         TickRate = tickRate;
         Seed = seed;
         SpatialCellSize = spatialCellSize;
@@ -37,6 +41,8 @@ internal sealed class ServerOptions
     public int Port { get; }
 
     public int SnapshotRate { get; }
+
+    public int MaximumSubscriptionCellCount { get; }
 
     public int TickRate { get; }
 
@@ -80,6 +86,15 @@ internal sealed class ServerOptions
             throw new InvalidOperationException("Server:SnapshotRate must be greater than zero.");
         }
 
+        var maximumSubscriptionCellCount = ReadInt32(
+            configuration,
+            "Server:MaximumSubscriptionCellCount",
+            DefaultMaximumSubscriptionCellCount);
+        if (maximumSubscriptionCellCount <= 0)
+        {
+            throw new InvalidOperationException("Server:MaximumSubscriptionCellCount must be greater than zero.");
+        }
+
         var tickRate = ReadInt32(configuration, "Simulation:TickRate", 30);
         if (tickRate is <= 0 or > ushort.MaxValue)
         {
@@ -114,6 +129,7 @@ internal sealed class ServerOptions
             listenAddress,
             port,
             snapshotRate,
+            maximumSubscriptionCellCount,
             tickRate,
             seed,
             spatialCellSize,

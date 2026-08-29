@@ -44,6 +44,8 @@ network receive path から Simulation / connection state を同期的に横断�
 
 Phase 4 で扱う command は `SubscribeArea` のみです。channel capacity は有限とし、producer が server の処理速度を恒常的に上回った場合に無制限な backlog を作らない構成にしています。
 
+`SubscribeArea` は command queue へ投入する前に server policy で検証します。矩形の両端が `SpatialGrid` の対応範囲へ変換できることに加え、走査対象セル数を `Server:MaximumSubscriptionCellCount` 以下に制限します。既定値は 4096 cells です。これにより極端な座標で hosted service を停止させたり、巨大矩形で spatial query に過大な走査を要求したりできないようにします。
+
 ## Connection state
 
 `ClientConnectionRegistry` が active connection を管理します。各 connection は次を保持します。
@@ -82,11 +84,15 @@ publish ごとに connection の subscription を capture し、その矩形だ�
 - existing ID → `AgentUpdate`
 - disappeared ID → `AgentRemove`
 
+subscription を変更しても known Agent ID set は次の publish まで保持します。新範囲の snapshot と比較することで、旧範囲にだけ存在した Agent へ `AgentRemove` を送信できます。
+
 subscription revision を使い、publish 中に Client が別範囲へ subscription を変更した場合、古い publish 結果で known Agent ID set を上書きしません。
 
 ## Send serialization
 
 同一 WebSocket へ handshake/error response と snapshot publisher が同時 send しないよう、connection 単位で send を直列化します。Protocol serialization は send lock の前に行い、WebSocket I/O の ownership だけを排他します。
+
+connection disposal と snapshot send が競合する可能性があるため、send の lifetime を参照カウントします。dispose request 後は新しい send を拒否し、既に開始済みの send がすべて終了してから send semaphore を破棄します。registry snapshot に残った古い参照からの送信拒否は publisher 側で接続終了として処理します。
 
 ## Logging
 

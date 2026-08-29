@@ -138,7 +138,7 @@ internal sealed class SnapshotPublishService(
             catch (Exception exception) when (
                 exception is WebSocketException or OperationCanceledException or ObjectDisposedException)
             {
-                if (!cancellationToken.IsCancellationRequested && exception is not ObjectDisposedException)
+                if (!cancellationToken.IsCancellationRequested)
                 {
                     ServerLog.SnapshotDeliveryStopped(logger, connection.Id, exception);
                 }

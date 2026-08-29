@@ -74,6 +74,89 @@ public sealed class ServerIntegrationTests
     }
 
     [TestMethod]
+    public async Task ChangingSubscriptionRemovesAgentsFromPreviousArea()
+    {
+        await using var host = await ServerTestHost.StartAsync(initialAgentCount: 4, snapshotRate: 60);
+        using var socket = await host.ConnectWebSocketAsync();
+        await ServerTestHost.HandshakeAsync(socket);
+
+        await ServerTestHost.SendAsync(
+            socket,
+            new SubscribeAreaMessage(-100d, -100d, 100d, 100d),
+            ProtocolVersion.Current);
+
+        var knownAgentIds = new HashSet<ulong>();
+        var sawUpdate = false;
+        for (var index = 0; index < 64 && (knownAgentIds.Count < 4 || !sawUpdate); index++)
+        {
+            var envelope = await ServerTestHost.ReceiveAsync(socket, TimeSpan.FromSeconds(3));
+            switch (envelope.Message)
+            {
+                case AgentSpawnMessage spawn:
+                    knownAgentIds.Add(spawn.AgentId);
+                    break;
+                case AgentUpdateMessage update when knownAgentIds.Contains(update.AgentId):
+                    sawUpdate = true;
+                    break;
+            }
+        }
+
+        Assert.AreEqual(4, knownAgentIds.Count);
+        Assert.IsTrue(sawUpdate);
+
+        await ServerTestHost.SendAsync(
+            socket,
+            new SubscribeAreaMessage(1000d, 1000d, 1100d, 1100d),
+            ProtocolVersion.Current);
+
+        var removedAgentIds = new HashSet<ulong>();
+        for (var index = 0; index < 64 && removedAgentIds.Count < knownAgentIds.Count; index++)
+        {
+            var envelope = await ServerTestHost.ReceiveAsync(socket, TimeSpan.FromSeconds(3));
+            if (envelope.Message is AgentRemoveMessage remove && knownAgentIds.Contains(remove.AgentId))
+            {
+                removedAgentIds.Add(remove.AgentId);
+            }
+        }
+
+        CollectionAssert.AreEquivalent(knownAgentIds.ToArray(), removedAgentIds.ToArray());
+    }
+
+    [TestMethod]
+    public async Task SubscriptionOutsideSpatialGridReturnsErrorAndConnectionRemainsUsable()
+    {
+        await using var host = await ServerTestHost.StartAsync(initialAgentCount: 1, snapshotRate: 30);
+        using var socket = await host.ConnectWebSocketAsync();
+        await ServerTestHost.HandshakeAsync(socket);
+
+        await ServerTestHost.SendAsync(
+            socket,
+            new SubscribeAreaMessage(-1e300, -1e300, 1e300, 1e300),
+            ProtocolVersion.Current);
+
+        var errorEnvelope = await ServerTestHost.ReceiveAsync(socket, TimeSpan.FromSeconds(3));
+        var error = Assert.IsInstanceOfType<ProtocolErrorMessage>(errorEnvelope.Message);
+        Assert.AreEqual(ProtocolErrorCode.InvalidRequest, error.Code);
+        Assert.IsTrue(error.Parameters.Any(parameter =>
+            parameter.Key == ProtocolErrorParameterKeys.DetailCode &&
+            parameter.Value == SubscriptionAreaPolicy.OutsideSpatialGridDetailCode));
+
+        await ServerTestHost.SendAsync(
+            socket,
+            new SubscribeAreaMessage(-100d, -100d, 100d, 100d),
+            ProtocolVersion.Current);
+
+        var sawSpawn = false;
+        for (var index = 0; index < 16 && !sawSpawn; index++)
+        {
+            var envelope = await ServerTestHost.ReceiveAsync(socket, TimeSpan.FromSeconds(3));
+            sawSpawn = envelope.Message is AgentSpawnMessage;
+        }
+
+        Assert.IsTrue(sawSpawn);
+    }
+
+    [TestMethod]
     public async Task DisconnectRemovesConnectionState()
     {
         await using var host = await ServerTestHost.StartAsync(initialAgentCount: 0);

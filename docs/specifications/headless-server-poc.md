@@ -20,9 +20,10 @@ dotnet run --project src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj
 - port: `5080`
 - Simulation tick rate: `30 Hz`
 - snapshot publish rate: `10 Hz`
+- maximum subscription cells: `4,096`
 - initial Agent count: `1,000`
 
-listen address / port、tick rate、snapshot rate、seed、spatial cell size、initial Agent count、spawn area は configuration provider から上書きできます。
+listen address / port、tick rate、snapshot rate、maximum subscription cell count、seed、spatial cell size、initial Agent count、spawn area は configuration provider から上書きできます。
 
 ## HTTP endpoint
 
@@ -53,6 +54,8 @@ handshake 完了後、Client は `SubscribeArea` を送信できます。
 
 subscription は connection ごとに1つ保持し、新しい `SubscribeArea` はその connection の既存範囲を置き換えます。Client command は network receive path から直接 Simulation state を変更せず、bounded command channel を経由して Server 側 state へ反映します。
 
+Server は subscription を受理する前に、矩形が spatial grid の対応座標範囲へ収まることと、対象セル数が `Server:MaximumSubscriptionCellCount` 以下であることを検証します。条件を満たさない場合は `InvalidRequest` を返し、Simulation query は実行しません。
+
 ## Snapshot 配信
 
 snapshot publish 周期は Simulation tick 周期から分離します。
@@ -62,6 +65,8 @@ snapshot publish 周期は Simulation tick 周期から分離します。
 - Client がまだ知らない Agent: `AgentSpawn`
 - Client が既に知っている Agent: `AgentUpdate`
 - 前回は範囲内だったが現在 snapshot に存在しない Agent: `AgentRemove`
+
+subscription 変更時も前回の known Agent ID を次の snapshot 比較まで保持します。これにより新範囲から外れた旧Agentは `AgentRemove` され、Client側に残留しません。
 
 Simulation の mutable state 自体は network layer へ公開しません。
 

@@ -15,6 +15,7 @@ public sealed class ServerOptionsTests
                 ["Server:ListenAddress"] = "127.0.0.2",
                 ["Server:Port"] = "9000",
                 ["Server:SnapshotRate"] = "20",
+                ["Server:MaximumSubscriptionCellCount"] = "2048",
                 ["Simulation:TickRate"] = "60",
                 ["Simulation:Seed"] = "42",
                 ["Simulation:SpatialCellSize"] = "32",
@@ -27,6 +28,7 @@ public sealed class ServerOptionsTests
         Assert.AreEqual("127.0.0.2", options.ListenAddress.ToString());
         Assert.AreEqual(9000, options.Port);
         Assert.AreEqual(20, options.SnapshotRate);
+        Assert.AreEqual(2048, options.MaximumSubscriptionCellCount);
         Assert.AreEqual(60, options.TickRate);
         Assert.AreEqual(42UL, options.Seed);
         Assert.AreEqual(32d, options.SpatialCellSize);
@@ -40,6 +42,19 @@ public sealed class ServerOptionsTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Server:Port"] = "70000",
+            })
+            .Build();
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => ServerOptions.Load(configuration));
+    }
+
+    [TestMethod]
+    public void InvalidMaximumSubscriptionCellCountIsRejected()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Server:MaximumSubscriptionCellCount"] = "0",
             })
             .Build();
 

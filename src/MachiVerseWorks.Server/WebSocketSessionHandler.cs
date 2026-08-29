@@ -9,6 +9,7 @@ internal sealed class WebSocketSessionHandler(
     ClientConnectionRegistry connections,
     ClientCommandQueue commandQueue,
     SimulationRuntime simulation,
+    ServerOptions options,
     ILogger<WebSocketSessionHandler> logger)
 {
     private const int ReceiveBufferSize = 8192;
@@ -128,6 +129,26 @@ internal sealed class WebSocketSessionHandler(
                         subscribeArea.MinY,
                         subscribeArea.MaxX,
                         subscribeArea.MaxY);
+                    if (!SubscriptionAreaPolicy.TryValidate(
+                        area,
+                        options.SpatialCellSize,
+                        options.MaximumSubscriptionCellCount,
+                        out var detailCode))
+                    {
+                        await SendErrorAsync(
+                            connection,
+                            ProtocolErrorCode.InvalidRequest,
+                            [
+                                new ProtocolErrorParameter(ProtocolErrorParameterKeys.Field, "area"),
+                                new ProtocolErrorParameter(
+                                    ProtocolErrorParameterKeys.DetailCode,
+                                    detailCode ?? SubscriptionAreaPolicy.OutsideSpatialGridDetailCode),
+                            ],
+                            connection.NegotiatedVersion,
+                            cancellationToken);
+                        return true;
+                    }
+
                     await commandQueue.WriteAsync(
                         new SubscribeAreaCommand(connection.Id, area),
                         cancellationToken);
