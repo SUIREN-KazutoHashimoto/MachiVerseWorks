@@ -22,6 +22,8 @@ bash scripts/run-phase6-e2e.sh
 
 スクリプトは `.NET` restore/build、Web Client の `npm ci` / build、Vite、Headless Server、headless Chrome/Chromium を順に使用します。Chrome または Chromium が `PATH` に必要です。
 
+Browserの完了待ちはChrome DevTools ProtocolをNode.jsから実時間で監視します。Chromeのvirtual timeはWebSocket相手のServer時間と一致しないため使用しません。
+
 実行結果は `.artifacts/phase6-e2e/` に保存します。
 
 - `browser-*.html`: Browser smoke test の最終DOMとClient計測値

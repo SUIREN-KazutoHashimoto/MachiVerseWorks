@@ -74,6 +74,7 @@ run_scenario() {
   local server_log="$ARTIFACT_DIR/server-$name.log"
   local browser_dom="$ARTIFACT_DIR/browser-$name.html"
   local metrics_json="$ARTIFACT_DIR/server-metrics-$name.json"
+  local browser_url="http://127.0.0.1:$WEB_PORT/tests/browser/e2e.html?agents=$agents&mode=$mode&server=ws%3A%2F%2F127.0.0.1%3A$SERVER_PORT%2Fws"
 
   echo "Running Phase 6 E2E scenario: agents=$agents mode=$mode"
   cleanup_server
@@ -95,19 +96,11 @@ run_scenario() {
 
   wait_http "http://127.0.0.1:$SERVER_PORT/health" 200
 
-  "$CHROME" \
-    --headless=new \
-    --no-sandbox \
-    --disable-dev-shm-usage \
-    --disable-background-timer-throttling \
-    --disable-backgrounding-occluded-windows \
-    --enable-unsafe-swiftshader \
-    --use-gl=swiftshader \
-    --window-size=1280,720 \
-    --virtual-time-budget=120000 \
-    --dump-dom \
-    "http://127.0.0.1:$WEB_PORT/tests/browser/e2e.html?agents=$agents&mode=$mode&server=ws%3A%2F%2F127.0.0.1%3A$SERVER_PORT%2Fws" \
-    >"$browser_dom" 2>>"$ARTIFACT_DIR/chrome.log"
+  node "$ROOT_DIR/scripts/run-headless-browser-e2e.mjs" \
+    "$CHROME" \
+    "$browser_url" \
+    "$browser_dom" \
+    "$ARTIFACT_DIR/chrome.log"
 
   if ! grep -Fq 'data-status="passed"' "$browser_dom"; then
     echo "Browser E2E scenario failed: $name" >&2
