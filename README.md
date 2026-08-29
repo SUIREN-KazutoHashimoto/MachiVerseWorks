@@ -13,7 +13,7 @@
   <a href="https://github.com/SUIREN-KazutoHashimoto/MachiVerseWorks/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/SUIREN-KazutoHashimoto/MachiVerseWorks/actions/workflows/ci.yml/badge.svg?branch=develop"></a>
   <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
   <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512BD4.svg">
-  <img alt="Status: Foundation Complete" src="https://img.shields.io/badge/status-foundation%20complete-2ea44f.svg">
+  <img alt="Status: Pre-alpha" src="https://img.shields.io/badge/status-pre--alpha-blue.svg">
 </p>
 
 <p align="center">
@@ -27,8 +27,7 @@ MachiVerseWorks は、市民・道路交通・公共交通・物流・産業・�
 旧 Machi-Sim で得られたドメイン・設計・性能面の知見を引き継ぎつつ、ブラウザ単体実装からシミュレーション本体を分離。クライアントは必要な空間範囲だけを受信・描画し、より大規模な都市と多数の Agent を扱える構成を目指します。
 
 > [!NOTE]
-> **Phase 0 — リポジトリ初期セットアップは完了しています。**  
-> アプリケーション実装はまだ開始前で、次のタスクは [`SKL-001`](ROADMAP.md) — `MachiVerseWorks.slnx` の作成です。
+> 現在は **pre-alpha** 段階です。実装・API・Protocol・Save format・仕様は開発の進行に伴って変更される可能性があります。
 
 ## Architecture
 
