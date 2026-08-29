@@ -31,6 +31,30 @@ public sealed class ClientConnectionStateTests
             nextSubscription.KnownAgentIds.ToArray());
     }
 
+    [TestMethod]
+    public void StaleSubscriptionCommitAlsoAppliesDeliveredRemoves()
+    {
+        using var socket = new StubWebSocket();
+        using var connection = new ClientConnection(Guid.NewGuid(), socket);
+        var firstArea = new WorldRect(-100d, -100d, 100d, 100d);
+        var nextArea = new WorldRect(1_000d, 1_000d, 1_100d, 1_100d);
+
+        connection.SetSubscription(firstArea);
+        Assert.IsTrue(connection.TryCaptureSubscription(out var initialSubscription));
+        Assert.IsTrue(connection.TryReplaceKnownAgentIds(
+            initialSubscription.Revision,
+            new HashSet<ulong> { 10 }));
+        Assert.IsTrue(connection.TryCaptureSubscription(out var staleSubscription));
+
+        connection.SetSubscription(nextArea);
+
+        Assert.IsFalse(connection.TryReplaceKnownAgentIds(
+            staleSubscription.Revision,
+            []));
+        Assert.IsTrue(connection.TryCaptureSubscription(out var nextSubscription));
+        Assert.AreEqual(0, nextSubscription.KnownAgentIds.Count);
+    }
+
     private sealed class StubWebSocket : WebSocket
     {
         public override WebSocketCloseStatus? CloseStatus => null;

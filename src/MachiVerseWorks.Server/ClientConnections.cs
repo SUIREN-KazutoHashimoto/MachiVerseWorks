@@ -72,17 +72,14 @@ internal sealed class ClientConnection : IDisposable
 
         lock (_stateGate)
         {
-            if (_subscriptionRevision != revision)
-            {
-                // The stale snapshot may already have delivered Spawn messages before the
-                // subscription changed. Preserve those IDs so the next subscription plan can
-                // emit Remove messages instead of leaving ghost entities on the client.
-                _knownAgentIds.UnionWith(agentIds);
-                return false;
-            }
+            var revisionMatches = _subscriptionRevision == revision;
 
+            // This set represents what was actually delivered to the client after a complete
+            // snapshot plan, independently of which subscription is current now. Committing the
+            // exact delivered set also preserves stale-plan removes, so the next subscription can
+            // choose Spawn/Update/Remove from the client's real state.
             _knownAgentIds = agentIds;
-            return true;
+            return revisionMatches;
         }
     }
 
