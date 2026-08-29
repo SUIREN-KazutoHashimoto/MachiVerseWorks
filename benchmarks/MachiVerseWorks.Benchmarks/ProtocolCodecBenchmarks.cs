@@ -5,7 +5,7 @@ namespace MachiVerseWorks.Benchmarks;
 
 public sealed class ProtocolCodecBenchmarks
 {
-    private static readonly AgentUpdateMessage Message = new(
+    private readonly AgentUpdateMessage _message = new(
         42,
         125.25d,
         -480.5d,
@@ -18,13 +18,13 @@ public sealed class ProtocolCodecBenchmarks
     [GlobalSetup]
     public void Setup()
     {
-        _frame = ProtocolCodec.Serialize(Message);
+        _frame = ProtocolCodec.Serialize(_message);
     }
 
     [Benchmark]
     public byte[] Encode()
     {
-        return ProtocolCodec.Serialize(Message);
+        return ProtocolCodec.Serialize(_message);
     }
 
     [Benchmark]
