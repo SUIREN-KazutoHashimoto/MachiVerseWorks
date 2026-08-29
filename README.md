@@ -55,6 +55,7 @@ MachiVerseWorks/
 ├─ tools/
 ├─ .github/
 ├─ global.json
+├─ ROADMAP.md
 ├─ AGENT.md
 ├─ AGENTS.md
 ├─ CONTRIBUTING.md
@@ -67,6 +68,12 @@ MachiVerseWorks/
 ```
 
 各ディレクトリの役割は、それぞれの `README.md` と [`docs/README.md`](docs/README.md) を参照してください。
+
+## Roadmap
+
+実装予定と進捗は [`ROADMAP.md`](ROADMAP.md) で管理します。
+
+MachiVerseWorks では、大きな機能名をそのまま長期間未完了のチェック項目にせず、**単独で完了・検証できる小さなTask ID**へ分解して進めます。交通・鉄道・経済などの大テーマは Backlog として保持し、着手するときに細分化します。
 
 ## 開発環境
 
