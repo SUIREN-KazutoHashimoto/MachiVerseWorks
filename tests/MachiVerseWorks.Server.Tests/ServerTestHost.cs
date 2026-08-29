@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.WebSockets;
 using MachiVerseWorks.Protocol;
 using Microsoft.AspNetCore.Builder;
@@ -26,7 +27,8 @@ internal sealed class ServerTestHost : IAsyncDisposable
     public static async Task<ServerTestHost> StartAsync(
         int initialAgentCount = 4,
         int tickRate = 30,
-        int snapshotRate = 30)
+        int snapshotRate = 30,
+        double spawnHalfExtent = 5d)
     {
         var app = ServerApplication.Build([], builder =>
         {
@@ -35,13 +37,13 @@ internal sealed class ServerTestHost : IAsyncDisposable
             {
                 ["Server:ListenAddress"] = "127.0.0.1",
                 ["Server:Port"] = "0",
-                ["Server:SnapshotRate"] = snapshotRate.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                ["Simulation:TickRate"] = tickRate.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                ["Simulation:InitialAgentCount"] = initialAgentCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                ["Simulation:SpawnArea:MinX"] = "-5",
-                ["Simulation:SpawnArea:MinY"] = "-5",
-                ["Simulation:SpawnArea:MaxX"] = "5",
-                ["Simulation:SpawnArea:MaxY"] = "5",
+                ["Server:SnapshotRate"] = snapshotRate.ToString(CultureInfo.InvariantCulture),
+                ["Simulation:TickRate"] = tickRate.ToString(CultureInfo.InvariantCulture),
+                ["Simulation:InitialAgentCount"] = initialAgentCount.ToString(CultureInfo.InvariantCulture),
+                ["Simulation:SpawnArea:MinX"] = (-spawnHalfExtent).ToString(CultureInfo.InvariantCulture),
+                ["Simulation:SpawnArea:MinY"] = (-spawnHalfExtent).ToString(CultureInfo.InvariantCulture),
+                ["Simulation:SpawnArea:MaxX"] = spawnHalfExtent.ToString(CultureInfo.InvariantCulture),
+                ["Simulation:SpawnArea:MaxY"] = spawnHalfExtent.ToString(CultureInfo.InvariantCulture),
             });
         });
 

@@ -172,6 +172,111 @@ public sealed class ServerIntegrationTests
         Assert.AreEqual(0, connections.Count);
     }
 
+    [TestMethod]
+    public async Task ReconnectCanReceiveFreshSubscriptionState()
+    {
+        await using var host = await ServerTestHost.StartAsync(initialAgentCount: 4, snapshotRate: 30);
+
+        using (var firstSocket = await host.ConnectWebSocketAsync())
+        {
+            await ServerTestHost.HandshakeAsync(firstSocket);
+            await ServerTestHost.SendAsync(
+                firstSocket,
+                new SubscribeAreaMessage(-100d, -100d, 100d, 100d),
+                ProtocolVersion.Current);
+            await ReceiveUntilAsync(firstSocket, static message => message is AgentSpawnMessage);
+            await firstSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "reconnect", CancellationToken.None);
+        }
+
+        using var secondSocket = await host.ConnectWebSocketAsync();
+        await ServerTestHost.HandshakeAsync(secondSocket);
+        await ServerTestHost.SendAsync(
+            secondSocket,
+            new SubscribeAreaMessage(-100d, -100d, 100d, 100d),
+            ProtocolVersion.Current);
+        var message = await ReceiveUntilAsync(secondSocket, static candidate => candidate is AgentSpawnMessage);
+
+        Assert.IsInstanceOfType<AgentSpawnMessage>(message);
+    }
+
+    [TestMethod]
+    public async Task E2eMetricsRecordSnapshotBytesEncodeAndSendTime()
+    {
+        await using var host = await ServerTestHost.StartAsync(initialAgentCount: 4, snapshotRate: 30);
+        using var socket = await host.ConnectWebSocketAsync();
+        await ServerTestHost.HandshakeAsync(socket);
+        await ServerTestHost.SendAsync(
+            socket,
+            new SubscribeAreaMessage(-100d, -100d, 100d, 100d),
+            ProtocolVersion.Current);
+
+        var metrics = host.App.Services.GetRequiredService<E2eMetrics>();
+        await WaitUntilAsync(
+            () => metrics.Capture().TotalSnapshotDeliveries > 0,
+            TimeSpan.FromSeconds(3));
+
+        var snapshot = metrics.Capture();
+        Assert.IsTrue(snapshot.TotalMessages > 0);
+        Assert.IsTrue(snapshot.TotalBytes > 0);
+        Assert.IsTrue(snapshot.TotalEncodeTimeMs >= 0d);
+        Assert.IsTrue(snapshot.TotalSendTimeMs >= 0d);
+        Assert.IsTrue(snapshot.LastBytes > 0);
+    }
+
+    [TestMethod]
+    public async Task TenThousandAgentSimulationPublishesOnlySubscribedAgents()
+    {
+        await AssertLargeSimulationPublishesOnlySubscribedAgentsAsync(10_000);
+    }
+
+    [TestMethod]
+    public async Task HundredThousandAgentSimulationPublishesOnlySubscribedAgents()
+    {
+        await AssertLargeSimulationPublishesOnlySubscribedAgentsAsync(100_000);
+    }
+
+    private static async Task AssertLargeSimulationPublishesOnlySubscribedAgentsAsync(int initialAgentCount)
+    {
+        await using var host = await ServerTestHost.StartAsync(
+            initialAgentCount: initialAgentCount,
+            snapshotRate: 20,
+            spawnHalfExtent: 500d);
+        using var socket = await host.ConnectWebSocketAsync();
+        await ServerTestHost.HandshakeAsync(socket);
+        await ServerTestHost.SendAsync(
+            socket,
+            new SubscribeAreaMessage(-50d, -50d, 50d, 50d),
+            ProtocolVersion.Current);
+
+        var metrics = host.App.Services.GetRequiredService<E2eMetrics>();
+        await WaitUntilAsync(
+            () => metrics.Capture().LastAgentCount > 0,
+            TimeSpan.FromSeconds(10));
+
+        var snapshot = metrics.Capture();
+        Assert.IsTrue(snapshot.LastAgentCount > 0);
+        Assert.IsTrue(snapshot.LastAgentCount < initialAgentCount);
+        Assert.IsTrue(snapshot.LastMessageCount > 0);
+        Assert.IsTrue(snapshot.LastBytes > 0);
+    }
+
+    private static async Task<IProtocolMessage> ReceiveUntilAsync(
+        ClientWebSocket socket,
+        Func<IProtocolMessage, bool> predicate)
+    {
+        for (var index = 0; index < 128; index++)
+        {
+            var envelope = await ServerTestHost.ReceiveAsync(socket, TimeSpan.FromSeconds(3));
+            if (predicate(envelope.Message))
+            {
+                return envelope.Message;
+            }
+        }
+
+        Assert.Fail("Expected protocol message was not received.");
+        throw new InvalidOperationException();
+    }
+
     private static async Task WaitUntilAsync(Func<bool> predicate, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;

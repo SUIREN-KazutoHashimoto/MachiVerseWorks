@@ -85,6 +85,7 @@ internal sealed class SnapshotPublishService(
     SimulationRuntime simulation,
     ServerOptions options,
     ClientConnectionRegistry connections,
+    E2eMetrics metrics,
     ILogger<SnapshotPublishService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -125,15 +126,27 @@ internal sealed class SnapshotPublishService(
 
             try
             {
+                long bytes = 0;
+                double encodeTimeMs = 0d;
+                double sendTimeMs = 0d;
                 foreach (var message in plan.Messages)
                 {
-                    await connection.SendAsync(
+                    var sendMetrics = await connection.SendAsync(
                         message,
                         connection.NegotiatedVersion,
                         cancellationToken);
+                    bytes = checked(bytes + sendMetrics.FrameBytes);
+                    encodeTimeMs += sendMetrics.EncodeTimeMs;
+                    sendTimeMs += sendMetrics.SendTimeMs;
                 }
 
                 connection.TryReplaceKnownAgentIds(subscription.Revision, plan.CurrentAgentIds);
+                metrics.RecordSnapshotDelivery(
+                    snapshots.Length,
+                    plan.Messages.Count,
+                    bytes,
+                    encodeTimeMs,
+                    sendTimeMs);
             }
             catch (Exception exception) when (
                 exception is WebSocketException or OperationCanceledException or ObjectDisposedException)
