@@ -46,7 +46,7 @@ network receive path から Simulation / connection state を同期的に横断�
 
 `SubscribeVolume` は command queue へ投入する前に server policy で検証します。`minX/minY/minZ/maxX/maxY/maxZ` は有限かつ各軸で `max >= min` を要求し、volume両端が `SpatialGrid` の対応範囲へ変換できることを確認します。
 
-走査対象セル数は `cellsX × cellsY × cellsZ` で数え、`Server:MaximumSubscriptionCellCount` 以下に制限します。既定値は `65,536` cellsです。Web Clientの既定高度範囲と16:9 viewportの最小zoomを収めつつ、極端に巨大なvolumeによる過大なspatial queryを防ぎます。
+走査対象セル数は `cellsX × cellsY × cellsZ` で数え、`Server:MaximumSubscriptionCellCount` 以下に制限します。既定値は `262,144` cellsです。Web Clientの16:9最小zoomでnear/farを含むfull 3D frustum AABBを受理できる値とし、極端に巨大な外部subscriptionは拒否します。Simulation内部の`SpatialIndex.Query`は巨大な疎volumeでoccupied cell側の走査へ切り替え、空cellを体積分総当たりしません。
 
 ## Connection state
 

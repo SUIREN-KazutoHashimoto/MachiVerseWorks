@@ -1,18 +1,21 @@
 # MachiVerseWorks.Protocol
 
-Server と Client の binary wire contract を管理します。
+ServerとClientのbinary wire contractを管理します。
 
-Phase 3 では次を正本として実装します。
+現在の正本契約:
 
-- Protocol version: `1.0`
+- Protocol version: `2.0`
 - 16-byte little-endian frame header
 - stable `MessageType` ID
 - `Hello` / `HelloAck`
-- `SubscribeArea`
-- Agent spawn / update / remove
+- 3D `SubscribeVolume`
+- XYZ position / XYZ velocityを持つAgent spawn / update
+- Agent remove
 - stable error code + structured parameter
 - serializer / deserializer
 
-Protocol project は Simulation の内部状態や Web UI 表示文言を直接参照しません。
+Protocol 2.0はPhase 9のネイティブ3D化に伴うbreaking changeです。Protocol 1.xの2D payload、`SubscribeArea`、Z省略layoutへの暗黙fallbackは提供しません。
 
-binary layout と互換性ルールの詳細は [`../../docs/architecture/protocol.md`](../../docs/architecture/protocol.md) を参照してください。
+Protocol projectはSimulationの内部状態やWeb UI表示文言を直接参照しません。
+
+binary layoutと互換性ルールの詳細は[`../../docs/architecture/protocol.md`](../../docs/architecture/protocol.md)を参照してください。

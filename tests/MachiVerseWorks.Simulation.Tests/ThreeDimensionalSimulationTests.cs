@@ -58,6 +58,27 @@ public sealed class ThreeDimensionalSimulationTests
     }
 
     [TestMethod]
+    public void HugeSparseVolumeSnapshotReturnsOccupiedAgentsWithoutEnumeratingEveryCell()
+    {
+        var world = new SimulationWorld(new SimulationConfig(tickRate: 30, seed: 1, spatialCellSize: 16d));
+        var first = world.CreateAgent(new WorldPoint(-100d, 20d, -300d), new WorldVector(0d, 0d, 0d));
+        var second = world.CreateAgent(new WorldPoint(500d, -600d, 700d), new WorldVector(0d, 0d, 0d));
+
+        var snapshots = world.CreateSnapshot(new WorldVolume(
+            -1_000_000d,
+            -1_000_000d,
+            -1_000_000d,
+            1_000_000d,
+            1_000_000d,
+            1_000_000d));
+
+        Assert.AreEqual(2, snapshots.Length);
+        CollectionAssert.AreEquivalent(
+            new[] { first.Value, second.Value },
+            snapshots.Select(static snapshot => snapshot.Id.Value).ToArray());
+    }
+
+    [TestMethod]
     public void CheckpointRestorePreservesAltitudeAndVerticalVelocity()
     {
         var world = new SimulationWorld(new SimulationConfig(tickRate: 4, seed: 91, spatialCellSize: 32d));

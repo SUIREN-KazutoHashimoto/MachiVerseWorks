@@ -56,8 +56,59 @@ internal sealed class SpatialIndex
     {
         var minCell = SpatialGrid.ToCell(new WorldPoint(volume.MinX, volume.MinY, volume.MinZ), _cellSize);
         var maxCell = SpatialGrid.ToCell(new WorldPoint(volume.MaxX, volume.MaxY, volume.MaxZ), _cellSize);
-        var result = new List<AgentId>();
+        if (_agentsByCell.Count == 0)
+        {
+            return [];
+        }
 
+        return ShouldScanOccupiedCells(minCell, maxCell)
+            ? QueryOccupiedCells(minCell, maxCell)
+            : QueryCellRange(minCell, maxCell);
+    }
+
+    private bool ShouldScanOccupiedCells(SpatialCell minCell, SpatialCell maxCell)
+    {
+        var occupiedCellCount = (ulong)_agentsByCell.Count;
+        var spanX = CellSpan(minCell.X, maxCell.X);
+        var spanY = CellSpan(minCell.Y, maxCell.Y);
+        var spanZ = CellSpan(minCell.Z, maxCell.Z);
+
+        if (spanX > occupiedCellCount)
+        {
+            return true;
+        }
+
+        if (spanY > occupiedCellCount / spanX)
+        {
+            return true;
+        }
+
+        var spanXY = spanX * spanY;
+        return spanZ > occupiedCellCount / spanXY;
+    }
+
+    private List<AgentId> QueryOccupiedCells(SpatialCell minCell, SpatialCell maxCell)
+    {
+        var result = new List<AgentId>();
+        foreach (var entry in _agentsByCell)
+        {
+            var cell = entry.Key;
+            if (cell.X < minCell.X || cell.X > maxCell.X ||
+                cell.Y < minCell.Y || cell.Y > maxCell.Y ||
+                cell.Z < minCell.Z || cell.Z > maxCell.Z)
+            {
+                continue;
+            }
+
+            result.AddRange(entry.Value);
+        }
+
+        return result;
+    }
+
+    private List<AgentId> QueryCellRange(SpatialCell minCell, SpatialCell maxCell)
+    {
+        var result = new List<AgentId>();
         for (var cellZ = minCell.Z; cellZ <= maxCell.Z; cellZ++)
         {
             for (var cellY = minCell.Y; cellY <= maxCell.Y; cellY++)
@@ -88,6 +139,11 @@ internal sealed class SpatialIndex
         }
 
         return result;
+    }
+
+    private static ulong CellSpan(int minimum, int maximum)
+    {
+        return (ulong)((long)maximum - minimum) + 1UL;
     }
 
     private HashSet<AgentId> GetOrCreateCell(SpatialCell cell)

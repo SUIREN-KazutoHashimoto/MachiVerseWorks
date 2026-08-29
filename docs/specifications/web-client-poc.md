@@ -1,33 +1,36 @@
-# Web Client 最小 PoC 仕様
+# Web Client 基盤仕様
 
 ## Goal
 
-Phase 5ではBrowserからHeadless Serverへ接続し、subscription範囲内Agentを受信・補間・描画できる最小Clientを完成させます。同時に将来の効果音・3D音・環境音を追加できるAudio Client Foundationを用意します。
+Phase 5で成立させたBrowser Clientを基礎とし、Phase 9以降はHeadless Serverから3D subscription範囲内Agentを受信・補間・描画するClientとして扱います。Audio Client Foundationも同じXYZ座標を使用します。
 
 ## Connection
 
-- Server URLは `VITE_SERVER_URL` で上書きできる。
-- 未指定時は `ws://127.0.0.1:5080/ws` を使用する。
-- 接続直後にProtocol 1.0 `Hello` を送る。
-- `HelloAck` 後だけsubscriptionを送る。
+- Server URLは`VITE_SERVER_URL`で上書きできる。
+- 未指定時は`ws://127.0.0.1:5080/ws`を使用する。
+- 接続直後にProtocol 2.0 `Hello`を送る。
+- `HelloAck`後だけ`SubscribeVolume`を送る。
 - binary frameのみ処理する。
 - 切断時はClient entity stateを破棄する。
 - 自動再接続は1秒開始、最大5秒の指数backoffとする。
+- Protocol 1.x / `SubscribeArea`へのfallbackは行わない。
 
 ## Entity state / rendering
 
-- `AgentSpawn` はClient EntityStoreへ追加する。
-- `AgentUpdate` はprevious/current snapshotを更新する。
-- `AgentRemove` はClient stateと関連audio emitterを削除する。
-- Positionはsnapshot受信間隔を基準にprevious/current間で線形補間する。
-- Agent描画はInstancedMeshの最小box形状とする。
-- Cameraはdragでpan、wheelでzoomできる。
-- Camera visible areaに20% marginを足した矩形をsubscriptionとして送る。
+- `AgentSpawn`はClient EntityStoreへXYZ position / XYZ velocityを追加する。
+- `AgentUpdate`はprevious/currentのXYZ snapshotを更新する。
+- `AgentRemove`はClient stateと関連audio emitterを削除する。
+- Positionはsnapshot受信間隔を基準にprevious/current間で3軸線形補間する。
+- Agent描画は`THREE.InstancedMesh`の最小box形状とする。
+- Simulation `(X,Y,Z)`はThree.js `(X,Z,Y)`へ明示変換する。
+- Cameraはdragで水平pan、wheelでzoomできる。
+- subscriptionはOrthographicCameraのnear/farを含む8つのfrustum cornerから3D AABBを算出し、20% marginを加えた`SubscribeVolume`として送る。
+- 固定の高度slabでsubscriptionを切らず、cameraの高度・向き・clip rangeへ追従する。
 
 ## UI / localization
 
 - default localeはlocale manifestから選択する。
-- Phase 5 resourceは`ja-JP`のみ。
+- 現在のdefault resourceは`ja-JP`とする。
 - 接続state、Protocol version、Agent count、Audio stateを表示する。
 - Protocol errorのuser-facing textはlocale resourceから解決する。
 
@@ -38,10 +41,11 @@ Phase 5ではBrowserからHeadless Serverへ接続し、subscription範囲内Age
 - Cue IDからmanifestを通じてassetを解決し、callerへasset pathを露出しない。
 - Short SFXをAudioBuffer cacheできる。
 - non-positional / positional play APIを持つ。
+- Simulation `(X,Y,Z)`をWeb Audio `(X,Z,Y)`へ明示変換する。
 - Camera transformをWeb Audio listenerへ同期する。
 - Positional looping emitterはvoice budgetでvirtualizeする。
 - Entity position/removeをemitterへ反映できる。
-- Global ambient / Ambient Zone / overlap / fade / external parameterを扱える。
+- Global ambient / Ambient Zone / overlap / fade / external parameterを3D位置で扱う。
 - Web Audio API非対応でもClient通信・描画は継続する。
 - Server / Protocolは音声asset pathを送らない。
 
@@ -52,4 +56,3 @@ Phase 5ではBrowserからHeadless Serverへ接続し、subscription範囲内Age
 - BGM selection UI
 - 保存されるvolume設定
 - production deployment
-- E2E performance acceptance

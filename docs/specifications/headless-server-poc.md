@@ -18,7 +18,7 @@ dotnet run --project src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj
 - port: `5080`
 - Simulation tick rate: `30 Hz`
 - snapshot publish rate: `10 Hz`
-- maximum subscription cells: `65,536`
+- maximum subscription cells: `262,144`
 - allowed Browser WebSocket origins: `http://127.0.0.1:5173`, `http://localhost:5173`
 - initial Agent count: `1,000`
 - default spawn volume: `X/Y = -500..500`, `Z = -64..64`
@@ -64,7 +64,7 @@ subscription は connection ごとに1つ保持し、新しい `SubscribeVolume`
 
 `SubscribeVolume` は `minX / minY / minZ / maxX / maxY / maxZ` の6境界を持ちます。全値は有限値で、各軸について `max >= min` を要求します。2D rectangle への暗黙変換は行いません。
 
-Server は subscription を受理する前に、volume の両端が spatial grid の対応座標範囲へ収まることと、対象セル数 `cellsX × cellsY × cellsZ` が `Server:MaximumSubscriptionCellCount` 以下であることを検証します。既定上限は `65,536` cellsです。条件を満たさない場合は `InvalidRequest` を返し、Simulation query は実行しません。
+Server は subscription を受理する前に、volume の両端が spatial grid の対応座標範囲へ収まることと、対象セル数 `cellsX × cellsY × cellsZ` が `Server:MaximumSubscriptionCellCount` 以下であることを検証します。既定上限は `262,144` cellsです。Web Clientの既定16:9 cameraでは最小zoomでもnear/farを含むfull 3D frustum AABBを収めます。条件を満たさない外部volumeは `InvalidRequest` を返し、Simulation query は実行しません。
 
 ## Snapshot 配信
 

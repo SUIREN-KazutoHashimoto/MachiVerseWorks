@@ -2,8 +2,8 @@
 
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 9 — 3D Simulation Foundation
-> **次の実装タスク:** P9-001 — 3D座標系の軸・単位・境界方針を仕様とADRで固定する
+> **現在:** Phase 9 — 3D Simulation Foundation（完了）
+> **次の実装タスク:** 未選定 — 将来 Backlog から次Phaseを小Taskへ分解する
 
 ## 全体の現在地
 
@@ -18,362 +18,63 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 6 | End-to-End PoC | ✅ 完了 |
 | 7 | 性能基盤の拡張 | ✅ 完了 |
 | 8 | 保存・復元基盤 | ✅ 完了 |
-| 9 | 3D Simulation Foundation | ⬜ 未完了 |
+| 9 | 3D Simulation Foundation | ✅ 完了 |
 
-## 状態の見方
+Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴として [`docs/archive/roadmap-through-phase9-plan.md`](docs/archive/roadmap-through-phase9-plan.md) に保存しています。
 
-- ⬜ **未完了** — 実装・検証のどちらかが残っている
-- ✅ **完了** — 必要な実装・build・test・benchmark・実機確認まで済んでいる
-- ⚠️ **手動設定待ち** — GitHub SettingsなどRepositoryファイルから変更できない作業が残っている
-
-Task ID は参照用の固定IDです。並び替えても変更しません。
-
-## 初期セットアップ
-
-`SET-001` から `SET-021` まで完了しました。Phase 1 の着手時点で通常開発へ移行し、以後は `AGENTS.md` の通常開発ルールに従ってルート `VERSION` を application version の正本として運用します。
-
-<details>
-<summary><strong>ROADMAP 運用ルール</strong></summary>
+## ROADMAP 運用ルール
 
 - 状態記号を付けるのは、単独で完了判定できる作業だけとする。
 - 1タスクは原則として「1つの観測可能な成果」を持つ。
-- 1タスク内に独立した成果が複数ある場合は、着手前または判明した時点で分割する。
-- 「交通を完成させる」「経済を実装する」のような大テーマはTask化しない。
-- 大テーマは見出しまたは将来 Backlog として管理し、着手時に小タスクへ分解する。
-- 完了条件が曖昧なタスクは、そのまま実装を始めず完了条件を具体化する。
+- 1タスク内に独立した成果が複数ある場合は分割する。
+- 大テーマは見出しまたは将来 Backlog として管理し、着手時に小Taskへ分解する。
 - コード変更では、必要な build / test / benchmark / 実機確認まで含めて完了とする。
 - 仕様や設計を変更した場合は、対応する docs / ADR の更新まで含めて完了とする。
-- 作業中にタスクが膨らんだ場合は、無理に1項目で抱えず未完了へ戻して分割する。
-- 「ほぼ完了」「一部完了」は ✅ にしない。残作業を別 Task ID へ明示的に切り出した場合のみ元タスクを完了にできる。
-- 全項目が完了した大きなセクションは、必要に応じて `docs/archive/` へ履歴を移し、ROADMAP を読みやすく保つ。
-
-</details>
+- 「ほぼ完了」「一部完了」は ✅ にしない。残作業を別Taskへ明示的に切り出した場合のみ元Taskを完了にできる。
+- 完了済みPhaseの詳細は必要に応じて `docs/archive/` へ移し、現行ROADMAPを次の判断に使いやすく保つ。
 
 ---
 
-<details>
-<summary><strong>Phase 0 — リポジトリ初期セットアップ（完了）</strong></summary>
-
-- ✅ **SET-001** — 基本ディレクトリ構成を作成する
-- ✅ **SET-002** — ルート `README.md` / `AGENTS.md` を整備する
-- ✅ **SET-003** — `.gitignore` / `.gitattributes` / `.editorconfig` を整備する
-- ✅ **SET-004** — Apache-2.0 の `LICENSE` / `NOTICE` / 第三者通知の基盤を整備する
-- ✅ **SET-005** — CONTRIBUTING / SECURITY / Code of Conduct / Issue・PRテンプレートを整備する
-- ✅ **SET-006** — Legacy から再利用する開発知見と移行方針を整理する
-- ✅ **SET-007** — Server-authoritative 構成の ADR とアーキテクチャ概要を整備する
-- ✅ **SET-008** — 将来の多言語対応を壊さない localization 境界を整備する
-- ✅ **SET-009** — GitHub Actions の CI / CodeQL / Dependency Review / Dependabot を整備する
-- ✅ **SET-010** — `.NET` SDK を `global.json` で固定する
-- ✅ **SET-011** — Coding Guidelines と Performance Guidelines を整備する
-- ✅ **SET-012** — 細粒度タスク管理用の `ROADMAP.md` を導入する
-- ✅ **SET-013** — `develop` ブランチを作成する
-- ✅ **SET-014** — `main` / `develop` のRulesetまたはbranch protectionを設定する
-- ✅ **SET-015** — CI に実装有無に依存しない固定 `ci-gate` jobを追加する
-- ✅ **SET-016** — 新機能branch名を `feature/*` に統一する
-- ✅ **SET-017** — PRの標準merge方式とbranch削除方針を確定・文書化する
-- ✅ **SET-018** — 通常開発用application versionの正本設計を確定する
-- ✅ **SET-019** — GitHub Security設定を確認・有効化する
-- ✅ **SET-020** — MarkdownのRepository内リンク検証をCIへ追加する
-- ✅ **SET-021** — Repositoryのmerge設定とmerge後branch自動削除をGitHub Settingsへ反映する
-
-</details>
-
----
-
-<details>
-<summary><strong>Phase 1 — 開発プロジェクト骨格（完了）</strong></summary>
+## Phase 9 — 3D Simulation Foundation（完了）
 
 > **状態: ✅ 完了**  
-> 通常開発への移行後、C# Solution と Web Client の最小骨格を作り、既存CIを実際のbuildへ接続する。
-
-### .NET Solution
-
-- ✅ **SKL-001** — ルートに `MachiVerseWorks.slnx` を作成する
-- ✅ **SKL-002** — `MachiVerseWorks.Simulation` の `.csproj` を作成する
-- ✅ **SKL-003** — `MachiVerseWorks.Protocol` の `.csproj` を作成する
-- ✅ **SKL-004** — `MachiVerseWorks.Server` の `.csproj` を作成する
-- ✅ **SKL-005** — `MachiVerseWorks.Benchmarks` の `.csproj` を作成する
-- ✅ **SKL-006** — `MachiVerseWorks.Simulation.Tests` の `.csproj` を作成する
-- ✅ **SKL-007** — `MachiVerseWorks.Protocol.Tests` の `.csproj` を作成する
-- ✅ **SKL-008** — `MachiVerseWorks.Server.Tests` の `.csproj` を作成する
-- ✅ **SKL-009** — Solution に全 C# project を登録する
-- ✅ **SKL-010** — ProjectReference の依存方向を設定する
-- ✅ **SKL-011** — 空の状態で `dotnet restore` が成功することを確認する
-- ✅ **SKL-012** — 空の状態で Release build が成功することを確認する
-- ✅ **SKL-013** — 空の状態で全 test project が成功することを確認する
-
-### Web Client
-
-- ✅ **SKL-014** — Web Client の採用パッケージとversion方針を決める
-- ✅ **SKL-015** — `src/web/package.json` を作成する
-- ✅ **SKL-016** — npm lockfile を作成する
-- ✅ **SKL-017** — Node.js version固定ファイルを追加する
-- ✅ **SKL-018** — TypeScript 設定を追加する
-- ✅ **SKL-019** — Vite の最小構成を追加する
-- ✅ **SKL-020** — Three.js の最小依存を追加する
-- ✅ **SKL-021** — ブラウザに空の MachiVerseWorks 画面を表示できるようにする
-- ✅ **SKL-022** — Web Client の lint / typecheck script を用意する
-- ✅ **SKL-023** — Web Client の最小 build を成功させる
-
-### CI 連携
-
-- ✅ **SKL-024** — CI の `dotnet` job が実行され成功することを確認する
-- ✅ **SKL-025** — CI の `web` job が実行され成功することを確認する
-- ✅ **SKL-026** — Dependabot に NuGet 更新設定を追加する
-- ✅ **SKL-027** — Dependabot に npm 更新設定を追加する
-- ✅ **SKL-028** — 初回実装向けのローカル開発手順を `getting-started.md` に記載する
-
-</details>
-
----
-
-<details>
-<summary><strong>Phase 2 — Simulation Core 最小 PoC（完了）</strong></summary>
-
-目標は「都市機能」ではなく、まず多数 Agent を安定して step できる最小コアを作ること。
-
-### 基本時間・設定
-
-- ✅ **SIM-001** — Simulation の tick rate を保持する設定型を作る
-- ✅ **SIM-002** — Simulation seed を保持する設定を追加する
-- ✅ **SIM-003** — Simulation time / tick counter を表す型を作る
-- ✅ **SIM-004** — `Step()` で tick を1回進める最小 API を作る
-- ✅ **SIM-005** — 同一seed・同一入力で同じ結果になるテストを作る
-
-### Agent Store
-
-- ✅ **SIM-006** — `AgentId` の安定したID型を作る
-- ✅ **SIM-007** — Agent の最小状態を格納する `AgentStore` を作る
-- ✅ **SIM-008** — Agent を1体生成できる API を作る
-- ✅ **SIM-009** — 指定数の Agent を一括生成できるようにする
-- ✅ **SIM-010** — Agent ID を途中で詰め直さないことをテストする
-- ✅ **SIM-011** — 1 tick で Agent の最小状態を更新する処理を作る
-
-### Spatial Index
-
-- ✅ **SIM-012** — World 座標を cell / chunk に変換する型を作る
-- ✅ **SIM-013** — Agent を spatial cell に登録できるようにする
-- ✅ **SIM-014** — Agent 移動時に cell 所属を更新できるようにする
-- ✅ **SIM-015** — 矩形範囲の Agent ID を取得する query を作る
-- ✅ **SIM-016** — spatial query の境界条件テストを追加する
-
-### Snapshot
-
-- ✅ **SIM-017** — Client配信用の最小 Agent snapshot 型を定義する
-- ✅ **SIM-018** — Simulation内部の可変Storeとsnapshotを分離する
-- ✅ **SIM-019** — 指定範囲だけ snapshot を生成できるようにする
-- ✅ **SIM-020** — snapshot生成中にSimulation内部状態を外部へ公開しないことをテストする
-
-### 最小性能計測
-
-- ✅ **SIM-021** — 1,000 Agent の tick benchmark を追加する
-- ✅ **SIM-022** — 10,000 Agent の tick benchmark を追加する
-- ✅ **SIM-023** — 100,000 Agent の tick benchmark を追加する
-- ✅ **SIM-024** — tick時間の p50 / p95 / p99 を記録できるようにする
-- ✅ **SIM-025** — tickあたり allocation を記録できるようにする
-- ✅ **SIM-026** — PoCの初回性能結果を文書へ記録する
-
-</details>
-
----
-
-<details>
-<summary><strong>Phase 3 — Protocol 最小実装（完了）</strong></summary>
-
-- ✅ **PRT-001** — Protocol version の表現方法を決める
-- ✅ **PRT-002** — message type ID の管理方法を決める
-- ✅ **PRT-003** — binary frame のheader layoutを定義する
-- ✅ **PRT-004** — Client → Server `Hello` message を定義する
-- ✅ **PRT-005** — Server → Client `HelloAck` message を定義する
-- ✅ **PRT-006** — Client → Server `SubscribeArea` message を定義する
-- ✅ **PRT-007** — Server → Client Agent spawn message を定義する
-- ✅ **PRT-008** — Server → Client Agent update message を定義する
-- ✅ **PRT-009** — Server → Client Agent remove message を定義する
-- ✅ **PRT-010** — user-facing error用の stable code + parameter contract を定義する
-- ✅ **PRT-011** — 最小 serializer を実装する
-- ✅ **PRT-012** — 最小 deserializer を実装する
-- ✅ **PRT-013** — 各messageのround-trip testを追加する
-- ✅ **PRT-014** — 不正なframe長を拒否するテストを追加する
-- ✅ **PRT-015** — 未知message typeを安全に拒否するテストを追加する
-- ✅ **PRT-016** — binary layout を architecture docs に記録する
-
-</details>
-
----
-
-<details>
-<summary><strong>Phase 4 — Headless Server 最小実装（完了）</strong></summary>
-
-- ✅ **SRV-001** — Server project を単独起動できるようにする
-- ✅ **SRV-002** — 設定ファイルからlisten address / portを読めるようにする
-- ✅ **SRV-003** — health endpoint を追加する
-- ✅ **SRV-004** — Simulation Core の lifecycle をServerから開始できるようにする
-- ✅ **SRV-005** — Simulation tick loop を専用の実行境界で動かす
-- ✅ **SRV-006** — graceful shutdown でtick loopを停止できるようにする
-- ✅ **SRV-007** — WebSocket endpoint を追加する
-- ✅ **SRV-008** — Client接続を登録・解除する仕組みを作る
-- ✅ **SRV-009** — `Hello` / `HelloAck` の接続ハンドシェイクを実装する
-- ✅ **SRV-010** — Client command をSimulation側へ渡すqueue/channelを作る
-- ✅ **SRV-011** — `SubscribeArea` を接続単位で保持する
-- ✅ **SRV-012** — subscription範囲のsnapshotだけを取得する
-- ✅ **SRV-013** — snapshot publish周期をSimulation tickから分離する
-- ✅ **SRV-014** — Agent spawn/update/remove を送信する
-- ✅ **SRV-015** — 切断時にsubscription stateを破棄する
-- ✅ **SRV-016** — Server起動・停止のintegration testを追加する
-- ✅ **SRV-017** — WebSocket handshakeのintegration testを追加する
-- ✅ **SRV-018** — snapshot送信のintegration testを追加する
-
-</details>
-
----
-
-<details>
-<summary><strong>Phase 5 — Web Client 最小実装（完了）</strong></summary>
-
-- ✅ **WEB-001** — Web Client のapplication entry pointを作る
-- ✅ **WEB-002** — locale manifestからdefault localeを初期化する
-- ✅ **WEB-003** — `ja-JP` の最小UI resourceを作る
-- ✅ **WEB-004** — Server URL設定を読み込めるようにする
-- ✅ **WEB-005** — WebSocket接続クラスを作る
-- ✅ **WEB-006** — `Hello` / `HelloAck` を実装する
-- ✅ **WEB-007** — binary frame decoderを作る
-- ✅ **WEB-008** — Client側entity storeを作る
-- ✅ **WEB-009** — Agent spawnをentity storeへ反映する
-- ✅ **WEB-010** — Agent updateをentity storeへ反映する
-- ✅ **WEB-011** — Agent removeをentity storeへ反映する
-- ✅ **WEB-012** — Three.js scene / camera / renderer の最小構成を作る
-- ✅ **WEB-013** — camera位置からsubscription範囲を計算する
-- ✅ **WEB-014** — `SubscribeArea` をServerへ送る
-- ✅ **WEB-015** — Agentを最小形状で描画する
-- ✅ **WEB-016** — snapshot間の位置補間を実装する
-- ✅ **WEB-017** — 接続状態をUIへ表示する
-- ✅ **WEB-018** — Protocol error codeをlocale resource経由で表示する
-- ✅ **WEB-019** — 接続切断を検知する
-- ✅ **WEB-020** — 最小の再接続処理を実装する
-
-### Audio Client Foundation
-
-音声は描画と独立した Client presentation system として扱い、Web Audio API を基盤に UI / BGM / 環境音 / World SFX / Voice を同一の mixer graph 上で管理する。多数Agent環境では全EntityへAudioNodeを常設せず、距離・優先度・voice budgetによるvirtualizationを前提とする。
-
-- ✅ **AUD-001** — Web Clientのaudio architectureとstate ownershipを文書化する
-- ✅ **AUD-002** — `AudioContext` lifecycleを管理する `AudioEngine` の境界を作る
-- ✅ **AUD-003** — user gestureによるaudio unlock / resumeを実装する
-- ✅ **AUD-004** — Master / Music / UI / Ambient / World / Voice のmixer busを作る
-- ✅ **AUD-005** — audio asset manifestの形式とstable cue IDを定義する
-- ✅ **AUD-006** — short SFX用のAudioBuffer preload / cache基盤を作る
-- ✅ **AUD-007** — non-positional soundの最小再生APIを作る
-- ✅ **AUD-008** — Three.js cameraとaudio listenerを接続する
-- ✅ **AUD-009** — positional sound emitterの最小再生APIを作る
-- ✅ **AUD-010** — positional soundのdistance attenuation既定値を定義する
-- ✅ **AUD-011** — active audio emitterを管理するregistryを作る
-- ✅ **AUD-012** — concurrent voice budgetとaudio virtualizationを実装する
-- ✅ **AUD-013** — Entity位置更新をactive positional emitterへ反映する
-- ✅ **AUD-014** — Entity remove時に関連audio emitterを解放する
-- ✅ **AUD-015** — global ambient layerを定義・再生できるようにする
-- ✅ **AUD-016** — locationに紐づくAmbient Zoneのデータモデルを定義する
-- ✅ **AUD-017** — camera位置からactive Ambient Zoneを選択する
-- ✅ **AUD-018** — Ambient Zone内で複数ambient layerを合成できるようにする
-- ✅ **AUD-019** — Ambient Zone切替時のfade / crossfadeを実装する
-- ✅ **AUD-020** — overlapping Ambient Zoneのpriority / weight解決ルールを定義する
-- ✅ **AUD-021** — ambient mixへ外部parameterを渡せる境界を作る
-- ✅ **AUD-022** — master muteとcategory別volumeを実装する
-- ✅ **AUD-023** — AudioContext非対応・blocked・suspended時のfallbackを実装する
-- ✅ **AUD-024** — AudioEngine / mixer / voice budgetのunit testを追加する
-- ✅ **AUD-025** — audio cueにasset pathを直接露出しないことをテストする
-- ✅ **AUD-026** — Server / Protocolから音声ファイル名を送らずsemantic world eventからcueへ解決する方針を文書化する
-
-</details>
-
----
-
-<details>
-<summary><strong>Phase 6 — End-to-End PoC（完了）</strong></summary>
-
-- ✅ **E2E-001** — Server + Web Client のローカル起動手順を確定する
-- ✅ **E2E-002** — BrowserからServerへ接続できることを確認する
-- ✅ **E2E-003** — 1,000 AgentをServerで生成しBrowserに表示する
-- ✅ **E2E-004** — camera移動時にsubscription範囲が更新されることを確認する
-- ✅ **E2E-005** — 範囲外AgentがClientからremoveされることを確認する
-- ✅ **E2E-006** — 再接続後にClient stateを復元できることを確認する
-- ✅ **E2E-007** — 10,000 AgentのServer simulationで近傍だけ描画できることを確認する
-- ✅ **E2E-008** — 100,000 AgentのServer simulationで近傍だけ配信できることを確認する
-- ✅ **E2E-009** — snapshot bytes / encode time / send timeを記録する
-- ✅ **E2E-010** — Client decode time / frame timeを記録する
-- ✅ **E2E-011** — PoC結果と既知のボトルネックを文書化する
-
-</details>
-
----
-
-<details>
-<summary><strong>Phase 7 — 性能基盤の拡張（完了）</strong></summary>
-
-PoCを動かした後、計測結果に基づいて必要な項目だけ進める。
-
-- ✅ **PER-001** — BenchmarkDotNetの共通設定を作る
-- ✅ **PER-002** — Simulation benchmark結果を保存する形式を決める
-- ✅ **PER-003** — snapshot生成時間のbenchmarkを追加する
-- ✅ **PER-004** — Protocol encode/decode benchmarkを追加する
-- ✅ **PER-005** — spatial query benchmarkを追加する
-- ✅ **PER-006** — GC collection回数を計測結果へ含める
-- ✅ **PER-007** — Serverのsnapshot配信統計をログへ出せるようにする
-- ✅ **PER-008** — Web Clientのdecode時間をdevelopment overlayで確認できるようにする
-- ✅ **PER-009** — Web Clientのrender frame timeをdevelopment overlayで確認できるようにする
-- ✅ **PER-010** — 最初の性能改善候補をprofile結果から選定する
-
-</details>
-
----
-
-<details>
-<summary><strong>Phase 8 — 保存・復元基盤（完了）</strong></summary>
-
-最小Worldをversioned Save Dataへ保存し、同じSimulation状態と継続実行条件を復元できる基盤を確立する。
-
-- ✅ **SAV-001** — Save Data が保持する最小情報を定義する
-- ✅ **SAV-002** — Save format versionを定義する
-- ✅ **SAV-003** — locale依存表示文字列をSave Dataへ保存しないテストを追加する
-- ✅ **SAV-004** — 最小Worldを保存できるようにする
-- ✅ **SAV-005** — 保存した最小Worldを読み込めるようにする
-- ✅ **SAV-006** — save → load で同じSimulation状態を復元するテストを追加する
-- ✅ **SAV-007** — 不正Save Dataを安全に拒否するテストを追加する
-
-</details>
-
----
-
-<details>
-<summary><strong>Phase 9 — 3D Simulation Foundation</strong></summary>
-
-> **状態: ⬜ 未完了**  
-> 道路・鉄道・建物・地下・高架などの本格実装へ進む前に、Simulation Worldの正本座標系を2Dから3Dへ移行する。描画だけを3D化するのではなく、Simulation内部状態からProtocol・Save Data・Web Clientまで高さ情報を欠落させないことをPhase 9の完了条件とする。
+> Simulation Worldの正本座標系をフルネイティブ3Dへ移行し、Simulation内部状態からProtocol・Server・Web Client・Audio・Save Dataまで高さ情報を欠落させない基盤を確立した。
 
 ### 座標契約・Simulation Core
 
-- ⬜ **P9-001** — 3D座標系の軸・単位・境界・rendererへの写像を仕様とADRで固定する
-- ⬜ **P9-002** — `WorldPoint` / `WorldVector` を3軸化し、全成分のfinite validationを実装する
-- ⬜ **P9-003** — `SpatialCell` / `SpatialGrid` を3次元cellへ拡張する
-- ⬜ **P9-004** — 3D volume型を導入し、`SpatialIndex` の登録・移動・volume queryを3D化する
-- ⬜ **P9-005** — `AgentStore` / `SimulationWorld` の生成・移動・tick更新を3軸状態へ移行する
-- ⬜ **P9-006** — snapshot / checkpointを3軸化し、determinism・境界条件・failure atomicityの回帰testを追加する
+- ✅ **P9-001** — 3D座標系の軸・単位・境界・rendererへの写像を仕様とADRで固定する
+- ✅ **P9-002** — `WorldPoint` / `WorldVector` を3軸化し、全成分のfinite validationを実装する
+- ✅ **P9-003** — `SpatialCell` / `SpatialGrid` を3次元cellへ拡張する
+- ✅ **P9-004** — `WorldVolume`を導入し、`SpatialIndex`の登録・移動・volume queryを3D化する
+- ✅ **P9-005** — `AgentStore` / `SimulationWorld` の生成・移動・tick更新を3軸状態へ移行する
+- ✅ **P9-006** — snapshot / checkpointを3軸化し、determinism・境界条件・failure atomicityの回帰testを追加する
 
 ### Protocol・Server
 
-- ⬜ **P9-007** — Agent position / velocityとsubscription volumeを3軸wire contractへ更新し、必要なProtocol versionを上げる
-- ⬜ **P9-008** — Serverのsubscription state・snapshot取得・spawn/update配信で3D座標を欠落なく扱う
+- ✅ **P9-007** — Agent position / velocityとsubscription volumeを3軸wire contractへ更新し、Protocol 2.0へ上げる
+- ✅ **P9-008** — Serverのsubscription state・snapshot取得・spawn/update配信で3D座標を欠落なく扱う
 
 ### Web Client・Audio
 
-- ⬜ **P9-009** — Web Client protocol decoder / EntityStore / interpolationを3軸状態へ移行する
-- ⬜ **P9-010** — Simulation座標をThree.js座標へ明示的に写像し、Agentの高さと3D subscription volumeを描画・camera stateへ反映する
-- ⬜ **P9-011** — positional audio / listener / Ambient Zoneが3D位置を扱い、高度差を距離・位置判定へ反映できるようにする
+- ✅ **P9-009** — Web Client protocol decoder / EntityStore / interpolationを3軸状態へ移行する
+- ✅ **P9-010** — Simulation座標をThree.js座標へ明示的に写像し、Agent高度とcamera由来3D subscription volumeを描画・配信へ反映する
+- ✅ **P9-011** — positional audio / listener / Ambient Zoneを3D位置へ移行し、高度差を距離・位置判定へ反映する
 
 ### Save・性能・E2E
 
-- ⬜ **P9-012** — Save Dataを3軸stateへ更新し、format versionとsave/load round-trip testを更新する
-- ⬜ **P9-013** — 3D Spatial Index / tick / snapshot / Protocolのbenchmarkを更新し、2D時点からのperformance regressionを記録する
-- ⬜ **P9-014** — 同一水平位置で高度だけ異なるAgentをE2Eで区別して配信・描画・保存復元できることを確認する
-- ⬜ **P9-015** — architecture/specification/ROADMAPと検証結果を同期し、Phase 9の完了条件を満たしたことを記録する
+- ✅ **P9-012** — Save Dataを3軸stateへ更新し、Save format 2とsave/load round-trip testを更新する
+- ✅ **P9-013** — 3D Spatial Index / tick / snapshot / Protocol benchmarkを更新し、3D化直前commitとの同一runner比較結果を[`docs/development/performance-benchmark.md`](docs/development/performance-benchmark.md)へ記録する
+- ✅ **P9-014** — 同一水平位置・異高度Agentを実Server→Browser→`THREE.InstancedMesh`までE2E検証し、Save→Load→Protocol 2.0統合testでも高度保持を確認する
+- ✅ **P9-015** — architecture / specification / ROADMAPと検証結果を同期し、Phase 9の完了条件を記録する
+
+### Phase 9 closeout evidence
+
+- Protocolは2D fallbackを持たない2.0 contract、Save Dataは3D必須のformat 2。
+- Web Client subscriptionは固定高度bandを廃止し、OrthographicCameraのnear/farを含む8 frustum cornerから3D AABBを算出する。
+- Server外部subscriptionはXYZ cell budgetで制限し、Simulation内部の巨大疎volume queryはoccupied-cell走査へadaptiveに切り替える。
+- Browser E2Eはhelper値ではなく実`InstancedMesh` instance matrixの高度差を観測する。
+- 3D化直前 `2ada7e8736c7d93038f3291fd7db154f58db09e0` とPhase 9 closeout候補を同一GitHub runnerで比較し、通常Spatial Query / Snapshot / Protocolはほぼ横ばい、100,000 Agent tick p99は1.3878msで30Hz budgetの約4.2%であることを記録した。
+- PR #44のcloseout検証で CI、Dependency Review、Phase 6 E2E、Phase 7 benchmark、Phase 9 regression benchmarkが成功する構成を確認した。
 
 ### Phase 9 の非対象
 
@@ -385,12 +86,9 @@ Phase 9では3D座標を正本として扱える基盤までを完成させ、�
 - 地下・高架を考慮したpathfindingルール
 - 旧Save formatから新formatへのmigration
 
-</details>
-
 ---
 
-<details>
-<summary><strong>将来 Backlog</strong></summary>
+## 将来 Backlog
 
 以下は**テーマ**であり、完了状態記号の対象ではありません。着手するときに、その時点の設計に合わせて上記と同程度の粒度へ分解します。
 
@@ -427,5 +125,3 @@ Phase 9では3D座標を正本として扱える基盤までを完成させ、�
 3. How の重要判断が必要なら `docs/architecture/` / ADR を作成・更新する。
 4. 1つずつ完了判定できるTaskへ分割する。
 5. 最初の数項目だけを優先順に並べ、巨大な一括実装を始めない。
-
-</details>
