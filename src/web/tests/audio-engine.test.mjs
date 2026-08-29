@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { AudioEngine, resolveAudioListenerPose, resolveMasterGain } from '../src/audio-engine.ts';
+import {
+  AudioEngine,
+  resolveAudioListenerPose,
+  resolveMasterGain,
+  simulationToAudioPosition,
+} from '../src/audio-engine.ts';
 
 test('AudioEngine falls back when Web Audio API is unavailable', async () => {
   const engine = new AudioEngine();
@@ -23,7 +28,14 @@ test('audio gain boundaries reject non-finite values', () => {
   assert.throws(() => engine.setCategoryVolume('world', Number.NEGATIVE_INFINITY), RangeError);
 });
 
-test('listener pose uses the ground-plane position and orthogonal camera basis', () => {
+test('Simulation audio position maps altitude onto Web Audio Y', () => {
+  assert.deepEqual(
+    simulationToAudioPosition({ x: 12, y: 34, z: 56 }),
+    { x: 12, y: 56, z: 34 },
+  );
+});
+
+test('listener pose preserves camera altitude and orthogonal camera basis', () => {
   const pose = resolveAudioListenerPose({
     matrixWorld: {
       elements: [
@@ -35,7 +47,7 @@ test('listener pose uses the ground-plane position and orthogonal camera basis',
     },
   });
 
-  assert.deepEqual(pose?.position, { x: 12, y: 0, z: 34 });
+  assert.deepEqual(pose?.position, { x: 12, y: 500, z: 34 });
   assert.equal(Math.abs(pose?.direction.x ?? Number.NaN), 0);
   assert.equal(pose?.direction.y, -1);
   assert.equal(Math.abs(pose?.direction.z ?? Number.NaN), 0);
@@ -46,14 +58,13 @@ test('listener pose uses the ground-plane position and orthogonal camera basis',
   assert.equal(Math.abs(dot), 0);
 });
 
-test('listener pose rejects non-finite camera matrix values', () => {
+test('listener pose rejects non-finite camera matrix values including altitude', () => {
   const elements = [
     1, 0, 0, 0,
     0, 0, -1, 0,
     0, 1, 0, 0,
-    12, 500, 34, 1,
+    12, Number.NaN, 34, 1,
   ];
-  elements[12] = Number.NaN;
 
   assert.equal(resolveAudioListenerPose({ matrixWorld: { elements } }), null);
 });
