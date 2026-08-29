@@ -9,15 +9,16 @@
 - 同一デザインの単なるリサイズ・WebP変換・favicon化などは原本として増やさず、派生アセットとして扱う。
 - デザイン自体を更新した新しいマスターは、旧原本を必要に応じて履歴に残したうえで差し替える。
 - Web Clientからこのディレクトリを直接runtime参照しない。必要な形式・サイズへ変換したファイルをWeb側のasset領域へ配置する。
-- 原本を追加するときは、必要に応じてSHA-256を併記し、意図しない再圧縮や差し替えを検出できるようにする。
+- チャット添付やプレビュー表示から得たハッシュ値ではなく、Repositoryへ保存された原本そのものを正として扱う。
 
 ## 原本台帳
 
 | ファイル | 用途 | 原本情報 |
 | --- | --- | --- |
-| `machiverseworks-social-preview.png` | GitHub Social Preview / プロジェクト紹介用横長ビジュアル | 1774×887 px / 2,335,044 bytes / SHA-256: `33da21333949b7d05cd5d6ee9b1ebaa0ef1d8717f54e91f3fc835163d37bfab2` |
+| `machiverseworks-icon.png` | MachiVerseWorks アイコン原本 | 1254×1254 px / 1,055,908 bytes / Git blob: `6cfb090d167b3b444d748ff1b767c074e1ae2d3a` |
+| `machiverseworks-social-preview.png` | GitHub Social Preview / プロジェクト紹介用横長ビジュアル原本 | 1774×887 px / 1,457,352 bytes / Git blob: `cf132be818346d9169321fd9f69f5c8a92ef4367` |
 
-`machiverseworks-social-preview.png` のチェックサムは `machiverseworks-social-preview.png.sha256` にも保存します。
+Git blob ID はRepository内の原本同一性確認用です。外部配布用にSHA-256等が必要になった場合は、Repositoryから取得した原本ファイルに対して生成します。
 
 ## 大容量ファイル
 
