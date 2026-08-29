@@ -29,6 +29,7 @@ const initialSpawnStates = new Map();
 let connectionState = 'disconnected';
 let protocolError = null;
 let clientError = null;
+let negotiatedTickRate = null;
 let sawUpdate = false;
 let sawRemove = false;
 let altitudeSeparation = null;
@@ -47,6 +48,10 @@ const connection = new MachiVerseConnection(
               x: message.x,
               y: message.y,
               z: message.z,
+              velocityX: message.velocityX,
+              velocityY: message.velocityY,
+              velocityZ: message.velocityZ,
+              tickCount: message.tickCount,
             });
           }
           store.spawn(message);
@@ -68,7 +73,7 @@ const connection = new MachiVerseConnection(
     onProtocolError: (message) => { protocolError = new Error(`Protocol error ${String(message.code)}.`); },
     onClientError: (error) => { clientError = error; },
     onDisconnected: () => { store.clear(); },
-    onHelloAck: () => {},
+    onHelloAck: (_version, tickRate) => { negotiatedTickRate = tickRate; },
     onFrameDecoded: (metrics) => clientMetrics.recordDecode(metrics.frameBytes, metrics.decodeTimeMs),
   },
 );
@@ -169,21 +174,33 @@ async function runNearbyScenario() {
 
 async function runAltitudeScenario() {
   connection.setSubscription({
-    minX: -1,
-    minY: -1,
+    minX: -128,
+    minY: -128,
     minZ: 0,
-    maxX: 1,
-    maxY: 1,
+    maxX: 128,
+    maxY: 128,
     maxZ: 120,
   });
-  await waitUntil(() => store.size === expectedTotal, 'same-horizontal-position altitude agents received');
+  await waitUntil(() => store.size === expectedTotal, 'altitude agents received');
   await waitUntil(() => initialSpawnStates.size === expectedTotal, 'initial altitude AgentSpawn states recorded');
   await waitUntil(() => sawUpdate, 'altitude agents received updates');
+  assert(Number.isInteger(negotiatedTickRate) && negotiatedTickRate > 0, 'server tick rate was negotiated');
 
   const spawnStates = [...initialSpawnStates.values()];
-  assert(spawnStates.every((agent) => agent.x === 0 && agent.y === 0), 'altitude agents spawned at the same horizontal position');
-  const initialAltitudes = new Set(spawnStates.map((agent) => agent.z.toFixed(6)));
-  assert(initialAltitudes.size > 1, 'AgentSpawn preserves distinct altitudes');
+  const reconstructedOrigins = spawnStates.map((agent) => {
+    const elapsedSeconds = Number(agent.tickCount) / negotiatedTickRate;
+    return {
+      x: agent.x - agent.velocityX * elapsedSeconds,
+      y: agent.y - agent.velocityY * elapsedSeconds,
+      z: agent.z - agent.velocityZ * elapsedSeconds,
+    };
+  });
+  assert(
+    reconstructedOrigins.every((agent) => nearlyEqual(agent.x, 0) && nearlyEqual(agent.y, 0)),
+    'delivered AgentSpawn state reconstructs the same initial horizontal position',
+  );
+  const initialAltitudes = new Set(reconstructedOrigins.map((agent) => agent.z.toFixed(6)));
+  assert(initialAltitudes.size > 1, 'AgentSpawn preserves distinct initial altitudes');
 
   const agents = [...store.sample(performance.now())];
   assert(agents.length === expectedTotal, 'all altitude agents are present in EntityStore');
@@ -242,6 +259,10 @@ function assert(condition, description) {
   if (!condition) {
     throw new Error(`Assertion failed: ${description}.`);
   }
+}
+
+function nearlyEqual(left, right, epsilon = 1e-6) {
+  return Math.abs(left - right) <= epsilon;
 }
 
 function sleep(durationMs) {
