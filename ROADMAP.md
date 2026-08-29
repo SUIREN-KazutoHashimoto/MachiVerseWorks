@@ -44,11 +44,13 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 - 状態記号を付けるのは、単独で完了判定できる作業だけとする。
 - 1タスクは原則として「1つの観測可能な成果」を持つ。
 - 1タスク内に独立した成果が複数ある場合は分割する。
+- E2E、benchmark、docs同期のように独立して完了可能な成果は、それぞれ別Taskとする。
 - コード変更では、必要な build / test / benchmark / 実機確認まで含めて完了とする。
 - 仕様や設計を変更した場合は、対応する docs / ADR の更新まで含めて完了とする。
 - Protocol version / Save format version は application `VERSION` と独立して、互換性が変わるときだけ更新する。
 - 「ほぼ完了」「一部完了」は ✅ にしない。残作業を別Taskへ明示的に切り出した場合のみ元Taskを完了にできる。
 - 作業中に新しい依存関係が見つかった場合は、後続PhaseのTaskを更新してから実装を進める。
+- Phaseから外した計画済み項目は暗黙に削除せず、対応Phaseまたは継続Backlogへ必ず移す。
 - 完了済みPhaseの詳細は必要に応じて `docs/archive/` へ移し、現行ROADMAPを次の判断に使いやすく保つ。
 
 ## Phase 10以降の依存順
@@ -172,37 +174,29 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 > **依存:** Phase 10  
 > 道路・交差点接続・車線を、経路探索と交通Simulationが利用できる3D topologyとして確立する。
 
-### 道路モデル
-
 - ⬜ **P11-001** — Road Networkの軸・接続・方向・高度・道路種別の正本契約を仕様化する
 - ⬜ **P11-002** — RoadNode / RoadSegmentのstable IDと3D geometryを実装する
 - ⬜ **P11-003** — Laneの方向・幅・速度上限・segment内順序を表すモデルを実装する
 - ⬜ **P11-004** — Lane間の進入・退出・turn connectionを明示するtopologyを実装する
 - ⬜ **P11-005** — 基本的なintersection nodeを表現し、接続妥当性を検証する
 - ⬜ **P11-006** — RoadとBuilding / POI access pointの接続境界を定義する
-
-### Simulation・保存・配信
-
 - ⬜ **P11-007** — Road Network storeと3D spatial queryをSimulationへ追加する
 - ⬜ **P11-008** — Road追加・更新・削除時にdangling connectionを残さないatomic commandを実装する
-- ⬜ **P11-009** — Road Networkをsnapshot / checkpoint / Save Dataへ含める
-- ⬜ **P11-010** — Road / Lane topologyのProtocol配信契約を追加する
-- ⬜ **P11-011** — Serverがsubscription volume内のRoad geometryを配信する経路を実装する
-
-### Web Client・検証
-
-- ⬜ **P11-012** — Web ClientでRoad Segment / Laneを3D geometryとして描画する
-- ⬜ **P11-013** — 高架・地下・交差するが接続しない道路を視覚的・topology的に区別するtest fixtureを追加する
-- ⬜ **P11-014** — 不正接続・自己参照・重複connection・範囲外座標のvalidation testを追加する
-- ⬜ **P11-015** — Road NetworkのSave→Server→Browser E2Eを追加する
-- ⬜ **P11-016** — 大規模Road/Lane topologyのmemory・query・配信benchmarkを記録する
-- ⬜ **P11-017** — Road Networkのspecification / architecture / ROADMAPを実装結果へ同期する
+- ⬜ **P11-009** — 立体交差と接続交差点を区別し、高度だけで誤接続しないvalidationを追加する
+- ⬜ **P11-010** — Road Networkをcheckpoint / Save Dataへ含める
+- ⬜ **P11-011** — Road / Lane / intersection geometryのProtocol配信契約を追加する
+- ⬜ **P11-012** — Serverがsubscription volume内のRoad Networkを配信する
+- ⬜ **P11-013** — Web ClientでRoad / Lane / intersectionを3D描画する
+- ⬜ **P11-014** — 高架・地下・立体交差を含むdeterministic Road fixtureを追加する
+- ⬜ **P11-015** — Road topologyのSave→Server→Browser E2Eを追加する
+- ⬜ **P11-016** — 10,000 / 100,000 RoadSegment級のtopology・spatial query benchmarkを記録する
+- ⬜ **P11-017** — Road Networkのspecification / architecture / ROADMAPを同期する
 
 ### Phase 11 完了条件
 
-- Road / Laneが3D topologyとして正しく接続され、高架・地下を含めて接続有無を表現できる。
-- 後続RoutingがSimulation内部構造へ密結合せず利用できる明確なgraph境界がある。
-- Road Networkを保存・配信・描画できる。
+- 道路・車線・交差点接続を3D topologyとして一意に表現できる。
+- 高架・地下の交差が誤って接続されない。
+- Road Networkを保存・subscription配信・Browser描画できる。
 
 ---
 
@@ -210,27 +204,28 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 
 > **状態: ⬜ 未着手**  
 > **依存:** Phase 11  
-> Road Network上で、決定的・検証可能・キャッシュ可能な経路探索を提供する。
+> Road / Lane topology上で決定的な経路探索を行い、後続交通modeが共有できるRoute契約を作る。
 
-- ⬜ **P12-001** — Route request / result / costの正本契約と失敗理由を仕様化する
-- ⬜ **P12-002** — Road/Lane topologyからrouting graphを構築する境界を実装する
-- ⬜ **P12-003** — 3D位置またはaccess pointをrouting graphへsnapする処理を実装する
-- ⬜ **P12-004** — 距離costによるbaseline shortest-path探索を実装する
-- ⬜ **P12-005** — Lane方向・turn connection・進入禁止を探索時に強制する
+- ⬜ **P12-001** — Route request / result / routing costの責務とstable ID参照契約を仕様化する
+- ⬜ **P12-002** — Road/Lane topologyからrouting graphを構築する
+- ⬜ **P12-003** — 起点・終点を最寄り有効Laneへresolveする処理を実装する
+- ⬜ **P12-004** — 最短距離を基準にした決定的なpathfindingを実装する
+- ⬜ **P12-005** — turn restriction / one-way / closed laneをrouting制約へ反映する
 - ⬜ **P12-006** — 速度上限を使った推定所要時間costを追加する
 - ⬜ **P12-007** — 同一入力でstableなRouteを返すdeterministic tie-break ruleを実装する
 - ⬜ **P12-008** — RouteをLane sequenceとsegment progressとして表すimmutable resultを実装する
 - ⬜ **P12-009** — Route cacheのkey・容量・eviction方針を定義して実装する
 - ⬜ **P12-010** — Road topology変更時に影響Route cacheを安全にinvalidateする
-- ⬜ **P12-011** — 到達不能・孤立graph・高架/地下誤接続を含むrouting regression testを追加する
-- ⬜ **P12-012** — 小/中/大規模graphで探索時間・allocation・cache hitのbenchmarkを記録する
-- ⬜ **P12-013** — Routingのspecification / architecture / ROADMAPを実装結果へ同期する
+- ⬜ **P12-011** — 地下・高架・立体交差を含む3D接続制約をroutingへ反映する
+- ⬜ **P12-012** — 到達不能・孤立graph・高架/地下誤接続を含むrouting regression testを追加する
+- ⬜ **P12-013** — 小/中/大規模graphで探索時間・allocation・cache hitのbenchmarkを記録する
+- ⬜ **P12-014** — Routingのspecification / architecture / ROADMAPを同期する
 
 ### Phase 12 完了条件
 
 - 任意の有効な起点・終点について、Road/Lane制約に従うRouteを決定的に取得できる。
 - topology変更後に古いRoute cacheを使用しない。
-- 大規模graphでの探索costが計測可能である。
+- 立体構造を誤接続せず、大規模graphでの探索costを計測できる。
 
 ---
 
@@ -239,8 +234,6 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 > **状態: ⬜ 未着手**  
 > **依存:** Phase 12  
 > VehicleがRouteに従ってLane上を移動し、交通密度と前走車の影響を受ける最小道路交通Simulationを作る。
-
-### Vehicle・走行
 
 - ⬜ **P13-001** — Vehicle entity・stable ID・寸法・性能値・状態遷移を仕様化する
 - ⬜ **P13-002** — Vehicle storeとspawn / despawn lifecycleをSimulationへ追加する
@@ -251,9 +244,6 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 - ⬜ **P13-007** — Routeに必要なLane変更を安全に実行する最小lane-change ruleを実装する
 - ⬜ **P13-008** — Lane終端で次Laneへ進むtransitionとRoute completionを実装する
 - ⬜ **P13-009** — 衝突・逆走・Lane外progressなどのtraffic invariantを検証する
-
-### 保存・配信・描画
-
 - ⬜ **P13-010** — Vehicle stateをcheckpoint / Save Dataへ含め、継続実行のdeterminismを確認する
 - ⬜ **P13-011** — Vehicle spawn/update/removeをProtocolへ追加する
 - ⬜ **P13-012** — Serverがsubscription volume内Vehicleだけを配信する
@@ -261,7 +251,7 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 - ⬜ **P13-014** — traffic density / average speed / queue lengthの基礎metricsを計測可能にする
 - ⬜ **P13-015** — 複数VehicleがRouteを完走する実Server→Browser E2Eを追加する
 - ⬜ **P13-016** — 1,000 / 10,000 / 100,000 Vehicle級のtick・occupancy・snapshot benchmarkを記録する
-- ⬜ **P13-017** — Road Trafficのspecification / architecture / ROADMAPを実装結果へ同期する
+- ⬜ **P13-017** — Road Trafficのspecification / architecture / ROADMAPを同期する
 
 ### Phase 13 完了条件
 
@@ -289,14 +279,15 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 - ⬜ **P14-010** — Signal stateをProtocol / ServerからClientへ配信する
 - ⬜ **P14-011** — Web Clientで信号現示・stop line・queueをdebug可視化する
 - ⬜ **P14-012** — 複数交差点・右左折・高負荷queueのdeterministic regression testを追加する
-- ⬜ **P14-013** — 信号付きRoad TrafficのE2Eとintersection throughput benchmarkを追加する
-- ⬜ **P14-014** — Intersection / Signalのspecification / architecture / ROADMAPを実装結果へ同期する
+- ⬜ **P14-013** — 信号付きRoad Trafficを実Server→Browserで検証するE2Eを追加する
+- ⬜ **P14-014** — intersection throughput / queue処理のbenchmarkを記録する
+- ⬜ **P14-015** — Intersection / Signalのspecification / architecture / ROADMAPを同期する
 
 ### Phase 14 完了条件
 
 - Vehicleが交差点競合と信号現示を無視して侵入しない。
 - queue・signal stateを保存復元・配信・可視化できる。
-- 交差点がTraffic Simulationの主要な性能劣化点になった場合に測定できるbenchmarkがある。
+- 交差点処理の性能を独立benchmarkで追跡できる。
 
 ---
 
@@ -348,8 +339,9 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 - ⬜ **P16-010** — Pedestrian stateをcheckpoint / Save Dataへ含める
 - ⬜ **P16-011** — PedestrianをProtocol / Serverでsubscription配信する
 - ⬜ **P16-012** — Web ClientでPedestrianをinstance描画・補間する
-- ⬜ **P16-013** — Building間徒歩TripのE2Eと大規模Pedestrian benchmarkを追加する
-- ⬜ **P16-014** — Pedestrianのspecification / architecture / ROADMAPを同期する
+- ⬜ **P16-013** — Building間徒歩Tripを実Server→Browserで検証するE2Eを追加する
+- ⬜ **P16-014** — 大規模Pedestrianのtick・routing・occupancy benchmarkを記録する
+- ⬜ **P16-015** — Pedestrianのspecification / architecture / ROADMAPを同期する
 
 ### Phase 16 完了条件
 
@@ -362,7 +354,7 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 ## Phase 17 — Railway Infrastructure
 
 > **状態: ⬜ 未着手**  
-> **依存:** Phase 10 / 11  
+> **依存:** Phase 10 / 11 / 16  
 > 線路・分岐・block・駅・ホーム・車庫を、列車運行が利用できる3D railway topologyとして確立する。
 
 - ⬜ **P17-001** — Railway Infrastructureの軸・接続・track gauge・方向・高度契約を仕様化する
@@ -378,13 +370,15 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 - ⬜ **P17-011** — Track / Station / PlatformのProtocol配信契約を追加する
 - ⬜ **P17-012** — Web ClientでTrack / Station / Platformを3D描画する
 - ⬜ **P17-013** — 高架・地下・複線・分岐・駅を含むdeterministic fixtureを追加する
-- ⬜ **P17-014** — Railway InfrastructureのE2E・topology benchmark・docs同期を完了する
+- ⬜ **P17-014** — Railway InfrastructureのSave→Server→Browser E2Eを追加する
+- ⬜ **P17-015** — 大規模Railway topologyのquery・validation benchmarkを記録する
+- ⬜ **P17-016** — Railway Infrastructureのspecification / architecture / ROADMAPを同期する
 
 ### Phase 17 完了条件
 
 - Train operationが利用できる連続したtrack topology・block・station・platformが存在する。
 - 道路同様、立体交差と接続を混同しない。
-- Infrastructureを保存・配信・描画できる。
+- Infrastructureを保存・配信・描画でき、pedestrian networkからPlatformへ到達できる。
 
 ---
 
@@ -408,7 +402,8 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 - ⬜ **P18-012** — Train位置・service・delay・platform stateをProtocol / Serverで配信する
 - ⬜ **P18-013** — Web ClientでTrainを描画し、駅の発着情報をdebug表示する
 - ⬜ **P18-014** — 複数列車・複数駅・遅延を含む1運行周期のdeterministic E2Eを追加する
-- ⬜ **P18-015** — 大規模Train/Service数のtick・routing・block処理benchmarkとdocs同期を完了する
+- ⬜ **P18-015** — 大規模Train/Service数のtick・routing・block処理benchmarkを記録する
+- ⬜ **P18-016** — Railway Operationsのspecification / architecture / ROADMAPを同期する
 
 ### Phase 18 完了条件
 
@@ -437,8 +432,9 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 - ⬜ **P19-011** — Multimodal transit stateをcheckpoint / Save Dataへ含める
 - ⬜ **P19-012** — Transit line / realtime vehicle / arrival estimateをProtocol / Serverで配信する
 - ⬜ **P19-013** — Web Clientでroute・stop・vehicle・arrival情報をdebug表示する
-- ⬜ **P19-014** — 徒歩→鉄道→徒歩、Bus、Taxiを含むE2Eとjourney-planning benchmarkを追加する
-- ⬜ **P19-015** — Multimodal Transitのspecification / architecture / ROADMAPを同期する
+- ⬜ **P19-014** — 徒歩→鉄道→徒歩、Bus、Taxiを含むTripを実Server→Browserで検証するE2Eを追加する
+- ⬜ **P19-015** — journey planning / transfer / dispatchのbenchmarkを記録する
+- ⬜ **P19-016** — Multimodal Transitのspecification / architecture / ROADMAPを同期する
 
 ### Phase 19 完了条件
 
@@ -467,8 +463,9 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 - ⬜ **P20-011** — Economy stateをcheckpoint / Save Dataへ含める
 - ⬜ **P20-012** — employment / income / company / productionの集計statisticsをServer配信可能にする
 - ⬜ **P20-013** — Web Clientで選択Company / Householdと経済統計をdebug表示する
-- ⬜ **P20-014** — 複数日経済cycleのdeterministic testと大規模Actor benchmarkを追加する
-- ⬜ **P20-015** — Economyのspecification / architecture / ROADMAPを同期する
+- ⬜ **P20-014** — 複数日economic cycleのdeterministic integration testを追加する
+- ⬜ **P20-015** — 大規模Economic Actorのtick・planner・memory benchmarkを記録する
+- ⬜ **P20-016** — Economyのspecification / architecture / ROADMAPを同期する
 
 ### Phase 20 完了条件
 
@@ -496,8 +493,9 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 - ⬜ **P21-010** — Logistics stateをcheckpoint / Save Dataへ含める
 - ⬜ **P21-011** — Shipment / inventory / freight statisticsをProtocol / Serverで配信する
 - ⬜ **P21-012** — Web ClientでFreight Vehicle / Shipment / inventoryをdebug表示する
-- ⬜ **P21-013** — 生産→配送→在庫補充のE2Eと大規模Shipment benchmarkを追加する
-- ⬜ **P21-014** — Logistics / Freightのspecification / architecture / ROADMAPを同期する
+- ⬜ **P21-013** — 生産→配送→在庫補充を実Server→Browserで検証するE2Eを追加する
+- ⬜ **P21-014** — 大規模Shipment / Inventoryのtick・routing・memory benchmarkを記録する
+- ⬜ **P21-015** — Logistics / Freightのspecification / architecture / ROADMAPを同期する
 
 ### Phase 21 完了条件
 
@@ -524,8 +522,9 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 - ⬜ **P22-009** — Power stateをcheckpoint / Save Dataへ含める
 - ⬜ **P22-010** — Power topology / supply / demand / outageをProtocol / Serverで配信する
 - ⬜ **P22-011** — Web ClientでPower networkと供給状態をdebug可視化する
-- ⬜ **P22-012** — 需要変動・generator停止・outage復旧のdeterministic E2Eを追加する
-- ⬜ **P22-013** — 大規模Power node/loadのtick・topology benchmarkとdocs同期を完了する
+- ⬜ **P22-012** — 需要変動・generator停止・outage復旧を検証するdeterministic E2Eを追加する
+- ⬜ **P22-013** — 大規模Power node/loadのtick・topology benchmarkを記録する
+- ⬜ **P22-014** — Power Infrastructureのspecification / architecture / ROADMAPを同期する
 
 ### Phase 22 完了条件
 
@@ -708,6 +707,29 @@ Phase 9終了時点で列挙していた将来Backlogは、以下の通りPhase 
 | Container image | Phase 25 |
 | Mod / extension architecture | Phase 26 |
 | Additional locales | Phase 26 |
+
+## Phase 9から継続する計画済み項目
+
+Phase 9では「3D座標を正本として扱える基盤」までを完了とし、具体的な物理・地形ルールは後続へ分離していた。Phase 10〜26へ直接割り当てられない項目も消さず、現行Backlogとして保持する。
+
+| Phase 9で非対象とした項目 | 現在の扱い |
+| --- | --- |
+| 道路・線路・建物ごとの高度制約 | Phase 10 / 11 / 17の3D geometry・topology・validationで扱う |
+| 地下・高架を考慮したpathfinding | Phase 12で扱う |
+| 旧Save formatから新formatへのmigration | Phase 25で扱う |
+| 重力・落下・ジャンプ等の垂直物理 | 継続Backlog（Phase未割当） |
+| 飛行・空中移動等のairborne movement | 継続Backlog（Phase未割当） |
+| terrain model / terrain collision | 継続Backlog（Phase未割当） |
+| ground snapping / surface追従 | 継続Backlog（Phase未割当） |
+
+### 継続Backlog（Phase未割当）
+
+以下は計画済みだが、Phase 10〜26の完了に必須とはしない。着手時に独立Phaseまたは既存Phaseへの追加Taskとして分解する。
+
+- Physics Foundation — 重力、落下、ジャンプ、垂直速度・加速度、物理stateのSave / Protocol / E2E
+- Airborne Movement — 飛行可能Entity、空中経路、飛行高度ルール、3D空間交通との競合境界
+- Terrain Foundation — terrain height / surface / slopeの正本モデル、3D spatial query、Save / Protocol / Web描画
+- Terrain Interaction — terrain collision、ground snapping、surface追従、道路・建物・Pedestrianとの接続
 
 ## 新規Backlogの扱い
 
