@@ -2,16 +2,16 @@
 
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 0 — リポジトリ初期セットアップ完了  
-> **次の実装タスク:** `SKL-001` — ルートに `MachiVerseWorks.slnx` を作成する
+> **現在:** Phase 1 — 開発プロジェクト骨格完了  
+> **次の実装タスク:** `SIM-001` — Simulation の tick rate を保持する設定型を作る
 
 ## 全体の現在地
 
 | Phase | 内容 | 状態 |
 | --- | --- | --- |
 | 0 | リポジトリ初期セットアップ | ✅ 完了 |
-| 1 | 開発プロジェクト骨格 | ⏭️ 次 |
-| 2 | Simulation Core 最小 PoC | ⏳ 待機 |
+| 1 | 開発プロジェクト骨格 | ✅ 完了 |
+| 2 | Simulation Core 最小 PoC | ⏭️ 次 |
 | 3 | Protocol 最小実装 | ⏳ 待機 |
 | 4 | Headless Server 最小実装 | ⏳ 待機 |
 | 5 | Web Client 最小実装 | ⏳ 待機 |
@@ -29,7 +29,7 @@ Task ID は参照用の固定IDです。並び替えても変更しません。
 
 ## 初期セットアップ
 
-`SET-001` から `SET-021` まで完了しました。通常開発への移行が明示されるまでは、`AGENTS.md` の初期セットアップ例外に従い application version のカウントアップとルート `VERSION` の作成は行いません。
+`SET-001` から `SET-021` まで完了しました。Phase 1 の着手時点で通常開発へ移行し、以後は `AGENTS.md` の通常開発ルールに従ってルート `VERSION` を application version の正本として運用します。
 
 <details>
 <summary><strong>ROADMAP 運用ルール</strong></summary>
@@ -81,50 +81,50 @@ Task ID は参照用の固定IDです。並び替えても変更しません。
 
 ## Phase 1 — 開発プロジェクト骨格
 
-> **状態: ⏭️ 次**  
+> **状態: ✅ 完了**  
 > 通常開発への移行後、C# Solution と Web Client の最小骨格を作り、既存CIを実際のbuildへ接続する。
 
 ### .NET Solution
 
-- ⬜ **SKL-001** — ルートに `MachiVerseWorks.slnx` を作成する
-- ⬜ **SKL-002** — `MachiVerseWorks.Simulation` の `.csproj` を作成する
-- ⬜ **SKL-003** — `MachiVerseWorks.Protocol` の `.csproj` を作成する
-- ⬜ **SKL-004** — `MachiVerseWorks.Server` の `.csproj` を作成する
-- ⬜ **SKL-005** — `MachiVerseWorks.Benchmarks` の `.csproj` を作成する
-- ⬜ **SKL-006** — `MachiVerseWorks.Simulation.Tests` の `.csproj` を作成する
-- ⬜ **SKL-007** — `MachiVerseWorks.Protocol.Tests` の `.csproj` を作成する
-- ⬜ **SKL-008** — `MachiVerseWorks.Server.Tests` の `.csproj` を作成する
-- ⬜ **SKL-009** — Solution に全 C# project を登録する
-- ⬜ **SKL-010** — ProjectReference の依存方向を設定する
-- ⬜ **SKL-011** — 空の状態で `dotnet restore` が成功することを確認する
-- ⬜ **SKL-012** — 空の状態で Release build が成功することを確認する
-- ⬜ **SKL-013** — 空の状態で全 test project が成功することを確認する
+- ✅ **SKL-001** — ルートに `MachiVerseWorks.slnx` を作成する
+- ✅ **SKL-002** — `MachiVerseWorks.Simulation` の `.csproj` を作成する
+- ✅ **SKL-003** — `MachiVerseWorks.Protocol` の `.csproj` を作成する
+- ✅ **SKL-004** — `MachiVerseWorks.Server` の `.csproj` を作成する
+- ✅ **SKL-005** — `MachiVerseWorks.Benchmarks` の `.csproj` を作成する
+- ✅ **SKL-006** — `MachiVerseWorks.Simulation.Tests` の `.csproj` を作成する
+- ✅ **SKL-007** — `MachiVerseWorks.Protocol.Tests` の `.csproj` を作成する
+- ✅ **SKL-008** — `MachiVerseWorks.Server.Tests` の `.csproj` を作成する
+- ✅ **SKL-009** — Solution に全 C# project を登録する
+- ✅ **SKL-010** — ProjectReference の依存方向を設定する
+- ✅ **SKL-011** — 空の状態で `dotnet restore` が成功することを確認する
+- ✅ **SKL-012** — 空の状態で Release build が成功することを確認する
+- ✅ **SKL-013** — 空の状態で全 test project が成功することを確認する
 
 ### Web Client
 
-- ⬜ **SKL-014** — Web Client の採用パッケージとversion方針を決める
-- ⬜ **SKL-015** — `src/web/package.json` を作成する
-- ⬜ **SKL-016** — npm lockfile を作成する
-- ⬜ **SKL-017** — Node.js version固定ファイルを追加する
-- ⬜ **SKL-018** — TypeScript 設定を追加する
-- ⬜ **SKL-019** — Vite の最小構成を追加する
-- ⬜ **SKL-020** — Three.js の最小依存を追加する
-- ⬜ **SKL-021** — ブラウザに空の MachiVerseWorks 画面を表示できるようにする
-- ⬜ **SKL-022** — Web Client の lint / typecheck script を用意する
-- ⬜ **SKL-023** — Web Client の最小 build を成功させる
+- ✅ **SKL-014** — Web Client の採用パッケージとversion方針を決める
+- ✅ **SKL-015** — `src/web/package.json` を作成する
+- ✅ **SKL-016** — npm lockfile を作成する
+- ✅ **SKL-017** — Node.js version固定ファイルを追加する
+- ✅ **SKL-018** — TypeScript 設定を追加する
+- ✅ **SKL-019** — Vite の最小構成を追加する
+- ✅ **SKL-020** — Three.js の最小依存を追加する
+- ✅ **SKL-021** — ブラウザに空の MachiVerseWorks 画面を表示できるようにする
+- ✅ **SKL-022** — Web Client の lint / typecheck script を用意する
+- ✅ **SKL-023** — Web Client の最小 build を成功させる
 
 ### CI 連携
 
-- ⬜ **SKL-024** — CI の `dotnet` job が実行され成功することを確認する
-- ⬜ **SKL-025** — CI の `web` job が実行され成功することを確認する
-- ⬜ **SKL-026** — Dependabot に NuGet 更新設定を追加する
-- ⬜ **SKL-027** — Dependabot に npm 更新設定を追加する
-- ⬜ **SKL-028** — 初回実装向けのローカル開発手順を `getting-started.md` に記載する
+- ✅ **SKL-024** — CI の `dotnet` job が実行され成功することを確認する
+- ✅ **SKL-025** — CI の `web` job が実行され成功することを確認する
+- ✅ **SKL-026** — Dependabot に NuGet 更新設定を追加する
+- ✅ **SKL-027** — Dependabot に npm 更新設定を追加する
+- ✅ **SKL-028** — 初回実装向けのローカル開発手順を `getting-started.md` に記載する
 
 ---
 
 <details>
-<summary><strong>Phase 2 — Simulation Core 最小 PoC（待機）</strong></summary>
+<summary><strong>Phase 2 — Simulation Core 最小 PoC（次）</strong></summary>
 
 目標は「都市機能」ではなく、まず多数 Agent を安定して step できる最小コアを作ること。
 
