@@ -1,3 +1,4 @@
+using MachiVerseWorks.Simulation;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace MachiVerseWorks.Persistence.Tests;
@@ -103,5 +104,70 @@ public sealed class WorldSaveSerializerLimitTests
 
         Assert.AreEqual(0UL, world.Time.TickCount);
         Assert.AreEqual(0, world.ActiveAgentCount);
+    }
+
+    [TestMethod]
+    public void SerializeRejectsWorldAboveConfiguredAgentLimitBeforeProducingOutput()
+    {
+        var world = new SimulationWorld();
+        world.CreateAgents(2, new WorldVolume(0, 0, 0, 1, 1, 1));
+        var limits = new WorldSaveLimits(maximumBytes: 1_000_000, maximumAgentCount: 1);
+
+        Assert.ThrowsExactly<InvalidDataException>(() =>
+            WorldSaveSerializer.Serialize(world, limits));
+    }
+
+    [TestMethod]
+    public void SerializeRejectsOutputAboveConfiguredByteLimit()
+    {
+        var world = new SimulationWorld();
+        var baseline = WorldSaveSerializer.Serialize(
+            world,
+            new WorldSaveLimits(maximumBytes: 1_000_000, maximumAgentCount: 10));
+        var limits = new WorldSaveLimits(
+            maximumBytes: baseline.Length - 1,
+            maximumAgentCount: 10);
+
+        Assert.ThrowsExactly<InvalidDataException>(() =>
+            WorldSaveSerializer.Serialize(world, limits));
+    }
+
+    [TestMethod]
+    public void SaveDoesNotWritePartialDataWhenConfiguredOutputLimitIsExceeded()
+    {
+        var world = new SimulationWorld();
+        var baseline = WorldSaveSerializer.Serialize(
+            world,
+            new WorldSaveLimits(maximumBytes: 1_000_000, maximumAgentCount: 10));
+        var limits = new WorldSaveLimits(
+            maximumBytes: baseline.Length - 1,
+            maximumAgentCount: 10);
+        using var destination = new MemoryStream();
+
+        Assert.ThrowsExactly<InvalidDataException>(() =>
+            WorldSaveSerializer.Save(destination, world, limits));
+
+        Assert.AreEqual(0L, destination.Length);
+        Assert.AreEqual(0L, destination.Position);
+    }
+
+    [TestMethod]
+    public void SaveProducedWithConfiguredLimitsCanLoadWithTheSameLimits()
+    {
+        var world = new SimulationWorld(new SimulationConfig(seed: 42));
+        world.CreateAgents(2, new WorldVolume(-1, -1, -1, 1, 1, 1));
+        var baseline = WorldSaveSerializer.Serialize(
+            world,
+            new WorldSaveLimits(maximumBytes: 1_000_000, maximumAgentCount: 2));
+        var limits = new WorldSaveLimits(
+            maximumBytes: baseline.Length,
+            maximumAgentCount: 2);
+
+        var data = WorldSaveSerializer.Serialize(world, limits);
+        var restored = WorldSaveSerializer.Deserialize(data, limits);
+
+        Assert.AreEqual(world.ActiveAgentCount, restored.ActiveAgentCount);
+        Assert.AreEqual(world.TotalCreatedAgentCount, restored.TotalCreatedAgentCount);
+        Assert.AreEqual(world.CreateCheckpoint().RandomState, restored.CreateCheckpoint().RandomState);
     }
 }

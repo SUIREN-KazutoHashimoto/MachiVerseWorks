@@ -28,6 +28,7 @@ public sealed class SimulationWorld
     {
         ValidatePoint(position);
         _spatialIndex.ValidatePosition(position);
+        _agents.EnsureCapacity(1);
         return CreateAgent(position, NextVelocity());
     }
 
@@ -47,6 +48,7 @@ public sealed class SimulationWorld
 
         _spatialIndex.ValidatePosition(new WorldPoint(spawnVolume.MinX, spawnVolume.MinY, spawnVolume.MinZ));
         _spatialIndex.ValidatePosition(new WorldPoint(spawnVolume.MaxX, spawnVolume.MaxY, spawnVolume.MaxZ));
+        _agents.EnsureCapacity(count);
 
         var ids = new AgentId[count];
         for (var index = 0; index < ids.Length; index++)

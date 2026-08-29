@@ -3,14 +3,17 @@ import {
   type AmbientLayerDefinition,
   type AmbientZoneDefinition,
   type Point3D,
+  type ResolvedAmbientLayer,
 } from './audio-policy.ts';
 import type { AudioEngine } from './audio-engine.ts';
+
+const AmbientFadeSeconds = 1.5;
 
 export class AmbientSystem {
   private globalLayers: readonly AmbientLayerDefinition[] = [];
   private zones: readonly AmbientZoneDefinition[] = [];
   private parameters: Readonly<Record<string, number>> = {};
-  private activeKeys = new Set<string>();
+  private activeLayers = new Map<string, ResolvedAmbientLayer>();
 
   public constructor(private readonly audio: AudioEngine) {}
 
@@ -38,16 +41,58 @@ export class AmbientSystem {
   public async update(listener: Point3D): Promise<void> {
     validatePoint(listener, 'Ambient listener');
     const mix = resolveAmbientLayers(this.globalLayers, this.zones, listener, this.parameters);
-    const nextKeys = new Set(mix.map((layer) => layer.key));
-    await Promise.all(
-      mix.map((layer) => this.audio.setAmbientLayer(layer.key, layer.cueId, layer.gain, 1.5)),
-    );
-    await Promise.all(
-      [...this.activeKeys]
-        .filter((key) => !nextKeys.has(key))
-        .map((key) => this.audio.clearAmbientLayer(key, 1.5)),
-    );
-    this.activeKeys = nextKeys;
+    const previousLayers = new Map(this.activeLayers);
+    const desiredLayers = new Map(mix.map((layer) => [layer.key, layer]));
+    const appliedLayers: ResolvedAmbientLayer[] = [];
+
+    try {
+      for (const layer of mix) {
+        await this.audio.setAmbientLayer(layer.key, layer.cueId, layer.gain, AmbientFadeSeconds);
+        appliedLayers.push(layer);
+      }
+    } catch (error) {
+      const rollbackFailures: unknown[] = [];
+      const trackedLayers = new Map(previousLayers);
+      for (let index = appliedLayers.length - 1; index >= 0; index -= 1) {
+        const layer = appliedLayers[index]!;
+        const previous = previousLayers.get(layer.key);
+        try {
+          if (previous === undefined) {
+            await this.audio.clearAmbientLayer(layer.key, AmbientFadeSeconds);
+          } else {
+            await this.audio.setAmbientLayer(previous.key, previous.cueId, previous.gain, AmbientFadeSeconds);
+          }
+        } catch (rollbackError) {
+          rollbackFailures.push(rollbackError);
+          if (previous === undefined) {
+            trackedLayers.set(layer.key, layer);
+          }
+        }
+      }
+      this.activeLayers = trackedLayers;
+      if (rollbackFailures.length > 0) {
+        throw new AggregateError([error, ...rollbackFailures], 'Ambient layer update failed and rollback was incomplete.');
+      }
+      throw error;
+    }
+
+    const staleLayers = [...previousLayers.values()].filter((layer) => !desiredLayers.has(layer.key));
+    for (let index = 0; index < staleLayers.length; index += 1) {
+      const stale = staleLayers[index]!;
+      try {
+        await this.audio.clearAmbientLayer(stale.key, AmbientFadeSeconds);
+      } catch (error) {
+        const trackedLayers = new Map(desiredLayers);
+        for (let remaining = index; remaining < staleLayers.length; remaining += 1) {
+          const uncleared = staleLayers[remaining]!;
+          trackedLayers.set(uncleared.key, uncleared);
+        }
+        this.activeLayers = trackedLayers;
+        throw error;
+      }
+    }
+
+    this.activeLayers = desiredLayers;
   }
 }
 
@@ -78,9 +123,9 @@ function validateLayer(layer: AmbientLayerDefinition, label: string): void {
 }
 
 function validatePoint(point: Point3D, label: string): void {
-  validateFinite(point.x, `${label} x`);
-  validateFinite(point.y, `${label} y`);
-  validateFinite(point.z, `${label} z`);
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || !Number.isFinite(point.z)) {
+    throw new RangeError(`${label} coordinates must be finite.`);
+  }
 }
 
 function validateFinite(value: number, label: string): void {

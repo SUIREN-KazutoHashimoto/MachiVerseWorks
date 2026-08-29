@@ -15,9 +15,28 @@ internal sealed class AgentStore
 
     public ulong NextId => _nextId;
 
+    public void EnsureCapacity(int count)
+    {
+        if (count < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(count), count, "Agent count cannot be negative.");
+        }
+        if (count == 0)
+        {
+            return;
+        }
+
+        var availableIds = ulong.MaxValue - _nextId;
+        if ((ulong)count > availableIds)
+        {
+            throw new OverflowException("Agent ID space does not have enough capacity for the requested creation operation.");
+        }
+    }
+
     public AgentId Add(WorldPoint position, WorldVector velocity, SpatialIndex spatialIndex)
     {
         spatialIndex.ValidatePosition(position);
+        EnsureCapacity(1);
         var id = new AgentId(_nextId);
         var nextId = checked(_nextId + 1);
 

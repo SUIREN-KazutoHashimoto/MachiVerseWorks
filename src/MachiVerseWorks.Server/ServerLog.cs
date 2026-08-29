@@ -43,4 +43,7 @@ internal static partial class ServerLog
         long bytes,
         double encodeTimeMs,
         double sendTimeMs);
+
+    [LoggerMessage(11, LogLevel.Critical, "Unexpected snapshot delivery failure for connection {ConnectionId}.")]
+    public static partial void UnexpectedSnapshotDeliveryFailure(ILogger logger, Guid connectionId, Exception exception);
 }

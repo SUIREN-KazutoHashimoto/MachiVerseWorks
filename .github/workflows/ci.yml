@@ -114,6 +114,37 @@ jobs:
 
           print(f"Application version: {value}")
 
+      - name: Reject application version regression against PR base
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$BASE_REF"
+          base_version="$(git show FETCH_HEAD:VERSION | tr -d '\r\n')"
+          current_version="$(tr -d '\r\n' < VERSION)"
+          python - "$base_version" "$current_version" <<'PY'
+          import re
+          import sys
+
+          base, current = sys.argv[1], sys.argv[2]
+          pattern = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
+
+          def parse(value: str) -> tuple[int, int, int]:
+              match = pattern.fullmatch(value)
+              if match is None:
+                  raise SystemExit(f"Invalid application version: {value}")
+              return tuple(int(part) for part in match.groups())
+
+          if parse(current) < parse(base):
+              raise SystemExit(
+                  f"Application VERSION regressed from PR base {base} to {current}."
+              )
+
+          print(f"Application VERSION monotonicity: base={base}, current={current}")
+          PY
+
       - name: Validate locale manifest
         shell: python
         run: |

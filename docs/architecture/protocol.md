@@ -6,6 +6,16 @@ MachiVerseWorks の Server / Web Client 間で使用するbinary protocolを定�
 
 `ProtocolVersion`は`major.minor`。breaking changeはmajorを上げる。Phase 9の3D必須wire contractは2.0であり、1.xの2D payloadへ暗黙fallbackしない。
 
+同一majorでは、Server current以下のminorをClientが要求した場合に受理できる。negotiation成立時のversionは**ClientがHello frame headerで要求したversionそのもの**とし、次の3箇所で同一値を使用する。
+
+- Server connection stateの`NegotiatedVersion`
+- `HelloAck` payload内の`protocolVersion`
+- handshake後に送受信する全frame headerのprotocol version
+
+例としてServer 2.3 / Client 2.1ではnegotiated versionは2.1となる。Serverが2.3をHelloAck payloadだけで返すことはしない。Clientは`HelloAck`のframe headerとpayload versionが一致することを確認し、以後の受信frame headerがnegotiated versionから変化した場合はprotocol errorとして接続を終了する。
+
+Client要求minorがServer currentより新しい場合、またはmajorが異なる場合はnegotiationを拒否する。
+
 ## Common frame header
 
 全整数値とIEEE 754 `double`はlittle-endian。Headerは固定16 bytes。
@@ -71,4 +81,4 @@ Payloadは16 bytes: Agent ID 8 bytes + simulation tick count 8 bytes。
 
 ## Error / decode failure
 
-Error payload、stable error code、frame validationは従来どおりProtocol boundaryで扱う。未知message、invalid payload、非有限座標、frame length不一致は安全に拒否する。
+Error payload、stable error code、frame validationはProtocol boundaryで扱う。未知message、invalid payload、非有限座標、frame length不一致、negotiation後のframe version変更は安全に拒否する。

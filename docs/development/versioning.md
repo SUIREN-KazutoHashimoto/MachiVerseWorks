@@ -36,6 +36,8 @@ Phase 0 の初期セットアップが完了していても、自動的にversio
 
 PR 作成に伴う A / B のversion更新コミットでは、同じ操作で C を別途加算しません。GitHub がPRマージ時に生成する merge commit も管理上のコミットとして扱い、C を加算しません。
 
+一度使用したversionより小さい値へ戻してはなりません。過去versionの再利用はartifact、bug report、Release履歴の識別性を壊すため禁止します。
+
 ## 3. 各コンポーネントへの反映
 
 同じアプリケーションversionを複数ファイルへ手入力しません。
@@ -69,10 +71,13 @@ Client / Server 間のwire互換性を表します。
 
 通常開発への移行が明示されるまでは `VERSION` が存在しない状態を許可します。
 
-`VERSION` が追加された後はCIで最低限次を検証します。
+`VERSION` が追加された後はCIで次を検証します。
 
 - `A.B.C` の3整数形式であること
 - 前後に不要な文字や空白行を持たないこと
+- Pull Requestでは、PR側の`VERSION`がtarget/base branchの`VERSION`より小さくなっていないこと
+
+baseとの比較は`A`, `B`, `C`を整数tupleとして行います。version後退を検出した場合はrepository jobを失敗させるため、必須`ci-gate`も失敗します。
 
 通常開発へ移行するときは、CIの必須ファイル一覧にも `VERSION` を追加します。
 
@@ -83,3 +88,4 @@ Client / Server 間のwire互換性を表します。
 - Save format versionをアプリケーションversionで代用しない。
 - Git tagだけをversionの正本にしない。
 - build日時を公式versionの代わりにしない。
+- target/base branchより小さい`VERSION`を持つPRを作らない。

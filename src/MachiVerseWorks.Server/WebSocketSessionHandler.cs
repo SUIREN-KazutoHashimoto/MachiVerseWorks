@@ -56,14 +56,14 @@ internal sealed class WebSocketSessionHandler(ClientConnectionRegistry connectio
                 await CloseSafelyAsync(connection.Socket, WebSocketCloseStatus.PolicyViolation, "Hello required.", cancellationToken);
                 return false;
             }
-            if (!ProtocolVersion.Current.CanAccept(envelope.Version))
+            if (!ProtocolVersion.Current.TryNegotiate(envelope.Version, out var negotiatedVersion))
             {
                 await SendErrorAsync(connection, ProtocolErrorCode.UnsupportedProtocolVersion, [new ProtocolErrorParameter(ProtocolErrorParameterKeys.RequestedVersion, envelope.Version.ToString()), new ProtocolErrorParameter(ProtocolErrorParameterKeys.SupportedVersion, ProtocolVersion.Current.ToString())], ProtocolVersion.Current, cancellationToken);
                 await CloseSafelyAsync(connection.Socket, WebSocketCloseStatus.PolicyViolation, "Unsupported protocol version.", cancellationToken);
                 return false;
             }
-            connection.CompleteHandshake(envelope.Version);
-            await connection.SendAsync(new HelloAckMessage(ProtocolVersion.Current, checked((ushort)simulation.TickRate)), envelope.Version, cancellationToken);
+            connection.CompleteHandshake(negotiatedVersion);
+            await connection.SendAsync(new HelloAckMessage(negotiatedVersion, checked((ushort)simulation.TickRate)), negotiatedVersion, cancellationToken);
             return true;
         }
 

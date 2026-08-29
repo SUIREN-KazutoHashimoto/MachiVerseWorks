@@ -1,3 +1,4 @@
+using System.Net.WebSockets;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace MachiVerseWorks.Server.Tests;
@@ -34,7 +35,31 @@ public sealed class SnapshotDeliverySchedulerTests
 
         releaseSlow.SetResult();
         await WaitUntilAsync(() => scheduler.InFlightCount == 0, TimeSpan.FromSeconds(1));
+        scheduler.ThrowIfFaulted();
         Assert.IsTrue(scheduler.TrySchedule(slowConnectionId, () => Task.CompletedTask));
+    }
+
+    [TestMethod]
+    public async Task UnexpectedDeliveryFailureIsSurfacedToTheOwner()
+    {
+        var scheduler = new SnapshotDeliveryScheduler();
+        var expected = new InvalidOperationException("unexpected delivery failure");
+
+        Assert.IsTrue(scheduler.TrySchedule(Guid.NewGuid(), () => Task.FromException(expected)));
+        await WaitUntilAsync(() => scheduler.InFlightCount == 0, TimeSpan.FromSeconds(1));
+
+        var actual = Assert.ThrowsExactly<InvalidOperationException>(() => scheduler.ThrowIfFaulted());
+        Assert.AreSame(expected, actual);
+    }
+
+    [TestMethod]
+    public void FailurePolicySeparatesClientTransportFailuresFromServerFailures()
+    {
+        Assert.IsTrue(SnapshotDeliveryFailurePolicy.IsExpectedClientFailure(new WebSocketException()));
+        Assert.IsTrue(SnapshotDeliveryFailurePolicy.IsExpectedClientFailure(new OperationCanceledException()));
+        Assert.IsTrue(SnapshotDeliveryFailurePolicy.IsExpectedClientFailure(new ObjectDisposedException("socket")));
+        Assert.IsFalse(SnapshotDeliveryFailurePolicy.IsExpectedClientFailure(new InvalidOperationException()));
+        Assert.IsFalse(SnapshotDeliveryFailurePolicy.IsExpectedClientFailure(new OverflowException()));
     }
 
     private static async Task WaitUntilAsync(Func<bool> predicate, TimeSpan timeout)

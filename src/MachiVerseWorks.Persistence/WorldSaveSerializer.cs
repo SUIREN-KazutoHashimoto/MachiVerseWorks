@@ -19,22 +19,42 @@ public static class WorldSaveSerializer
 
     public static byte[] Serialize(SimulationWorld world)
     {
+        return Serialize(world, WorldSaveLimits.Default);
+    }
+
+    public static byte[] Serialize(SimulationWorld world, WorldSaveLimits limits)
+    {
         ArgumentNullException.ThrowIfNull(world);
-        var document = CreateDocument(world.CreateCheckpoint());
-        return JsonSerializer.SerializeToUtf8Bytes(document, JsonOptions);
+        ArgumentNullException.ThrowIfNull(limits);
+        var checkpoint = world.CreateCheckpoint();
+        ValidateCheckpointWithinLimits(checkpoint, limits);
+        var document = CreateDocument(checkpoint);
+        var data = JsonSerializer.SerializeToUtf8Bytes(document, JsonOptions);
+        if (data.Length > limits.MaximumBytes)
+        {
+            throw new InvalidDataException(
+                $"Save Data output exceeds the configured {limits.MaximumBytes}-byte limit.");
+        }
+        return data;
     }
 
     public static void Save(Stream destination, SimulationWorld world)
     {
+        Save(destination, world, WorldSaveLimits.Default);
+    }
+
+    public static void Save(Stream destination, SimulationWorld world, WorldSaveLimits limits)
+    {
         ArgumentNullException.ThrowIfNull(destination);
         ArgumentNullException.ThrowIfNull(world);
+        ArgumentNullException.ThrowIfNull(limits);
 
         if (!destination.CanWrite)
         {
             throw new ArgumentException("Destination stream must be writable.", nameof(destination));
         }
 
-        var data = Serialize(world);
+        var data = Serialize(world, limits);
         destination.Write(data);
     }
 
@@ -115,6 +135,15 @@ public static class WorldSaveSerializer
         }
 
         return Deserialize(buffer.ToArray(), limits);
+    }
+
+    private static void ValidateCheckpointWithinLimits(SimulationCheckpoint checkpoint, WorldSaveLimits limits)
+    {
+        if (checkpoint.Agents.Count > limits.MaximumAgentCount)
+        {
+            throw new InvalidDataException(
+                $"World contains {checkpoint.Agents.Count} Agents, exceeding the configured {limits.MaximumAgentCount}-Agent Save limit.");
+        }
     }
 
     private static SaveDataDocument CreateDocument(SimulationCheckpoint checkpoint)

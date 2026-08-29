@@ -59,13 +59,20 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
         using var timer = new PeriodicTimer(options.SnapshotInterval);
         try
         {
-            while (await timer.WaitForNextTickAsync(stoppingToken)) SchedulePublish(stoppingToken);
+            while (await timer.WaitForNextTickAsync(stoppingToken))
+            {
+                _deliveryScheduler.ThrowIfFaulted();
+                SchedulePublish(stoppingToken);
+            }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
         }
+
+        _deliveryScheduler.ThrowIfFaulted();
         var inFlight = _deliveryScheduler.CreateInFlightSnapshot();
         if (inFlight.Length > 0) await Task.WhenAll(inFlight);
+        _deliveryScheduler.ThrowIfFaulted();
         ServerLog.SnapshotPublisherStopped(logger);
     }
 
@@ -100,11 +107,16 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
             metrics.RecordSnapshotDelivery(snapshots.Length, plan.Messages.Count, bytes, encodeTimeMs, sendTimeMs);
             ServerLog.SnapshotDeliveryMetrics(logger, connection.Id, snapshots.Length, plan.Messages.Count, bytes, encodeTimeMs, sendTimeMs);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (SnapshotDeliveryFailurePolicy.IsExpectedClientFailure(exception))
         {
             if (!cancellationToken.IsCancellationRequested) ServerLog.SnapshotDeliveryStopped(logger, connection.Id, exception);
             connection.Abort();
             connections.Remove(connection.Id);
+        }
+        catch (Exception exception)
+        {
+            ServerLog.UnexpectedSnapshotDeliveryFailure(logger, connection.Id, exception);
+            throw;
         }
     }
 }
