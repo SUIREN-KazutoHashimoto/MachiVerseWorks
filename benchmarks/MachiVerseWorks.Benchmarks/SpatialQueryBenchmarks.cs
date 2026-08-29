@@ -4,7 +4,6 @@ using MachiVerseWorks.Simulation.Internal;
 
 namespace MachiVerseWorks.Benchmarks;
 
-[Config(typeof(PerformanceBenchmarkConfig))]
 public sealed class SpatialQueryBenchmarks
 {
     private SpatialIndex _index = null!;

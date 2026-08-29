@@ -6,17 +6,17 @@ using BenchmarkDotNet.Exporters.Json;
 
 namespace MachiVerseWorks.Benchmarks;
 
-public sealed class PerformanceBenchmarkConfig : ManualConfig
+internal static class PerformanceBenchmarkConfig
 {
-    public PerformanceBenchmarkConfig()
+    public static IConfig Create()
     {
-        Add(DefaultConfig.Instance);
-        AddDiagnoser(MemoryDiagnoser.Default);
-        AddExporter(MarkdownExporter.GitHub);
-        AddExporter(JsonExporter.Full);
-        AddExporter(CsvMeasurementsExporter.Default);
-
-        ArtifactsPath = Environment.GetEnvironmentVariable("MACHIVERSE_BENCHMARK_ARTIFACTS")
+        var config = ManualConfig.Create(DefaultConfig.Instance);
+        config.AddDiagnoser(MemoryDiagnoser.Default);
+        config.AddExporter(MarkdownExporter.GitHub);
+        config.AddExporter(JsonExporter.Full);
+        config.AddExporter(CsvMeasurementsExporter.Default);
+        config.ArtifactsPath = Environment.GetEnvironmentVariable("MACHIVERSE_BENCHMARK_ARTIFACTS")
             ?? "BenchmarkDotNet.Artifacts";
+        return config;
     }
 }

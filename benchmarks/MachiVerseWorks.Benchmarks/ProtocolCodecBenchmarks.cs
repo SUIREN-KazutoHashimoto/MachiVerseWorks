@@ -3,7 +3,6 @@ using MachiVerseWorks.Protocol;
 
 namespace MachiVerseWorks.Benchmarks;
 
-[Config(typeof(PerformanceBenchmarkConfig))]
 public sealed class ProtocolCodecBenchmarks
 {
     private static readonly AgentUpdateMessage Message = new(

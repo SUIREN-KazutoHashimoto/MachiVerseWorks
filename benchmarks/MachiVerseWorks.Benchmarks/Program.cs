@@ -15,4 +15,6 @@ if (args.Any(static argument => argument is "--warmup" or "--ticks"))
     return;
 }
 
-BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, new PerformanceBenchmarkConfig());
+BenchmarkSwitcher
+    .FromAssembly(typeof(Program).Assembly)
+    .Run(args, PerformanceBenchmarkConfig.Create());

@@ -6,6 +6,7 @@
 
 - [`getting-started.md`](getting-started.md): 環境準備、build、test、Server + Web Client起動手順
 - [`e2e-poc.md`](e2e-poc.md): Phase 6 End-to-End PoC の再現手順、計測点、既知ボトルネック
+- [`performance-benchmark.md`](performance-benchmark.md): Phase 7 BenchmarkDotNet基盤、結果保存、Server/Web観測、改善候補
 - [`git-workflow.md`](git-workflow.md): branch / PR / validation の標準フロー
 - [`repository-settings.md`](repository-settings.md): branch protection、merge方式、GitHub Security設定の基準
 - [`versioning.md`](versioning.md): `A.B.C` とルート `VERSION` の運用
