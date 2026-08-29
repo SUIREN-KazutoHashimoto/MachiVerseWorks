@@ -194,7 +194,7 @@ public sealed class SimulationWorld
         return new WorldVector(
             _random.NextDouble(-1d, 1d),
             _random.NextDouble(-1d, 1d),
-            _random.NextDouble(-1d, 1d));
+            0d);
     }
 
     private static long CalculateExpectedElapsedTicks(ulong tickCount, TimeSpan tickDuration)

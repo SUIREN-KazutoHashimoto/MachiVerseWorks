@@ -29,6 +29,19 @@ public sealed class ThreeDimensionalSimulationTests
     }
 
     [TestMethod]
+    public void AutomaticallyGeneratedAgentsHaveZeroVerticalVelocity()
+    {
+        var world = new SimulationWorld(new SimulationConfig(tickRate: 30, seed: 17, spatialCellSize: 16d));
+        var ids = world.CreateAgents(8, new WorldVolume(-10d, -20d, -30d, 10d, 20d, 30d));
+
+        foreach (var id in ids)
+        {
+            Assert.IsTrue(world.TryGetAgentSnapshot(id, out var snapshot));
+            Assert.AreEqual(0d, snapshot.Velocity.Z);
+        }
+    }
+
+    [TestMethod]
     public void VolumeQuerySeparatesAgentsWithSameHorizontalPositionByAltitude()
     {
         var world = new SimulationWorld(new SimulationConfig(tickRate: 30, seed: 1, spatialCellSize: 16d));

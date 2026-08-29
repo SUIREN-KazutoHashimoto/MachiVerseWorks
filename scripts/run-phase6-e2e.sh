@@ -99,12 +99,12 @@ run_scenario() {
     Server__SnapshotRate=5 \
     Simulation__TickRate=10 \
     Simulation__InitialAgentCount="$agents" \
-    Simulation__SpawnArea__MinX="$spawn_min_x" \
-    Simulation__SpawnArea__MinY="$spawn_min_y" \
-    Simulation__SpawnArea__MinZ="$spawn_min_z" \
-    Simulation__SpawnArea__MaxX="$spawn_max_x" \
-    Simulation__SpawnArea__MaxY="$spawn_max_y" \
-    Simulation__SpawnArea__MaxZ="$spawn_max_z" \
+    Simulation__SpawnVolume__MinX="$spawn_min_x" \
+    Simulation__SpawnVolume__MinY="$spawn_min_y" \
+    Simulation__SpawnVolume__MinZ="$spawn_min_z" \
+    Simulation__SpawnVolume__MaxX="$spawn_max_x" \
+    Simulation__SpawnVolume__MaxY="$spawn_max_y" \
+    Simulation__SpawnVolume__MaxZ="$spawn_max_z" \
     dotnet run \
       --project "$ROOT_DIR/src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj" \
       --configuration Release --no-build \

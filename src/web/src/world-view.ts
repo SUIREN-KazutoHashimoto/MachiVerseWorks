@@ -66,18 +66,12 @@ export class WorldView {
   }
 
   public getSubscriptionVolume(): WorldVolume {
-    const halfHeight = INITIAL_HALF_HEIGHT / this.camera.zoom;
-    const halfWidth = halfHeight * this.aspect;
-    const centerX = this.camera.position.x;
-    const centerY = this.camera.position.z;
-    return {
-      minX: centerX - halfWidth * SUBSCRIPTION_PADDING,
-      minY: centerY - halfHeight * SUBSCRIPTION_PADDING,
-      minZ: SUBSCRIPTION_MIN_ALTITUDE,
-      maxX: centerX + halfWidth * SUBSCRIPTION_PADDING,
-      maxY: centerY + halfHeight * SUBSCRIPTION_PADDING,
-      maxZ: SUBSCRIPTION_MAX_ALTITUDE,
-    };
+    return computeOrthographicSubscriptionVolume(
+      this.camera,
+      SUBSCRIPTION_MIN_ALTITUDE,
+      SUBSCRIPTION_MAX_ALTITUDE,
+      SUBSCRIPTION_PADDING,
+    );
   }
 
   public getListenerPosition(): WorldPosition {
@@ -137,6 +131,58 @@ export class WorldView {
       this.camera.updateProjectionMatrix();
     }, { passive: false });
   }
+}
+
+export function computeOrthographicSubscriptionVolume(
+  camera: THREE.OrthographicCamera,
+  minimumAltitude: number,
+  maximumAltitude: number,
+  padding = 1,
+): WorldVolume {
+  if (!Number.isFinite(minimumAltitude) || !Number.isFinite(maximumAltitude) || maximumAltitude < minimumAltitude) {
+    throw new RangeError('Subscription altitude bounds must be finite and ordered.');
+  }
+  if (!Number.isFinite(padding) || padding < 1) {
+    throw new RangeError('Subscription padding must be finite and at least 1.');
+  }
+
+  camera.updateMatrixWorld(true);
+  const direction = camera.getWorldDirection(new THREE.Vector3());
+  if (Math.abs(direction.y) < 1e-9) {
+    throw new RangeError('Subscription projection requires a camera direction that intersects altitude planes.');
+  }
+
+  const projectedPoint = new THREE.Vector3();
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (const altitude of [minimumAltitude, maximumAltitude]) {
+    for (const normalizedX of [-1, 1]) {
+      for (const normalizedY of [-1, 1]) {
+        projectedPoint.set(normalizedX, normalizedY, 0).unproject(camera);
+        const distance = (altitude - projectedPoint.y) / direction.y;
+        const simulationX = projectedPoint.x + direction.x * distance;
+        const simulationY = projectedPoint.z + direction.z * distance;
+        minX = Math.min(minX, simulationX);
+        minY = Math.min(minY, simulationY);
+        maxX = Math.max(maxX, simulationX);
+        maxY = Math.max(maxY, simulationY);
+      }
+    }
+  }
+
+  const paddingX = (maxX - minX) * (padding - 1) * 0.5;
+  const paddingY = (maxY - minY) * (padding - 1) * 0.5;
+  return {
+    minX: minX - paddingX,
+    minY: minY - paddingY,
+    minZ: minimumAltitude,
+    maxX: maxX + paddingX,
+    maxY: maxY + paddingY,
+    maxZ: maximumAltitude,
+  };
 }
 
 export function simulationToThreePosition(

@@ -42,6 +42,16 @@ public sealed class ServerOptionsTests
     }
 
     [TestMethod]
+    public void DefaultSubscriptionBudgetSupportsNativeThreeDimensionalClientVolume()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection([]).Build();
+
+        var options = ServerOptions.Load(configuration);
+
+        Assert.AreEqual(65536, options.MaximumSubscriptionCellCount);
+    }
+
+    [TestMethod]
     public void InvalidPortIsRejected()
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Server:Port"] = "70000" }).Build();
