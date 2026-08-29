@@ -89,9 +89,18 @@ try {
     ]);
     if (browser.exitCode === null && browser.signalCode === null) {
       browser.kill('SIGKILL');
+      await Promise.race([
+        new Promise((resolve) => browser.once('exit', resolve)),
+        sleep(2_000),
+      ]);
     }
   }
-  await rm(profileDirectory, { recursive: true, force: true });
+  await rm(profileDirectory, {
+    recursive: true,
+    force: true,
+    maxRetries: 10,
+    retryDelay: 100,
+  });
 }
 
 async function reservePort() {
