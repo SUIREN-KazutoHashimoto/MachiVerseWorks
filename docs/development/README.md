@@ -5,6 +5,7 @@
 現在の主要文書:
 
 - [`git-workflow.md`](git-workflow.md): branch / PR / validation の標準フロー
+- [`ci.md`](ci.md): GitHub Actions、CI、CodeQL、Dependency Review の運用
 - [`localization-guidelines.md`](localization-guidelines.md): 将来の多言語対応を壊さない実装ルール
 
 今後ここへ、必要に応じて次の文書を追加します。

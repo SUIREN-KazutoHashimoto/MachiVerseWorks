@@ -1,0 +1,22 @@
+name: Dependency Review
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+      - 'release/**'
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    name: dependency review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: high
