@@ -2,7 +2,7 @@
 
 この文書は、旧 Machi-Sim の開発・不具合修正手順から、MachiVerseWorks でも有効な原則を引き継ぎ、新アーキテクチャ向けに整理したものです。
 
-共通ルールの正本はルートの [`AGENT.md`](../../AGENT.md) です。
+共通ルールの正本はルートの [`AGENTS.md`](../../AGENTS.md) です。
 
 ## 1. 基本フロー
 
@@ -161,4 +161,4 @@ PR本文には最低限、可能な範囲で次を含めます。
 - 必要な test / build / benchmark が成功している
 - runtime 確認が必要な項目は確認済み、または未確認と明示している
 - 不要な debug code / experiment flag が残っていない
-- 通常開発期間では `AGENT.md` の version 規則へ従っている
+- 通常開発期間では `AGENTS.md` の version 規則へ従っている
