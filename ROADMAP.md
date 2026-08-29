@@ -3,7 +3,7 @@
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
 > **現在:** Phase 0 — 初期セットアップ最終確認  
-> **手動設定待ち:** `SET-019` / `SET-021`  
+> **手動設定待ち:** `SET-021`  
 > **次の実装タスク:** `SKL-001` — ルートに `MachiVerseWorks.slnx` を作成する
 
 ## 全体の現在地
@@ -30,9 +30,8 @@ Task ID は参照用の固定IDです。並び替えても変更しません。
 
 ## 初期セットアップ残タスク
 
-以下の2項目だけは GitHub Settings 側の操作が必要です。設定値の正本は [`docs/development/repository-settings.md`](docs/development/repository-settings.md) です。
+GitHub Settings 側の操作が必要な項目は残り1つです。設定値の正本は [`docs/development/repository-settings.md`](docs/development/repository-settings.md) です。
 
-- ⬜ **SET-019** — Private vulnerability reporting / Dependabot alerts / Secret scanning 等のSecurity設定を確認・有効化する
 - ⬜ **SET-021** — Repositoryのmerge方式をmerge commitのみにし、merge後の短命branch自動削除を有効化する
 
 <details>
@@ -75,7 +74,7 @@ Task ID は参照用の固定IDです。並び替えても変更しません。
 - ✅ **SET-016** — 新機能branch名を `feature/*` に統一する
 - ✅ **SET-017** — PRの標準merge方式とbranch削除方針を確定・文書化する
 - ✅ **SET-018** — 通常開発用application versionの正本設計を確定する
-- ⬜ **SET-019** — GitHub Security設定を確認・有効化する
+- ✅ **SET-019** — GitHub Security設定を確認・有効化する
 - ✅ **SET-020** — MarkdownのRepository内リンク検証をCIへ追加する
 - ⬜ **SET-021** — Repositoryのmerge設定とmerge後branch自動削除をGitHub Settingsへ反映する
 
