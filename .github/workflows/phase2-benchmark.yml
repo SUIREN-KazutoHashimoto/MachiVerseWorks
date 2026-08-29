@@ -1,0 +1,45 @@
+name: Phase 2 benchmark
+
+on:
+  push:
+    branches:
+      - 'feature/phase-2-simulation-core'
+    paths:
+      - 'src/MachiVerseWorks.Simulation/**'
+      - 'benchmarks/MachiVerseWorks.Benchmarks/**'
+      - '.github/workflows/phase2-benchmark.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Show environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          uname -a
+          lscpu
+          free -h
+          dotnet --info
+
+      - name: Restore
+        run: dotnet restore MachiVerseWorks.slnx
+
+      - name: Build benchmark
+        run: dotnet build benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-restore
+
+      - name: Run tick benchmark
+        run: dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-build -- --warmup 60 --ticks 200
