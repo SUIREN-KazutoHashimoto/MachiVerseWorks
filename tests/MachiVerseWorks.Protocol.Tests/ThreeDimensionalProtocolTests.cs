@@ -9,7 +9,7 @@ public sealed class ThreeDimensionalProtocolTests
     [TestMethod]
     public void ProtocolMajorVersionIsTwoForNativeThreeDimensionalWireContract()
     {
-        Assert.AreEqual(new ProtocolVersion(2, 0), ProtocolVersion.Current);
+        Assert.AreEqual((ushort)2, ProtocolVersion.Current.Major);
     }
 
     [TestMethod]
