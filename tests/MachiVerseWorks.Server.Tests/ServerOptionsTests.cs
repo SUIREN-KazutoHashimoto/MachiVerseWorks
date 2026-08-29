@@ -42,13 +42,13 @@ public sealed class ServerOptionsTests
     }
 
     [TestMethod]
-    public void DefaultSubscriptionBudgetSupportsNativeThreeDimensionalClientVolume()
+    public void DefaultSubscriptionBudgetSupportsFullNativeThreeDimensionalClientFrustum()
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection([]).Build();
 
         var options = ServerOptions.Load(configuration);
 
-        Assert.AreEqual(65536, options.MaximumSubscriptionCellCount);
+        Assert.AreEqual(262_144, options.MaximumSubscriptionCellCount);
     }
 
     [TestMethod]

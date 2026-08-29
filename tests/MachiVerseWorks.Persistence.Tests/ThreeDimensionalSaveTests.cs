@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MachiVerseWorks.Protocol;
 using MachiVerseWorks.Simulation;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -39,5 +40,51 @@ public sealed class ThreeDimensionalSaveTests
         Assert.AreEqual(lower, lowerSnapshots[0].Id);
         Assert.AreEqual(1, upperSnapshots.Length);
         Assert.AreEqual(upper, upperSnapshots[0].Id);
+    }
+
+    [TestMethod]
+    public void SaveRestoreStateCanFlowThroughThreeDimensionalProtocolWithoutLosingAltitude()
+    {
+        var world = new SimulationWorld(new SimulationConfig(tickRate: 30, seed: 19, spatialCellSize: 16d));
+        world.CreateAgent(new WorldPoint(25d, -40d, -320d), new WorldVector(1d, 2d, -3d));
+        world.CreateAgent(new WorldPoint(25d, -40d, 850d), new WorldVector(4d, 5d, 6d));
+
+        var restored = WorldSaveSerializer.Deserialize(WorldSaveSerializer.Serialize(world));
+        var snapshots = restored.CreateSnapshot(new WorldVolume(20d, -45d, -400d, 30d, -35d, 900d));
+        Assert.AreEqual(2, snapshots.Length);
+
+        var decodedMessages = snapshots
+            .Select(static snapshot => new AgentSpawnMessage(
+                snapshot.Id.Value,
+                snapshot.Position.X,
+                snapshot.Position.Y,
+                snapshot.Position.Z,
+                snapshot.Velocity.X,
+                snapshot.Velocity.Y,
+                snapshot.Velocity.Z,
+                snapshot.TickCount))
+            .Select(static message => ProtocolCodec.Serialize(message))
+            .Select(static frame => DecodeAgentSpawn(frame))
+            .OrderBy(static message => message.Z)
+            .ToArray();
+
+        Assert.AreEqual(2, decodedMessages.Length);
+        Assert.AreEqual(25d, decodedMessages[0].X);
+        Assert.AreEqual(25d, decodedMessages[1].X);
+        Assert.AreEqual(-40d, decodedMessages[0].Y);
+        Assert.AreEqual(-40d, decodedMessages[1].Y);
+        Assert.AreEqual(-320d, decodedMessages[0].Z);
+        Assert.AreEqual(850d, decodedMessages[1].Z);
+        Assert.AreEqual(-3d, decodedMessages[0].VelocityZ);
+        Assert.AreEqual(6d, decodedMessages[1].VelocityZ);
+    }
+
+    private static AgentSpawnMessage DecodeAgentSpawn(byte[] frame)
+    {
+        Assert.IsTrue(ProtocolCodec.TryDeserialize(frame, out var envelope, out var error));
+        Assert.AreEqual(ProtocolDecodeError.None, error);
+        Assert.IsNotNull(envelope);
+        Assert.IsInstanceOfType<AgentSpawnMessage>(envelope.Message);
+        return (AgentSpawnMessage)envelope.Message;
     }
 }

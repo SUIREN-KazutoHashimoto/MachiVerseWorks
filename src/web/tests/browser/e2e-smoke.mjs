@@ -1,8 +1,10 @@
+import * as THREE from 'three';
+
 import { ClientPerformanceMetrics } from '../../src/client-performance.ts';
 import { MachiVerseConnection } from '../../src/connection.ts';
 import { EntityStore } from '../../src/entity-store.ts';
 import { MessageType } from '../../src/protocol.ts';
-import { simulationToThreePosition, WorldView } from '../../src/world-view.ts';
+import { WorldView } from '../../src/world-view.ts';
 
 const parameters = new URLSearchParams(window.location.search);
 const expectedTotal = Number.parseInt(parameters.get('agents') ?? '1000', 10);
@@ -202,22 +204,35 @@ async function runAltitudeScenario() {
   const initialAltitudes = new Set(reconstructedOrigins.map((agent) => agent.z.toFixed(6)));
   assert(initialAltitudes.size > 1, 'AgentSpawn preserves distinct initial altitudes');
 
-  const agents = [...store.sample(performance.now())];
+  const sampleTime = performance.now();
+  const agents = [...store.sample(sampleTime)];
   assert(agents.length === expectedTotal, 'all altitude agents are present in EntityStore');
   const simulationAltitudes = new Set(agents.map((agent) => agent.z.toFixed(6)));
   assert(simulationAltitudes.size === initialAltitudes.size, 'AgentUpdate and EntityStore preserve altitude separation');
 
-  const rendererAltitudes = new Set(
-    agents.map((agent) => simulationToThreePosition(agent.x, agent.y, agent.z).y.toFixed(6)),
-  );
-  assert(rendererAltitudes.size === simulationAltitudes.size, 'renderer mapping preserves altitude separation');
-  view.render(store, performance.now());
+  view.render(store, sampleTime);
+  const rendererAltitudes = readRenderedAltitudes(expectedTotal);
+  assert(rendererAltitudes.size === simulationAltitudes.size, 'actual InstancedMesh transforms preserve altitude separation');
 
   return {
     initialAltitudes: [...initialAltitudes],
     simulationAltitudes: [...simulationAltitudes],
     rendererAltitudes: [...rendererAltitudes],
   };
+}
+
+function readRenderedAltitudes(expectedCount) {
+  const mesh = view.scene.children.find((child) => child instanceof THREE.InstancedMesh);
+  assert(mesh instanceof THREE.InstancedMesh, 'WorldView contains the Agent InstancedMesh');
+  assert(mesh.count === expectedCount, `InstancedMesh contains ${String(expectedCount)} rendered agents`);
+
+  const matrix = new THREE.Matrix4();
+  const altitudes = new Set();
+  for (let index = 0; index < mesh.count; index += 1) {
+    mesh.getMatrixAt(index, matrix);
+    altitudes.add(matrix.elements[13].toFixed(6));
+  }
+  return altitudes;
 }
 
 async function recordAnimationFrames() {

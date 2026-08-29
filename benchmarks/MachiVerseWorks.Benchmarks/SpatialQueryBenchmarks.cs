@@ -17,22 +17,7 @@ public class SpatialQueryBenchmarks
     [GlobalSetup]
     public void Setup()
     {
-        _index = new SpatialIndex(64d);
-        var side = (int)Math.Ceiling(Math.Cbrt(AgentCount));
-        var horizontalSpacing = 10_000d / side;
-        var verticalSpacing = 1_000d / side;
-
-        for (var index = 0; index < AgentCount; index++)
-        {
-            var xIndex = index % side;
-            var yIndex = (index / side) % side;
-            var zIndex = index / (side * side);
-            var position = new WorldPoint(
-                -5_000d + ((xIndex + 0.5d) * horizontalSpacing),
-                -5_000d + ((yIndex + 0.5d) * horizontalSpacing),
-                -500d + ((zIndex + 0.5d) * verticalSpacing));
-            _index.Register(new AgentId((ulong)index + 1), position);
-        }
+        _index = CreateIndex(AgentCount);
     }
 
     [Benchmark]
@@ -47,5 +32,53 @@ public class SpatialQueryBenchmarks
             extent,
             extent,
             altitudeExtent));
+    }
+
+    internal static SpatialIndex CreateIndex(int agentCount)
+    {
+        var index = new SpatialIndex(64d);
+        var side = (int)Math.Ceiling(Math.Cbrt(agentCount));
+        var horizontalSpacing = 10_000d / side;
+        var verticalSpacing = 1_000d / side;
+
+        for (var agentIndex = 0; agentIndex < agentCount; agentIndex++)
+        {
+            var xIndex = agentIndex % side;
+            var yIndex = (agentIndex / side) % side;
+            var zIndex = agentIndex / (side * side);
+            var position = new WorldPoint(
+                -5_000d + ((xIndex + 0.5d) * horizontalSpacing),
+                -5_000d + ((yIndex + 0.5d) * horizontalSpacing),
+                -500d + ((zIndex + 0.5d) * verticalSpacing));
+            index.Register(new AgentId((ulong)agentIndex + 1), position);
+        }
+
+        return index;
+    }
+}
+
+public class SparseSpatialQueryBenchmarks
+{
+    private SpatialIndex _index = null!;
+
+    [Params(10_000, 100_000)]
+    public int AgentCount { get; set; }
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _index = SpatialQueryBenchmarks.CreateIndex(AgentCount);
+    }
+
+    [Benchmark]
+    public List<AgentId> QueryLargeSparseVolume()
+    {
+        return _index.Query(new WorldVolume(
+            -1_000_000d,
+            -1_000_000d,
+            -1_000_000d,
+            1_000_000d,
+            1_000_000d,
+            1_000_000d));
     }
 }

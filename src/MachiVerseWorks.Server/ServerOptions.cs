@@ -6,7 +6,7 @@ namespace MachiVerseWorks.Server;
 
 internal sealed class ServerOptions
 {
-    private const int DefaultMaximumSubscriptionCellCount = 65536;
+    private const int DefaultMaximumSubscriptionCellCount = 262_144;
     private const string DefaultAllowedWebSocketOrigins = "http://127.0.0.1:5173;http://localhost:5173";
 
     private ServerOptions(IPAddress listenAddress, int port, int snapshotRate, int maximumSubscriptionCellCount, IReadOnlyList<string> allowedWebSocketOrigins, int tickRate, ulong seed, double spatialCellSize, int initialAgentCount, double spawnMinX, double spawnMinY, double spawnMinZ, double spawnMaxX, double spawnMaxY, double spawnMaxZ)
