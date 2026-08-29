@@ -12,6 +12,8 @@ internal sealed class AgentStore
 
     public int TotalCreatedCount => _states.Count;
 
+    public ulong NextId => _nextId;
+
     public AgentId Add(WorldPoint position, WorldVector velocity, SpatialIndex spatialIndex)
     {
         var id = new AgentId(_nextId);
@@ -102,5 +104,56 @@ internal sealed class AgentStore
         }
 
         return snapshots.ToArray();
+    }
+
+    public SimulationAgentCheckpoint[] CreateCheckpoint()
+    {
+        var checkpoint = new SimulationAgentCheckpoint[_states.Count];
+        for (var index = 0; index < _states.Count; index++)
+        {
+            var state = _states[index];
+            checkpoint[index] = new SimulationAgentCheckpoint(
+                state.Id,
+                state.Position,
+                state.Velocity,
+                state.IsActive);
+        }
+
+        return checkpoint;
+    }
+
+    public void Restore(
+        IReadOnlyList<SimulationAgentCheckpoint> agents,
+        ulong nextId,
+        SpatialIndex spatialIndex)
+    {
+        ArgumentNullException.ThrowIfNull(agents);
+        ArgumentNullException.ThrowIfNull(spatialIndex);
+
+        if (_states.Count != 0 || _indexById.Count != 0 || ActiveCount != 0)
+        {
+            throw new InvalidOperationException("Agent store must be empty before restore.");
+        }
+
+        for (var index = 0; index < agents.Count; index++)
+        {
+            var checkpoint = agents[index];
+            var state = new AgentState(checkpoint.Id, checkpoint.Position, checkpoint.Velocity)
+            {
+                IsActive = checkpoint.IsActive,
+            };
+            _states.Add(state);
+
+            if (!state.IsActive)
+            {
+                continue;
+            }
+
+            _indexById.Add(state.Id, index);
+            spatialIndex.Register(state.Id, state.Position);
+            ActiveCount++;
+        }
+
+        _nextId = nextId;
     }
 }

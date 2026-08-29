@@ -76,6 +76,83 @@ public sealed class SimulationWorld
         return _agents.CreateSnapshot(area, _spatialIndex, Time.TickCount);
     }
 
+    public SimulationCheckpoint CreateCheckpoint()
+    {
+        return new SimulationCheckpoint(
+            Config.TickRate,
+            Config.Seed,
+            Config.SpatialCellSize,
+            Time.TickCount,
+            Time.Elapsed.Ticks,
+            _random.State,
+            _agents.NextId,
+            _agents.CreateCheckpoint());
+    }
+
+    public static SimulationWorld RestoreCheckpoint(SimulationCheckpoint checkpoint)
+    {
+        ArgumentNullException.ThrowIfNull(checkpoint);
+        ArgumentNullException.ThrowIfNull(checkpoint.Agents);
+
+        if (checkpoint.ElapsedTicks < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(checkpoint),
+                checkpoint.ElapsedTicks,
+                "Simulation elapsed time cannot be negative.");
+        }
+
+        if (checkpoint.NextAgentId == 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(checkpoint),
+                checkpoint.NextAgentId,
+                "Next Agent ID must be greater than zero.");
+        }
+
+        var seenAgentIds = new HashSet<ulong>(checkpoint.Agents.Count);
+        var maximumAgentId = 0UL;
+        foreach (var agent in checkpoint.Agents)
+        {
+            if (agent.Id.Value == 0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(checkpoint),
+                    agent.Id.Value,
+                    "Agent IDs must be greater than zero.");
+            }
+
+            if (!seenAgentIds.Add(agent.Id.Value))
+            {
+                throw new ArgumentException($"Duplicate Agent ID {agent.Id.Value}.", nameof(checkpoint));
+            }
+
+            ValidatePoint(agent.Position);
+            ValidateVector(agent.Velocity);
+            maximumAgentId = Math.Max(maximumAgentId, agent.Id.Value);
+        }
+
+        if (checkpoint.NextAgentId <= maximumAgentId)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(checkpoint),
+                checkpoint.NextAgentId,
+                "Next Agent ID must be greater than every stored Agent ID.");
+        }
+
+        var config = new SimulationConfig(
+            checkpoint.TickRate,
+            checkpoint.Seed,
+            checkpoint.SpatialCellSize);
+        var world = new SimulationWorld(config)
+        {
+            Time = new SimulationTime(checkpoint.TickCount, TimeSpan.FromTicks(checkpoint.ElapsedTicks)),
+            _random = new DeterministicRandom(checkpoint.RandomState),
+        };
+        world._agents.Restore(checkpoint.Agents, checkpoint.NextAgentId, world._spatialIndex);
+        return world;
+    }
+
     private WorldVector NextVelocity()
     {
         return new WorldVector(

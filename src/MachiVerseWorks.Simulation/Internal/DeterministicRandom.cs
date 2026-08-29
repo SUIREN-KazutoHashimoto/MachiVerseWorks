@@ -9,6 +9,8 @@ internal struct DeterministicRandom
         _state = seed;
     }
 
+    public readonly ulong State => _state;
+
     public double NextUnitDouble()
     {
         const double scale = 1d / (1UL << 53);
