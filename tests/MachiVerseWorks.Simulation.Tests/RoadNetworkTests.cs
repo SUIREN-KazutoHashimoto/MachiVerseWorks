@@ -31,6 +31,24 @@ public sealed class RoadNetworkTests
         var world = new SimulationWorld(); var a = world.CreateRoadNode(new WorldPoint(-10, 0, 0)); var j = world.CreateRoadNode(new WorldPoint(0, 0, 0), RoadNodeKind.Intersection); var b = world.CreateRoadNode(new WorldPoint(10, 0, 0)); var s1 = world.CreateRoadSegment(a, j); var s2 = world.CreateRoadSegment(j, b); var forward1 = world.CreateLane(s1, LaneDirection.Forward, 0); var forward2 = world.CreateLane(s2, LaneDirection.Forward, 0); var reverse2 = world.CreateLane(s2, LaneDirection.Reverse, 0); world.CreateLaneConnection(forward1, forward2, j, TurnMovement.Straight); Assert.ThrowsExactly<InvalidOperationException>(() => world.CreateLaneConnection(forward1, reverse2, j)); Assert.AreEqual(1, world.LaneConnectionCount);
     }
     [TestMethod]
+    public void IntersectionReferencedByLaneConnectionCannotBeDemotedToEndpoint()
+    {
+        var world = new SimulationWorld();
+        var start = world.CreateRoadNode(new WorldPoint(0, 0, 0));
+        var junction = world.CreateRoadNode(new WorldPoint(10, 0, 0), RoadNodeKind.Intersection);
+        var segment = world.CreateRoadSegment(start, junction);
+        var incoming = world.CreateLane(segment, LaneDirection.Forward, 0);
+        var outgoing = world.CreateLane(segment, LaneDirection.Reverse, 0);
+        world.CreateLaneConnection(incoming, outgoing, junction);
+
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            world.UpdateRoadNode(junction, new WorldPoint(10, 0, 0), RoadNodeKind.Endpoint));
+
+        Assert.IsTrue(world.TryGetRoadNodeSnapshot(junction, out var snapshot));
+        Assert.AreEqual(RoadNodeKind.Intersection, snapshot.Kind);
+        Assert.AreEqual(1, world.LaneConnectionCount);
+    }
+    [TestMethod]
     public void RoadAccessPointRequiresExistingUrbanReference()
     {
         var world = new SimulationWorld(); var a = world.CreateRoadNode(new WorldPoint(0, 0, 0)); var b = world.CreateRoadNode(new WorldPoint(20, 0, 0)); var segment = world.CreateRoadSegment(a, b); var building = world.CreateBuilding(new WorldVolume(0, 5, 0, 10, 15, 10)); var poi = world.CreatePoi(new WorldPoint(5, 10, 0), PoiKind.Service, building); var access = world.CreateRoadAccessPoint(segment, 0.5, building, poi, RoadAccessMode.Motor | RoadAccessMode.Foot); Assert.AreEqual(1UL, access.Value); Assert.ThrowsExactly<ArgumentException>(() => world.CreateRoadAccessPoint(segment, 0.5, new BuildingId(999))); Assert.AreEqual(1, world.RoadAccessPointCount);

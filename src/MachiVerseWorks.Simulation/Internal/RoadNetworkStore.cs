@@ -17,7 +17,10 @@ internal sealed class RoadNetworkStore
     public RoadNodeId AddNode(WorldPoint position, RoadNodeKind kind) { EnsureCapacity(nextNodeId, "Road node"); spatialIndex.ValidatePosition(position); var id = new RoadNodeId(nextNodeId++); nodes.Add(id, new(id, kind, position)); degreeByNode.Add(id, 0); spatialIndex.RegisterNode(id, position); return id; }
     public bool UpdateNode(RoadNodeId id, WorldPoint position, RoadNodeKind kind)
     {
-        if (!nodes.ContainsKey(id)) return false; spatialIndex.ValidatePosition(position); if (kind == RoadNodeKind.Endpoint && degreeByNode[id] > 1) throw new InvalidOperationException($"Road node {id.Value} has multiple incident segments and must remain an intersection.");
+        if (!nodes.ContainsKey(id)) return false;
+        spatialIndex.ValidatePosition(position);
+        if (kind == RoadNodeKind.Endpoint && degreeByNode[id] > 1) throw new InvalidOperationException($"Road node {id.Value} has multiple incident segments and must remain an intersection.");
+        if (kind == RoadNodeKind.Endpoint && connections.Values.Any(x => x.ViaNodeId == id)) throw new InvalidOperationException($"Road node {id.Value} must remain an intersection while lane connections reference it.");
         var incident = segments.Values.Where(s => s.StartNodeId == id || s.EndNodeId == id).ToArray(); nodes[id] = new(id, kind, position); spatialIndex.UpdateNode(id, position);
         foreach (var s in incident) spatialIndex.UpdateSegment(s.Id, nodes[s.StartNodeId].Position, nodes[s.EndNodeId].Position); return true;
     }
