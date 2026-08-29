@@ -149,9 +149,9 @@ internal sealed class SnapshotPublishService(
             long bytes = 0;
             double encodeTimeMs = 0d;
             double sendTimeMs = 0d;
+            using var sendCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             foreach (var message in plan.Messages)
             {
-                using var sendCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 sendCancellation.CancelAfter(ClientSendTimeout);
                 var sendMetrics = await connection.SendAsync(
                     message,
