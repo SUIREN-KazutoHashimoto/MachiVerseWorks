@@ -10,7 +10,7 @@ import {
   type AgentStateMessage,
   type ProtocolErrorMessage,
   type ProtocolMessage,
-  type WorldRect,
+  type WorldVolume,
 } from './protocol.ts';
 import { ClientUi } from './ui.ts';
 import { WorldView } from './world-view.ts';
@@ -27,7 +27,7 @@ export class Application {
   private readonly connection: MachiVerseConnection;
   private animationFrame = 0;
   private lastSubscriptionAt = Number.NEGATIVE_INFINITY;
-  private lastSubscription: WorldRect | null = null;
+  private lastSubscription: WorldVolume | null = null;
   private lastAudioSyncAt = Number.NEGATIVE_INFINITY;
   private lastPerformanceUiAt = Number.NEGATIVE_INFINITY;
   private audioSyncPending = false;
@@ -116,12 +116,12 @@ export class Application {
       return;
     }
     this.lastSubscriptionAt = now;
-    const area = this.view.getSubscriptionArea();
-    if (this.lastSubscription !== null && rectanglesNearlyEqual(this.lastSubscription, area)) {
+    const volume = this.view.getSubscriptionVolume();
+    if (this.lastSubscription !== null && volumesNearlyEqual(this.lastSubscription, volume)) {
       return;
     }
-    this.lastSubscription = area;
-    this.connection.setSubscription(area);
+    this.lastSubscription = volume;
+    this.connection.setSubscription(volume);
   }
 
   private updateAudio(now: number): void {
@@ -173,7 +173,7 @@ export class Application {
 
   private applyAgentSpawn(message: AgentStateMessage): void {
     this.store.spawn(message);
-    this.audio.updateEntityPosition(message.agentId, { x: message.x, y: message.y });
+    this.audio.updateEntityPosition(message.agentId, { x: message.x, y: message.y, z: message.z });
     this.ui.setAgentCount(this.store.size);
   }
 
@@ -181,7 +181,7 @@ export class Application {
     if (!this.store.update(message)) {
       this.store.spawn(message);
     }
-    this.audio.updateEntityPosition(message.agentId, { x: message.x, y: message.y });
+    this.audio.updateEntityPosition(message.agentId, { x: message.x, y: message.y, z: message.z });
     this.ui.setAgentCount(this.store.size);
   }
 
@@ -199,10 +199,12 @@ export class Application {
   }
 }
 
-function rectanglesNearlyEqual(left: WorldRect, right: WorldRect): boolean {
+function volumesNearlyEqual(left: WorldVolume, right: WorldVolume): boolean {
   const epsilon = 0.5;
   return Math.abs(left.minX - right.minX) < epsilon &&
     Math.abs(left.minY - right.minY) < epsilon &&
+    Math.abs(left.minZ - right.minZ) < epsilon &&
     Math.abs(left.maxX - right.maxX) < epsilon &&
-    Math.abs(left.maxY - right.maxY) < epsilon;
+    Math.abs(left.maxY - right.maxY) < epsilon &&
+    Math.abs(left.maxZ - right.maxZ) < epsilon;
 }

@@ -5,7 +5,7 @@ import {
   type ProtocolErrorMessage,
   type ProtocolMessage,
   type ProtocolVersion,
-  type WorldRect,
+  type WorldVolume,
   decodeFrame,
   encodeHello,
   encodeSubscribeArea,
@@ -45,7 +45,7 @@ export class MachiVerseConnection {
   private reconnectAttempt = 0;
   private shouldReconnect = false;
   private negotiatedVersion: ProtocolVersion | null = null;
-  private desiredSubscription: WorldRect | null = null;
+  private desiredSubscription: WorldVolume | null = null;
 
   public constructor(
     private readonly serverUrl: string,
@@ -71,8 +71,8 @@ export class MachiVerseConnection {
     this.setState('disconnected');
   }
 
-  public setSubscription(area: WorldRect): void {
-    this.desiredSubscription = { ...area };
+  public setSubscription(volume: WorldVolume): void {
+    this.desiredSubscription = { ...volume };
     this.sendDesiredSubscription();
   }
 
@@ -178,18 +178,18 @@ export class MachiVerseConnection {
   private sendDesiredSubscription(): void {
     const socket = this.socket;
     const version = this.negotiatedVersion;
-    const area = this.desiredSubscription;
+    const volume = this.desiredSubscription;
     if (
       this.state !== 'connected' ||
       socket === null ||
       socket.readyState !== WebSocket.OPEN ||
       version === null ||
-      area === null
+      volume === null
     ) {
       return;
     }
 
-    socket.send(encodeSubscribeArea(area, version));
+    socket.send(encodeSubscribeArea(volume, version));
   }
 
   private scheduleReconnect(): void {

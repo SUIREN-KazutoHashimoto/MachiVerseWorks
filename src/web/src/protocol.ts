@@ -1,7 +1,7 @@
 export const PROTOCOL_MAGIC = 0x5057564d;
 export const PROTOCOL_HEADER_SIZE = 16;
 export const PROTOCOL_MAX_PAYLOAD_LENGTH = 1_048_576;
-export const CURRENT_PROTOCOL_VERSION = Object.freeze({ major: 1, minor: 0 });
+export const CURRENT_PROTOCOL_VERSION = Object.freeze({ major: 2, minor: 0 });
 
 export enum MessageType {
   Hello = 1,
@@ -27,11 +27,13 @@ export interface ProtocolVersion {
   readonly minor: number;
 }
 
-export interface WorldRect {
+export interface WorldVolume {
   readonly minX: number;
   readonly minY: number;
+  readonly minZ: number;
   readonly maxX: number;
   readonly maxY: number;
+  readonly maxZ: number;
 }
 
 export interface ProtocolErrorParameter {
@@ -49,7 +51,7 @@ export interface HelloAckMessage {
   readonly tickRate: number;
 }
 
-export interface SubscribeAreaMessage extends WorldRect {
+export interface SubscribeAreaMessage extends WorldVolume {
   readonly type: MessageType.SubscribeArea;
 }
 
@@ -58,8 +60,10 @@ export interface AgentStateMessage {
   readonly agentId: bigint;
   readonly x: number;
   readonly y: number;
+  readonly z: number;
   readonly velocityX: number;
   readonly velocityY: number;
+  readonly velocityZ: number;
   readonly tickCount: bigint;
 }
 
@@ -102,16 +106,18 @@ export function encodeHello(version: ProtocolVersion = CURRENT_PROTOCOL_VERSION)
 }
 
 export function encodeSubscribeArea(
-  area: WorldRect,
+  volume: WorldVolume,
   version: ProtocolVersion = CURRENT_PROTOCOL_VERSION,
 ): ArrayBuffer {
-  validateWorldRect(area);
-  const frame = createFrame(MessageType.SubscribeArea, 32, version);
+  validateWorldVolume(volume);
+  const frame = createFrame(MessageType.SubscribeArea, 48, version);
   const view = new DataView(frame);
-  view.setFloat64(PROTOCOL_HEADER_SIZE, area.minX, true);
-  view.setFloat64(PROTOCOL_HEADER_SIZE + 8, area.minY, true);
-  view.setFloat64(PROTOCOL_HEADER_SIZE + 16, area.maxX, true);
-  view.setFloat64(PROTOCOL_HEADER_SIZE + 24, area.maxY, true);
+  view.setFloat64(PROTOCOL_HEADER_SIZE, volume.minX, true);
+  view.setFloat64(PROTOCOL_HEADER_SIZE + 8, volume.minY, true);
+  view.setFloat64(PROTOCOL_HEADER_SIZE + 16, volume.minZ, true);
+  view.setFloat64(PROTOCOL_HEADER_SIZE + 24, volume.maxX, true);
+  view.setFloat64(PROTOCOL_HEADER_SIZE + 32, volume.maxY, true);
+  view.setFloat64(PROTOCOL_HEADER_SIZE + 40, volume.maxZ, true);
   return frame;
 }
 
@@ -199,15 +205,17 @@ function decodeMessage(
         tickRate: view.getUint16(offset + 4, true),
       };
     case MessageType.SubscribeArea: {
-      assertPayloadLength(payloadLength, 32, messageType);
-      const area: WorldRect = {
+      assertPayloadLength(payloadLength, 48, messageType);
+      const volume: WorldVolume = {
         minX: view.getFloat64(offset, true),
         minY: view.getFloat64(offset + 8, true),
-        maxX: view.getFloat64(offset + 16, true),
-        maxY: view.getFloat64(offset + 24, true),
+        minZ: view.getFloat64(offset + 16, true),
+        maxX: view.getFloat64(offset + 24, true),
+        maxY: view.getFloat64(offset + 32, true),
+        maxZ: view.getFloat64(offset + 40, true),
       };
-      validateWorldRect(area);
-      return { type: MessageType.SubscribeArea, ...area };
+      validateWorldVolume(volume);
+      return { type: MessageType.SubscribeArea, ...volume };
     }
     case MessageType.AgentSpawn:
     case MessageType.AgentUpdate:
@@ -232,22 +240,26 @@ function decodeAgentState(
   offset: number,
   payloadLength: number,
 ): AgentStateMessage {
-  assertPayloadLength(payloadLength, 48, type);
+  assertPayloadLength(payloadLength, 64, type);
   const message: AgentStateMessage = {
     type,
     agentId: view.getBigUint64(offset, true),
     x: view.getFloat64(offset + 8, true),
     y: view.getFloat64(offset + 16, true),
-    velocityX: view.getFloat64(offset + 24, true),
-    velocityY: view.getFloat64(offset + 32, true),
-    tickCount: view.getBigUint64(offset + 40, true),
+    z: view.getFloat64(offset + 24, true),
+    velocityX: view.getFloat64(offset + 32, true),
+    velocityY: view.getFloat64(offset + 40, true),
+    velocityZ: view.getFloat64(offset + 48, true),
+    tickCount: view.getBigUint64(offset + 56, true),
   };
 
   if (
     !Number.isFinite(message.x) ||
     !Number.isFinite(message.y) ||
+    !Number.isFinite(message.z) ||
     !Number.isFinite(message.velocityX) ||
-    !Number.isFinite(message.velocityY)
+    !Number.isFinite(message.velocityY) ||
+    !Number.isFinite(message.velocityZ)
   ) {
     throw new ProtocolDecodeFailure('Agent state contains a non-finite value.');
   }
@@ -315,16 +327,19 @@ function readUtf8String(
   }
 }
 
-function validateWorldRect(area: WorldRect): void {
+function validateWorldVolume(volume: WorldVolume): void {
   if (
-    !Number.isFinite(area.minX) ||
-    !Number.isFinite(area.minY) ||
-    !Number.isFinite(area.maxX) ||
-    !Number.isFinite(area.maxY) ||
-    area.maxX < area.minX ||
-    area.maxY < area.minY
+    !Number.isFinite(volume.minX) ||
+    !Number.isFinite(volume.minY) ||
+    !Number.isFinite(volume.minZ) ||
+    !Number.isFinite(volume.maxX) ||
+    !Number.isFinite(volume.maxY) ||
+    !Number.isFinite(volume.maxZ) ||
+    volume.maxX < volume.minX ||
+    volume.maxY < volume.minY ||
+    volume.maxZ < volume.minZ
   ) {
-    throw new RangeError('World rectangle coordinates must be finite and ordered.');
+    throw new RangeError('World volume coordinates must be finite and ordered.');
   }
 }
 

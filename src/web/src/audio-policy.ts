@@ -1,11 +1,14 @@
-export interface Point2D {
+export interface Point3D {
   readonly x: number;
   readonly y: number;
+  readonly z: number;
 }
+
+export type Point2D = Point3D;
 
 export interface VoiceCandidate {
   readonly id: string;
-  readonly position: Point2D;
+  readonly position: Point3D;
   readonly priority: number;
 }
 
@@ -20,8 +23,10 @@ export interface AmbientZoneDefinition {
   readonly id: string;
   readonly minX: number;
   readonly minY: number;
+  readonly minZ: number;
   readonly maxX: number;
   readonly maxY: number;
+  readonly maxZ: number;
   readonly priority: number;
   readonly fadeDistance: number;
   readonly layers: readonly AmbientLayerDefinition[];
@@ -35,7 +40,7 @@ export interface ResolvedAmbientLayer {
 
 export function selectVoiceIds(
   candidates: readonly VoiceCandidate[],
-  listener: Point2D,
+  listener: Point3D,
   budget: number,
 ): ReadonlySet<string> {
   if (!Number.isInteger(budget) || budget < 0) {
@@ -51,7 +56,8 @@ export function selectVoiceIds(
     candidate,
     distanceSquared:
       (candidate.position.x - listener.x) ** 2 +
-      (candidate.position.y - listener.y) ** 2,
+      (candidate.position.y - listener.y) ** 2 +
+      (candidate.position.z - listener.z) ** 2,
   }));
   ranked.sort((left, right) => {
     const priorityDifference = right.candidate.priority - left.candidate.priority;
@@ -70,7 +76,7 @@ export function selectVoiceIds(
 export function resolveAmbientLayers(
   globalLayers: readonly AmbientLayerDefinition[],
   zones: readonly AmbientZoneDefinition[],
-  listener: Point2D,
+  listener: Point3D,
   parameters: Readonly<Record<string, number>> = {},
 ): readonly ResolvedAmbientLayer[] {
   validatePoint(listener, 'Ambient listener');
@@ -109,12 +115,14 @@ export function resolveAmbientLayers(
   return [...resolved.values()].sort((left, right) => left.key.localeCompare(right.key));
 }
 
-function calculateZoneWeight(zone: AmbientZoneDefinition, listener: Point2D): number {
+function calculateZoneWeight(zone: AmbientZoneDefinition, listener: Point3D): number {
   if (
     listener.x < zone.minX ||
     listener.x > zone.maxX ||
     listener.y < zone.minY ||
-    listener.y > zone.maxY
+    listener.y > zone.maxY ||
+    listener.z < zone.minZ ||
+    listener.z > zone.maxZ
   ) {
     return 0;
   }
@@ -128,6 +136,8 @@ function calculateZoneWeight(zone: AmbientZoneDefinition, listener: Point2D): nu
     zone.maxX - listener.x,
     listener.y - zone.minY,
     zone.maxY - listener.y,
+    listener.z - zone.minZ,
+    zone.maxZ - listener.z,
   );
   return clamp01(edgeDistance / zone.fadeDistance);
 }
@@ -172,11 +182,18 @@ function accumulateLayer(
 function validateZone(zone: AmbientZoneDefinition): void {
   validateFinite(zone.minX, `Ambient zone ${zone.id} minX`);
   validateFinite(zone.minY, `Ambient zone ${zone.id} minY`);
+  validateFinite(zone.minZ, `Ambient zone ${zone.id} minZ`);
   validateFinite(zone.maxX, `Ambient zone ${zone.id} maxX`);
   validateFinite(zone.maxY, `Ambient zone ${zone.id} maxY`);
+  validateFinite(zone.maxZ, `Ambient zone ${zone.id} maxZ`);
   validateFinite(zone.priority, `Ambient zone ${zone.id} priority`);
   validateFinite(zone.fadeDistance, `Ambient zone ${zone.id} fadeDistance`);
-  if (zone.maxX < zone.minX || zone.maxY < zone.minY || zone.fadeDistance < 0) {
+  if (
+    zone.maxX < zone.minX ||
+    zone.maxY < zone.minY ||
+    zone.maxZ < zone.minZ ||
+    zone.fadeDistance < 0
+  ) {
     throw new RangeError(`Ambient zone ${zone.id} has invalid bounds.`);
   }
   for (const layer of zone.layers) {
@@ -188,9 +205,10 @@ function validateLayer(layer: AmbientLayerDefinition, label: string): void {
   validateFinite(layer.gain, `${label} ${layer.key} gain`);
 }
 
-function validatePoint(point: Point2D, label: string): void {
+function validatePoint(point: Point3D, label: string): void {
   validateFinite(point.x, `${label} x`);
   validateFinite(point.y, `${label} y`);
+  validateFinite(point.z, `${label} z`);
 }
 
 function validateFinite(value: number, label: string): void {

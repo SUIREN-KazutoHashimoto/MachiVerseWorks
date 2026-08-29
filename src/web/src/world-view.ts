@@ -1,17 +1,22 @@
 import * as THREE from 'three';
 
 import type { EntityStore } from './entity-store.ts';
-import type { WorldRect } from './protocol.ts';
+import type { WorldVolume } from './protocol.ts';
 
 const CAMERA_HEIGHT = 500;
+const CAMERA_TILT_DISTANCE = 250;
 const INITIAL_HALF_HEIGHT = 300;
 const SUBSCRIPTION_PADDING = 1.2;
+const SUBSCRIPTION_MIN_ALTITUDE = -128;
+const SUBSCRIPTION_MAX_ALTITUDE = 512;
 const MINIMUM_ZOOM = 0.25;
 const MAXIMUM_ZOOM = 8;
+const AGENT_HALF_SIZE = 2.5;
 
 export interface WorldPosition {
   readonly x: number;
   readonly y: number;
+  readonly z: number;
 }
 
 export class WorldView {
@@ -28,8 +33,8 @@ export class WorldView {
   public constructor(private readonly host: HTMLElement) {
     this.scene.background = new THREE.Color(0x0b1020);
     this.camera.position.set(0, CAMERA_HEIGHT, 0);
-    this.camera.up.set(0, 0, -1);
-    this.camera.lookAt(0, 0, 0);
+    this.camera.up.set(0, 1, 0);
+    this.camera.lookAt(0, 0, -CAMERA_TILT_DISTANCE);
 
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.domElement.setAttribute('aria-label', 'MachiVerseWorks world view');
@@ -60,7 +65,7 @@ export class WorldView {
     this.renderer.render(this.scene, this.camera);
   }
 
-  public getSubscriptionArea(): WorldRect {
+  public getSubscriptionVolume(): WorldVolume {
     const halfHeight = INITIAL_HALF_HEIGHT / this.camera.zoom;
     const halfWidth = halfHeight * this.aspect;
     const centerX = this.camera.position.x;
@@ -68,13 +73,19 @@ export class WorldView {
     return {
       minX: centerX - halfWidth * SUBSCRIPTION_PADDING,
       minY: centerY - halfHeight * SUBSCRIPTION_PADDING,
+      minZ: SUBSCRIPTION_MIN_ALTITUDE,
       maxX: centerX + halfWidth * SUBSCRIPTION_PADDING,
       maxY: centerY + halfHeight * SUBSCRIPTION_PADDING,
+      maxZ: SUBSCRIPTION_MAX_ALTITUDE,
     };
   }
 
   public getListenerPosition(): WorldPosition {
-    return { x: this.camera.position.x, y: this.camera.position.z };
+    return {
+      x: this.camera.position.x,
+      y: this.camera.position.z,
+      z: this.camera.position.y,
+    };
   }
 
   public dispose(): void {
@@ -128,30 +139,43 @@ export class WorldView {
   }
 }
 
+export function simulationToThreePosition(
+  x: number,
+  y: number,
+  z: number,
+  target = new THREE.Vector3(),
+): THREE.Vector3 {
+  return target.set(x, z, y);
+}
+
 class AgentRenderer {
   private readonly geometry = new THREE.BoxGeometry(5, 5, 5);
   private readonly material = new THREE.MeshBasicMaterial({ color: 0x67e8f9 });
   private mesh: THREE.InstancedMesh;
   private capacity = 1_024;
   private readonly matrix = new THREE.Matrix4();
-  private positions = new Float32Array(this.capacity * 2);
+  private positions = new Float32Array(this.capacity * 3);
 
   public constructor(private readonly scene: THREE.Scene) {
     this.mesh = this.createMesh(this.capacity);
     this.scene.add(this.mesh);
   }
 
-public update(store: EntityStore, now: number): void {
-  this.ensureCapacity(store.size);
-  const count = store.writeSampledPositions(now, this.positions);
-  for (let index = 0; index < count; index += 1) {
-    const positionOffset = index * 2;
-    this.matrix.makeTranslation(this.positions[positionOffset], 2.5, this.positions[positionOffset + 1]);
-    this.mesh.setMatrixAt(index, this.matrix);
+  public update(store: EntityStore, now: number): void {
+    this.ensureCapacity(store.size);
+    const count = store.writeSampledPositions(now, this.positions);
+    for (let index = 0; index < count; index += 1) {
+      const positionOffset = index * 3;
+      this.matrix.makeTranslation(
+        this.positions[positionOffset],
+        this.positions[positionOffset + 2] + AGENT_HALF_SIZE,
+        this.positions[positionOffset + 1],
+      );
+      this.mesh.setMatrixAt(index, this.matrix);
+    }
+    this.mesh.count = count;
+    this.mesh.instanceMatrix.needsUpdate = true;
   }
-  this.mesh.count = count;
-  this.mesh.instanceMatrix.needsUpdate = true;
-}
 
   public dispose(): void {
     this.scene.remove(this.mesh);
@@ -172,7 +196,7 @@ public update(store: EntityStore, now: number): void {
 
     const previousMesh = this.mesh;
     this.capacity = nextCapacity;
-    this.positions = new Float32Array(nextCapacity * 2);
+    this.positions = new Float32Array(nextCapacity * 3);
     this.mesh = this.createMesh(nextCapacity);
     this.scene.remove(previousMesh);
     previousMesh.dispose();
