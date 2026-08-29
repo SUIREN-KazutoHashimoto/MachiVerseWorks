@@ -2,8 +2,8 @@
 
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 5 — Web Client 最小実装完了
-> **次の実装タスク:** `E2E-001` — Server + Web Client のローカル起動手順を確定する
+> **現在:** Phase 6 — End-to-End PoC 完了
+> **次の実装タスク:** `PER-001` — BenchmarkDotNetの共通設定を作る
 
 ## 全体の現在地
 
@@ -15,8 +15,8 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 3 | Protocol 最小実装 | ✅ 完了 |
 | 4 | Headless Server 最小実装 | ✅ 完了 |
 | 5 | Web Client 最小実装 | ✅ 完了 |
-| 6 | End-to-End PoC | ⏭️ 次 |
-| 7 | 性能基盤の拡張 | ⏳ 待機 |
+| 6 | End-to-End PoC | ✅ 完了 |
+| 7 | 性能基盤の拡張 | ⏭️ 次 |
 | 8 | 保存・復元基盤 | ⏳ 待機 |
 
 ## 状態の見方
@@ -286,26 +286,26 @@ Task ID は参照用の固定IDです。並び替えても変更しません。
 ---
 
 <details>
-<summary><strong>Phase 6 — End-to-End PoC（次）</strong></summary>
+<summary><strong>Phase 6 — End-to-End PoC（完了）</strong></summary>
 
-- ⬜ **E2E-001** — Server + Web Client のローカル起動手順を確定する
-- ⬜ **E2E-002** — BrowserからServerへ接続できることを確認する
-- ⬜ **E2E-003** — 1,000 AgentをServerで生成しBrowserに表示する
-- ⬜ **E2E-004** — camera移動時にsubscription範囲が更新されることを確認する
-- ⬜ **E2E-005** — 範囲外AgentがClientからremoveされることを確認する
-- ⬜ **E2E-006** — 再接続後にClient stateを復元できることを確認する
-- ⬜ **E2E-007** — 10,000 AgentのServer simulationで近傍だけ描画できることを確認する
-- ⬜ **E2E-008** — 100,000 AgentのServer simulationで近傍だけ配信できることを確認する
-- ⬜ **E2E-009** — snapshot bytes / encode time / send timeを記録する
-- ⬜ **E2E-010** — Client decode time / frame timeを記録する
-- ⬜ **E2E-011** — PoC結果と既知のボトルネックを文書化する
+- ✅ **E2E-001** — Server + Web Client のローカル起動手順を確定する
+- ✅ **E2E-002** — BrowserからServerへ接続できることを確認する
+- ✅ **E2E-003** — 1,000 AgentをServerで生成しBrowserに表示する
+- ✅ **E2E-004** — camera移動時にsubscription範囲が更新されることを確認する
+- ✅ **E2E-005** — 範囲外AgentがClientからremoveされることを確認する
+- ✅ **E2E-006** — 再接続後にClient stateを復元できることを確認する
+- ✅ **E2E-007** — 10,000 AgentのServer simulationで近傍だけ描画できることを確認する
+- ✅ **E2E-008** — 100,000 AgentのServer simulationで近傍だけ配信できることを確認する
+- ✅ **E2E-009** — snapshot bytes / encode time / send timeを記録する
+- ✅ **E2E-010** — Client decode time / frame timeを記録する
+- ✅ **E2E-011** — PoC結果と既知のボトルネックを文書化する
 
 </details>
 
 ---
 
 <details>
-<summary><strong>Phase 7 — 性能基盤の拡張（待機）</strong></summary>
+<summary><strong>Phase 7 — 性能基盤の拡張（次）</strong></summary>
 
 PoCを動かした後、計測結果に基づいて必要な項目だけ進める。
 
