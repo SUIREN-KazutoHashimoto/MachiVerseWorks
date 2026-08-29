@@ -2,8 +2,8 @@
 
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 4 — Headless Server 最小実装完了  
-> **次の実装タスク:** `WEB-001` — Web Client のapplication entry pointを作る
+> **現在:** Phase 5 — Web Client 最小実装完了
+> **次の実装タスク:** `E2E-001` — Server + Web Client のローカル起動手順を確定する
 
 ## 全体の現在地
 
@@ -14,8 +14,8 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 2 | Simulation Core 最小 PoC | ✅ 完了 |
 | 3 | Protocol 最小実装 | ✅ 完了 |
 | 4 | Headless Server 最小実装 | ✅ 完了 |
-| 5 | Web Client 最小実装 | ⏭️ 次 |
-| 6 | End-to-End PoC | ⏳ 待機 |
+| 5 | Web Client 最小実装 | ✅ 完了 |
+| 6 | End-to-End PoC | ⏭️ 次 |
 | 7 | 性能基盤の拡張 | ⏳ 待機 |
 | 8 | 保存・復元基盤 | ⏳ 待機 |
 
@@ -79,7 +79,8 @@ Task ID は参照用の固定IDです。並び替えても変更しません。
 
 ---
 
-## Phase 1 — 開発プロジェクト骨格
+<details>
+<summary><strong>Phase 1 — 開発プロジェクト骨格（完了）</strong></summary>
 
 > **状態: ✅ 完了**  
 > 通常開発への移行後、C# Solution と Web Client の最小骨格を作り、既存CIを実際のbuildへ接続する。
@@ -120,6 +121,8 @@ Task ID は参照用の固定IDです。並び替えても変更しません。
 - ✅ **SKL-026** — Dependabot に NuGet 更新設定を追加する
 - ✅ **SKL-027** — Dependabot に npm 更新設定を追加する
 - ✅ **SKL-028** — 初回実装向けのローカル開発手順を `getting-started.md` に記載する
+
+</details>
 
 ---
 
@@ -224,35 +227,66 @@ Task ID は参照用の固定IDです。並び替えても変更しません。
 ---
 
 <details>
-<summary><strong>Phase 5 — Web Client 最小実装（次）</strong></summary>
+<summary><strong>Phase 5 — Web Client 最小実装（完了）</strong></summary>
 
-- ⬜ **WEB-001** — Web Client のapplication entry pointを作る
-- ⬜ **WEB-002** — locale manifestからdefault localeを初期化する
-- ⬜ **WEB-003** — `ja-JP` の最小UI resourceを作る
-- ⬜ **WEB-004** — Server URL設定を読み込めるようにする
-- ⬜ **WEB-005** — WebSocket接続クラスを作る
-- ⬜ **WEB-006** — `Hello` / `HelloAck` を実装する
-- ⬜ **WEB-007** — binary frame decoderを作る
-- ⬜ **WEB-008** — Client側entity storeを作る
-- ⬜ **WEB-009** — Agent spawnをentity storeへ反映する
-- ⬜ **WEB-010** — Agent updateをentity storeへ反映する
-- ⬜ **WEB-011** — Agent removeをentity storeへ反映する
-- ⬜ **WEB-012** — Three.js scene / camera / renderer の最小構成を作る
-- ⬜ **WEB-013** — camera位置からsubscription範囲を計算する
-- ⬜ **WEB-014** — `SubscribeArea` をServerへ送る
-- ⬜ **WEB-015** — Agentを最小形状で描画する
-- ⬜ **WEB-016** — snapshot間の位置補間を実装する
-- ⬜ **WEB-017** — 接続状態をUIへ表示する
-- ⬜ **WEB-018** — Protocol error codeをlocale resource経由で表示する
-- ⬜ **WEB-019** — 接続切断を検知する
-- ⬜ **WEB-020** — 最小の再接続処理を実装する
+- ✅ **WEB-001** — Web Client のapplication entry pointを作る
+- ✅ **WEB-002** — locale manifestからdefault localeを初期化する
+- ✅ **WEB-003** — `ja-JP` の最小UI resourceを作る
+- ✅ **WEB-004** — Server URL設定を読み込めるようにする
+- ✅ **WEB-005** — WebSocket接続クラスを作る
+- ✅ **WEB-006** — `Hello` / `HelloAck` を実装する
+- ✅ **WEB-007** — binary frame decoderを作る
+- ✅ **WEB-008** — Client側entity storeを作る
+- ✅ **WEB-009** — Agent spawnをentity storeへ反映する
+- ✅ **WEB-010** — Agent updateをentity storeへ反映する
+- ✅ **WEB-011** — Agent removeをentity storeへ反映する
+- ✅ **WEB-012** — Three.js scene / camera / renderer の最小構成を作る
+- ✅ **WEB-013** — camera位置からsubscription範囲を計算する
+- ✅ **WEB-014** — `SubscribeArea` をServerへ送る
+- ✅ **WEB-015** — Agentを最小形状で描画する
+- ✅ **WEB-016** — snapshot間の位置補間を実装する
+- ✅ **WEB-017** — 接続状態をUIへ表示する
+- ✅ **WEB-018** — Protocol error codeをlocale resource経由で表示する
+- ✅ **WEB-019** — 接続切断を検知する
+- ✅ **WEB-020** — 最小の再接続処理を実装する
+
+### Audio Client Foundation
+
+音声は描画と独立した Client presentation system として扱い、Web Audio API を基盤に UI / BGM / 環境音 / World SFX / Voice を同一の mixer graph 上で管理する。多数Agent環境では全EntityへAudioNodeを常設せず、距離・優先度・voice budgetによるvirtualizationを前提とする。
+
+- ✅ **AUD-001** — Web Clientのaudio architectureとstate ownershipを文書化する
+- ✅ **AUD-002** — `AudioContext` lifecycleを管理する `AudioEngine` の境界を作る
+- ✅ **AUD-003** — user gestureによるaudio unlock / resumeを実装する
+- ✅ **AUD-004** — Master / Music / UI / Ambient / World / Voice のmixer busを作る
+- ✅ **AUD-005** — audio asset manifestの形式とstable cue IDを定義する
+- ✅ **AUD-006** — short SFX用のAudioBuffer preload / cache基盤を作る
+- ✅ **AUD-007** — non-positional soundの最小再生APIを作る
+- ✅ **AUD-008** — Three.js cameraとaudio listenerを接続する
+- ✅ **AUD-009** — positional sound emitterの最小再生APIを作る
+- ✅ **AUD-010** — positional soundのdistance attenuation既定値を定義する
+- ✅ **AUD-011** — active audio emitterを管理するregistryを作る
+- ✅ **AUD-012** — concurrent voice budgetとaudio virtualizationを実装する
+- ✅ **AUD-013** — Entity位置更新をactive positional emitterへ反映する
+- ✅ **AUD-014** — Entity remove時に関連audio emitterを解放する
+- ✅ **AUD-015** — global ambient layerを定義・再生できるようにする
+- ✅ **AUD-016** — locationに紐づくAmbient Zoneのデータモデルを定義する
+- ✅ **AUD-017** — camera位置からactive Ambient Zoneを選択する
+- ✅ **AUD-018** — Ambient Zone内で複数ambient layerを合成できるようにする
+- ✅ **AUD-019** — Ambient Zone切替時のfade / crossfadeを実装する
+- ✅ **AUD-020** — overlapping Ambient Zoneのpriority / weight解決ルールを定義する
+- ✅ **AUD-021** — ambient mixへ外部parameterを渡せる境界を作る
+- ✅ **AUD-022** — master muteとcategory別volumeを実装する
+- ✅ **AUD-023** — AudioContext非対応・blocked・suspended時のfallbackを実装する
+- ✅ **AUD-024** — AudioEngine / mixer / voice budgetのunit testを追加する
+- ✅ **AUD-025** — audio cueにasset pathを直接露出しないことをテストする
+- ✅ **AUD-026** — Server / Protocolから音声ファイル名を送らずsemantic world eventからcueへ解決する方針を文書化する
 
 </details>
 
 ---
 
 <details>
-<summary><strong>Phase 6 — End-to-End PoC（待機）</strong></summary>
+<summary><strong>Phase 6 — End-to-End PoC（次）</strong></summary>
 
 - ⬜ **E2E-001** — Server + Web Client のローカル起動手順を確定する
 - ⬜ **E2E-002** — BrowserからServerへ接続できることを確認する

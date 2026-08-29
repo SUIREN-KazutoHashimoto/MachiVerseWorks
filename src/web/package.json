@@ -7,6 +7,7 @@
     "build": "tsc --noEmit && vite build",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-transform-types tests/*.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -13,6 +13,11 @@ body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+button,
+input {
+  font: inherit;
+}
+
 #app {
   position: relative;
 }
@@ -21,12 +26,19 @@ body {
   display: block;
   width: 100%;
   height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+#app canvas:active {
+  cursor: grabbing;
 }
 
 .identity {
   position: absolute;
   right: 1rem;
   bottom: 1rem;
+  z-index: 2;
   display: flex;
   gap: 0.55rem;
   align-items: baseline;
@@ -42,4 +54,83 @@ body {
 .identity span {
   font-size: 0.75rem;
   opacity: 0.7;
+}
+
+.status-panel {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  z-index: 3;
+  min-width: 14rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid rgb(148 163 184 / 24%);
+  border-radius: 0.65rem;
+  background: rgb(15 23 42 / 86%);
+  box-shadow: 0 0.8rem 2rem rgb(0 0 0 / 25%);
+  backdrop-filter: blur(0.65rem);
+}
+
+.status-row {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  gap: 0.75rem;
+  align-items: baseline;
+  margin: 0.15rem 0;
+}
+
+.status-label {
+  color: #94a3b8;
+  font-size: 0.75rem;
+}
+
+.status-value {
+  justify-self: end;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.status-value[data-state="connected"] {
+  color: #86efac;
+}
+
+.status-value[data-state="reconnecting"],
+.status-value[data-state="connecting"],
+.status-value[data-state="handshaking"] {
+  color: #fde68a;
+}
+
+.audio-unlock {
+  width: 100%;
+  margin-top: 0.6rem;
+  padding: 0.42rem 0.6rem;
+  border: 1px solid rgb(103 232 249 / 45%);
+  border-radius: 0.45rem;
+  background: rgb(8 145 178 / 22%);
+  color: #cffafe;
+  cursor: pointer;
+}
+
+.audio-unlock:hover {
+  background: rgb(8 145 178 / 34%);
+}
+
+.client-error {
+  max-width: 22rem;
+  margin-top: 0.65rem;
+  color: #fecaca;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.camera-hint {
+  position: absolute;
+  left: 1rem;
+  bottom: 1rem;
+  z-index: 2;
+  padding: 0.35rem 0.55rem;
+  border-radius: 0.35rem;
+  background: rgb(15 23 42 / 65%);
+  color: #cbd5e1;
+  font-size: 0.7rem;
+  pointer-events: none;
 }

@@ -1,25 +1,48 @@
-# Web Client
+# MachiVerseWorks Web Client
 
-MachiVerseWorks の表示・入力を担当する Web Client です。
+Vite + TypeScript + Three.js で構成する MachiVerseWorks のブラウザClientです。
 
-## Phase 1 の技術構成
+Phase 5 では次の最小経路を実装しています。
 
-- Node.js 24 LTS を `.node-version` で完全固定する。
-- Vite + TypeScript の vanilla 構成とし、UI framework は Phase 1 では導入しない。
-- 3D 描画の最小依存として Three.js を使用する。
-- ESLint + typescript-eslint で TypeScript を静的検査する。
-- `package.json` の直接依存は exact version とし、`package-lock.json` をコミットする。
-- 依存更新は Dependabot の npm 設定から行う。
-- アプリケーションversionは `package.json` へ重複管理せず、Vite build 時にリポジトリルート `VERSION` を読む。
+```text
+WebSocket -> Protocol decoder -> EntityStore -> interpolation -> Three.js
+                                              \\-> Audio presentation boundary
+```
 
-## コマンド
+## 起動
+
+Serverを既定設定で起動した後、このディレクトリで次を実行します。
 
 ```bash
 npm ci
 npm run dev
+```
+
+既定のWebSocket URLは `ws://127.0.0.1:5080/ws` です。別のServerへ接続する場合は Vite environment variable で指定します。
+
+```bash
+VITE_SERVER_URL=ws://127.0.0.1:5080/ws npm run dev
+```
+
+URLは `ws://` または `wss://` のみ受理します。
+
+## 操作
+
+- 左ドラッグ: camera移動
+- マウスホイール: zoom
+- `音声を有効化`: browserのuser gesture要件を満たして `AudioContext` を resume
+
+Cameraから計算した矩形にpaddingを加えて `SubscribeArea` を送信します。切断時はClient entity stateを破棄し、自動再接続後に新しい接続のspawn snapshotから再構築します。
+
+## 検証
+
+```bash
 npm run lint
 npm run typecheck
+npm test
 npm run build
 ```
 
-Web Client は Simulation の正本ではありません。Server から受け取った状態の表示と、ユーザー入力の送信に責務を限定します。
+Protocol codec / EntityStore / audio voice budget・Ambient Zone policy は Node.js のbuilt-in test runnerで検証します。
+
+音声assetは将来 `public/audio/` 以下へ配置し、codeからfile pathを指定せず `audio/manifest.json` のstable cue IDを利用します。
