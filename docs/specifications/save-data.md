@@ -46,6 +46,8 @@ Save format version はルート `VERSION` の application version、および P
 
 `randomState` は seed だけではなく保存時点の deterministic random generator 状態を表す。これによりロード後に新規Agentを生成した場合も、保存しなかった場合と同じ乱数系列を継続できる。
 
+Version 1 の時間は固定tick durationで進む。したがって `elapsedTicks` は `tickCount × SimulationConfig.TickDuration.Ticks` と一致しなければならず、両者を独立した任意値として扱わない。
+
 ## JSON例
 
 ```json
@@ -56,7 +58,7 @@ Save format version はルート `VERSION` の application version、および P
     "seed": 1,
     "spatialCellSize": 64,
     "tickCount": 120,
-    "elapsedTicks": 40000000,
+    "elapsedTicks": 39999960,
     "randomState": 1663341875487337578,
     "nextAgentId": 3,
     "agents": [
@@ -119,6 +121,7 @@ Phase 8 version 1 には次を保存しない。
 - 未知field
 - 無効なSimulation設定値
 - 負のelapsed time
+- `tickCount` と `elapsedTicks` が固定tick durationから導かれる値として一致しない状態
 - 次の1 tickで`tickCount`またはelapsed timeがoverflowする状態
 - 0のAgent ID
 - 重複Agent ID

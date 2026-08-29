@@ -200,6 +200,28 @@ public sealed class WorldSaveSerializerTests
         Assert.ThrowsExactly<InvalidDataException>(() => WorldSaveSerializer.Deserialize(json));
     }
 
+    [TestMethod]
+    public void TickCountAndElapsedTimeMismatchIsRejected()
+    {
+        var json = """
+            {
+              "formatVersion": 1,
+              "simulation": {
+                "tickRate": 10,
+                "seed": 1,
+                "spatialCellSize": 64,
+                "tickCount": 2,
+                "elapsedTicks": 0,
+                "randomState": 1,
+                "nextAgentId": 1,
+                "agents": []
+              }
+            }
+            """u8.ToArray();
+
+        Assert.ThrowsExactly<InvalidDataException>(() => WorldSaveSerializer.Deserialize(json));
+    }
+
     private static void AssertCheckpointEqual(SimulationCheckpoint expected, SimulationCheckpoint actual)
     {
         Assert.AreEqual(expected.TickRate, actual.TickRate);
