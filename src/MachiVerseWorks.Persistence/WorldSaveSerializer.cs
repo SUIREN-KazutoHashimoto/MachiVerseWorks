@@ -6,6 +6,8 @@ namespace MachiVerseWorks.Persistence;
 
 public static class WorldSaveSerializer
 {
+    private const int StreamReadBufferSize = 81_920;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -38,11 +40,23 @@ public static class WorldSaveSerializer
 
     public static SimulationWorld Deserialize(ReadOnlySpan<byte> utf8Json)
     {
+        return Deserialize(utf8Json, WorldSaveLimits.Default);
+    }
+
+    public static SimulationWorld Deserialize(ReadOnlySpan<byte> utf8Json, WorldSaveLimits limits)
+    {
+        ArgumentNullException.ThrowIfNull(limits);
+        if (utf8Json.Length > limits.MaximumBytes)
+        {
+            throw new InvalidDataException(
+                $"Save Data exceeds the configured {limits.MaximumBytes}-byte input limit.");
+        }
+
         try
         {
             var document = JsonSerializer.Deserialize<SaveDataDocument>(utf8Json, JsonOptions)
                 ?? throw new InvalidDataException("Save Data document is empty.");
-            return RestoreDocument(document);
+            return RestoreDocument(document, limits);
         }
         catch (InvalidDataException)
         {
@@ -57,16 +71,49 @@ public static class WorldSaveSerializer
 
     public static SimulationWorld Load(Stream source)
     {
+        return Load(source, WorldSaveLimits.Default);
+    }
+
+    public static SimulationWorld Load(Stream source, WorldSaveLimits limits)
+    {
         ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(limits);
 
         if (!source.CanRead)
         {
             throw new ArgumentException("Source stream must be readable.", nameof(source));
         }
 
+        if (source.CanSeek)
+        {
+            var remainingLength = source.Length - source.Position;
+            if (remainingLength > limits.MaximumBytes)
+            {
+                throw new InvalidDataException(
+                    $"Save Data exceeds the configured {limits.MaximumBytes}-byte input limit.");
+            }
+        }
+
         using var buffer = new MemoryStream();
-        source.CopyTo(buffer);
-        return Deserialize(buffer.ToArray());
+        var readBuffer = new byte[Math.Min(StreamReadBufferSize, limits.MaximumBytes)];
+        while (true)
+        {
+            var read = source.Read(readBuffer, 0, readBuffer.Length);
+            if (read == 0)
+            {
+                break;
+            }
+
+            if (buffer.Length > limits.MaximumBytes - read)
+            {
+                throw new InvalidDataException(
+                    $"Save Data exceeds the configured {limits.MaximumBytes}-byte input limit.");
+            }
+
+            buffer.Write(readBuffer, 0, read);
+        }
+
+        return Deserialize(buffer.ToArray(), limits);
     }
 
     private static SaveDataDocument CreateDocument(SimulationCheckpoint checkpoint)
@@ -103,7 +150,7 @@ public static class WorldSaveSerializer
         };
     }
 
-    private static SimulationWorld RestoreDocument(SaveDataDocument document)
+    private static SimulationWorld RestoreDocument(SaveDataDocument document, WorldSaveLimits limits)
     {
         var formatVersion = Require(document.FormatVersion, "formatVersion");
         if (formatVersion != SaveFormatVersion.Current)
@@ -116,6 +163,12 @@ public static class WorldSaveSerializer
             ?? throw new InvalidDataException("Save Data is missing simulation state.");
         var savedAgents = simulation.Agents
             ?? throw new InvalidDataException("Save Data is missing Agent state.");
+        if (savedAgents.Length > limits.MaximumAgentCount)
+        {
+            throw new InvalidDataException(
+                $"Save Data contains {savedAgents.Length} Agents, exceeding the configured {limits.MaximumAgentCount}-Agent limit.");
+        }
+
         var agents = new SimulationAgentCheckpoint[savedAgents.Length];
 
         for (var index = 0; index < savedAgents.Length; index++)

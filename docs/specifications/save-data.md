@@ -81,6 +81,17 @@ Save format version はルート `VERSION` の application version、および P
 }
 ```
 
+## 読込時の資源上限
+
+外部Save Dataは構造が正しくても無制限には受け入れない。`WorldSaveLimits` の既定値は次とする。
+
+- 最大UTF-8入力サイズ: 128 MiB
+- 最大Agent数: 1,000,000
+
+byte上限はJSON parse前に適用する。Stream入力は上限を超えて無制限にbufferしない。Agent数はcheckpoint配列へ変換する前に検証する。
+
+テストや将来のhost要件では明示的な`WorldSaveLimits`を指定できるが、上限を引き上げる場合は利用可能メモリと想定都市規模を考慮する。
+
 ## 保存しない情報
 
 Phase 8 version 1 には次を保存しない。
@@ -101,6 +112,8 @@ Phase 8 version 1 には次を保存しない。
 少なくとも次は不正Save Dataとして拒否する。
 
 - JSONとして不正
+- configured byte上限超過
+- configured Agent数上限超過
 - current以外の`formatVersion`
 - 必須field欠落
 - 未知field
