@@ -3,7 +3,7 @@
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
 > **現在:** Phase 0 — 初期セットアップ最終確認  
-> **手動設定待ち:** `SET-014` / `SET-019` / `SET-021`  
+> **手動設定待ち:** `SET-019` / `SET-021`  
 > **次の実装タスク:** `SKL-001` — ルートに `MachiVerseWorks.slnx` を作成する
 
 ## 全体の現在地
@@ -30,9 +30,8 @@ Task ID は参照用の固定IDです。並び替えても変更しません。
 
 ## 初期セットアップ残タスク
 
-以下の3項目だけは GitHub Settings 側の操作が必要です。設定値の正本は [`docs/development/repository-settings.md`](docs/development/repository-settings.md) です。
+以下の2項目だけは GitHub Settings 側の操作が必要です。設定値の正本は [`docs/development/repository-settings.md`](docs/development/repository-settings.md) です。
 
-- ⬜ **SET-014** — `main` / `develop` のRulesetまたはbranch protectionを設定する
 - ⬜ **SET-019** — Private vulnerability reporting / Dependabot alerts / Secret scanning 等のSecurity設定を確認・有効化する
 - ⬜ **SET-021** — Repositoryのmerge方式をmerge commitのみにし、merge後の短命branch自動削除を有効化する
 
@@ -71,7 +70,7 @@ Task ID は参照用の固定IDです。並び替えても変更しません。
 - ✅ **SET-011** — Coding Guidelines と Performance Guidelines を整備する
 - ✅ **SET-012** — 細粒度タスク管理用の `ROADMAP.md` を導入する
 - ✅ **SET-013** — `develop` ブランチを作成する
-- ⬜ **SET-014** — `main` / `develop` のRulesetまたはbranch protectionを設定する
+- ✅ **SET-014** — `main` / `develop` のRulesetまたはbranch protectionを設定する
 - ✅ **SET-015** — CI に実装有無に依存しない固定 `ci-gate` jobを追加する
 - ✅ **SET-016** — 新機能branch名を `feature/*` に統一する
 - ✅ **SET-017** — PRの標準merge方式とbranch削除方針を確定・文書化する
