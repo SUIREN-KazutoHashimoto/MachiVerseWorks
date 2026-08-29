@@ -31,7 +31,7 @@ public sealed class WorldSaveSerializerLimitTests
     {
         var json = """
             {
-              "formatVersion": 1,
+              "formatVersion": 2,
               "simulation": {
                 "tickRate": 30,
                 "seed": 1,
@@ -41,8 +41,8 @@ public sealed class WorldSaveSerializerLimitTests
                 "randomState": 1,
                 "nextAgentId": 3,
                 "agents": [
-                  { "id": 1, "x": 0, "y": 0, "velocityX": 0, "velocityY": 0, "isActive": true },
-                  { "id": 2, "x": 1, "y": 1, "velocityX": 0, "velocityY": 0, "isActive": true }
+                  { "id": 1, "x": 0, "y": 0, "z": 0, "velocityX": 0, "velocityY": 0, "velocityZ": 0, "isActive": true },
+                  { "id": 2, "x": 1, "y": 1, "z": 1, "velocityX": 0, "velocityY": 0, "velocityZ": 0, "isActive": true }
                 ]
               }
             }
@@ -58,7 +58,7 @@ public sealed class WorldSaveSerializerLimitTests
     {
         var json = """
             {
-              "formatVersion": 1,
+              "formatVersion": 2,
               "simulation": {
                 "tickRate": 30,
                 "seed": 1,
@@ -84,7 +84,7 @@ public sealed class WorldSaveSerializerLimitTests
     {
         var json = """
             {
-              "formatVersion": 1,
+              "formatVersion": 2,
               "simulation": {
                 "tickRate": 30,
                 "seed": 1,
