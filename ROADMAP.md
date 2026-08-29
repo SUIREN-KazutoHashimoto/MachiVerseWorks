@@ -2,15 +2,14 @@
 
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 0 — 初期セットアップ最終確認  
-> **手動設定待ち:** `SET-014` / `SET-019` / `SET-021`  
+> **現在:** Phase 0 — リポジトリ初期セットアップ完了  
 > **次の実装タスク:** `SKL-001` — ルートに `MachiVerseWorks.slnx` を作成する
 
 ## 全体の現在地
 
 | Phase | 内容 | 状態 |
 | --- | --- | --- |
-| 0 | リポジトリ初期セットアップ | ⚠️ **手動設定待ち** |
+| 0 | リポジトリ初期セットアップ | ✅ 完了 |
 | 1 | 開発プロジェクト骨格 | ⏭️ 次 |
 | 2 | Simulation Core 最小 PoC | ⏳ 待機 |
 | 3 | Protocol 最小実装 | ⏳ 待機 |
@@ -28,13 +27,9 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 
 Task ID は参照用の固定IDです。並び替えても変更しません。
 
-## 初期セットアップ残タスク
+## 初期セットアップ
 
-以下の3項目だけは GitHub Settings 側の操作が必要です。設定値の正本は [`docs/development/repository-settings.md`](docs/development/repository-settings.md) です。
-
-- ⬜ **SET-014** — `main` / `develop` のRulesetまたはbranch protectionを設定する
-- ⬜ **SET-019** — Private vulnerability reporting / Dependabot alerts / Secret scanning 等のSecurity設定を確認・有効化する
-- ⬜ **SET-021** — Repositoryのmerge方式をmerge commitのみにし、merge後の短命branch自動削除を有効化する
+`SET-001` から `SET-021` まで完了しました。通常開発への移行が明示されるまでは、`AGENTS.md` の初期セットアップ例外に従い application version のカウントアップとルート `VERSION` の作成は行いません。
 
 <details>
 <summary><strong>ROADMAP 運用ルール</strong></summary>
@@ -56,7 +51,7 @@ Task ID は参照用の固定IDです。並び替えても変更しません。
 ---
 
 <details>
-<summary><strong>Phase 0 — リポジトリ初期セットアップ（手動設定待ち）</strong></summary>
+<summary><strong>Phase 0 — リポジトリ初期セットアップ（完了）</strong></summary>
 
 - ✅ **SET-001** — 基本ディレクトリ構成を作成する
 - ✅ **SET-002** — ルート `README.md` / `AGENTS.md` を整備する
@@ -71,14 +66,14 @@ Task ID は参照用の固定IDです。並び替えても変更しません。
 - ✅ **SET-011** — Coding Guidelines と Performance Guidelines を整備する
 - ✅ **SET-012** — 細粒度タスク管理用の `ROADMAP.md` を導入する
 - ✅ **SET-013** — `develop` ブランチを作成する
-- ⬜ **SET-014** — `main` / `develop` のRulesetまたはbranch protectionを設定する
+- ✅ **SET-014** — `main` / `develop` のRulesetまたはbranch protectionを設定する
 - ✅ **SET-015** — CI に実装有無に依存しない固定 `ci-gate` jobを追加する
 - ✅ **SET-016** — 新機能branch名を `feature/*` に統一する
 - ✅ **SET-017** — PRの標準merge方式とbranch削除方針を確定・文書化する
 - ✅ **SET-018** — 通常開発用application versionの正本設計を確定する
-- ⬜ **SET-019** — GitHub Security設定を確認・有効化する
+- ✅ **SET-019** — GitHub Security設定を確認・有効化する
 - ✅ **SET-020** — MarkdownのRepository内リンク検証をCIへ追加する
-- ⬜ **SET-021** — Repositoryのmerge設定とmerge後branch自動削除をGitHub Settingsへ反映する
+- ✅ **SET-021** — Repositoryのmerge設定とmerge後branch自動削除をGitHub Settingsへ反映する
 
 </details>
 
@@ -87,7 +82,7 @@ Task ID は参照用の固定IDです。並び替えても変更しません。
 ## Phase 1 — 開発プロジェクト骨格
 
 > **状態: ⏭️ 次**  
-> 初期セットアップのGitHub手動設定を終えた後、C# Solution と Web Client の最小骨格を作り、既存CIを実際のbuildへ接続する。
+> 通常開発への移行後、C# Solution と Web Client の最小骨格を作り、既存CIを実際のbuildへ接続する。
 
 ### .NET Solution
 
