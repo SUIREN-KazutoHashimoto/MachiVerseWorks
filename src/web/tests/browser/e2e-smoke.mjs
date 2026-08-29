@@ -2,7 +2,7 @@ import { ClientPerformanceMetrics } from '../../src/client-performance.ts';
 import { MachiVerseConnection } from '../../src/connection.ts';
 import { EntityStore } from '../../src/entity-store.ts';
 import { MessageType } from '../../src/protocol.ts';
-import { WorldView } from '../../src/world-view.ts';
+import { simulationToThreePosition, WorldView } from '../../src/world-view.ts';
 
 const parameters = new URLSearchParams(window.location.search);
 const expectedTotal = Number.parseInt(parameters.get('agents') ?? '1000', 10);
@@ -12,8 +12,8 @@ const serverUrl = parameters.get('server') ?? 'ws://127.0.0.1:5080/ws';
 if (!Number.isInteger(expectedTotal) || expectedTotal <= 0) {
   throw new Error('agents must be a positive integer.');
 }
-if (mode !== 'full' && mode !== 'near') {
-  throw new Error('mode must be full or near.');
+if (mode !== 'full' && mode !== 'near' && mode !== 'altitude') {
+  throw new Error('mode must be full, near, or altitude.');
 }
 
 const host = document.querySelector('#host');
@@ -30,6 +30,7 @@ let protocolError = null;
 let clientError = null;
 let sawUpdate = false;
 let sawRemove = false;
+let altitudeSeparation = null;
 
 const connection = new MachiVerseConnection(
   serverUrl,
@@ -69,8 +70,10 @@ try {
 
   if (mode === 'full') {
     await runFullScenario();
-  } else {
+  } else if (mode === 'near') {
     await runNearbyScenario();
+  } else {
+    altitudeSeparation = await runAltitudeScenario();
   }
 
   await recordAnimationFrames();
@@ -87,6 +90,7 @@ try {
     visibleAgents: store.size,
     sawUpdate,
     sawRemove,
+    altitudeSeparation,
     performance: performanceSnapshot,
   });
 } catch (error) {
@@ -100,13 +104,20 @@ try {
 }
 
 async function runFullScenario() {
-  connection.setSubscription({ minX: -600, minY: -600, maxX: 600, maxY: 600 });
+  connection.setSubscription({
+    minX: -600,
+    minY: -600,
+    minZ: -128,
+    maxX: 600,
+    maxY: 600,
+    maxZ: 512,
+  });
   await waitUntil(() => store.size === expectedTotal, `${String(expectedTotal)} agents received`);
   view.render(store, performance.now());
 
   view.camera.position.x = 2_000;
   view.camera.position.z = 2_000;
-  connection.setSubscription(view.getSubscriptionArea());
+  connection.setSubscription(view.getSubscriptionVolume());
   await waitUntil(() => store.size === 0, 'out-of-range agents removed after camera move');
   assert(sawRemove, 'AgentRemove was observed after camera move');
 
@@ -114,7 +125,7 @@ async function runFullScenario() {
   view.camera.position.z = 0;
   view.camera.zoom = 8;
   view.camera.updateProjectionMatrix();
-  connection.setSubscription(view.getSubscriptionArea());
+  connection.setSubscription(view.getSubscriptionVolume());
   await waitUntil(
     () => store.size > 0 && store.size < expectedTotal,
     'nearby subscription restored after camera return',
@@ -137,7 +148,7 @@ async function runNearbyScenario() {
   view.camera.position.z = 0;
   view.camera.zoom = 8;
   view.camera.updateProjectionMatrix();
-  connection.setSubscription(view.getSubscriptionArea());
+  connection.setSubscription(view.getSubscriptionVolume());
 
   await waitUntil(
     () => store.size > 0 && store.size < expectedTotal,
@@ -145,6 +156,37 @@ async function runNearbyScenario() {
   );
   await waitUntil(() => sawUpdate, 'nearby agents received updates');
   view.render(store, performance.now());
+}
+
+async function runAltitudeScenario() {
+  connection.setSubscription({
+    minX: -1,
+    minY: -1,
+    minZ: 0,
+    maxX: 1,
+    maxY: 1,
+    maxZ: 120,
+  });
+  await waitUntil(() => store.size === expectedTotal, 'same-horizontal-position altitude agents received');
+  await waitUntil(() => sawUpdate, 'altitude agents received updates');
+
+  const agents = [...store.sample(performance.now())];
+  assert(agents.length === expectedTotal, 'all altitude agents are present in EntityStore');
+  assert(agents.every((agent) => Math.abs(agent.x) < 0.000001 && Math.abs(agent.y) < 0.000001), 'altitude agents share horizontal position');
+
+  const simulationAltitudes = new Set(agents.map((agent) => agent.z.toFixed(6)));
+  assert(simulationAltitudes.size > 1, 'Protocol and EntityStore preserve distinct altitudes');
+
+  const rendererAltitudes = new Set(
+    agents.map((agent) => simulationToThreePosition(agent.x, agent.y, agent.z).y.toFixed(6)),
+  );
+  assert(rendererAltitudes.size === simulationAltitudes.size, 'renderer mapping preserves altitude separation');
+  view.render(store, performance.now());
+
+  return {
+    simulationAltitudes: [...simulationAltitudes],
+    rendererAltitudes: [...rendererAltitudes],
+  };
 }
 
 async function recordAnimationFrames() {
