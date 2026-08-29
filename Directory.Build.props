@@ -8,5 +8,7 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
     <TreatWarningsAsErrors Condition="'$(CI)' == 'true'">true</TreatWarningsAsErrors>
+    <MachiVerseWorksVersionFile>$([System.IO.Path]::Combine('$(MSBuildThisFileDirectory)', 'VERSION'))</MachiVerseWorksVersionFile>
+    <Version Condition="Exists('$(MachiVerseWorksVersionFile)')">$([System.IO.File]::ReadAllText('$(MachiVerseWorksVersionFile)').Trim())</Version>
   </PropertyGroup>
 </Project>

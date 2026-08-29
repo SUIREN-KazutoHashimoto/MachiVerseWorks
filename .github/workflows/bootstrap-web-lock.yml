@@ -1,0 +1,42 @@
+name: Bootstrap web lockfile
+
+on:
+  push:
+    branches:
+      - feature/phase-1-project-skeleton
+
+permissions:
+  contents: write
+
+jobs:
+  generate-lockfile:
+    name: generate package-lock
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: src/web/.node-version
+
+      - name: Generate npm lockfile
+        working-directory: src/web
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Commit lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '0.0.2\n' > VERSION
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add VERSION src/web/package-lock.json
+          if git diff --cached --quiet; then
+            echo 'No lockfile changes to commit.'
+            exit 0
+          fi
+          git commit -m 'Web lockfileを生成'
+          git push

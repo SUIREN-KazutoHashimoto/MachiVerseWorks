@@ -13,3 +13,29 @@ updates:
       github-actions:
         patterns:
           - "*"
+
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:10"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 5
+    groups:
+      nuget:
+        patterns:
+          - "*"
+
+  - package-ecosystem: npm
+    directory: /src/web
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:20"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 5
+    groups:
+      npm:
+        patterns:
+          - "*"

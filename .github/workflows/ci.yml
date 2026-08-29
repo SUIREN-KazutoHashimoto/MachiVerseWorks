@@ -49,6 +49,7 @@ jobs:
             LICENSE
             NOTICE
             THIRD_PARTY_NOTICES.txt
+            VERSION
             .gitignore
             .gitattributes
             .editorconfig
@@ -97,17 +98,13 @@ jobs:
 
           print(f".NET SDK baseline: {version}")
 
-      - name: Validate application version when present
+      - name: Validate application version
         shell: python
         run: |
           import re
           from pathlib import Path
 
           path = Path("VERSION")
-          if not path.exists():
-              print("VERSION is not present during repository initial setup.")
-              raise SystemExit(0)
-
           raw = path.read_text(encoding="utf-8")
           value = raw.rstrip("\r\n")
           if raw not in {value, value + "\n", value + "\r\n"}:
@@ -248,7 +245,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version-file: src/web/.node-version
           cache: npm
           cache-dependency-path: src/web/package-lock.json
 
