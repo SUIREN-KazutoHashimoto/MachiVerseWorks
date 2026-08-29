@@ -42,6 +42,7 @@ jobs:
           set -euo pipefail
           required_files=(
             README.md
+            ROADMAP.md
             AGENT.md
             AGENTS.md
             CONTRIBUTING.md
