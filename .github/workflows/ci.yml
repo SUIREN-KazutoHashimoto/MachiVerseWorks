@@ -53,6 +53,7 @@ jobs:
             .gitignore
             .gitattributes
             .editorconfig
+            global.json
             Directory.Build.props
             Directory.Packages.props
           )
@@ -66,6 +67,30 @@ jobs:
 
           grep -Fq "AGENT.md" AGENTS.md
           grep -Fq "MachiVerseWorks" NOTICE
+
+      - name: Validate .NET SDK policy
+        shell: python
+        run: |
+          import json
+          import re
+          from pathlib import Path
+
+          data = json.loads(Path("global.json").read_text(encoding="utf-8"))
+          sdk = data.get("sdk")
+          if not isinstance(sdk, dict):
+              raise SystemExit("global.json must contain an sdk object")
+
+          version = sdk.get("version")
+          if not isinstance(version, str) or not re.fullmatch(r"\d+\.\d+\.\d+", version):
+              raise SystemExit("sdk.version must be a fully-qualified stable SDK version")
+
+          if sdk.get("allowPrerelease") is not False:
+              raise SystemExit("sdk.allowPrerelease must be false")
+
+          if sdk.get("rollForward") != "latestFeature":
+              raise SystemExit("sdk.rollForward must be latestFeature")
+
+          print(f".NET SDK baseline: {version}")
 
       - name: Validate locale manifest
         shell: python
@@ -139,7 +164,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
 
       - name: Resolve solution
         shell: bash
@@ -153,6 +178,9 @@ jobs:
             echo "::error::A .NET project exists, but MachiVerseWorks.slnx or MachiVerseWorks.sln is missing."
             exit 1
           fi
+
+      - name: Show .NET information
+        run: dotnet --info
 
       - name: Restore
         run: dotnet restore "$DOTNET_TARGET"

@@ -1,7 +1,5 @@
 # MachiVerseWorks
 
-[![CI](https://github.com/SUIREN-KazutoHashimoto/MachiVerseWorks/actions/workflows/ci.yml/badge.svg)](https://github.com/SUIREN-KazutoHashimoto/MachiVerseWorks/actions/workflows/ci.yml)
-
 MachiVerseWorks は、C# 製のヘッドレス・シミュレーションサーバーとブラウザベースの 3D クライアントで構成する、大規模リアルタイム都市シミュレーションです。
 
 市民、道路交通、公共交通、物流、産業、電力などの都市活動をサーバー側で継続的にシミュレーションし、クライアント側では必要な範囲のデータを受信して可視化します。
@@ -56,6 +54,7 @@ MachiVerseWorks/
 ├─ scripts/
 ├─ tools/
 ├─ .github/
+├─ global.json
 ├─ AGENT.md
 ├─ AGENTS.md
 ├─ CONTRIBUTING.md
@@ -68,6 +67,17 @@ MachiVerseWorks/
 ```
 
 各ディレクトリの役割は、それぞれの `README.md` と [`docs/README.md`](docs/README.md) を参照してください。
+
+## 開発環境
+
+.NET SDK はルートの [`global.json`](global.json) を正本として固定します。現在は .NET 10 系を採用しています。
+
+開発ルールと性能評価方針:
+
+- [Coding Guidelines](docs/development/coding-guidelines.md)
+- [Performance Guidelines](docs/development/performance.md)
+- [CI / GitHub Actions](docs/development/ci.md)
+- [Git workflow](docs/development/git-workflow.md)
 
 ## ドキュメント管理方針
 
@@ -91,7 +101,7 @@ MachiVerseWorks では、旧実装のように巨大な横断設計書へ情報�
 - 大規模 Agent 処理はデータ指向・割り当て抑制・並列処理を前提に設計する
 - 最適化は計測結果に基づいて行い、可読性や仕様の正しさより先に複雑化しない
 
-具体的な開発ルールは [`AGENT.md`](AGENT.md)、開発フローは [`docs/development/git-workflow.md`](docs/development/git-workflow.md)、CI は [`docs/development/ci.md`](docs/development/ci.md) を参照してください。
+具体的な開発ルールは [`AGENT.md`](AGENT.md)、開発フローは [`docs/development/git-workflow.md`](docs/development/git-workflow.md) を参照してください。
 
 ## 旧 Machi-Sim
 
