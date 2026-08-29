@@ -1,0 +1,27 @@
+# Normalize text files across Windows / Linux / macOS.
+* text=auto eol=lf
+
+# Windows-native scripts.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Shell / PowerShell scripts.
+*.sh text eol=lf
+*.ps1 text eol=lf
+
+# Binary assets.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.7z binary
+*.dll binary
+*.exe binary
+*.pdb binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
