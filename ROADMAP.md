@@ -2,8 +2,8 @@
 
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 8 — 保存・復元基盤 完了
-> **次の実装タスク:** 未定 — 将来 Backlog を着手時にTaskへ分解する
+> **現在:** Phase 9 — 3D Simulation Foundation
+> **次の実装タスク:** P9-001 — 3D座標系の軸・単位・境界方針を仕様とADRで固定する
 
 ## 全体の現在地
 
@@ -18,6 +18,7 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 6 | End-to-End PoC | ✅ 完了 |
 | 7 | 性能基盤の拡張 | ✅ 完了 |
 | 8 | 保存・復元基盤 | ✅ 完了 |
+| 9 | 3D Simulation Foundation | ⬜ 未完了 |
 
 ## 状態の見方
 
@@ -336,6 +337,53 @@ PoCを動かした後、計測結果に基づいて必要な項目だけ進め�
 - ✅ **SAV-005** — 保存した最小Worldを読み込めるようにする
 - ✅ **SAV-006** — save → load で同じSimulation状態を復元するテストを追加する
 - ✅ **SAV-007** — 不正Save Dataを安全に拒否するテストを追加する
+
+</details>
+
+---
+
+<details>
+<summary><strong>Phase 9 — 3D Simulation Foundation</strong></summary>
+
+> **状態: ⬜ 未完了**  
+> 道路・鉄道・建物・地下・高架などの本格実装へ進む前に、Simulation Worldの正本座標系を2Dから3Dへ移行する。描画だけを3D化するのではなく、Simulation内部状態からProtocol・Save Data・Web Clientまで高さ情報を欠落させないことをPhase 9の完了条件とする。
+
+### 座標契約・Simulation Core
+
+- ⬜ **P9-001** — 3D座標系の軸・単位・境界・rendererへの写像を仕様とADRで固定する
+- ⬜ **P9-002** — `WorldPoint` / `WorldVector` を3軸化し、全成分のfinite validationを実装する
+- ⬜ **P9-003** — `SpatialCell` / `SpatialGrid` を3次元cellへ拡張する
+- ⬜ **P9-004** — 3D volume型を導入し、`SpatialIndex` の登録・移動・volume queryを3D化する
+- ⬜ **P9-005** — `AgentStore` / `SimulationWorld` の生成・移動・tick更新を3軸状態へ移行する
+- ⬜ **P9-006** — snapshot / checkpointを3軸化し、determinism・境界条件・failure atomicityの回帰testを追加する
+
+### Protocol・Server
+
+- ⬜ **P9-007** — Agent position / velocityとsubscription volumeを3軸wire contractへ更新し、必要なProtocol versionを上げる
+- ⬜ **P9-008** — Serverのsubscription state・snapshot取得・spawn/update配信で3D座標を欠落なく扱う
+
+### Web Client・Audio
+
+- ⬜ **P9-009** — Web Client protocol decoder / EntityStore / interpolationを3軸状態へ移行する
+- ⬜ **P9-010** — Simulation座標をThree.js座標へ明示的に写像し、Agentの高さと3D subscription volumeを描画・camera stateへ反映する
+- ⬜ **P9-011** — positional audio / listener / Ambient Zoneが3D位置を扱い、高度差を距離・位置判定へ反映できるようにする
+
+### Save・性能・E2E
+
+- ⬜ **P9-012** — Save Dataを3軸stateへ更新し、format versionとsave/load round-trip testを更新する
+- ⬜ **P9-013** — 3D Spatial Index / tick / snapshot / Protocolのbenchmarkを更新し、2D時点からのperformance regressionを記録する
+- ⬜ **P9-014** — 同一水平位置で高度だけ異なるAgentをE2Eで区別して配信・描画・保存復元できることを確認する
+- ⬜ **P9-015** — architecture/specification/ROADMAPと検証結果を同期し、Phase 9の完了条件を満たしたことを記録する
+
+### Phase 9 の非対象
+
+Phase 9では3D座標を正本として扱える基盤までを完成させ、以下の具体的な物理・交通ルールは後続Taskへ分離する。
+
+- 重力・ジャンプ・落下・飛行などの物理挙動
+- terrain collision / ground snapping
+- 道路・線路・建物ごとの高度制約
+- 地下・高架を考慮したpathfindingルール
+- 旧Save formatから新formatへのmigration
 
 </details>
 
