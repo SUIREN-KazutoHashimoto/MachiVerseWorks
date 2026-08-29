@@ -24,6 +24,14 @@ internal sealed class SaveSimulationData
     public ulong? NextAgentId { get; init; }
 
     public SaveAgentData?[]? Agents { get; init; }
+
+    public ulong? NextBuildingId { get; init; }
+
+    public SaveBuildingData?[]? Buildings { get; init; }
+
+    public ulong? NextPoiId { get; init; }
+
+    public SavePoiData?[]? Pois { get; init; }
 }
 
 internal sealed class SaveAgentData
@@ -43,4 +51,38 @@ internal sealed class SaveAgentData
     public double? VelocityZ { get; init; }
 
     public bool? IsActive { get; init; }
+}
+
+internal sealed class SaveBuildingData
+{
+    public ulong? Id { get; init; }
+
+    public byte? Kind { get; init; }
+
+    public double? MinX { get; init; }
+
+    public double? MinY { get; init; }
+
+    public double? MinZ { get; init; }
+
+    public double? MaxX { get; init; }
+
+    public double? MaxY { get; init; }
+
+    public double? MaxZ { get; init; }
+}
+
+internal sealed class SavePoiData
+{
+    public ulong? Id { get; init; }
+
+    public byte? Kind { get; init; }
+
+    public double? X { get; init; }
+
+    public double? Y { get; init; }
+
+    public double? Z { get; init; }
+
+    public required ulong? BuildingId { get; init; }
 }

@@ -64,7 +64,7 @@ public static class WorldSaveSerializer
 
         try
         {
-            ValidateAgentCountBeforeMaterialization(utf8Json, limits.MaximumAgentCount);
+            ValidateCollectionCountsBeforeMaterialization(utf8Json, limits);
             var document = JsonSerializer.Deserialize<SaveDataDocument>(utf8Json, JsonOptions)
                 ?? throw new InvalidDataException("Save Data document is empty.");
             return RestoreDocument(document, limits);
@@ -157,6 +157,18 @@ public static class WorldSaveSerializer
             throw new InvalidDataException(
                 $"World contains {checkpoint.Agents.Count} Agents, exceeding the configured {limits.MaximumAgentCount}-Agent Save limit.");
         }
+
+        if (checkpoint.Buildings.Count > limits.MaximumBuildingCount)
+        {
+            throw new InvalidDataException(
+                $"World contains {checkpoint.Buildings.Count} Buildings, exceeding the configured {limits.MaximumBuildingCount}-Building Save limit.");
+        }
+
+        if (checkpoint.Pois.Count > limits.MaximumPoiCount)
+        {
+            throw new InvalidDataException(
+                $"World contains {checkpoint.Pois.Count} POIs, exceeding the configured {limits.MaximumPoiCount}-POI Save limit.");
+        }
     }
 
     private static SaveDataDocument CreateDocument(SimulationCheckpoint checkpoint)
@@ -178,6 +190,38 @@ public static class WorldSaveSerializer
             };
         }
 
+        var buildings = new SaveBuildingData[checkpoint.Buildings.Count];
+        for (var index = 0; index < buildings.Length; index++)
+        {
+            var building = checkpoint.Buildings[index];
+            buildings[index] = new SaveBuildingData
+            {
+                Id = building.Id.Value,
+                Kind = (byte)building.Kind,
+                MinX = building.Bounds.MinX,
+                MinY = building.Bounds.MinY,
+                MinZ = building.Bounds.MinZ,
+                MaxX = building.Bounds.MaxX,
+                MaxY = building.Bounds.MaxY,
+                MaxZ = building.Bounds.MaxZ,
+            };
+        }
+
+        var pois = new SavePoiData[checkpoint.Pois.Count];
+        for (var index = 0; index < pois.Length; index++)
+        {
+            var poi = checkpoint.Pois[index];
+            pois[index] = new SavePoiData
+            {
+                Id = poi.Id.Value,
+                Kind = (byte)poi.Kind,
+                X = poi.Position.X,
+                Y = poi.Position.Y,
+                Z = poi.Position.Z,
+                BuildingId = poi.BuildingId?.Value,
+            };
+        }
+
         return new SaveDataDocument
         {
             FormatVersion = SaveFormatVersion.Current,
@@ -191,6 +235,10 @@ public static class WorldSaveSerializer
                 RandomState = checkpoint.RandomState,
                 NextAgentId = checkpoint.NextAgentId,
                 Agents = agents,
+                NextBuildingId = checkpoint.NextBuildingId,
+                Buildings = buildings,
+                NextPoiId = checkpoint.NextPoiId,
+                Pois = pois,
             },
         };
     }
@@ -208,14 +256,14 @@ public static class WorldSaveSerializer
             ?? throw new InvalidDataException("Save Data is missing simulation state.");
         var savedAgents = simulation.Agents
             ?? throw new InvalidDataException("Save Data is missing Agent state.");
-        if (savedAgents.Length > limits.MaximumAgentCount)
-        {
-            throw new InvalidDataException(
-                $"Save Data contains {savedAgents.Length} Agents, exceeding the configured {limits.MaximumAgentCount}-Agent limit.");
-        }
+        var savedBuildings = simulation.Buildings
+            ?? throw new InvalidDataException("Save Data is missing Building state.");
+        var savedPois = simulation.Pois
+            ?? throw new InvalidDataException("Save Data is missing POI state.");
+
+        ValidateMaterializedCounts(savedAgents.Length, savedBuildings.Length, savedPois.Length, limits);
 
         var agents = new SimulationAgentCheckpoint[savedAgents.Length];
-
         for (var index = 0; index < savedAgents.Length; index++)
         {
             var savedAgent = savedAgents[index]
@@ -233,6 +281,41 @@ public static class WorldSaveSerializer
                 Require(savedAgent.IsActive, $"agents[{index}].isActive"));
         }
 
+        var buildings = new SimulationBuildingCheckpoint[savedBuildings.Length];
+        for (var index = 0; index < savedBuildings.Length; index++)
+        {
+            var savedBuilding = savedBuildings[index]
+                ?? throw new InvalidDataException($"Building entry {index} is null.");
+            buildings[index] = new SimulationBuildingCheckpoint(
+                new BuildingId(Require(savedBuilding.Id, $"buildings[{index}].id")),
+                (BuildingKind)Require(savedBuilding.Kind, $"buildings[{index}].kind"),
+                new WorldVolume(
+                    Require(savedBuilding.MinX, $"buildings[{index}].minX"),
+                    Require(savedBuilding.MinY, $"buildings[{index}].minY"),
+                    Require(savedBuilding.MinZ, $"buildings[{index}].minZ"),
+                    Require(savedBuilding.MaxX, $"buildings[{index}].maxX"),
+                    Require(savedBuilding.MaxY, $"buildings[{index}].maxY"),
+                    Require(savedBuilding.MaxZ, $"buildings[{index}].maxZ")));
+        }
+
+        var pois = new SimulationPoiCheckpoint[savedPois.Length];
+        for (var index = 0; index < savedPois.Length; index++)
+        {
+            var savedPoi = savedPois[index]
+                ?? throw new InvalidDataException($"POI entry {index} is null.");
+            var buildingId = savedPoi.BuildingId is { } savedBuildingId
+                ? new BuildingId(savedBuildingId)
+                : (BuildingId?)null;
+            pois[index] = new SimulationPoiCheckpoint(
+                new PoiId(Require(savedPoi.Id, $"pois[{index}].id")),
+                (PoiKind)Require(savedPoi.Kind, $"pois[{index}].kind"),
+                new WorldPoint(
+                    Require(savedPoi.X, $"pois[{index}].x"),
+                    Require(savedPoi.Y, $"pois[{index}].y"),
+                    Require(savedPoi.Z, $"pois[{index}].z")),
+                buildingId);
+        }
+
         var checkpoint = new SimulationCheckpoint(
             Require(simulation.TickRate, "simulation.tickRate"),
             Require(simulation.Seed, "simulation.seed"),
@@ -241,14 +324,43 @@ public static class WorldSaveSerializer
             Require(simulation.ElapsedTicks, "simulation.elapsedTicks"),
             Require(simulation.RandomState, "simulation.randomState"),
             Require(simulation.NextAgentId, "simulation.nextAgentId"),
-            agents);
+            agents,
+            Require(simulation.NextBuildingId, "simulation.nextBuildingId"),
+            buildings,
+            Require(simulation.NextPoiId, "simulation.nextPoiId"),
+            pois);
 
         return SimulationWorld.RestoreCheckpoint(checkpoint);
     }
 
-    private static void ValidateAgentCountBeforeMaterialization(
+    private static void ValidateMaterializedCounts(
+        int agentCount,
+        int buildingCount,
+        int poiCount,
+        WorldSaveLimits limits)
+    {
+        if (agentCount > limits.MaximumAgentCount)
+        {
+            throw new InvalidDataException(
+                $"Save Data contains {agentCount} Agents, exceeding the configured {limits.MaximumAgentCount}-Agent limit.");
+        }
+
+        if (buildingCount > limits.MaximumBuildingCount)
+        {
+            throw new InvalidDataException(
+                $"Save Data contains {buildingCount} Buildings, exceeding the configured {limits.MaximumBuildingCount}-Building limit.");
+        }
+
+        if (poiCount > limits.MaximumPoiCount)
+        {
+            throw new InvalidDataException(
+                $"Save Data contains {poiCount} POIs, exceeding the configured {limits.MaximumPoiCount}-POI limit.");
+        }
+    }
+
+    private static void ValidateCollectionCountsBeforeMaterialization(
         ReadOnlySpan<byte> utf8Json,
-        int maximumAgentCount)
+        WorldSaveLimits limits)
     {
         var reader = new Utf8JsonReader(
             utf8Json,
@@ -260,25 +372,36 @@ public static class WorldSaveSerializer
 
         while (reader.Read())
         {
-            if (reader.TokenType != JsonTokenType.PropertyName ||
-                !reader.ValueTextEquals("agents"))
+            if (reader.TokenType != JsonTokenType.PropertyName)
             {
                 continue;
             }
 
-            if (!reader.Read() || reader.TokenType != JsonTokenType.StartArray)
+            if (reader.ValueTextEquals("agents"))
             {
-                continue;
+                ValidateNamedArrayElementCount(ref reader, limits.MaximumAgentCount, "Agent");
             }
-
-            ValidateArrayElementCount(ref reader, maximumAgentCount);
+            else if (reader.ValueTextEquals("buildings"))
+            {
+                ValidateNamedArrayElementCount(ref reader, limits.MaximumBuildingCount, "Building");
+            }
+            else if (reader.ValueTextEquals("pois"))
+            {
+                ValidateNamedArrayElementCount(ref reader, limits.MaximumPoiCount, "POI");
+            }
         }
     }
 
-    private static void ValidateArrayElementCount(
+    private static void ValidateNamedArrayElementCount(
         ref Utf8JsonReader reader,
-        int maximumAgentCount)
+        int maximumCount,
+        string entityName)
     {
+        if (!reader.Read() || reader.TokenType != JsonTokenType.StartArray)
+        {
+            return;
+        }
+
         var arrayDepth = reader.CurrentDepth;
         var elementCount = 0;
 
@@ -303,10 +426,10 @@ public static class WorldSaveSerializer
             }
 
             elementCount++;
-            if (elementCount > maximumAgentCount)
+            if (elementCount > maximumCount)
             {
                 throw new InvalidDataException(
-                    $"Save Data Agent count exceeds the configured {maximumAgentCount}-Agent limit before deserialization.");
+                    $"Save Data {entityName} count exceeds the configured {maximumCount}-{entityName} limit before deserialization.");
             }
         }
     }
