@@ -127,3 +127,20 @@ PR に伴う A / B の更新コミットは、PR 作成のためのバージョ�
 - 既に会話やリポジトリから判明している情報を再質問しない。
 - 大きな変更では、実装前に既存構造と関連コードを調査する。
 - 変更は可能な限り論理的にまとまった単位で行う。
+
+## 9. 多言語対応の前提
+
+現時点では日本語を主言語として開発するが、将来の localization を壊さないため次を守る。
+
+- default locale は `ja-JP` とし、locale tag は BCP 47 形式で扱う。
+- Simulation Core の状態へ翻訳済み UI 文言を持ち込まない。
+- Protocol の正式契約へ日本語や英語などの翻訳済みエラーメッセージを埋め込まず、stable code と structured parameter を使用する。
+- Save Data には翻訳済みラベルではなく stable ID / enum / code / raw value を保存する。
+- ユーザー向け表示文言の localization と数値・日時・単位 formatting は Web Client の責務とする。
+- Web Client の locale resource は `src/web/locales/` を正規入口とする。
+- Web Client の本実装開始後は、固定 UI 文言を可能な限り locale resource key 経由で参照する。
+- 翻訳文を単語単位でコード上で連結せず、named parameter を持つ message として扱う。
+- ユーザー入力文字列、固有名詞、外部コンテンツはシステム UI 文言と区別する。
+- i18n library は Web Client 実装開始時に選定し、初期セットアップ段階では固定しない。
+
+詳細は `docs/architecture/localization.md`、`docs/development/localization-guidelines.md`、`docs/decisions/ADR-0002-localization-boundary.md` を参照する。
