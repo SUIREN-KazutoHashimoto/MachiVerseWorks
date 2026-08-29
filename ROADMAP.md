@@ -2,8 +2,8 @@
 
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 2 — Simulation Core 最小 PoC完了  
-> **次の実装タスク:** `PRT-001` — Protocol version の表現方法を決める
+> **現在:** Phase 3 — Protocol 最小実装完了  
+> **次の実装タスク:** `SRV-001` — Server project を単独起動できるようにする
 
 ## 全体の現在地
 
@@ -12,8 +12,8 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 0 | リポジトリ初期セットアップ | ✅ 完了 |
 | 1 | 開発プロジェクト骨格 | ✅ 完了 |
 | 2 | Simulation Core 最小 PoC | ✅ 完了 |
-| 3 | Protocol 最小実装 | ⏭️ 次 |
-| 4 | Headless Server 最小実装 | ⏳ 待機 |
+| 3 | Protocol 最小実装 | ✅ 完了 |
+| 4 | Headless Server 最小実装 | ⏭️ 次 |
 | 5 | Web Client 最小実装 | ⏳ 待機 |
 | 6 | End-to-End PoC | ⏳ 待機 |
 | 7 | 性能基盤の拡張 | ⏳ 待機 |
@@ -174,31 +174,31 @@ Task ID は参照用の固定IDです。並び替えても変更しません。
 ---
 
 <details>
-<summary><strong>Phase 3 — Protocol 最小実装（次）</strong></summary>
+<summary><strong>Phase 3 — Protocol 最小実装（完了）</strong></summary>
 
-- ⬜ **PRT-001** — Protocol version の表現方法を決める
-- ⬜ **PRT-002** — message type ID の管理方法を決める
-- ⬜ **PRT-003** — binary frame のheader layoutを定義する
-- ⬜ **PRT-004** — Client → Server `Hello` message を定義する
-- ⬜ **PRT-005** — Server → Client `HelloAck` message を定義する
-- ⬜ **PRT-006** — Client → Server `SubscribeArea` message を定義する
-- ⬜ **PRT-007** — Server → Client Agent spawn message を定義する
-- ⬜ **PRT-008** — Server → Client Agent update message を定義する
-- ⬜ **PRT-009** — Server → Client Agent remove message を定義する
-- ⬜ **PRT-010** — user-facing error用の stable code + parameter contract を定義する
-- ⬜ **PRT-011** — 最小 serializer を実装する
-- ⬜ **PRT-012** — 最小 deserializer を実装する
-- ⬜ **PRT-013** — 各messageのround-trip testを追加する
-- ⬜ **PRT-014** — 不正なframe長を拒否するテストを追加する
-- ⬜ **PRT-015** — 未知message typeを安全に拒否するテストを追加する
-- ⬜ **PRT-016** — binary layout を architecture docs に記録する
+- ✅ **PRT-001** — Protocol version の表現方法を決める
+- ✅ **PRT-002** — message type ID の管理方法を決める
+- ✅ **PRT-003** — binary frame のheader layoutを定義する
+- ✅ **PRT-004** — Client → Server `Hello` message を定義する
+- ✅ **PRT-005** — Server → Client `HelloAck` message を定義する
+- ✅ **PRT-006** — Client → Server `SubscribeArea` message を定義する
+- ✅ **PRT-007** — Server → Client Agent spawn message を定義する
+- ✅ **PRT-008** — Server → Client Agent update message を定義する
+- ✅ **PRT-009** — Server → Client Agent remove message を定義する
+- ✅ **PRT-010** — user-facing error用の stable code + parameter contract を定義する
+- ✅ **PRT-011** — 最小 serializer を実装する
+- ✅ **PRT-012** — 最小 deserializer を実装する
+- ✅ **PRT-013** — 各messageのround-trip testを追加する
+- ✅ **PRT-014** — 不正なframe長を拒否するテストを追加する
+- ✅ **PRT-015** — 未知message typeを安全に拒否するテストを追加する
+- ✅ **PRT-016** — binary layout を architecture docs に記録する
 
 </details>
 
 ---
 
 <details>
-<summary><strong>Phase 4 — Headless Server 最小実装（待機）</strong></summary>
+<summary><strong>Phase 4 — Headless Server 最小実装（次）</strong></summary>
 
 - ⬜ **SRV-001** — Server project を単独起動できるようにする
 - ⬜ **SRV-002** — 設定ファイルからlisten address / portを読めるようにする
