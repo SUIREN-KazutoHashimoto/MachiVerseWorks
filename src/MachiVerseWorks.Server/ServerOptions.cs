@@ -7,11 +7,8 @@ namespace MachiVerseWorks.Server;
 internal sealed class ServerOptions
 {
     private const int DefaultMaximumSubscriptionCellCount = 4096;
-    private static readonly string[] DefaultAllowedWebSocketOrigins =
-    [
-        "http://127.0.0.1:5173",
-        "http://localhost:5173",
-    ];
+    private const string DefaultAllowedWebSocketOrigins =
+        "http://127.0.0.1:5173;http://localhost:5173";
 
     private ServerOptions(
         IPAddress listenAddress,
@@ -104,18 +101,7 @@ internal sealed class ServerOptions
             throw new InvalidOperationException("Server:MaximumSubscriptionCellCount must be greater than zero.");
         }
 
-        var configuredOrigins = configuration
-            .GetSection("Server:AllowedWebSocketOrigins")
-            .GetChildren()
-            .Select(child => child.Value)
-            .Where(static value => !string.IsNullOrWhiteSpace(value))
-            .Select(static value => WebSocketOriginPolicy.NormalizeOrigin(value!))
-            .ToArray();
-        var allowedWebSocketOrigins = configuredOrigins.Length == 0
-            ? DefaultAllowedWebSocketOrigins
-                .Select(WebSocketOriginPolicy.NormalizeOrigin)
-                .ToArray()
-            : configuredOrigins;
+        var allowedWebSocketOrigins = ReadAllowedWebSocketOrigins(configuration);
 
         var tickRate = ReadInt32(configuration, "Simulation:TickRate", 30);
         if (tickRate is <= 0 or > ushort.MaxValue)
@@ -161,6 +147,22 @@ internal sealed class ServerOptions
             spawnMinY,
             spawnMaxX,
             spawnMaxY);
+    }
+
+    private static string[] ReadAllowedWebSocketOrigins(IConfiguration configuration)
+    {
+        var configuredValue = configuration["Server:AllowedWebSocketOrigins"];
+        var value = configuredValue ?? DefaultAllowedWebSocketOrigins;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return [];
+        }
+
+        return value
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(WebSocketOriginPolicy.NormalizeOrigin)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
     private static int ReadInt32(IConfiguration configuration, string key, int defaultValue)
