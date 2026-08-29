@@ -18,16 +18,19 @@ public class SpatialQueryBenchmarks
     public void Setup()
     {
         _index = new SpatialIndex(64d);
-        var side = (int)Math.Ceiling(Math.Sqrt(AgentCount));
-        var spacing = 10_000d / side;
+        var side = (int)Math.Ceiling(Math.Cbrt(AgentCount));
+        var horizontalSpacing = 10_000d / side;
+        var verticalSpacing = 1_000d / side;
 
         for (var index = 0; index < AgentCount; index++)
         {
             var xIndex = index % side;
-            var yIndex = index / side;
+            var yIndex = (index / side) % side;
+            var zIndex = index / (side * side);
             var position = new WorldPoint(
-                -5_000d + ((xIndex + 0.5d) * spacing),
-                -5_000d + ((yIndex + 0.5d) * spacing));
+                -5_000d + ((xIndex + 0.5d) * horizontalSpacing),
+                -5_000d + ((yIndex + 0.5d) * horizontalSpacing),
+                -500d + ((zIndex + 0.5d) * verticalSpacing));
             _index.Register(new AgentId((ulong)index + 1), position);
         }
     }
@@ -36,6 +39,13 @@ public class SpatialQueryBenchmarks
     public List<AgentId> Query()
     {
         var extent = QueryHalfExtent;
-        return _index.Query(new WorldRect(-extent, -extent, extent, extent));
+        var altitudeExtent = Math.Max(64d, extent / 4d);
+        return _index.Query(new WorldVolume(
+            -extent,
+            -extent,
+            -altitudeExtent,
+            extent,
+            extent,
+            altitudeExtent));
     }
 }

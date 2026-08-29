@@ -5,8 +5,20 @@ namespace MachiVerseWorks.Benchmarks;
 
 public class SnapshotBenchmarks
 {
-    private static readonly WorldRect SpawnArea = new(-5_000d, -5_000d, 5_000d, 5_000d);
-    private static readonly WorldRect SubscriptionArea = new(-512d, -512d, 512d, 512d);
+    private static readonly WorldVolume SpawnVolume = new(
+        -5_000d,
+        -5_000d,
+        -500d,
+        5_000d,
+        5_000d,
+        500d);
+    private static readonly WorldVolume SubscriptionVolume = new(
+        -512d,
+        -512d,
+        -128d,
+        512d,
+        512d,
+        128d);
     private SimulationWorld _world = null!;
 
     [Params(1_000, 10_000, 100_000)]
@@ -16,7 +28,7 @@ public class SnapshotBenchmarks
     public void Setup()
     {
         _world = new SimulationWorld(new SimulationConfig(tickRate: 30, seed: 1234, spatialCellSize: 64d));
-        _world.CreateAgents(AgentCount, SpawnArea);
+        _world.CreateAgents(AgentCount, SpawnVolume);
         for (var index = 0; index < 30; index++)
         {
             _world.Step();
@@ -26,6 +38,6 @@ public class SnapshotBenchmarks
     [Benchmark]
     public AgentSnapshot[] CreateSnapshot()
     {
-        return _world.CreateSnapshot(SubscriptionArea);
+        return _world.CreateSnapshot(SubscriptionVolume);
     }
 }
