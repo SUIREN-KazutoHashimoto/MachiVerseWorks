@@ -6,6 +6,8 @@ namespace MachiVerseWorks.Server.Tests;
 [TestClass]
 public sealed class ServerOptionsOriginTests
 {
+    private static readonly string[] ExpectedConfiguredOrigins = ["https://client.example:8443"];
+
     [TestMethod]
     public void ConfiguredWebSocketOriginsOverrideDefaults()
     {
@@ -19,7 +21,7 @@ public sealed class ServerOptionsOriginTests
         var options = ServerOptions.Load(configuration);
 
         CollectionAssert.AreEqual(
-            new[] { "https://client.example:8443" },
+            ExpectedConfiguredOrigins,
             options.AllowedWebSocketOrigins.ToArray());
     }
 
