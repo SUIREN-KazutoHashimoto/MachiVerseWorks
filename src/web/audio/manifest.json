@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "defaults": {
+    "referenceDistance": 20,
+    "maximumDistance": 500,
+    "rolloffFactor": 1,
+    "voiceBudgets": {
+      "music": 2,
+      "ui": 16,
+      "ambient": 16,
+      "world": 64,
+      "voice": 4
+    }
+  },
+  "cues": {}
+}

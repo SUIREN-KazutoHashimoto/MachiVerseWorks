@@ -1,29 +1,14 @@
 # Locale Resources
 
-Web Client の locale resource を配置するディレクトリです。
-
-MachiVerseWorks は当面日本語のみで開発しますが、将来 locale を追加するときに UI 実装を作り直さなくて済むよう、このディレクトリを翻訳 resource の正規入口とします。
-
-## 現在の状態
+Web Client の user-facing text を配置する翻訳 resource の正規入口です。
 
 - default locale: `ja-JP`
-- supported locale: `ja-JP` のみ
-- i18n library: 未選定
-- 翻訳 resource: Web Client 実装開始時に追加
+- supported locale: `ja-JP`
+- i18n library: なし（Phase 5 では小さな `Localizer` を使用）
+- `manifest.json` が default / supported locale の正本
+- `ja-JP.json` が Phase 5 の最小 UI / Protocol error resource
 
-`manifest.json` は locale の識別情報だけを先に定義します。
-
-## 将来の想定構成
-
-```text
-locales/
-├─ manifest.json
-├─ ja-JP.json
-├─ en-US.json
-└─ ...
-```
-
-実際の resource format は Web Client の i18n library 選定時に確定します。
+Web Client は起動時に `manifest.json` の `defaultLocale` を読み、対応する resource を選択します。Protocol の error code は stable numeric code のまま受け取り、Client側で `error.protocol.<code>` に解決します。
 
 ## 重要な境界
 
@@ -32,8 +17,8 @@ locales/
 - user-entered text は翻訳対象にしない。
 - number / date / unit formatting は locale-aware API で行う。
 
-詳細は次を参照してください。
+詳細:
 
-- `docs/architecture/localization.md`
-- `docs/development/localization-guidelines.md`
-- `docs/decisions/ADR-0002-localization-boundary.md`
+- `../../../docs/architecture/localization.md`
+- `../../../docs/development/localization-guidelines.md`
+- `../../../docs/decisions/ADR-0002-localization-boundary.md`
