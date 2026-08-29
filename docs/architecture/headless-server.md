@@ -69,12 +69,15 @@ connection 切断時は registry から削除し、subscription / known Agent st
 
 ## Handshake
 
-1. Client が `Hello` frame を送信する。
-2. Server が frame header の Protocol version を検証する。
-3. compatible なら negotiated version を connection state に保存する。
-4. Server が `HelloAck` と current Simulation tick rate を返す。
+1. Client が `Hello` frameを送信し、frame headerで希望Protocol versionを提示する。
+2. Serverは同一majorかつ`requested minor <= current minor`の場合だけ受理する。
+3. negotiated versionはClientが要求したversionそのものとする。
+4. Serverは同じversionをconnection state、`HelloAck` payload、`HelloAck` frame headerへ使用する。
+5. handshake後は受信frame headerがnegotiated versionと完全一致することを要求する。
 
-Phase 9 の current Protocol は `2.0` です。handshake 後に frame version が途中で変化した場合は connection を拒否します。
+例えばServer 2.3 / Client 2.1ではconnection全体を2.1として扱う。Server currentだけをHelloAck payloadへ返してClient/Serverのstateを食い違わせない。
+
+Phase 9 の current Protocol は `2.0` です。
 
 ## Snapshot publisher
 
@@ -98,6 +101,14 @@ snapshot publisherはconnectionごとに最大1件のdelivery taskだけをin-fl
 
 各deliveryではlinked `CancellationTokenSource` を1つだけ作り、各message sendの直前に5秒timeoutを再設定します。5秒以内に1messageを送信できないconnectionはabortしてregistryから除外します。
 
+Client隔離の対象にする例外は、transport/connection由来と判断できる次の種類へ限定します。
+
+- `WebSocketException`
+- send timeout / shutdownを含む`OperationCanceledException`
+- connection破棄競合の`ObjectDisposedException`
+
+それ以外の`InvalidOperationException`、`OverflowException`などはServer内部bugやSimulation invariant violationの可能性があるため、Client faultとして握りつぶしません。Critical logを記録してdelivery taskをfaultさせ、`SnapshotDeliveryScheduler`がそのunexpected faultを保持し、publisherのHosted Serviceへ再伝播します。これによりsystemic failureをClient切断だけに見せかけません。
+
 shutdown時は新しいscheduleを停止した後、既存in-flight taskを回収してからpublisherを終了します。
 
 ## Send serialization
@@ -106,7 +117,7 @@ shutdown時は新しいscheduleを停止した後、既存in-flight taskを回�
 
 ## Logging
 
-Server の structured logging は source-generated `LoggerMessage` を使用します。
+Server の structured logging は source-generated `LoggerMessage` を使用します。expectedなClient delivery停止はDebug、unexpected snapshot delivery faultはCriticalで記録します。
 
 ## Graceful shutdown
 

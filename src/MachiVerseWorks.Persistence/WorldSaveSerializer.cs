@@ -19,23 +19,33 @@ public static class WorldSaveSerializer
 
     public static byte[] Serialize(SimulationWorld world)
     {
-        ArgumentNullException.ThrowIfNull(world);
-        var document = CreateDocument(world.CreateCheckpoint());
-        return JsonSerializer.SerializeToUtf8Bytes(document, JsonOptions);
+        return Serialize(world, WorldSaveLimits.Default);
+    }
+
+    public static byte[] Serialize(SimulationWorld world, WorldSaveLimits limits)
+    {
+        using var buffer = SerializeToBuffer(world, limits);
+        return buffer.ToArray();
     }
 
     public static void Save(Stream destination, SimulationWorld world)
     {
+        Save(destination, world, WorldSaveLimits.Default);
+    }
+
+    public static void Save(Stream destination, SimulationWorld world, WorldSaveLimits limits)
+    {
         ArgumentNullException.ThrowIfNull(destination);
         ArgumentNullException.ThrowIfNull(world);
+        ArgumentNullException.ThrowIfNull(limits);
 
         if (!destination.CanWrite)
         {
             throw new ArgumentException("Destination stream must be writable.", nameof(destination));
         }
 
-        var data = Serialize(world);
-        destination.Write(data);
+        using var buffer = SerializeToBuffer(world, limits);
+        buffer.WriteTo(destination);
     }
 
     public static SimulationWorld Deserialize(ReadOnlySpan<byte> utf8Json)
@@ -115,6 +125,38 @@ public static class WorldSaveSerializer
         }
 
         return Deserialize(buffer.ToArray(), limits);
+    }
+
+    private static BoundedSaveBuffer SerializeToBuffer(
+        SimulationWorld world,
+        WorldSaveLimits limits)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        ArgumentNullException.ThrowIfNull(limits);
+
+        var checkpoint = world.CreateCheckpoint();
+        ValidateCheckpointWithinLimits(checkpoint, limits);
+        var document = CreateDocument(checkpoint);
+        var buffer = new BoundedSaveBuffer(limits.MaximumBytes);
+        try
+        {
+            JsonSerializer.Serialize(buffer, document, JsonOptions);
+            return buffer;
+        }
+        catch
+        {
+            buffer.Dispose();
+            throw;
+        }
+    }
+
+    private static void ValidateCheckpointWithinLimits(SimulationCheckpoint checkpoint, WorldSaveLimits limits)
+    {
+        if (checkpoint.Agents.Count > limits.MaximumAgentCount)
+        {
+            throw new InvalidDataException(
+                $"World contains {checkpoint.Agents.Count} Agents, exceeding the configured {limits.MaximumAgentCount}-Agent Save limit.");
+        }
     }
 
     private static SaveDataDocument CreateDocument(SimulationCheckpoint checkpoint)
@@ -273,5 +315,124 @@ public static class WorldSaveSerializer
         where T : struct
     {
         return value ?? throw new InvalidDataException($"Save Data is missing required field '{fieldName}'.");
+    }
+
+    private sealed class BoundedSaveBuffer : Stream
+    {
+        private readonly int maximumBytes;
+        private readonly List<byte[]> segments = [];
+        private byte[]? currentSegment;
+        private int currentSegmentOffset;
+        private int length;
+
+        public BoundedSaveBuffer(int maximumBytes)
+        {
+            this.maximumBytes = maximumBytes;
+        }
+
+        public override bool CanRead => false;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => true;
+
+        public override long Length => length;
+
+        public override long Position
+        {
+            get => length;
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void SetLength(long value)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            ArgumentNullException.ThrowIfNull(buffer);
+            Write(buffer.AsSpan(offset, count));
+        }
+
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            if (buffer.Length > maximumBytes - length)
+            {
+                throw new InvalidDataException(
+                    $"Save Data output exceeds the configured {maximumBytes}-byte limit.");
+            }
+
+            while (!buffer.IsEmpty)
+            {
+                if (currentSegment is null || currentSegmentOffset == currentSegment.Length)
+                {
+                    var segmentLength = Math.Min(StreamReadBufferSize, maximumBytes - length);
+                    currentSegment = new byte[segmentLength];
+                    currentSegmentOffset = 0;
+                    segments.Add(currentSegment);
+                }
+
+                var copyLength = Math.Min(buffer.Length, currentSegment.Length - currentSegmentOffset);
+                buffer[..copyLength].CopyTo(currentSegment.AsSpan(currentSegmentOffset, copyLength));
+                currentSegmentOffset += copyLength;
+                length += copyLength;
+                buffer = buffer[copyLength..];
+            }
+        }
+
+        public byte[] ToArray()
+        {
+            var result = new byte[length];
+            CopyTo(result);
+            return result;
+        }
+
+        public void WriteTo(Stream destination)
+        {
+            ArgumentNullException.ThrowIfNull(destination);
+            var remaining = length;
+            foreach (var segment in segments)
+            {
+                var count = Math.Min(segment.Length, remaining);
+                destination.Write(segment.AsSpan(0, count));
+                remaining -= count;
+                if (remaining == 0)
+                {
+                    break;
+                }
+            }
+        }
+
+        private void CopyTo(Span<byte> destination)
+        {
+            var offset = 0;
+            var remaining = length;
+            foreach (var segment in segments)
+            {
+                var count = Math.Min(segment.Length, remaining);
+                segment.AsSpan(0, count).CopyTo(destination[offset..]);
+                offset += count;
+                remaining -= count;
+                if (remaining == 0)
+                {
+                    break;
+                }
+            }
+        }
     }
 }

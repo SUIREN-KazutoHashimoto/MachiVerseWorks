@@ -100,11 +100,12 @@ export class Application {
     switch (message.type) {
       case MessageType.AgentSpawn: this.applyAgentSpawn(message); return;
       case MessageType.AgentUpdate: this.applyAgentUpdate(message); return;
-      case MessageType.AgentRemove:
-        this.store.remove(message.agentId);
+      case MessageType.AgentRemove: {
+        const removed = this.store.remove(message.agentId);
         this.audio.removeEntity(message.agentId);
-        this.ui.setAgentCount(this.store.size);
+        if (removed) this.ui.setAgentCount(this.store.size);
         return;
+      }
       case MessageType.Hello:
       case MessageType.HelloAck:
       case MessageType.SubscribeVolume:
@@ -114,15 +115,23 @@ export class Application {
   }
 
   private applyAgentSpawn(message: AgentStateMessage): void {
+    const previousSize = this.store.size;
     this.store.spawn(message);
-    this.audio.updateEntityPosition(message.agentId, { x: message.x, y: message.y, z: message.z });
-    this.ui.setAgentCount(this.store.size);
+    this.updateEntityAudioPosition(message);
+    if (this.store.size !== previousSize) this.ui.setAgentCount(this.store.size);
   }
 
   private applyAgentUpdate(message: AgentStateMessage): void {
-    if (!this.store.update(message)) this.store.spawn(message);
+    if (!this.store.update(message)) {
+      this.store.spawn(message);
+      this.ui.setAgentCount(this.store.size);
+    }
+    this.updateEntityAudioPosition(message);
+  }
+
+  private updateEntityAudioPosition(message: AgentStateMessage): void {
+    if (!this.audio.hasEntityEmitters(message.agentId)) return;
     this.audio.updateEntityPosition(message.agentId, { x: message.x, y: message.y, z: message.z });
-    this.ui.setAgentCount(this.store.size);
   }
 
   private handleProtocolError(message: ProtocolErrorMessage): void {

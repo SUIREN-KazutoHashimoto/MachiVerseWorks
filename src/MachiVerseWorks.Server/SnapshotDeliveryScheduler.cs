@@ -1,9 +1,12 @@
+using System.Runtime.ExceptionServices;
+
 namespace MachiVerseWorks.Server;
 
 internal sealed class SnapshotDeliveryScheduler
 {
     private readonly object _gate = new();
     private readonly Dictionary<Guid, Task> _inFlight = [];
+    private Exception? _unexpectedFailure;
 
     public int InFlightCount
     {
@@ -42,15 +45,32 @@ internal sealed class SnapshotDeliveryScheduler
         }
     }
 
+    public void ThrowIfFaulted()
+    {
+        Exception? failure;
+        lock (_gate)
+        {
+            failure = _unexpectedFailure;
+        }
+
+        if (failure is not null)
+        {
+            ExceptionDispatchInfo.Capture(failure).Throw();
+        }
+    }
+
     private async Task ObserveCompletionAsync(Guid connectionId, Task delivery)
     {
         try
         {
             await delivery.ConfigureAwait(false);
         }
-        catch
+        catch (Exception exception)
         {
-            // Delivery owners are responsible for observing and handling their failures.
+            lock (_gate)
+            {
+                _unexpectedFailure ??= exception;
+            }
         }
         finally
         {

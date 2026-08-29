@@ -34,9 +34,17 @@ AgentStore + SpatialIndex
 
 stateは内部mutable structとし、外部には`AgentSnapshot`の値コピーだけを返す。tick失敗時はXYZすべてをrollbackし、SimulationTimeを含めてatomicityを維持する。
 
-## Stable ID
+## Stable ID と生成failure atomicity
 
 `AgentId`は`ulong`を包むstrongly typed valueとする。Agent削除後もIDは再利用・再採番しない。
+
+Agent生成はID capacityについてもfailure-atomicに扱う。`AgentStore`は現在の`nextId`から要求数を事前検証し、ID空間が不足する場合はstate mutation前に`OverflowException`で拒否する。
+
+- random velocityを使う単体`CreateAgent`は、PRNGを進める前に1 ID分のcapacityを確認する。
+- `CreateAgents(count, ...)`は位置乱数・速度乱数・Agent追加を始める前に`count`全体分のcapacityを確認する。
+- capacity不足時はAgent count、`nextId`、SpatialIndex、PRNG stateを呼出前から変更しない。
+
+crafted checkpointから`NextAgentId = ulong.MaxValue`へ到達した場合もrestore自体は既存stateとして表現可能だが、その後の新規生成は副作用なしで拒否される。
 
 ## Spatial index
 
@@ -56,3 +64,5 @@ Agentがいずれかの軸でcell境界を跨いだ場合だけmembershipを更�
 ## Determinism
 
 Agent自動生成用乱数は内部のSplitMix64系PRNGを使用する。同じseedと呼び出し順から同じ3D state sequenceを生成する。
+
+失敗した生成commandはdeterministic stateを変更しない。特にID枯渇による失敗ではPRNG stateを消費しないため、失敗commandの有無が後続の有効操作の乱数系列へ影響しない。

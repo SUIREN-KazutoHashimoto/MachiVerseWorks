@@ -1,5 +1,6 @@
 import manifestJson from '../audio/manifest.json' with { type: 'json' };
 import { selectVoiceIds, type Point3D, type VoiceCandidate } from './audio-policy.ts';
+import { EntityEmitterIndex } from './entity-emitter-index.ts';
 
 export type AudioCategory = 'music' | 'ui' | 'ambient' | 'world' | 'voice';
 export type AudioEngineState = 'locked' | 'running' | 'suspended' | 'unavailable';
@@ -82,6 +83,7 @@ export class AudioEngine {
   ]);
   private readonly buffers = new Map<string, Promise<AudioBuffer>>();
   private readonly emitters = new Map<string, VirtualEmitter>();
+  private readonly emitterIndex = new EntityEmitterIndex();
   private readonly activeEmitterVoices = new Map<string, ActiveEmitterVoice>();
   private readonly ambientVoices = new Map<string, AmbientVoice>();
   private muted = false;
@@ -165,13 +167,26 @@ export class AudioEngine {
     validatePoint(options.position, `Emitter ${id} position`);
     const priority = options.priority ?? 0;
     validateFinite(priority, `Emitter ${id} priority`);
-    this.emitters.set(id, {
+
+    const existing = this.emitters.get(id);
+    if (existing !== undefined) {
+      this.detachEmitterFromEntity(existing);
+      this.stopEmitterVoice(id);
+    }
+
+    const emitter: VirtualEmitter = {
       id,
       cueId,
       priority,
       entityId: options.entityId,
       position: { ...options.position },
-    });
+    };
+    this.emitters.set(id, emitter);
+    this.attachEmitterToEntity(emitter);
+  }
+
+  public hasEntityEmitters(entityId: bigint): boolean {
+    return this.emitterIndex.has(entityId);
   }
 
   public updateEmitterPosition(id: string, position: Point3D): void {
@@ -180,37 +195,49 @@ export class AudioEngine {
     if (emitter === undefined) {
       return;
     }
-    emitter.position = { ...position };
-    const active = this.activeEmitterVoices.get(id);
-    if (active !== undefined) {
-      setPannerPosition(active.panner, position);
-    }
+    this.applyEmitterPosition(emitter, position);
   }
 
   public removeEmitter(id: string): void {
+    const emitter = this.emitters.get(id);
+    if (emitter === undefined) {
+      return;
+    }
     this.emitters.delete(id);
+    this.detachEmitterFromEntity(emitter);
     this.stopEmitterVoice(id);
   }
 
-  public updateEntityPosition(entityId: bigint, position: Point3D): void {
+  public updateEntityPosition(entityId: bigint, position: Point3D): number {
     validatePoint(position, 'Entity position');
-    for (const emitter of this.emitters.values()) {
-      if (emitter.entityId === entityId) {
-        this.updateEmitterPosition(emitter.id, position);
-      }
+    const emitterIds = this.emitterIndex.get(entityId);
+    if (emitterIds === undefined) {
+      return 0;
     }
+
+    let updated = 0;
+    for (const emitterId of emitterIds) {
+      const emitter = this.emitters.get(emitterId);
+      if (emitter === undefined) {
+        continue;
+      }
+      this.applyEmitterPosition(emitter, position);
+      updated += 1;
+    }
+    return updated;
   }
 
-  public removeEntity(entityId: bigint): void {
-    const emitterIds: string[] = [];
-    for (const emitter of this.emitters.values()) {
-      if (emitter.entityId === entityId) {
-        emitterIds.push(emitter.id);
-      }
+  public removeEntity(entityId: bigint): number {
+    const emitterIds = this.emitterIndex.get(entityId);
+    if (emitterIds === undefined) {
+      return 0;
     }
-    for (const emitterId of emitterIds) {
+
+    const ids = [...emitterIds];
+    for (const emitterId of ids) {
       this.removeEmitter(emitterId);
     }
+    return ids.length;
   }
 
   public async syncSpatialVoices(listener: Point3D): Promise<void> {
@@ -325,6 +352,8 @@ export class AudioEngine {
     for (const key of [...this.ambientVoices.keys()]) {
       this.stopAmbientVoice(key, 0);
     }
+    this.emitters.clear();
+    this.emitterIndex.clear();
     const context = this.context;
     this.context = null;
     if (context !== null) {
@@ -333,6 +362,26 @@ export class AudioEngine {
     this.categoryGains.clear();
     this.masterGain = null;
     this.refreshState();
+  }
+
+  private attachEmitterToEntity(emitter: VirtualEmitter): void {
+    if (emitter.entityId !== undefined) {
+      this.emitterIndex.add(emitter.entityId, emitter.id);
+    }
+  }
+
+  private detachEmitterFromEntity(emitter: VirtualEmitter): void {
+    if (emitter.entityId !== undefined) {
+      this.emitterIndex.remove(emitter.entityId, emitter.id);
+    }
+  }
+
+  private applyEmitterPosition(emitter: VirtualEmitter, position: Point3D): void {
+    emitter.position = { ...position };
+    const active = this.activeEmitterVoices.get(emitter.id);
+    if (active !== undefined) {
+      setPannerPosition(active.panner, position);
+    }
   }
 
   private ensureContext(): AudioContext {
@@ -600,9 +649,9 @@ export function resolveMasterGain(muted: boolean, volume: number): number {
 }
 
 function validatePoint(point: Point3D, label: string): void {
-  validateFinite(point.x, `${label} x`);
-  validateFinite(point.y, `${label} y`);
-  validateFinite(point.z, `${label} z`);
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || !Number.isFinite(point.z)) {
+    throw new RangeError(`${label} coordinates must be finite.`);
+  }
 }
 
 function validatePositiveFinite(value: number, label: string): void {

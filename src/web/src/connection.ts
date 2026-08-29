@@ -68,18 +68,35 @@ export class MachiVerseConnection {
       const decodeStartedAt = onFrameDecoded === undefined ? 0 : performance.now();
       const envelope = decodeFrame(buffer);
       if (onFrameDecoded !== undefined) onFrameDecoded({ frameBytes: buffer.byteLength, decodeTimeMs: Math.max(0, performance.now() - decodeStartedAt) });
-      if (envelope.message.type === MessageType.Error) { this.callbacks.onProtocolError(envelope.message); return; }
+
       if (this.state === 'handshaking') {
+        if (envelope.message.type === MessageType.Error) {
+          this.callbacks.onProtocolError(envelope.message);
+          return;
+        }
         if (envelope.message.type !== MessageType.HelloAck) throw new ProtocolDecodeFailure('Expected HelloAck as the first server message.');
-        if (envelope.message.protocolVersion.major !== CURRENT_PROTOCOL_VERSION.major) throw new ProtocolDecodeFailure('Server selected an incompatible protocol major version.');
-        this.negotiatedVersion = envelope.message.protocolVersion;
+        const negotiatedVersion = resolveNegotiatedProtocolVersion(envelope.version, envelope.message.protocolVersion);
+        this.negotiatedVersion = negotiatedVersion;
         this.reconnectAttempt = 0;
         this.setState('connected');
-        this.callbacks.onHelloAck(envelope.message.protocolVersion, envelope.message.tickRate);
+        this.callbacks.onHelloAck(negotiatedVersion, envelope.message.tickRate);
         this.sendDesiredSubscription();
         return;
       }
-      if (this.state !== 'connected') return;
+
+      if (this.state !== 'connected') {
+        if (envelope.message.type === MessageType.Error) this.callbacks.onProtocolError(envelope.message);
+        return;
+      }
+
+      const negotiatedVersion = this.negotiatedVersion;
+      if (negotiatedVersion === null || !protocolVersionsEqual(envelope.version, negotiatedVersion)) {
+        throw new ProtocolDecodeFailure('Server frame version changed after protocol negotiation.');
+      }
+      if (envelope.message.type === MessageType.Error) {
+        this.callbacks.onProtocolError(envelope.message);
+        return;
+      }
       this.callbacks.onMessage(envelope.message);
     } catch (error) {
       const normalizedError = error instanceof Error ? error : new Error(String(error));
@@ -106,6 +123,24 @@ export class MachiVerseConnection {
 
   private cancelReconnect(): void { if (this.reconnectTimer === null) return; window.clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
   private setState(state: ConnectionState): void { if (this.state === state) return; this.state = state; this.callbacks.onStateChanged(state); }
+}
+
+export function resolveNegotiatedProtocolVersion(
+  frameVersion: ProtocolVersion,
+  acknowledgedVersion: ProtocolVersion,
+  supportedVersion: ProtocolVersion = CURRENT_PROTOCOL_VERSION,
+): ProtocolVersion {
+  if (!protocolVersionsEqual(frameVersion, acknowledgedVersion)) {
+    throw new ProtocolDecodeFailure('HelloAck frame version and payload version do not match.');
+  }
+  if (frameVersion.major !== supportedVersion.major || frameVersion.minor > supportedVersion.minor) {
+    throw new ProtocolDecodeFailure('Server selected an unsupported protocol version.');
+  }
+  return Object.freeze({ ...frameVersion });
+}
+
+export function protocolVersionsEqual(left: ProtocolVersion, right: ProtocolVersion): boolean {
+  return left.major === right.major && left.minor === right.minor;
 }
 
 async function toArrayBuffer(data: unknown): Promise<ArrayBuffer> {

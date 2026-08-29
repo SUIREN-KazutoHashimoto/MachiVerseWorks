@@ -4,6 +4,23 @@ import type { ConnectionState } from './connection.ts';
 import type { Localizer } from './localization.ts';
 import { protocolVersionToString, type ProtocolVersion } from './protocol.ts';
 
+export class AgentCountFormatter {
+  private readonly formatter: Intl.NumberFormat;
+  private lastCount: number | null = null;
+
+  public constructor(locale: string) {
+    this.formatter = new Intl.NumberFormat(locale);
+  }
+
+  public formatIfChanged(count: number): string | null {
+    if (this.lastCount === count) {
+      return null;
+    }
+    this.lastCount = count;
+    return this.formatter.format(count);
+  }
+}
+
 export class ClientUi {
   private readonly connectionValue = document.createElement('span');
   private readonly protocolValue = document.createElement('span');
@@ -13,12 +30,14 @@ export class ClientUi {
   private readonly frameValue: HTMLSpanElement | null;
   private readonly errorValue = document.createElement('div');
   private readonly audioButton = document.createElement('button');
+  private readonly agentCountFormatter: AgentCountFormatter;
 
   public constructor(
     host: HTMLElement,
     private readonly localizer: Localizer,
     showPerformanceOverlay = false,
   ) {
+    this.agentCountFormatter = new AgentCountFormatter(localizer.locale);
     const panel = document.createElement('section');
     panel.className = 'status-panel';
     panel.setAttribute('aria-live', 'polite');
@@ -89,7 +108,10 @@ export class ClientUi {
   }
 
   public setAgentCount(count: number): void {
-    this.agentsValue.textContent = new Intl.NumberFormat(this.localizer.locale).format(count);
+    const formatted = this.agentCountFormatter.formatIfChanged(count);
+    if (formatted !== null) {
+      this.agentsValue.textContent = formatted;
+    }
   }
 
   public setAudioState(state: AudioEngineState): void {
