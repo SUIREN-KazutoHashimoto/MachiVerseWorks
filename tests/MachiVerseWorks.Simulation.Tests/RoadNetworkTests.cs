@@ -5,12 +5,15 @@ namespace MachiVerseWorks.Simulation.Tests;
 [TestClass]
 public sealed class RoadNetworkTests
 {
+    private static readonly ulong[] ExpectedNodeIds = [1UL, 2UL, 3UL];
+    private static readonly ulong[] ExpectedSegmentIds = [1UL, 2UL];
+
     [TestMethod]
     public void StableIdsTopologyAndLaneOrderAreDeterministic()
     {
         var world = new SimulationWorld(new SimulationConfig(spatialCellSize: 32d)); var a = world.CreateRoadNode(new WorldPoint(0, 0, 0)); var junction = world.CreateRoadNode(new WorldPoint(100, 0, 0), RoadNodeKind.Intersection); var b = world.CreateRoadNode(new WorldPoint(100, 100, 0)); var incoming = world.CreateRoadSegment(a, junction, RoadKind.Collector); var outgoing = world.CreateRoadSegment(junction, b, RoadKind.Local); var inLane = world.CreateLane(incoming, LaneDirection.Forward, 0, 3.5, 16.7); var outLane = world.CreateLane(outgoing, LaneDirection.Forward, 0, 3.25, 13.9); var turn = world.CreateLaneConnection(inLane, outLane, junction, TurnMovement.Left);
         Assert.AreEqual(1UL, a.Value); Assert.AreEqual(2UL, junction.Value); Assert.AreEqual(1UL, incoming.Value); Assert.AreEqual(1UL, inLane.Value); Assert.AreEqual(1UL, turn.Value);
-        var snapshot = world.CreateRoadNetworkSnapshot(); CollectionAssert.AreEqual(new[] { 1UL, 2UL, 3UL }, snapshot.Nodes.Select(static x => x.Id.Value).ToArray()); CollectionAssert.AreEqual(new[] { 1UL, 2UL }, snapshot.Segments.Select(static x => x.Id.Value).ToArray());
+        var snapshot = world.CreateRoadNetworkSnapshot(); CollectionAssert.AreEqual(ExpectedNodeIds, snapshot.Nodes.Select(static x => x.Id.Value).ToArray()); CollectionAssert.AreEqual(ExpectedSegmentIds, snapshot.Segments.Select(static x => x.Id.Value).ToArray());
     }
     [TestMethod]
     public void CrossingGeometryNeverCreatesImplicitTopology()
@@ -31,6 +34,27 @@ public sealed class RoadNetworkTests
     public void RoadAccessPointRequiresExistingUrbanReference()
     {
         var world = new SimulationWorld(); var a = world.CreateRoadNode(new WorldPoint(0, 0, 0)); var b = world.CreateRoadNode(new WorldPoint(20, 0, 0)); var segment = world.CreateRoadSegment(a, b); var building = world.CreateBuilding(new WorldVolume(0, 5, 0, 10, 15, 10)); var poi = world.CreatePoi(new WorldPoint(5, 10, 0), PoiKind.Service, building); var access = world.CreateRoadAccessPoint(segment, 0.5, building, poi, RoadAccessMode.Motor | RoadAccessMode.Foot); Assert.AreEqual(1UL, access.Value); Assert.ThrowsExactly<ArgumentException>(() => world.CreateRoadAccessPoint(segment, 0.5, new BuildingId(999))); Assert.AreEqual(1, world.RoadAccessPointCount);
+    }
+    [TestMethod]
+    public void RoadAccessPointReferencesBlockUrbanEntityRemoval()
+    {
+        var world = new SimulationWorld();
+        var a = world.CreateRoadNode(new WorldPoint(0, 0, 0));
+        var b = world.CreateRoadNode(new WorldPoint(20, 0, 0));
+        var segment = world.CreateRoadSegment(a, b);
+        var building = world.CreateBuilding(new WorldVolume(0, 5, 0, 10, 15, 10));
+        var buildingAccess = world.CreateRoadAccessPoint(segment, 0.25, buildingId: building);
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => world.RemoveBuilding(building));
+        Assert.IsTrue(world.RemoveRoadAccessPoint(buildingAccess));
+        Assert.IsTrue(world.RemoveBuilding(building));
+
+        var poi = world.CreatePoi(new WorldPoint(15, 5, 0), PoiKind.Service);
+        var poiAccess = world.CreateRoadAccessPoint(segment, 0.75, poiId: poi, mode: RoadAccessMode.Foot);
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => world.RemovePoi(poi));
+        Assert.IsTrue(world.RemoveRoadAccessPoint(poiAccess));
+        Assert.IsTrue(world.RemovePoi(poi));
     }
     [TestMethod]
     public void CheckpointRoundTripPreservesTopologyAndNextIds()
