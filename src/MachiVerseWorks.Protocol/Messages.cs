@@ -41,6 +41,7 @@ public enum ProtocolLaneDirection : byte { Forward = 0, Reverse = 1 }
 public enum ProtocolTurnMovement : byte { Unspecified = 0, Straight = 1, Left = 2, Right = 3, UTurn = 4 }
 [Flags] public enum ProtocolRoadAccessMode : byte { None = 0, Motor = 1, Foot = 2 }
 public enum ProtocolPedestrianMovementState : byte { Walking = 0, WaitingForCrossing = 1, WaitingForOccupancy = 2, Arrived = 3 }
+public enum ProtocolVehicleMovementState : byte { Driving = 0, WaitingForTraffic = 1, ChangingLane = 2, Arrived = 3 }
 
 public readonly record struct ProtocolRoadNode(ulong Id, ProtocolRoadNodeKind Kind, double X, double Y, double Z);
 public readonly record struct ProtocolRoadSegment(ulong Id, ProtocolRoadKind Kind, ulong StartNodeId, ulong EndNodeId);
@@ -94,4 +95,47 @@ public sealed record PedestrianUpdateMessage(
 public sealed record PedestrianRemoveMessage(ulong PedestrianId, ulong TickCount) : IProtocolMessage
 {
     public MessageType Type => MessageType.PedestrianRemove;
+}
+
+public sealed record VehicleSpawnMessage(
+    ulong VehicleId,
+    ulong LaneId,
+    double X,
+    double Y,
+    double Z,
+    double ForwardX,
+    double ForwardY,
+    double ForwardZ,
+    double SpeedMetersPerSecond,
+    double LengthMeters,
+    double WidthMeters,
+    double HeightMeters,
+    ProtocolVehicleMovementState State,
+    ulong TickCount) : IProtocolMessage
+{
+    public MessageType Type => MessageType.VehicleSpawn;
+}
+
+public sealed record VehicleUpdateMessage(
+    ulong VehicleId,
+    ulong LaneId,
+    double X,
+    double Y,
+    double Z,
+    double ForwardX,
+    double ForwardY,
+    double ForwardZ,
+    double SpeedMetersPerSecond,
+    double LengthMeters,
+    double WidthMeters,
+    double HeightMeters,
+    ProtocolVehicleMovementState State,
+    ulong TickCount) : IProtocolMessage
+{
+    public MessageType Type => MessageType.VehicleUpdate;
+}
+
+public sealed record VehicleRemoveMessage(ulong VehicleId, ulong TickCount) : IProtocolMessage
+{
+    public MessageType Type => MessageType.VehicleRemove;
 }

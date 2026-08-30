@@ -8,7 +8,7 @@ namespace MachiVerseWorks.Persistence.Tests;
 public sealed class PedestrianSaveTests
 {
     [TestMethod]
-    public void FormatFiveRoundTripPreservesPedestrianRouteProgressAndNextId()
+    public void CurrentFormatRoundTripPreservesPedestrianRouteProgressAndNextId()
     {
         var world = CreateWorld(out var origin, out var destination);
         var first = world.CreatePedestrian(new TripRequest(new TripRequestId(10), TripEndpoint.ForBuilding(origin), TripEndpoint.ForBuilding(destination), TravelMode.Foot), 2.25d);
@@ -17,7 +17,7 @@ public sealed class PedestrianSaveTests
         var bytes = WorldSaveSerializer.Serialize(world);
         using var document = JsonDocument.Parse(bytes);
         var simulation = document.RootElement.GetProperty("simulation");
-        Assert.AreEqual(SaveFormatVersion.Pedestrian, document.RootElement.GetProperty("formatVersion").GetInt32());
+        Assert.AreEqual(SaveFormatVersion.Current, document.RootElement.GetProperty("formatVersion").GetInt32());
         Assert.AreEqual(1, simulation.GetProperty("pedestrians").GetArrayLength());
         Assert.AreEqual(2UL, simulation.GetProperty("nextPedestrianId").GetUInt64());
 
@@ -33,7 +33,7 @@ public sealed class PedestrianSaveTests
     }
 
     [TestMethod]
-    public void FormatFiveRoundTripPreservesCrossingPermission()
+    public void CurrentFormatRoundTripPreservesCrossingPermission()
     {
         var world = CreateCrossingWorld(out var origin, out var destination);
         var crossing = world.CreatePedestrianNetworkSnapshot().Crossings.Single();

@@ -25,7 +25,9 @@ public sealed record SimulationCheckpoint(
     IReadOnlyList<SimulationRoadAccessPointCheckpoint> RoadAccessPoints,
     ulong NextPedestrianId = 1,
     IReadOnlyList<SimulationPedestrianCheckpoint>? Pedestrians = null,
-    IReadOnlyList<SimulationPedestrianCrossingCheckpoint>? PedestrianCrossings = null);
+    IReadOnlyList<SimulationPedestrianCrossingCheckpoint>? PedestrianCrossings = null,
+    ulong NextVehicleId = 1,
+    IReadOnlyList<SimulationVehicleCheckpoint>? Vehicles = null);
 
 public readonly record struct SimulationAgentCheckpoint(AgentId Id, WorldPoint Position, WorldVector Velocity, bool IsActive);
 public readonly record struct SimulationBuildingCheckpoint(BuildingId Id, BuildingKind Kind, WorldVolume Bounds);
@@ -46,3 +48,12 @@ public readonly record struct SimulationPedestrianCheckpoint(
     double ProgressMeters,
     PedestrianMovementState State);
 public readonly record struct SimulationPedestrianCrossingCheckpoint(PedestrianCrossingId Id, bool IsOpen);
+public readonly record struct SimulationVehicleCheckpoint(
+    VehicleId Id,
+    VehicleDimensions Dimensions,
+    VehiclePerformance Performance,
+    IReadOnlyList<RouteLaneStep> RouteSteps,
+    int RouteStepIndex,
+    double RouteProgressMeters,
+    double SpeedMetersPerSecond,
+    VehicleMovementState State);

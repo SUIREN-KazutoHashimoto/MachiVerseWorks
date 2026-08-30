@@ -8,8 +8,8 @@ public sealed class PedestrianProtocolTests
     [TestMethod]
     public void CurrentProtocolSupportsPedestrianMessages()
     {
-        Assert.AreEqual(new ProtocolVersion(2, 2), ProtocolVersion.Current);
         Assert.IsTrue(ProtocolVersion.Current.SupportsPedestrians);
+        Assert.IsTrue(new ProtocolVersion(2, 2).SupportsPedestrians);
         Assert.IsFalse(new ProtocolVersion(2, 1).SupportsPedestrians);
     }
 

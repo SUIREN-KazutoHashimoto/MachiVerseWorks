@@ -109,6 +109,7 @@ public static class WorldSaveSerializer
         ValidateCount(checkpoint.RoadAccessPoints.Count, limits.MaximumRoadAccessPointCount, "RoadAccessPoints");
         ValidateCount(checkpoint.Pedestrians?.Count ?? 0, limits.MaximumPedestrianCount, "Pedestrians");
         ValidateCount(checkpoint.PedestrianCrossings?.Count ?? 0, limits.MaximumPedestrianCrossingCount, "PedestrianCrossings");
+        ValidateCount(checkpoint.Vehicles?.Count ?? 0, limits.MaximumVehicleCount, "Vehicles");
     }
 
     private static SaveDataDocument CreateDocument(SimulationCheckpoint checkpoint)
@@ -204,6 +205,32 @@ public static class WorldSaveSerializer
             Id = item.Id.Value,
             IsOpen = item.IsOpen,
         }).ToArray();
+        var vehicles = (checkpoint.Vehicles ?? []).Select(static item => new SaveVehicleData
+        {
+            Id = item.Id.Value,
+            LengthMeters = item.Dimensions.LengthMeters,
+            WidthMeters = item.Dimensions.WidthMeters,
+            HeightMeters = item.Dimensions.HeightMeters,
+            MaximumSpeedMetersPerSecond = item.Performance.MaximumSpeedMetersPerSecond,
+            MaximumAccelerationMetersPerSecondSquared = item.Performance.MaximumAccelerationMetersPerSecondSquared,
+            ComfortableDecelerationMetersPerSecondSquared = item.Performance.ComfortableDecelerationMetersPerSecondSquared,
+            MinimumGapMeters = item.Performance.MinimumGapMeters,
+            TimeHeadwaySeconds = item.Performance.TimeHeadwaySeconds,
+            RouteSteps = item.RouteSteps.Select(static step => new SaveVehicleRouteStepData
+            {
+                LaneId = step.LaneId.Value,
+                SegmentId = step.SegmentId.Value,
+                StartSegmentOffset = step.StartSegmentOffset,
+                EndSegmentOffset = step.EndSegmentOffset,
+                DistanceMeters = step.DistanceMeters,
+                EstimatedTravelTimeSeconds = step.EstimatedTravelTimeSeconds,
+                ExitConnectionId = step.ExitConnectionId?.Value,
+            }).ToArray(),
+            RouteStepIndex = item.RouteStepIndex,
+            RouteProgressMeters = item.RouteProgressMeters,
+            SpeedMetersPerSecond = item.SpeedMetersPerSecond,
+            State = (byte)item.State,
+        }).ToArray();
 
         return new SaveDataDocument
         {
@@ -235,6 +262,8 @@ public static class WorldSaveSerializer
                 NextPedestrianId = checkpoint.NextPedestrianId,
                 Pedestrians = pedestrians,
                 PedestrianCrossings = pedestrianCrossings,
+                NextVehicleId = checkpoint.NextVehicleId,
+                Vehicles = vehicles,
             },
         };
     }
@@ -242,9 +271,9 @@ public static class WorldSaveSerializer
     private static SimulationWorld RestoreDocument(SaveDataDocument document, WorldSaveLimits limits)
     {
         var format = Require(document.FormatVersion, "formatVersion");
-        if (format is not (SaveFormatVersion.BuildingPoi or SaveFormatVersion.RoadNetwork or SaveFormatVersion.Pedestrian))
+        if (format is not (SaveFormatVersion.BuildingPoi or SaveFormatVersion.RoadNetwork or SaveFormatVersion.Pedestrian or SaveFormatVersion.Vehicle))
         {
-            throw new InvalidDataException($"Unsupported Save format version {format}. Expected {SaveFormatVersion.Current} or migratable versions {SaveFormatVersion.BuildingPoi} and {SaveFormatVersion.RoadNetwork}.");
+            throw new InvalidDataException($"Unsupported Save format version {format}. Expected {SaveFormatVersion.Current} or migratable versions {SaveFormatVersion.BuildingPoi}, {SaveFormatVersion.RoadNetwork}, and {SaveFormatVersion.Pedestrian}.");
         }
 
         var simulation = document.Simulation ?? throw new InvalidDataException("Save Data is missing simulation state.");
@@ -253,6 +282,7 @@ public static class WorldSaveSerializer
         var savedPois = simulation.Pois ?? throw new InvalidDataException("Save Data is missing POI state.");
         var hasRoadNetwork = format >= SaveFormatVersion.RoadNetwork;
         var hasPedestrians = format >= SaveFormatVersion.Pedestrian;
+        var hasVehicles = format >= SaveFormatVersion.Vehicle;
         var roadNodesData = hasRoadNetwork ? simulation.RoadNodes ?? throw new InvalidDataException("Save Data is missing RoadNode state.") : [];
         var roadSegmentsData = hasRoadNetwork ? simulation.RoadSegments ?? throw new InvalidDataException("Save Data is missing RoadSegment state.") : [];
         var lanesData = hasRoadNetwork ? simulation.Lanes ?? throw new InvalidDataException("Save Data is missing Lane state.") : [];
@@ -260,6 +290,7 @@ public static class WorldSaveSerializer
         var accessData = hasRoadNetwork ? simulation.RoadAccessPoints ?? throw new InvalidDataException("Save Data is missing RoadAccessPoint state.") : [];
         var pedestrianData = hasPedestrians ? simulation.Pedestrians ?? throw new InvalidDataException("Save Data is missing Pedestrian state.") : [];
         var pedestrianCrossingData = hasPedestrians ? simulation.PedestrianCrossings ?? [] : [];
+        var vehicleData = hasVehicles ? simulation.Vehicles ?? throw new InvalidDataException("Save Data is missing Vehicle state.") : [];
         ValidateMaterializedCounts(
             savedAgents.Length,
             savedBuildings.Length,
@@ -271,6 +302,7 @@ public static class WorldSaveSerializer
             accessData.Length,
             pedestrianData.Length,
             pedestrianCrossingData.Length,
+            vehicleData.Length,
             limits);
 
         var agents = new SimulationAgentCheckpoint[savedAgents.Length];
@@ -393,6 +425,44 @@ public static class WorldSaveSerializer
                 Require(item.IsOpen, $"pedestrianCrossings[{index}].isOpen"));
         }
 
+        var vehicles = new SimulationVehicleCheckpoint[vehicleData.Length];
+        for (var index = 0; index < vehicles.Length; index++)
+        {
+            var item = vehicleData[index] ?? throw new InvalidDataException($"Vehicle entry {index} is null.");
+            var routeData = item.RouteSteps ?? throw new InvalidDataException($"Save Data is missing Vehicle Route state at vehicles[{index}].routeSteps.");
+            if (routeData.Length == 0) throw new InvalidDataException($"Vehicle entry {index} has an empty Route.");
+            var route = new RouteLaneStep[routeData.Length];
+            for (var stepIndex = 0; stepIndex < route.Length; stepIndex++)
+            {
+                var step = routeData[stepIndex] ?? throw new InvalidDataException($"Vehicle Route entry {index}:{stepIndex} is null.");
+                route[stepIndex] = new RouteLaneStep(
+                    new LaneId(Require(step.LaneId, $"vehicles[{index}].routeSteps[{stepIndex}].laneId")),
+                    new RoadSegmentId(Require(step.SegmentId, $"vehicles[{index}].routeSteps[{stepIndex}].segmentId")),
+                    Require(step.StartSegmentOffset, $"vehicles[{index}].routeSteps[{stepIndex}].startSegmentOffset"),
+                    Require(step.EndSegmentOffset, $"vehicles[{index}].routeSteps[{stepIndex}].endSegmentOffset"),
+                    Require(step.DistanceMeters, $"vehicles[{index}].routeSteps[{stepIndex}].distanceMeters"),
+                    Require(step.EstimatedTravelTimeSeconds, $"vehicles[{index}].routeSteps[{stepIndex}].estimatedTravelTimeSeconds"),
+                    step.ExitConnectionId is { } connectionId ? new LaneConnectionId(connectionId) : null);
+            }
+            vehicles[index] = new SimulationVehicleCheckpoint(
+                new VehicleId(Require(item.Id, $"vehicles[{index}].id")),
+                new VehicleDimensions(
+                    Require(item.LengthMeters, $"vehicles[{index}].lengthMeters"),
+                    Require(item.WidthMeters, $"vehicles[{index}].widthMeters"),
+                    Require(item.HeightMeters, $"vehicles[{index}].heightMeters")),
+                new VehiclePerformance(
+                    Require(item.MaximumSpeedMetersPerSecond, $"vehicles[{index}].maximumSpeedMetersPerSecond"),
+                    Require(item.MaximumAccelerationMetersPerSecondSquared, $"vehicles[{index}].maximumAccelerationMetersPerSecondSquared"),
+                    Require(item.ComfortableDecelerationMetersPerSecondSquared, $"vehicles[{index}].comfortableDecelerationMetersPerSecondSquared"),
+                    Require(item.MinimumGapMeters, $"vehicles[{index}].minimumGapMeters"),
+                    Require(item.TimeHeadwaySeconds, $"vehicles[{index}].timeHeadwaySeconds")),
+                route,
+                Require(item.RouteStepIndex, $"vehicles[{index}].routeStepIndex"),
+                Require(item.RouteProgressMeters, $"vehicles[{index}].routeProgressMeters"),
+                Require(item.SpeedMetersPerSecond, $"vehicles[{index}].speedMetersPerSecond"),
+                (VehicleMovementState)Require(item.State, $"vehicles[{index}].state"));
+        }
+
         var checkpoint = new SimulationCheckpoint(
             Require(simulation.TickRate, "simulation.tickRate"),
             Require(simulation.Seed, "simulation.seed"),
@@ -418,7 +488,9 @@ public static class WorldSaveSerializer
             accessPoints,
             hasPedestrians ? Require(simulation.NextPedestrianId, "simulation.nextPedestrianId") : 1UL,
             pedestrians,
-            pedestrianCrossings);
+            pedestrianCrossings,
+            hasVehicles ? Require(simulation.NextVehicleId, "simulation.nextVehicleId") : 1UL,
+            vehicles);
         return SimulationWorld.RestoreCheckpoint(checkpoint);
     }
 
@@ -439,6 +511,7 @@ public static class WorldSaveSerializer
         int accessPoints,
         int pedestrians,
         int pedestrianCrossings,
+        int vehicles,
         WorldSaveLimits limits)
     {
         ValidateCount(agents, limits.MaximumAgentCount, "Agents");
@@ -451,6 +524,7 @@ public static class WorldSaveSerializer
         ValidateCount(accessPoints, limits.MaximumRoadAccessPointCount, "RoadAccessPoints");
         ValidateCount(pedestrians, limits.MaximumPedestrianCount, "Pedestrians");
         ValidateCount(pedestrianCrossings, limits.MaximumPedestrianCrossingCount, "PedestrianCrossings");
+        ValidateCount(vehicles, limits.MaximumVehicleCount, "Vehicles");
     }
 
     private static void ValidateCount(int count, int maximum, string name)
@@ -474,6 +548,7 @@ public static class WorldSaveSerializer
             else if (reader.ValueTextEquals("roadAccessPoints")) ValidateNamedArrayElementCount(ref reader, limits.MaximumRoadAccessPointCount, "RoadAccessPoint");
             else if (reader.ValueTextEquals("pedestrians")) ValidateNamedArrayElementCount(ref reader, limits.MaximumPedestrianCount, "Pedestrian");
             else if (reader.ValueTextEquals("pedestrianCrossings")) ValidateNamedArrayElementCount(ref reader, limits.MaximumPedestrianCrossingCount, "PedestrianCrossing");
+            else if (reader.ValueTextEquals("vehicles")) ValidateNamedArrayElementCount(ref reader, limits.MaximumVehicleCount, "Vehicle");
         }
     }
 
