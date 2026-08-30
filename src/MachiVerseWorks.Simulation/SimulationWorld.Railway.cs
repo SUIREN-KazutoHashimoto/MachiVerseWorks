@@ -79,7 +79,7 @@ public sealed partial class SimulationWorld
         foreach (var platformAccess in _railway.GetPlatformAccessPoints(platformId))
         {
             if (!_roads.TryGetAccessPoint(platformAccess.RoadAccessPointId, out var roadAccess) || (roadAccess.Mode & RoadAccessMode.Foot) == 0) continue;
-            Span<TripEndpoint> candidates = stackalloc TripEndpoint[2];
+            var candidates = new TripEndpoint[2];
             var candidateCount = 0;
             if (roadAccess.PoiId is { } poiId) candidates[candidateCount++] = TripEndpoint.ForPoi(poiId);
             if (roadAccess.BuildingId is { } buildingId) candidates[candidateCount++] = TripEndpoint.ForBuilding(buildingId);
