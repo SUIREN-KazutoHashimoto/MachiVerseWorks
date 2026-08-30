@@ -10,12 +10,17 @@ import {
   encodeSubscribeVolume,
 } from './protocol.ts';
 import {
-  WEB_POPULATION_PROTOCOL_VERSION,
   decodePopulationFrame,
   encodeInspectPerson,
   isPopulationFrame,
   type PopulationProtocolMessage,
 } from './population-protocol.ts';
+import {
+  WEB_RAILWAY_PROTOCOL_VERSION,
+  decodeRailwayFrame,
+  isRailwayFrame,
+  type RailwayProtocolMessage,
+} from './railway-infrastructure.ts';
 import {
   decodeTrafficFrame,
   isTrafficFrame,
@@ -24,7 +29,7 @@ import {
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'handshaking' | 'connected' | 'reconnecting';
 export interface FrameDecodeMetrics { readonly frameBytes: number; readonly decodeTimeMs: number; }
-export interface ConnectionCallbacks { readonly onStateChanged: (state: ConnectionState) => void; readonly onMessage: (message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage) => void; readonly onProtocolError: (message: ProtocolErrorMessage) => void; readonly onClientError: (error: Error) => void; readonly onDisconnected: () => void; readonly onHelloAck: (version: ProtocolVersion, tickRate: number) => void; readonly onFrameDecoded?: (metrics: FrameDecodeMetrics) => void; }
+export interface ConnectionCallbacks { readonly onStateChanged: (state: ConnectionState) => void; readonly onMessage: (message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage) => void; readonly onProtocolError: (message: ProtocolErrorMessage) => void; readonly onClientError: (error: Error) => void; readonly onDisconnected: () => void; readonly onHelloAck: (version: ProtocolVersion, tickRate: number) => void; readonly onFrameDecoded?: (metrics: FrameDecodeMetrics) => void; }
 export interface ReconnectOptions { readonly minimumDelayMs: number; readonly maximumDelayMs: number; }
 
 export class MachiVerseConnection {
@@ -66,7 +71,7 @@ export class MachiVerseConnection {
     const socket = new WebSocket(this.serverUrl);
     socket.binaryType = 'arraybuffer';
     this.socket = socket;
-    socket.addEventListener('open', () => { if (this.socket !== socket) return; this.setState('handshaking'); socket.send(encodeHello(WEB_POPULATION_PROTOCOL_VERSION)); });
+    socket.addEventListener('open', () => { if (this.socket !== socket) return; this.setState('handshaking'); socket.send(encodeHello(WEB_RAILWAY_PROTOCOL_VERSION)); });
     socket.addEventListener('message', (event) => { void this.handleMessage(socket, event.data); });
     socket.addEventListener('error', () => { if (this.socket === socket) this.callbacks.onClientError(new Error('WebSocket transport error.')); });
     socket.addEventListener('close', () => {
@@ -103,16 +108,19 @@ export class MachiVerseConnection {
         return;
       }
 
-      const populationFrame = isPopulationFrame(buffer);
-      const trafficFrame = !populationFrame && isTrafficFrame(buffer);
-      const envelope = populationFrame
-        ? decodePopulationFrame(buffer)
-        : trafficFrame
-          ? decodeTrafficFrame(buffer)
-          : decodeFrame(buffer);
+      const railwayFrame = isRailwayFrame(buffer);
+      const populationFrame = !railwayFrame && isPopulationFrame(buffer);
+      const trafficFrame = !railwayFrame && !populationFrame && isTrafficFrame(buffer);
+      const envelope = railwayFrame
+        ? decodeRailwayFrame(buffer)
+        : populationFrame
+          ? decodePopulationFrame(buffer)
+          : trafficFrame
+            ? decodeTrafficFrame(buffer)
+            : decodeFrame(buffer);
       if (onFrameDecoded !== undefined) onFrameDecoded({ frameBytes: buffer.byteLength, decodeTimeMs: Math.max(0, performance.now() - decodeStartedAt) });
       if (this.state !== 'connected') {
-        if (!populationFrame && !trafficFrame && envelope.message.type === MessageType.Error) this.callbacks.onProtocolError(envelope.message as ProtocolErrorMessage);
+        if (!railwayFrame && !populationFrame && !trafficFrame && envelope.message.type === MessageType.Error) this.callbacks.onProtocolError(envelope.message as ProtocolErrorMessage);
         return;
       }
 
@@ -120,7 +128,7 @@ export class MachiVerseConnection {
       if (negotiatedVersion === null || !protocolVersionsEqual(envelope.version, negotiatedVersion)) {
         throw new ProtocolDecodeFailure('Server frame version changed after protocol negotiation.');
       }
-      if (!populationFrame && !trafficFrame && envelope.message.type === MessageType.Error) {
+      if (!railwayFrame && !populationFrame && !trafficFrame && envelope.message.type === MessageType.Error) {
         this.callbacks.onProtocolError(envelope.message as ProtocolErrorMessage);
         return;
       }
@@ -163,7 +171,7 @@ export class MachiVerseConnection {
 export function resolveNegotiatedProtocolVersion(
   frameVersion: ProtocolVersion,
   acknowledgedVersion: ProtocolVersion,
-  supportedVersion: ProtocolVersion = WEB_POPULATION_PROTOCOL_VERSION,
+  supportedVersion: ProtocolVersion = WEB_RAILWAY_PROTOCOL_VERSION,
 ): ProtocolVersion {
   if (!protocolVersionsEqual(frameVersion, acknowledgedVersion)) {
     throw new ProtocolDecodeFailure('HelloAck frame version and payload version do not match.');
