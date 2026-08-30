@@ -5,7 +5,7 @@ namespace MachiVerseWorks.Simulation.Tests;
 [TestClass]
 public sealed class SimulationTimeConsistencyTests
 {
-    [DataTestMethod]
+    [TestMethod]
     [DataRow(30)]
     [DataRow(60)]
     public void LongRunningElapsedTimeDoesNotAccumulateTimeSpanRoundingDrift(int tickRate)

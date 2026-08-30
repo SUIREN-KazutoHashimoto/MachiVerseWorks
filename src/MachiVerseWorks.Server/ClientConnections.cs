@@ -16,6 +16,8 @@ internal sealed class ClientConnection : IDisposable
     private HashSet<ulong> _knownPedestrianIds = [];
     private WorldVolume? _subscription;
     private long _subscriptionRevision;
+    private long _lastRoadSubscriptionRevision = long.MinValue;
+    private ulong _lastRoadRevision;
     private int _activeSendCount;
     private bool _disposeRequested;
     private bool _sendGateDisposed;
@@ -64,6 +66,25 @@ internal sealed class ClientConnection : IDisposable
         }
     }
 
+    public bool NeedsRoadSnapshot(long subscriptionRevision, ulong roadRevision)
+    {
+        lock (_stateGate)
+        {
+            return _lastRoadSubscriptionRevision != subscriptionRevision || _lastRoadRevision != roadRevision;
+        }
+    }
+
+    public bool TryMarkRoadSnapshotDelivered(long subscriptionRevision, ulong roadRevision)
+    {
+        lock (_stateGate)
+        {
+            if (_subscriptionRevision != subscriptionRevision) return false;
+            _lastRoadSubscriptionRevision = subscriptionRevision;
+            _lastRoadRevision = roadRevision;
+            return true;
+        }
+    }
+
     public bool TryReplaceKnownAgentIds(long revision, HashSet<ulong> agentIds) => TryReplaceKnownEntityIds(revision, agentIds, new HashSet<ulong>(_knownPedestrianIds));
 
     public bool TryReplaceKnownEntityIds(long revision, HashSet<ulong> agentIds, HashSet<ulong> pedestrianIds)
@@ -72,10 +93,9 @@ internal sealed class ClientConnection : IDisposable
         ArgumentNullException.ThrowIfNull(pedestrianIds);
         lock (_stateGate)
         {
-            var revisionMatches = _subscriptionRevision == revision;
             _knownAgentIds = agentIds;
             _knownPedestrianIds = pedestrianIds;
-            return revisionMatches;
+            return _subscriptionRevision == revision;
         }
     }
 

@@ -8,6 +8,7 @@ internal sealed class SimulationRuntime
     private readonly object _gate = new();
     private readonly SimulationWorld _world;
     private bool _pedestrianFixturePending;
+    private RoadNetworkReadModel? _roadReadModel;
 
     public SimulationRuntime(ServerOptions options, IConfiguration configuration)
     {
@@ -40,27 +41,63 @@ internal sealed class SimulationRuntime
     }
 
     public int TickRate => _world.Config.TickRate;
+    public TimeSpan TickInterval => TimeSpan.FromSeconds(_world.Config.TickDurationSeconds);
     public double SpatialCellSize => _world.Config.SpatialCellSize;
     public ulong TickCount { get { lock (_gate) return _world.Time.TickCount; } }
     public int ActiveAgentCount { get { lock (_gate) return _world.ActiveAgentCount; } }
     public int ActivePedestrianCount { get { lock (_gate) return _world.ActivePedestrianCount; } }
     public int RoadSegmentCount { get { lock (_gate) return _world.RoadSegmentCount; } }
-    public void Step() { lock (_gate) _world.Step(); }
-    public AgentSnapshot[] CreateSnapshot(WorldVolume volume) { lock (_gate) return _world.CreateSnapshot(volume); }
+
+    public void Step()
+    {
+        lock (_gate) _world.Step();
+    }
+
+    public AgentSnapshot[] CreateSnapshot(WorldVolume volume)
+    {
+        lock (_gate) return _world.CreateSnapshot(volume);
+    }
+
     public PedestrianSnapshot[] CreatePedestrianSnapshot(WorldVolume volume)
     {
         lock (_gate)
         {
-            if (_pedestrianFixturePending)
-            {
-                SeedPedestrianFixture(_world);
-                _pedestrianFixturePending = false;
-            }
-
+            EnsurePedestrianFixture();
             return _world.CreatePedestrianSnapshot(volume);
         }
     }
-    public RoadNetworkSnapshot CreateRoadNetworkSnapshot(WorldVolume volume) { lock (_gate) return _world.CreateRoadNetworkSnapshot(volume); }
+
+    public RoadNetworkSnapshot CreateRoadNetworkSnapshot(WorldVolume volume)
+    {
+        lock (_gate) return _world.CreateRoadNetworkSnapshot(volume);
+    }
+
+    public SimulationPublishSnapshot CapturePublishSnapshot()
+    {
+        ulong tickCount;
+        AgentSnapshot[] agents;
+        PedestrianSnapshot[] pedestrians;
+        RoadNetworkReadModel roadReadModel;
+        lock (_gate)
+        {
+            EnsurePedestrianFixture();
+            tickCount = _world.Time.TickCount;
+            agents = _world.CreateAllAgentSnapshots();
+            pedestrians = _world.CreateAllPedestrianSnapshots();
+            _roadReadModel ??= new RoadNetworkReadModel(1, _world.CreateRoadNetworkSnapshot());
+            roadReadModel = _roadReadModel;
+        }
+
+        return new SimulationPublishSnapshot(tickCount, SpatialCellSize, agents, pedestrians, roadReadModel);
+    }
+
+    private void EnsurePedestrianFixture()
+    {
+        if (!_pedestrianFixturePending) return;
+        SeedPedestrianFixture(_world);
+        _pedestrianFixturePending = false;
+        _roadReadModel = null;
+    }
 
     private static void SeedPedestrianFixture(SimulationWorld world)
     {
