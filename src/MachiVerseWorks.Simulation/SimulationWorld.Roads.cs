@@ -14,51 +14,99 @@ public sealed partial class SimulationWorld
 
     public RoadNodeId CreateRoadNode(WorldPoint position, RoadNodeKind kind = RoadNodeKind.Endpoint)
     {
-        ValidatePoint(position); ValidateEnum(kind, nameof(kind)); InvalidatePedestrianNetwork(); return _roads.AddNode(position, kind);
+        ValidatePoint(position);
+        ValidateEnum(kind, nameof(kind));
+        InvalidatePedestrianNetwork();
+        var id = _roads.AddNode(position, kind);
+        InvalidateRouting();
+        return id;
     }
 
     public bool UpdateRoadNode(RoadNodeId id, WorldPoint position, RoadNodeKind kind)
     {
-        ValidatePoint(position); ValidateEnum(kind, nameof(kind)); InvalidatePedestrianNetwork(); return _roads.UpdateNode(id, position, kind);
+        ValidatePoint(position);
+        ValidateEnum(kind, nameof(kind));
+        InvalidatePedestrianNetwork();
+        var updated = _roads.UpdateNode(id, position, kind);
+        if (updated) InvalidateRouting();
+        return updated;
     }
 
     public bool RemoveRoadNode(RoadNodeId id)
     {
         InvalidatePedestrianNetwork();
-        return _roads.RemoveNode(id);
+        var removed = _roads.RemoveNode(id);
+        if (removed) InvalidateRouting();
+        return removed;
     }
 
     public RoadSegmentId CreateRoadSegment(RoadNodeId startNodeId, RoadNodeId endNodeId, RoadKind kind = RoadKind.Local)
     {
-        ValidateEnum(kind, nameof(kind)); InvalidatePedestrianNetwork(); return _roads.AddSegment(startNodeId, endNodeId, kind);
+        ValidateEnum(kind, nameof(kind));
+        InvalidatePedestrianNetwork();
+        var id = _roads.AddSegment(startNodeId, endNodeId, kind);
+        InvalidateRouting();
+        return id;
     }
 
     public bool UpdateRoadSegment(RoadSegmentId id, RoadNodeId startNodeId, RoadNodeId endNodeId, RoadKind kind)
     {
-        ValidateEnum(kind, nameof(kind)); InvalidatePedestrianNetwork(); return _roads.UpdateSegment(id, startNodeId, endNodeId, kind);
+        ValidateEnum(kind, nameof(kind));
+        InvalidatePedestrianNetwork();
+        var updated = _roads.UpdateSegment(id, startNodeId, endNodeId, kind);
+        if (updated) InvalidateRouting();
+        return updated;
     }
 
     public bool RemoveRoadSegment(RoadSegmentId id)
     {
         InvalidatePedestrianNetwork();
-        return _roads.RemoveSegment(id);
+        var removed = _roads.RemoveSegment(id);
+        if (removed) InvalidateRouting();
+        return removed;
     }
 
-    public LaneId CreateLane(RoadSegmentId segmentId, LaneDirection direction, ushort order, double widthMeters = 3.5d, double speedLimitMetersPerSecond = 13.8888888889d) =>
-        _roads.AddLane(segmentId, direction, order, widthMeters, speedLimitMetersPerSecond);
+    public LaneId CreateLane(RoadSegmentId segmentId, LaneDirection direction, ushort order, double widthMeters = 3.5d, double speedLimitMetersPerSecond = 13.8888888889d)
+    {
+        var id = _roads.AddLane(segmentId, direction, order, widthMeters, speedLimitMetersPerSecond);
+        InvalidateRouting();
+        return id;
+    }
 
-    public bool UpdateLane(LaneId id, RoadSegmentId segmentId, LaneDirection direction, ushort order, double widthMeters, double speedLimitMetersPerSecond) =>
-        _roads.UpdateLane(id, segmentId, direction, order, widthMeters, speedLimitMetersPerSecond);
+    public bool UpdateLane(LaneId id, RoadSegmentId segmentId, LaneDirection direction, ushort order, double widthMeters, double speedLimitMetersPerSecond)
+    {
+        var updated = _roads.UpdateLane(id, segmentId, direction, order, widthMeters, speedLimitMetersPerSecond);
+        if (updated) InvalidateRouting();
+        return updated;
+    }
 
-    public bool RemoveLane(LaneId id) => _roads.RemoveLane(id);
+    public bool RemoveLane(LaneId id)
+    {
+        var removed = _roads.RemoveLane(id);
+        if (removed) InvalidateRouting();
+        return removed;
+    }
 
-    public LaneConnectionId CreateLaneConnection(LaneId fromLaneId, LaneId toLaneId, RoadNodeId viaNodeId, TurnMovement movement = TurnMovement.Unspecified) =>
-        _roads.AddConnection(fromLaneId, toLaneId, viaNodeId, movement);
+    public LaneConnectionId CreateLaneConnection(LaneId fromLaneId, LaneId toLaneId, RoadNodeId viaNodeId, TurnMovement movement = TurnMovement.Unspecified)
+    {
+        var id = _roads.AddConnection(fromLaneId, toLaneId, viaNodeId, movement);
+        InvalidateRouting();
+        return id;
+    }
 
-    public bool UpdateLaneConnection(LaneConnectionId id, LaneId fromLaneId, LaneId toLaneId, RoadNodeId viaNodeId, TurnMovement movement) =>
-        _roads.UpdateConnection(id, fromLaneId, toLaneId, viaNodeId, movement);
+    public bool UpdateLaneConnection(LaneConnectionId id, LaneId fromLaneId, LaneId toLaneId, RoadNodeId viaNodeId, TurnMovement movement)
+    {
+        var updated = _roads.UpdateConnection(id, fromLaneId, toLaneId, viaNodeId, movement);
+        if (updated) InvalidateRouting();
+        return updated;
+    }
 
-    public bool RemoveLaneConnection(LaneConnectionId id) => _roads.RemoveConnection(id);
+    public bool RemoveLaneConnection(LaneConnectionId id)
+    {
+        var removed = _roads.RemoveConnection(id);
+        if (removed) InvalidateRouting();
+        return removed;
+    }
 
     public RoadAccessPointId CreateRoadAccessPoint(RoadSegmentId segmentId, double segmentOffset, BuildingId? buildingId = null, PoiId? poiId = null, RoadAccessMode mode = RoadAccessMode.Motor)
     {
