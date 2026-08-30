@@ -7,6 +7,7 @@ on:
     paths:
       - scripts/phase18-patch.py
       - scripts/phase18-fix.py
+      - scripts/phase18-web-patch.py
       - .github/workflows/phase18-patch.yml
   workflow_dispatch:
 
@@ -38,6 +39,7 @@ jobs:
         run: |
           python scripts/phase18-patch.py
           python scripts/phase18-fix.py
+          python scripts/phase18-web-patch.py
       - name: Restore .NET
         run: dotnet restore MachiVerseWorks.slnx
       - name: Build .NET
@@ -47,6 +49,7 @@ jobs:
       - name: Test Web
         run: |
           npm --prefix src/web ci
+          npm --prefix src/web run lint
           npm --prefix src/web test
           npm --prefix src/web run build
       - name: Commit integrated changes
