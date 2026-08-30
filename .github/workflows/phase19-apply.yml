@@ -35,6 +35,7 @@ jobs:
           xz -dc /tmp/phase19.patch.xz > /tmp/phase19.patch
           patch -p1 < /tmp/phase19.patch
 
+          sed -i 's/[[:blank:]]\+$//' ROADMAP.md
           rm -f .github/workflows/phase19-source-artifact.yml
           rm -f .github/workflows/phase19-apply.yml
           printf '0.20.2\n' > VERSION
