@@ -170,27 +170,38 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 
 ## Phase 11 — Road Network Foundation
 
-> **状態: ⬜ 未着手**  
+> **状態: 実装検証済み・Phase 10 closeout待ち**  
 > **依存:** Phase 10  
-> 道路・交差点接続・車線を、経路探索と交通Simulationが利用できる3D topologyとして確立する。
+> 道路・交差点接続・車線を、経路探索と交通Simulationが利用できる3D topologyとして確立する。個別Taskは先行実装・検証済みだが、依存するPhase 10全体が未完了のため、Phase 11の正式closeoutと`develop`への統合判定はPhase 10完了後に行う。
 
-- ⬜ **P11-001** — Road Networkの軸・接続・方向・高度・道路種別の正本契約を仕様化する
-- ⬜ **P11-002** — RoadNode / RoadSegmentのstable IDと3D geometryを実装する
-- ⬜ **P11-003** — Laneの方向・幅・速度上限・segment内順序を表すモデルを実装する
-- ⬜ **P11-004** — Lane間の進入・退出・turn connectionを明示するtopologyを実装する
-- ⬜ **P11-005** — 基本的なintersection nodeを表現し、接続妥当性を検証する
-- ⬜ **P11-006** — RoadとBuilding / POI access pointの接続境界を定義する
-- ⬜ **P11-007** — Road Network storeと3D spatial queryをSimulationへ追加する
-- ⬜ **P11-008** — Road追加・更新・削除時にdangling connectionを残さないatomic commandを実装する
-- ⬜ **P11-009** — 立体交差と接続交差点を区別し、高度だけで誤接続しないvalidationを追加する
-- ⬜ **P11-010** — Road Networkをcheckpoint / Save Dataへ含める
-- ⬜ **P11-011** — Road / Lane / intersection geometryのProtocol配信契約を追加する
-- ⬜ **P11-012** — Serverがsubscription volume内のRoad Networkを配信する
-- ⬜ **P11-013** — Web ClientでRoad / Lane / intersectionを3D描画する
-- ⬜ **P11-014** — 高架・地下・立体交差を含むdeterministic Road fixtureを追加する
-- ⬜ **P11-015** — Road topologyのSave→Server→Browser E2Eを追加する
-- ⬜ **P11-016** — 10,000 / 100,000 RoadSegment級のtopology・spatial query benchmarkを記録する
-- ⬜ **P11-017** — Road Networkのspecification / architecture / ROADMAPを同期する
+- ✅ **P11-001** — Road Networkの軸・接続・方向・高度・道路種別の正本契約を仕様化する
+- ✅ **P11-002** — RoadNode / RoadSegmentのstable IDと3D geometryを実装する
+- ✅ **P11-003** — Laneの方向・幅・速度上限・segment内順序を表すモデルを実装する
+- ✅ **P11-004** — Lane間の進入・退出・turn connectionを明示するtopologyを実装する
+- ✅ **P11-005** — 基本的なintersection nodeを表現し、接続妥当性を検証する
+- ✅ **P11-006** — RoadとBuilding / POI access pointの接続境界を定義する
+- ✅ **P11-007** — Road Network storeと3D spatial queryをSimulationへ追加する
+- ✅ **P11-008** — Road追加・更新・削除時にdangling connectionを残さないatomic commandを実装する
+- ✅ **P11-009** — 立体交差と接続交差点を区別し、高度だけで誤接続しないvalidationを追加する
+- ✅ **P11-010** — Road Networkをcheckpoint / Save Dataへ含める
+- ✅ **P11-011** — Road / Lane / intersection geometryのProtocol配信契約を追加する
+- ✅ **P11-012** — Serverがsubscription volume内のRoad Networkを配信する
+- ✅ **P11-013** — Web ClientでRoad / Lane / intersectionを3D描画する
+- ✅ **P11-014** — 高架・地下・立体交差を含むdeterministic Road fixtureを追加する
+- ✅ **P11-015** — Road topologyのSave→Server→Browser E2Eを追加する
+- ✅ **P11-016** — 10,000 / 100,000 RoadSegment級のtopology・spatial query benchmarkを記録する
+- ✅ **P11-017** — Road Networkのspecification / architecture / ROADMAPを同期する
+
+### Phase 11 implementation evidence
+
+- `RoadNode` / `RoadSegment` / `Lane` / `LaneConnection` / `RoadAccessPoint`をstable ID付きのSimulation正本状態として実装し、geometry交差から暗黙接続を生成しない。
+- LaneConnection参照中のIntersectionをEndpointへ降格できず、RoadAccessPoint参照中のBuilding / POIも削除できないため、mutationでdangling topologyを残さない。
+- Road NetworkをcheckpointとSave format 4へ保存し、道路を持たないformat 3をformat 4へ移行できる。
+- Protocol 2.1でRoad Network snapshotを追加し、2.0 connectionにはRoad messageを送らず既存Agent契約を維持する。
+- deterministic fixtureは地下・地上・高架を含み、Browser E2Eで9 Node / 5 Segment / 2 Lane / 1 LaneConnection / 1 RoadAccessPointと、`-15m` / `0m` / `20m`の描画高度を実Server経由で確認した。
+- [`docs/development/road-network-benchmark.md`](docs/development/road-network-benchmark.md)へ10,000 / 100,000 Segmentの実測基準を記録し、100,000 Segmentでspatial query 3.816ms、全件snapshot 22.556ms、stable ID lookup 3.575nsを確認した。
+- closeout候補`0.13.14`でCI、Dependency Review、Phase 6 E2E、Phase 7 benchmark、Phase 9 regression benchmark、Phase 11 Road Network E2E、Phase 11 Road Network Benchmarkがすべて成功した。
+- Phase 10が未完了のため、全体の現在地ではPhase 11を`⏳ 待機`のままとし、依存順を飛ばして正式完了扱いにはしない。
 
 ### Phase 11 完了条件
 
