@@ -14,8 +14,13 @@ def replace_once(path: str, old: str, new: str) -> None:
 
 replace_once(
     "tests/MachiVerseWorks.Persistence.Tests/RailwayInfrastructureSaveTests.cs",
-    '"\\\"formatVersion\\\": 8"',
-    '"\\\"formatVersion\\\": 9"',
+    'StringAssert.Contains(json, "\\\"formatVersion\\\": 8");',
+    'StringAssert.Contains(json, "\\\"formatVersion\\\": 9");',
+)
+replace_once(
+    "tests/MachiVerseWorks.Persistence.Tests/RailwayInfrastructureSaveTests.cs",
+    'json = json.Replace("\\\"formatVersion\\\": 8", "\\\"formatVersion\\\": 7", StringComparison.Ordinal);',
+    'json = json.Replace("\\\"formatVersion\\\": 9", "\\\"formatVersion\\\": 7", StringComparison.Ordinal);',
 )
 replace_once(
     "src/MachiVerseWorks.Server/HostedServices.cs",
