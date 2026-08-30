@@ -6,12 +6,14 @@ internal sealed class RailwayInfrastructureReadModel
 {
     private readonly RailwayInfrastructureSnapshot _snapshot;
     private readonly Dictionary<TrackNodeId, TrackNodeSnapshot> _nodes;
+    private readonly Dictionary<TrackSegmentId, TrackSegmentSnapshot> _segments;
 
     public RailwayInfrastructureReadModel(ulong revision, RailwayInfrastructureSnapshot snapshot)
     {
         Revision = revision;
         _snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
         _nodes = snapshot.Nodes.ToDictionary(static item => item.Id);
+        _segments = snapshot.Segments.ToDictionary(static item => item.Id);
     }
 
     public ulong Revision { get; }
@@ -39,7 +41,7 @@ internal sealed class RailwayInfrastructureReadModel
         {
             stationIds.Add(platform.StationId);
             selectedSegments.Add(platform.TrackSegmentId);
-            if (_snapshot.Segments.FirstOrDefault(item => item.Id == platform.TrackSegmentId) is var segment && segment.Id.Value != 0)
+            if (_segments.TryGetValue(platform.TrackSegmentId, out var segment))
             {
                 selectedNodes.Add(segment.StartNodeId);
                 selectedNodes.Add(segment.EndNodeId);
