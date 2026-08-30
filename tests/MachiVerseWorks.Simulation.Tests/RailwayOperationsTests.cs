@@ -10,7 +10,7 @@ public sealed class RailwayOperationsTests
     {
         var world = new SimulationWorld();
         var a = world.CreateTrackNode(new WorldPoint(0d, 0d, 0d));
-        var b = world.CreateTrackNode(new WorldPoint(10d, 0d, 0d));
+        var b = world.CreateTrackNode(new WorldPoint(10d, 0d, 0d), TrackNodeKind.Junction);
         var c = world.CreateTrackNode(new WorldPoint(20d, 0d, 0d));
         var first = world.CreateTrackSegment(a, b);
         var second = world.CreateTrackSegment(b, c);
@@ -25,7 +25,7 @@ public sealed class RailwayOperationsTests
         RailwayOperationsFixtures.SeedDeterministic(world);
         var observedDelay = false;
 
-        for (var tick = 0; tick < 700; tick++)
+        for (var tick = 0; tick < 1200; tick++)
         {
             world.Step();
             var snapshot = world.CreateRailwayOperationsSnapshot();
