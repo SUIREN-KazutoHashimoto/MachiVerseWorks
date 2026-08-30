@@ -18,7 +18,7 @@ const PLATFORM_LENGTH = 88;
 const ACCESS_POINT_LENGTH = 24;
 const DEPOT_HEADER_LENGTH = 60;
 
-export const WEB_RAILWAY_PROTOCOL_VERSION: ProtocolVersion = Object.freeze({ major: 2, minor: 6 });
+export const WEB_RAILWAY_PROTOCOL_VERSION: ProtocolVersion = Object.freeze({ major: 2, minor: 7 });
 
 export enum RailwayMessageType {
   RailwayInfrastructureSnapshot = 700,

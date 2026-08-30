@@ -56,6 +56,7 @@ internal sealed class SaveSimulationData
     public SavePlatformAccessPointData?[]? PlatformAccessPoints { get; init; }
     public ulong? NextDepotId { get; init; }
     public SaveDepotData?[]? Depots { get; init; }
+    public SaveRailwayOperationsData? RailwayOperations { get; init; }
 }
 
 internal sealed class SaveAgentData

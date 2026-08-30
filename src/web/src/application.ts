@@ -9,6 +9,7 @@ import { PedestrianStore } from './pedestrian-store.ts';
 import { PopulationMessageType, type PopulationProtocolMessage, type PopulationStatisticsMessage, type PersonDebugMessage } from './population-protocol.ts';
 import { MessageType, ProtocolErrorCode, type AgentStateMessage, type PedestrianStateMessage, type ProtocolErrorMessage, type ProtocolMessage, type WorldVolume } from './protocol.ts';
 import { RailwayInfrastructureLayer, RailwayMessageType, type RailwayProtocolMessage } from './railway-infrastructure.ts';
+import { RailwayOperationsLayer, RailwayOperationsMessageType, type RailwayOperationsProtocolMessage, type RailwayOperationsSnapshotMessage } from './railway-operations.ts';
 import { ClientUi } from './ui.ts';
 import { TrafficMessageType, type TrafficProtocolMessage, type VehicleStateMessage } from './traffic-protocol.ts';
 import { IntersectionControlStore, VehicleStore } from './traffic-store.ts';
@@ -28,6 +29,7 @@ export class Application {
   private readonly performanceMetrics = import.meta.env.DEV ? new ClientPerformanceMetrics() : null;
   private readonly view: WorldView;
   private readonly railway: RailwayInfrastructureLayer;
+  private readonly railwayOperations: RailwayOperationsLayer;
   private readonly ui: ClientUi;
   private readonly connection: MachiVerseConnection;
   private animationFrame = 0;
@@ -41,6 +43,7 @@ export class Application {
     const performanceMetrics = this.performanceMetrics;
     this.view = new WorldView(host);
     this.railway = new RailwayInfrastructureLayer(this.view.scene);
+    this.railwayOperations = new RailwayOperationsLayer(this.view.scene);
     this.ui = new ClientUi(host, this.localizer, performanceMetrics !== null);
     this.connection = new MachiVerseConnection(
       this.config.serverUrl,
@@ -56,9 +59,11 @@ export class Application {
           this.vehicles.clear();
           this.intersections.clear();
           this.railway.clear();
+          this.railwayOperations.clear();
           this.view.clearRoadNetwork();
           this.ui.setAgentCount(0);
           this.ui.clearPopulation();
+          this.ui.clearRailwayOperations();
           this.ui.setProtocol(null);
         },
         onHelloAck: (version) => { this.ui.clearError(); this.ui.setProtocol(version); },
@@ -72,7 +77,7 @@ export class Application {
   }
 
   public start(): void { this.connection.connect(); this.animationFrame = window.requestAnimationFrame(this.animate); }
-  public dispose(): void { window.cancelAnimationFrame(this.animationFrame); window.removeEventListener('resize', this.handleResize); this.connection.disconnect(); this.audio.dispose(); this.railway.dispose(); this.view.dispose(); }
+  public dispose(): void { window.cancelAnimationFrame(this.animationFrame); window.removeEventListener('resize', this.handleResize); this.connection.disconnect(); this.audio.dispose(); this.railway.dispose(); this.railwayOperations.dispose(); this.view.dispose(); }
   private readonly handleResize = (): void => { this.view.resize(); };
 
   private readonly animate = (now: number): void => {
@@ -109,7 +114,7 @@ export class Application {
     this.lastPerformanceUiAt = now; this.ui.setPerformanceMetrics(metrics.snapshot());
   }
 
-  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage): void {
+  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage): void {
     switch (message.type) {
       case MessageType.AgentSpawn: this.applyAgentSpawn(message); return;
       case MessageType.AgentUpdate: this.applyAgentUpdate(message); return;
@@ -128,6 +133,7 @@ export class Application {
       case PopulationMessageType.PopulationStatistics: this.applyPopulationStatistics(message); return;
       case PopulationMessageType.PersonDebug: this.applyPersonDebug(message); return;
       case RailwayMessageType.RailwayInfrastructureSnapshot: this.railway.apply(message); return;
+      case RailwayOperationsMessageType.RailwayOperationsSnapshot: this.applyRailwayOperations(message); return;
       case MessageType.Hello:
       case MessageType.HelloAck:
       case MessageType.SubscribeVolume:
@@ -152,6 +158,7 @@ export class Application {
   private applyVehicleUpdate(message: VehicleStateMessage): void { if (!this.vehicles.update(message)) this.vehicles.spawn(message); }
   private applyPopulationStatistics(message: PopulationStatisticsMessage): void { this.ui.setPopulationStatistics(message); }
   private applyPersonDebug(message: PersonDebugMessage): void { this.ui.setPersonDebug(message); }
+  private applyRailwayOperations(message: RailwayOperationsSnapshotMessage): void { this.railwayOperations.apply(message); this.ui.setRailwayOperations(message); }
   private updateEntityAudioPosition(message: AgentStateMessage): void { if (this.audio.hasEntityEmitters(message.agentId)) this.audio.updateEntityPosition(message.agentId, { x: message.x, y: message.y, z: message.z }); }
 
   private handleProtocolError(message: ProtocolErrorMessage): void {

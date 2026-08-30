@@ -4,6 +4,7 @@ import type { ConnectionState } from './connection.ts';
 import type { Localizer } from './localization.ts';
 import { ActivityKind, PersonTravelState, type PersonDebugMessage, type PopulationStatisticsMessage } from './population-protocol.ts';
 import { protocolVersionToString, type ProtocolVersion } from './protocol.ts';
+import { RailwayServiceState, type RailwayOperationsSnapshotMessage } from './railway-operations.ts';
 
 export class AgentCountFormatter {
   private readonly formatter: Intl.NumberFormat;
@@ -25,6 +26,8 @@ export class ClientUi {
   private readonly protocolValue = document.createElement('span');
   private readonly agentsValue = document.createElement('span');
   private readonly populationValue = document.createElement('span');
+  private readonly trainsValue = document.createElement('span');
+  private readonly railwayDebugValue = document.createElement('div');
   private readonly audioValue = document.createElement('span');
   private readonly decodeValue: HTMLSpanElement | null;
   private readonly frameValue: HTMLSpanElement | null;
@@ -49,6 +52,7 @@ export class ClientUi {
       this.createStatusRow('status.protocol', this.protocolValue),
       this.createStatusRow('status.agents', this.agentsValue),
       this.createStatusRow('status.population', this.populationValue),
+      this.createStatusRow('status.trains', this.trainsValue),
       this.createStatusRow('status.audio', this.audioValue),
     );
 
@@ -75,6 +79,14 @@ export class ClientUi {
     this.personDebugValue.textContent = localizer.t('personDebug.none');
     inspector.append(inspectorTitle, controls, this.personDebugValue);
     panel.append(inspector);
+
+    const railwayDebug = document.createElement('div');
+    railwayDebug.className = 'railway-debug';
+    const railwayDebugTitle = document.createElement('strong');
+    railwayDebugTitle.textContent = localizer.t('railwayDebug.title');
+    this.railwayDebugValue.className = 'railway-debug-value';
+    railwayDebug.append(railwayDebugTitle, this.railwayDebugValue);
+    panel.append(railwayDebug);
 
     this.errorValue.className = 'client-error';
     this.errorValue.hidden = true;
@@ -109,6 +121,7 @@ export class ClientUi {
     this.setProtocol(null);
     this.setAgentCount(0);
     this.clearPopulation();
+    this.clearRailwayOperations();
     this.setAudioState('locked');
     if (this.decodeValue !== null) this.decodeValue.textContent = '—';
     if (this.frameValue !== null) this.frameValue.textContent = '—';
@@ -155,6 +168,24 @@ export class ClientUi {
     this.populationValue.textContent = '—';
     this.personDebugValue.textContent = this.localizer.t('personDebug.none');
   }
+
+  public setRailwayOperations(message: RailwayOperationsSnapshotMessage): void {
+    this.trainsValue.textContent = String(message.trains.length);
+    const delayed = message.services.filter((service) => service.delayTicks > 0n).length;
+    const completed = message.services.filter((service) => service.state === RailwayServiceState.Completed).length;
+    const timetableById = new Map(message.timetables.map((timetable) => [timetable.id, timetable] as const));
+    const arrivals: string[] = [];
+    for (const service of message.services) {
+      if (service.state === RailwayServiceState.Completed) continue;
+      const timetable = timetableById.get(service.timetableId);
+      const stop = timetable?.stops[service.nextStopIndex];
+      if (stop === undefined) continue;
+      arrivals.push(`S${stop.stationId.toString()}@${(stop.plannedArrivalTick + service.delayTicks).toString()}`);
+    }
+    this.railwayDebugValue.textContent = this.localizer.t('railwayDebug.summary', { delayed, completed, arrivals: arrivals.length === 0 ? '—' : arrivals.join(', ') });
+  }
+
+  public clearRailwayOperations(): void { this.trainsValue.textContent = '0'; this.railwayDebugValue.textContent = this.localizer.t('railwayDebug.none'); }
 
   public setPersonDebug(message: PersonDebugMessage): void {
     const residence = formatEndpoint(message.residenceBuildingId, message.residencePoiId);

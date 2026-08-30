@@ -2,8 +2,8 @@
 
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 18 — Railway Operations（次）  
-> **次の実装タスク:** P18-001 — Train / Formation / Service / Timetableの責務とstable ID契約を仕様化する
+> **現在:** Phase 19 — Multimodal Transit（次）
+> **次の実装タスク:** P19-001 — Transit Stop / Line / Service pattern / Trip legの共通契約を仕様化する
 
 ## 全体の現在地
 
@@ -27,8 +27,8 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 15 | Population & Daily Activity | ✅ 完了 |
 | 16 | Pedestrian Simulation | ✅ 完了 |
 | 17 | Railway Infrastructure | ✅ 完了 |
-| 18 | Railway Operations | ⏭️ 次 |
-| 19 | Multimodal Transit | ⏳ 待機 |
+| 18 | Railway Operations | ✅ 完了 |
+| 19 | Multimodal Transit | ⏭️ 次 |
 | 20 | Industry / Jobs / Economy | ⏳ 待機 |
 | 21 | Logistics / Freight | ⏳ 待機 |
 | 22 | Power Infrastructure | ⏳ 待機 |
@@ -82,9 +82,9 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 
 ---
 
-## Phase 9〜17 — 完了済みFoundation / Simulation Domains
+## Phase 9〜18 — 完了済みFoundation / Simulation Domains
 
-Phase 9〜17は正式closeout済み。現行ROADMAPでは完了履歴の詳細Taskを繰り返さず、実装・仕様・benchmarkの正本へ参照を集約する。
+Phase 9〜18は正式closeout済み。現行ROADMAPでは完了履歴の詳細Taskを繰り返さず、実装・仕様・benchmarkの正本へ参照を集約する。
 
 | Phase | 主な正本 / 証跡 |
 | --- | --- |
@@ -97,6 +97,7 @@ Phase 9〜17は正式closeout済み。現行ROADMAPでは完了履歴の詳細Ta
 | Phase 15 — Population & Daily Activity | [`docs/specifications/population-daily-activity.md`](docs/specifications/population-daily-activity.md)、[`docs/architecture/population-daily-activity.md`](docs/architecture/population-daily-activity.md)、[`docs/development/population-benchmark.md`](docs/development/population-benchmark.md) |
 | Phase 16 — Pedestrian Simulation | [`docs/specifications/pedestrian-simulation.md`](docs/specifications/pedestrian-simulation.md)、[`docs/architecture/pedestrian-simulation.md`](docs/architecture/pedestrian-simulation.md)、[`docs/development/pedestrian-benchmark.md`](docs/development/pedestrian-benchmark.md) |
 | Phase 17 — Railway Infrastructure | [`docs/specifications/railway-infrastructure.md`](docs/specifications/railway-infrastructure.md)、[`docs/architecture/railway-infrastructure.md`](docs/architecture/railway-infrastructure.md)、Phase 17 E2E / Railway benchmark workflow、PR #78 |
+| Phase 18 — Railway Operations | [`docs/specifications/railway-operations.md`](docs/specifications/railway-operations.md)、[`docs/architecture/railway-operations.md`](docs/architecture/railway-operations.md)、[`docs/development/railway-operations-benchmark.md`](docs/development/railway-operations-benchmark.md)、Phase 18 E2E / Railway Operations benchmark workflow、PR #131 |
 
 ### Phase 13〜16 closeout
 
@@ -150,32 +151,38 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ## Phase 18 — Railway Operations
 
-> **状態: ⬜ 未着手（次）**  
+> **状態: ✅ 完了**
 > **依存:** Phase 17  
 > Train・service・timetable・station stop・block separationを実装し、再現可能な鉄道運行を成立させる。
 
-- ⬜ **P18-001** — Train / Formation / Service / Timetableの責務とstable ID契約を仕様化する
-- ⬜ **P18-002** — Train formationの長さ・性能・capacityを表す最小モデルを実装する
-- ⬜ **P18-003** — Railway routeをTrack sequenceとして構築・検証する処理を実装する
-- ⬜ **P18-004** — Serviceとstop sequence / planned arrival / departureを表すTimetableを実装する
-- ⬜ **P18-005** — TrainをTrack geometryに沿って3D移動させる固定tick更新を実装する
-- ⬜ **P18-006** — block occupancy / reservationを実装し、同一blockへの危険な進入を防ぐ
-- ⬜ **P18-007** — station approach / stop position / dwell / departureを実装する
-- ⬜ **P18-008** — platform assignmentとoccupied platformの競合処理を実装する
-- ⬜ **P18-009** — timetableとの差からdelayを計算し、後続stopへ伝播する
-- ⬜ **P18-010** — depotからの出庫・service開始・終端・入庫のlifecycleを実装する
-- ⬜ **P18-011** — Train / Service / Timetable状態をcheckpoint / Save Dataへ含める
-- ⬜ **P18-012** — Train位置・service・delay・platform stateをProtocol / Serverで配信する
-- ⬜ **P18-013** — Web ClientでTrainを描画し、駅の発着情報をdebug表示する
-- ⬜ **P18-014** — 複数列車・複数駅・遅延を含む1運行周期のdeterministic E2Eを追加する
-- ⬜ **P18-015** — 大規模Train/Service数のtick・routing・block処理benchmarkを記録する
-- ⬜ **P18-016** — Railway Operationsのspecification / architecture / ROADMAPを同期する
+- ✅ **P18-001** — Train / Formation / Service / Timetableの責務とstable ID契約を仕様化する
+- ✅ **P18-002** — Train formationの長さ・性能・capacityを表す最小モデルを実装する
+- ✅ **P18-003** — Railway routeをTrack sequenceとして構築・検証する処理を実装する
+- ✅ **P18-004** — Serviceとstop sequence / planned arrival / departureを表すTimetableを実装する
+- ✅ **P18-005** — TrainをTrack geometryに沿って3D移動させる固定tick更新を実装する
+- ✅ **P18-006** — block occupancy / reservationを実装し、同一blockへの危険な進入を防ぐ
+- ✅ **P18-007** — station approach / stop position / dwell / departureを実装する
+- ✅ **P18-008** — platform assignmentとoccupied platformの競合処理を実装する
+- ✅ **P18-009** — timetableとの差からdelayを計算し、後続stopへ伝播する
+- ✅ **P18-010** — depotからの出庫・service開始・終端・入庫のlifecycleを実装する
+- ✅ **P18-011** — Train / Service / Timetable状態をcheckpoint / Save Dataへ含める
+- ✅ **P18-012** — Train位置・service・delay・platform stateをProtocol / Serverで配信する
+- ✅ **P18-013** — Web ClientでTrainを描画し、駅の発着情報をdebug表示する
+- ✅ **P18-014** — 複数列車・複数駅・遅延を含む1運行周期のdeterministic E2Eを追加する
+- ✅ **P18-015** — 大規模Train/Service数のtick・routing・block処理benchmarkを記録する
+- ✅ **P18-016** — Railway Operationsのspecification / architecture / ROADMAPを同期する
 
 ### Phase 18 完了条件
 
 - TrainがTimetableに基づいて駅間を走行・停車し、block競合を起こさない。
 - delay・platform・service stateを保存復元・配信できる。
 - 同一seed / timetableで再現可能な運行結果を得られる。
+
+### Phase 18 closeout
+
+- `Phase 18 Railway Operations E2E` run `33318887371`: 実Server→WebSocket→headless browserでProtocol 2.7をnegotiationし、2 Train / 2 Service / 2 Station / 2 Platformについて移動、Platform割当、dwell、delayを観測した。両Serviceは完了し、delayは276 / 717 tickだった。
+- `Phase 18 Railway Operations Benchmark` run `33318887363`: 100 / 1,000 Train・Serviceのfixed tickとsnapshotをShortRunで計測した。基準値は [`docs/development/railway-operations-benchmark.md`](docs/development/railway-operations-benchmark.md) を正本とする。
+- Phase 18のProtocol / Save / Web / E2E / benchmarkを含む最終検証はPR #131を統合単位とする。
 
 ---
 

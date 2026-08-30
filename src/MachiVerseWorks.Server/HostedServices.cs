@@ -128,6 +128,7 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
             var pedestrianPlan = connection.NegotiatedVersion.SupportsPedestrians ? PedestrianSnapshotMessagePlanner.Create(snapshot.Pedestrians, subscription.KnownPedestrianIds, snapshot.TickCount) : new PedestrianSnapshotMessagePlan([], []);
             var vehiclePlan = connection.NegotiatedVersion.SupportsVehicles ? VehicleSnapshotMessagePlanner.Create(snapshot.Vehicles, subscription.KnownVehicleIds, snapshot.TickCount) : new VehicleSnapshotMessagePlan([], []);
             var intersectionMessages = connection.NegotiatedVersion.SupportsIntersectionControl ? snapshot.Intersections.Select(IntersectionControlMessageMapper.Create).ToArray() : [];
+            var railwayOperationsMessage = connection.NegotiatedVersion.SupportsRailwayOperations && snapshot.Trains.Length > 0 ? RailwayOperationsMessageMapper.Create(publishSnapshot.RailwayOperations, snapshot.Trains, snapshot.TickCount) : null;
 
             IProtocolMessage? roadMessage = null; var roadStateHandled = false;
             if (connection.NegotiatedVersion.SupportsRoadNetwork && connection.NeedsRoadSnapshot(subscription.Revision, publishSnapshot.RoadNetwork.Revision))
@@ -143,7 +144,7 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
             }
 
             long bytes = 0; double encodeTimeMs = 0; double sendTimeMs = 0;
-            var messageCount = agentPlan.Messages.Count + pedestrianPlan.Messages.Count + vehiclePlan.Messages.Count + intersectionMessages.Length + (roadMessage is null ? 0 : 1) + railwayMessages.Count;
+            var messageCount = agentPlan.Messages.Count + pedestrianPlan.Messages.Count + vehiclePlan.Messages.Count + intersectionMessages.Length + (roadMessage is null ? 0 : 1) + railwayMessages.Count + (railwayOperationsMessage is null ? 0 : 1);
             using var sendCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             foreach (var message in agentPlan.Messages) { sendCancellation.CancelAfter(ClientSendTimeout); var sent = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation.Token); bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs; }
             foreach (var message in pedestrianPlan.Messages) { sendCancellation.CancelAfter(ClientSendTimeout); var sent = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation.Token); bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs; }
@@ -151,12 +152,13 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
             foreach (var message in intersectionMessages) { sendCancellation.CancelAfter(ClientSendTimeout); var sent = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation.Token); bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs; }
             if (roadMessage is not null) { sendCancellation.CancelAfter(ClientSendTimeout); var sent = await connection.SendAsync(roadMessage, connection.NegotiatedVersion, sendCancellation.Token); bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs; }
             foreach (var railwayMessage in railwayMessages) { sendCancellation.CancelAfter(ClientSendTimeout); var sent = await connection.SendAsync(railwayMessage, connection.NegotiatedVersion, sendCancellation.Token); bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs; }
+            if (railwayOperationsMessage is not null) { sendCancellation.CancelAfter(ClientSendTimeout); var sent = await connection.SendAsync(railwayOperationsMessage, connection.NegotiatedVersion, sendCancellation.Token); bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs; }
 
             connection.TryReplaceKnownEntityIds(subscription.Revision, agentPlan.CurrentAgentIds, pedestrianPlan.CurrentPedestrianIds, vehiclePlan.CurrentVehicleIds);
             if (roadStateHandled) connection.TryMarkRoadSnapshotDelivered(subscription.Revision, publishSnapshot.RoadNetwork.Revision);
             if (railwayStateHandled) connection.TryMarkRailwaySnapshotDelivered(subscription.Revision, publishSnapshot.RailwayInfrastructure.Revision);
-            metrics.RecordSnapshotDelivery(snapshot.Agents.Length + snapshot.Vehicles.Length, messageCount, bytes, encodeTimeMs, sendTimeMs);
-            ServerLog.SnapshotDeliveryMetrics(logger, connection.Id, snapshot.Agents.Length + snapshot.Vehicles.Length, messageCount, bytes, encodeTimeMs, sendTimeMs);
+            metrics.RecordSnapshotDelivery(snapshot.Agents.Length + snapshot.Vehicles.Length + snapshot.Trains.Length, messageCount, bytes, encodeTimeMs, sendTimeMs);
+            ServerLog.SnapshotDeliveryMetrics(logger, connection.Id, snapshot.Agents.Length + snapshot.Vehicles.Length + snapshot.Trains.Length, messageCount, bytes, encodeTimeMs, sendTimeMs);
         }
         catch (Exception exception) when (SnapshotDeliveryFailurePolicy.IsExpectedClientFailure(exception))
         {

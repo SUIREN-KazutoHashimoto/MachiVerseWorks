@@ -4,7 +4,7 @@ using MachiVerseWorks.Simulation;
 
 namespace MachiVerseWorks.Persistence;
 
-public static class WorldSaveSerializer
+public static partial class WorldSaveSerializer
 {
     private const int StreamReadBufferSize = 81_920;
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -120,6 +120,7 @@ public static class WorldSaveSerializer
         ValidateCount(checkpoint.Platforms?.Count ?? 0, limits.MaximumRoadAccessPointCount, "Platforms");
         ValidateCount(checkpoint.PlatformAccessPoints?.Count ?? 0, limits.MaximumRoadAccessPointCount, "PlatformAccessPoints");
         ValidateCount(checkpoint.Depots?.Count ?? 0, limits.MaximumBuildingCount, "Depots");
+        ValidateRailwayOperationsCheckpointWithinLimits(checkpoint, limits);
     }
 
     private static SaveDataDocument CreateDocument(SimulationCheckpoint checkpoint)
@@ -398,6 +399,7 @@ public static class WorldSaveSerializer
                 PlatformAccessPoints = platformAccessPoints,
                 NextDepotId = checkpoint.NextDepotId,
                 Depots = depots,
+                RailwayOperations = CreateRailwayOperationsData(checkpoint),
             },
         };
     }
@@ -405,7 +407,7 @@ public static class WorldSaveSerializer
     private static SimulationWorld RestoreDocument(SaveDataDocument document, WorldSaveLimits limits)
     {
         var format = Require(document.FormatVersion, "formatVersion");
-        if (format is not (SaveFormatVersion.BuildingPoi or SaveFormatVersion.RoadNetwork or SaveFormatVersion.Pedestrian or SaveFormatVersion.Vehicle or SaveFormatVersion.Population or SaveFormatVersion.RailwayInfrastructure))
+        if (format is not (SaveFormatVersion.BuildingPoi or SaveFormatVersion.RoadNetwork or SaveFormatVersion.Pedestrian or SaveFormatVersion.Vehicle or SaveFormatVersion.Population or SaveFormatVersion.RailwayInfrastructure or SaveFormatVersion.RailwayOperations))
         {
             throw new InvalidDataException($"Unsupported Save format version {format}. Expected {SaveFormatVersion.Current} or a supported migratable version.");
         }
@@ -419,6 +421,7 @@ public static class WorldSaveSerializer
         var hasVehicles = format >= SaveFormatVersion.Vehicle;
         var hasPopulation = format >= SaveFormatVersion.Population;
         var hasRailway = format >= SaveFormatVersion.RailwayInfrastructure;
+        var hasRailwayOperations = format >= SaveFormatVersion.RailwayOperations;
         var roadNodesData = hasRoadNetwork ? simulation.RoadNodes ?? throw new InvalidDataException("Save Data is missing RoadNode state.") : [];
         var roadSegmentsData = hasRoadNetwork ? simulation.RoadSegments ?? throw new InvalidDataException("Save Data is missing RoadSegment state.") : [];
         var lanesData = hasRoadNetwork ? simulation.Lanes ?? throw new InvalidDataException("Save Data is missing Lane state.") : [];
@@ -437,6 +440,7 @@ public static class WorldSaveSerializer
         var platformData = hasRailway ? simulation.Platforms ?? throw new InvalidDataException("Save Data is missing Platform state.") : [];
         var platformAccessData = hasRailway ? simulation.PlatformAccessPoints ?? throw new InvalidDataException("Save Data is missing PlatformAccessPoint state.") : [];
         var depotData = hasRailway ? simulation.Depots ?? throw new InvalidDataException("Save Data is missing Depot state.") : [];
+        var railwayOperationsData = hasRailwayOperations ? simulation.RailwayOperations ?? throw new InvalidDataException("Save Data is missing RailwayOperations state.") : null;
         ValidateMaterializedCounts(
             savedAgents.Length, savedBuildings.Length, savedPois.Length,
             roadNodesData.Length, roadSegmentsData.Length, lanesData.Length, connectionsData.Length, accessData.Length,
@@ -450,6 +454,7 @@ public static class WorldSaveSerializer
         ValidateCount(platformData.Length, limits.MaximumRoadAccessPointCount, "Platforms");
         ValidateCount(platformAccessData.Length, limits.MaximumRoadAccessPointCount, "PlatformAccessPoints");
         ValidateCount(depotData.Length, limits.MaximumBuildingCount, "Depots");
+        ValidateRailwayOperationsDataCounts(railwayOperationsData, hasRailwayOperations, limits);
 
         var agents = new SimulationAgentCheckpoint[savedAgents.Length];
         for (var index = 0; index < agents.Length; index++)
@@ -747,6 +752,8 @@ public static class WorldSaveSerializer
                 segmentIds);
         }
 
+        var railwayOperations = RestoreRailwayOperations(railwayOperationsData, hasRailwayOperations);
+
         var checkpoint = new SimulationCheckpoint(
             Require(simulation.TickRate, "simulation.tickRate"),
             Require(simulation.Seed, "simulation.seed"),
@@ -774,7 +781,12 @@ public static class WorldSaveSerializer
             hasRailway ? Require(simulation.NextStationId, "simulation.nextStationId") : 1UL, stations,
             hasRailway ? Require(simulation.NextPlatformId, "simulation.nextPlatformId") : 1UL, platforms,
             hasRailway ? Require(simulation.NextPlatformAccessPointId, "simulation.nextPlatformAccessPointId") : 1UL, platformAccessPoints,
-            hasRailway ? Require(simulation.NextDepotId, "simulation.nextDepotId") : 1UL, depots);
+            hasRailway ? Require(simulation.NextDepotId, "simulation.nextDepotId") : 1UL, depots,
+            railwayOperations.NextFormationId, railwayOperations.Formations,
+            railwayOperations.NextRouteId, railwayOperations.Routes,
+            railwayOperations.NextTimetableId, railwayOperations.Timetables,
+            railwayOperations.NextServiceId, railwayOperations.Services,
+            railwayOperations.NextTrainId, railwayOperations.Trains);
         return SimulationWorld.RestoreCheckpoint(checkpoint);
     }
 
@@ -844,6 +856,7 @@ public static class WorldSaveSerializer
             else if (reader.ValueTextEquals("platforms")) ValidateNamedArrayElementCount(ref reader, limits.MaximumRoadAccessPointCount, "Platform");
             else if (reader.ValueTextEquals("platformAccessPoints")) ValidateNamedArrayElementCount(ref reader, limits.MaximumRoadAccessPointCount, "PlatformAccessPoint");
             else if (reader.ValueTextEquals("depots")) ValidateNamedArrayElementCount(ref reader, limits.MaximumBuildingCount, "Depot");
+            else if (reader.ValueTextEquals("railwayOperations")) ValidateRailwayOperationsArrayCounts(ref reader, limits);
         }
     }
 
