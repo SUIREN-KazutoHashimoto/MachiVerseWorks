@@ -14,6 +14,7 @@
 - [`phase14-intersection-benchmark.md`](phase14-intersection-benchmark.md): Phase 14 queued intersection tick / controller snapshot benchmark baseline
 - [`population-benchmark.md`](population-benchmark.md): Phase 15 1,000 / 10,000 / 100,000 Person planner / tick / managed memory benchmark
 - [`pedestrian-benchmark.md`](pedestrian-benchmark.md): Phase 16 1,000 / 10,000 Pedestrian fixed-tick / routing benchmark
+- [`railway-operations-benchmark.md`](railway-operations-benchmark.md): Phase 18 100 / 1,000 Train・Service fixed-tick / snapshot benchmark baseline
 - [`git-workflow.md`](git-workflow.md): branch / PR / validation の標準フロー
 - [`repository-settings.md`](repository-settings.md): branch protection、merge方式、GitHub Security設定の基準
 - [`versioning.md`](versioning.md): `A.B.C` とルート `VERSION` の運用
