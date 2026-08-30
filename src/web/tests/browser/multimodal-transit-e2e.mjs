@@ -53,7 +53,7 @@ try {
     && snapshot.vehicles.some((vehicle) => vehicle.kind === TransitVehicleKind.Taxi)
     && snapshot.arrivalEstimates.length > 0,
   'Railway, Bus, Taxi, and arrival snapshot');
-  await waitUntil(() => observedBusMovement || observedTaxiMovement, 'Road Traffic backed Bus or Taxi movement', 45_000);
+  await waitUntil(() => observedBusRoadVehicleReuse && (observedBusMovement || observedTaxiMovement), 'Road Traffic backed Bus reuse and movement', 45_000);
 
   const railwayPattern = snapshot.patterns.find((pattern) => pattern.railwayServiceId !== null);
   const transitDebug = host.querySelector('.transit-debug-value');
