@@ -274,7 +274,7 @@ internal sealed class MultimodalTransitStore
     private static void ValidateNextId(ulong nextId, IEnumerable<ulong> ids, string name)
     {
         if (nextId == 0) throw new ArgumentOutOfRangeException(nameof(nextId), $"Next {name} ID must be greater than zero.");
-        var maximum = ids.DefaultIfEmpty(0).Max();
+        var maximum = ids.Any() ? ids.Max() : 0UL;
         if (nextId <= maximum) throw new ArgumentOutOfRangeException(nameof(nextId), $"Next {name} ID must be greater than every stored ID.");
     }
     private static void EnsureCapacity(ulong nextId, string name) { if (nextId == ulong.MaxValue) throw new OverflowException($"{name} ID capacity has been exhausted."); }

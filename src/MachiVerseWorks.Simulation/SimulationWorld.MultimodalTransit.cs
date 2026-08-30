@@ -345,7 +345,7 @@ public sealed partial class SimulationWorld
         }
     }
 
-    private void ValidateMultimodalTransitCheckpointReferences(SimulationCheckpoint checkpoint)
+    private static void ValidateMultimodalTransitCheckpointReferences(SimulationCheckpoint checkpoint)
     {
         var transit = checkpoint.MultimodalTransit;
         if (transit is null)

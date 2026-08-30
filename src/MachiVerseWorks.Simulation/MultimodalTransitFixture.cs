@@ -28,7 +28,7 @@ public static class MultimodalTransitFixtures
         var west = world.CreateRoadNode(new WorldPoint(-80d, roadY, 0d));
         var east = world.CreateRoadNode(new WorldPoint(80d, roadY, 0d));
         var road = world.CreateRoadSegment(west, east, RoadKind.Local);
-        var lane = world.CreateLane(road, LaneDirection.Forward, laneIndex: 0, speedLimitMetersPerSecond: 12d);
+        var lane = world.CreateLane(road, LaneDirection.Forward, order: 0, speedLimitMetersPerSecond: 12d);
 
         var origin = world.CreateBuilding(new WorldVolume(-72d, -2d, 0d, -68d, 2d, 4d), BuildingKind.Residential);
         var destination = world.CreateBuilding(new WorldVolume(68d, -2d, 0d, 72d, 2d, 4d), BuildingKind.Commercial);
