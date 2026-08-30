@@ -231,7 +231,7 @@ internal sealed class PedestrianNetworkStore
         adjacency[second].Add(id);
     }
 
-    private void AddCrossing(RoadNodeId roadNodeId, PedestrianEdgeId first, PedestrianEdgeId second, IReadOnlyDictionary<PedestrianCrossingId, bool> previousPermissions)
+    private void AddCrossing(RoadNodeId roadNodeId, PedestrianEdgeId first, PedestrianEdgeId second, Dictionary<PedestrianCrossingId, bool> previousPermissions)
     {
         var pair = NormalizeEdgePair(first, second);
         var id = new PedestrianCrossingId(HashStableId(0x43, roadNodeId.Value, pair.First.Value, pair.Second.Value));
