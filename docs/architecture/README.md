@@ -21,6 +21,7 @@ MachiVerseWorks の技術アーキテクチャを管理します。
 - [`road-network.md`](road-network.md): Road Network topology / spatial index / access boundary
 - [`routing.md`](routing.md): Road / Lane derived routing graph、deterministic search、LRU cache、invalidation
 - [`intersection-signal-control.md`](intersection-signal-control.md): movement conflict、entry arbitration、fixed signal、publish / Web debug boundary
+- [`population-daily-activity.md`](population-daily-activity.md): Person / Household state ownership、daily planner、Trip dispatch、Save / Protocol / Web境界
 - [`pedestrian-simulation.md`](pedestrian-simulation.md): derived walking graph、routing、tick、crossing / occupancy、Server / Web boundary
 - [`protocol.md`](protocol.md): Server / Web Client 間 binary protocol の versioning と wire layout
 - [`headless-server.md`](headless-server.md): Headless Server の lifecycle、WebSocket、command queue、snapshot publish
