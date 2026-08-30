@@ -277,7 +277,7 @@ internal sealed class PedestrianNetworkStore
         crossingPermissions[id] = open;
     }
 
-    private IReadOnlyList<PedestrianNodeId> ResolveEndpointCandidates(TripEndpoint endpoint, string parameterName)
+    private List<PedestrianNodeId> ResolveEndpointCandidates(TripEndpoint endpoint, string parameterName)
     {
         if ((endpoint.BuildingId is null) == (endpoint.PoiId is null)) throw new ArgumentException("Trip endpoint must reference exactly one Building or POI.", parameterName);
         if (endpoint.PoiId is { } poiId && poiNodes.TryGetValue(poiId, out var poiCandidates) && poiCandidates.Count > 0) return poiCandidates;

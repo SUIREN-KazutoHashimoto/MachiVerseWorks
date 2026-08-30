@@ -95,5 +95,3 @@ public sealed record PedestrianRemoveMessage(ulong PedestrianId, ulong TickCount
 {
     public MessageType Type => MessageType.PedestrianRemove;
 }
-
-public sealed record ProtocolEnvelope(ProtocolVersion Version, IProtocolMessage Message);
