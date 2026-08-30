@@ -57,6 +57,7 @@ public sealed partial class SimulationWorld
         _agents.Step(Config.TickDurationSeconds, _spatialIndex);
         PlanPopulationTrips(nextTime);
         StepVehicles(Config.TickDurationSeconds, nextTime.TickCount);
+        StepRailwayOperations(Config.TickDurationSeconds, nextTime.TickCount);
         StepPedestrians(Config.TickDurationSeconds);
         CompletePopulationTrips();
         Time = nextTime;
@@ -68,6 +69,7 @@ public sealed partial class SimulationWorld
     public SimulationCheckpoint CreateCheckpoint()
     {
         EnsurePedestrianNetwork();
+        var railwayOperations = RailwayOperations.CreateSnapshot();
         return new SimulationCheckpoint(
             Config.TickRate, Config.Seed, Config.SpatialCellSize, Time.TickCount, Time.Elapsed.Ticks, _random.State,
             _agents.NextId, _agents.CreateCheckpoint(),
@@ -89,7 +91,12 @@ public sealed partial class SimulationWorld
             _railway.NextStationId, _railway.CreateStationCheckpoint(),
             _railway.NextPlatformId, _railway.CreatePlatformCheckpoint(),
             _railway.NextPlatformAccessPointId, _railway.CreatePlatformAccessPointCheckpoint(),
-            _railway.NextDepotId, _railway.CreateDepotCheckpoint());
+            _railway.NextDepotId, _railway.CreateDepotCheckpoint(),
+            RailwayOperations.NextFormationId, railwayOperations.Formations,
+            RailwayOperations.NextRouteId, railwayOperations.Routes,
+            RailwayOperations.NextTimetableId, railwayOperations.Timetables,
+            RailwayOperations.NextServiceId, railwayOperations.Services,
+            RailwayOperations.NextTrainId, railwayOperations.Trains);
     }
 
     public static SimulationWorld RestoreCheckpoint(SimulationCheckpoint checkpoint)
@@ -132,6 +139,7 @@ public sealed partial class SimulationWorld
         world.RestoreUrbanObjects(checkpoint);
         world._roads.Restore(checkpoint);
         world._railway.Restore(checkpoint);
+        world.RestoreRailwayOperations(checkpoint);
         world.EnsureRoadTrafficTopology();
         world._vehicles.Restore(checkpoint.Vehicles ?? Array.Empty<SimulationVehicleCheckpoint>(), checkpoint.NextVehicleId, world._roadTrafficTopology);
         world.EnsurePedestrianNetwork();
