@@ -1,0 +1,19 @@
+name: Phase 19 Ready For Review
+
+on:
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  mark-ready:
+    if: github.event.pull_request.number == 132 && github.event.pull_request.draft == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark Phase 19 PR ready for review
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr ready 132 --repo "$GITHUB_REPOSITORY"
