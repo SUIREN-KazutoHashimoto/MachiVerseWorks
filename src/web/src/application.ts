@@ -6,9 +6,11 @@ import { MachiVerseConnection } from './connection.ts';
 import { EntityStore } from './entity-store.ts';
 import { initializeLocalization, type LocaleParameters } from './localization.ts';
 import { PedestrianStore } from './pedestrian-store.ts';
-import { MessageType, type AgentStateMessage, type PedestrianStateMessage, type ProtocolErrorMessage, type ProtocolMessage, type WorldVolume } from './protocol.ts';
+import { MessageType, ProtocolErrorCode, type AgentStateMessage, type PedestrianStateMessage, type ProtocolErrorMessage, type ProtocolMessage, type WorldVolume } from './protocol.ts';
 import { ClientUi } from './ui.ts';
 import { WorldView } from './world-view.ts';
+
+const SUBSCRIPTION_TOO_LARGE_DETAIL_CODE = 'subscriptionVolumeTooLarge';
 
 export class Application {
   private readonly localizer = initializeLocalization();
@@ -70,8 +72,8 @@ export class Application {
     this.lastSubscriptionAt = now;
     const volume = this.view.getSubscriptionVolume();
     if (this.lastSubscription !== null && volumesNearlyEqual(this.lastSubscription, volume)) return;
-    this.lastSubscription = volume;
     this.connection.setSubscription(volume);
+    this.lastSubscription = volume;
   }
 
   private updateAudio(now: number): void {
@@ -123,8 +125,20 @@ export class Application {
   private updateEntityAudioPosition(message: AgentStateMessage): void { if (this.audio.hasEntityEmitters(message.agentId)) this.audio.updateEntityPosition(message.agentId, { x: message.x, y: message.y, z: message.z }); }
 
   private handleProtocolError(message: ProtocolErrorMessage): void {
-    const parameters: Record<string, string> = {}; for (const parameter of message.parameters) parameters[parameter.key] = parameter.value; parameters.code = String(message.code);
-    const key = `error.protocol.${String(message.code)}`; const localized = this.localizer.t(key, parameters as LocaleParameters);
+    const parameters: Record<string, string> = {};
+    for (const parameter of message.parameters) parameters[parameter.key] = parameter.value;
+    if (message.code === ProtocolErrorCode.InvalidRequest
+      && parameters.detailCode === SUBSCRIPTION_TOO_LARGE_DETAIL_CODE
+      && this.view.zoomInForSubscriptionRetry()) {
+      this.lastSubscription = null;
+      this.lastSubscriptionAt = Number.NEGATIVE_INFINITY;
+      this.ui.clearError();
+      return;
+    }
+
+    parameters.code = String(message.code);
+    const key = `error.protocol.${String(message.code)}`;
+    const localized = this.localizer.t(key, parameters as LocaleParameters);
     this.ui.showError(localized === key ? this.localizer.t('error.protocol.unknown', { code: message.code }) : localized);
   }
 }

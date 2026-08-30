@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 
+import { LaneDirection } from '../src/protocol.ts';
 import {
+  computeLaneCenterOffsets,
   computeOrthographicSubscriptionVolume,
   simulationToThreePosition,
 } from '../src/world-view.ts';
@@ -37,15 +39,39 @@ test('subscription altitude follows camera altitude', () => {
   assert.ok(Math.abs((moved.maxZ - original.maxZ) - 1_000) < 1e-6);
 });
 
-test('minimum zoom full-frustum subscription stays within the default server cell budget', () => {
-  const camera = createCamera(0.25);
-  const volume = computeOrthographicSubscriptionVolume(camera, 1.2);
-  const cellSize = 64;
-  const cellCount = countCells(volume.minX, volume.maxX, cellSize) *
-    countCells(volume.minY, volume.maxY, cellSize) *
-    countCells(volume.minZ, volume.maxZ, cellSize);
+for (const [label, aspect] of [['16:9', 16 / 9], ['21:9', 21 / 9]]) {
+  test(`minimum zoom full-frustum subscription stays within the default server cell budget at ${label}`, () => {
+    const camera = createCamera(0.25, aspect);
+    const volume = computeOrthographicSubscriptionVolume(camera, 1.2);
+    const cellSize = 64;
+    const cellCount = countCells(volume.minX, volume.maxX, cellSize) *
+      countCells(volume.minY, volume.maxY, cellSize) *
+      countCells(volume.minZ, volume.maxZ, cellSize);
 
-  assert.ok(cellCount <= 262_144, `subscription covers ${cellCount} cells`);
+    assert.ok(cellCount <= 1_048_576, `subscription covers ${cellCount} cells`);
+  });
+}
+
+test('variable lane widths use cumulative preceding widths instead of order multiplied by own width', () => {
+  const offsets = computeLaneCenterOffsets([
+    { id: 10n, segmentId: 1n, direction: LaneDirection.Forward, order: 0, widthMeters: 3, speedLimitMetersPerSecond: 10 },
+    { id: 11n, segmentId: 1n, direction: LaneDirection.Forward, order: 4, widthMeters: 5, speedLimitMetersPerSecond: 10 },
+    { id: 12n, segmentId: 1n, direction: LaneDirection.Forward, order: 9, widthMeters: 4, speedLimitMetersPerSecond: 10 },
+  ]);
+
+  assert.equal(offsets.get(10n), 1.5);
+  assert.equal(offsets.get(11n), 5.5);
+  assert.equal(offsets.get(12n), 10);
+});
+
+test('reverse lanes mirror cumulative lane-center offsets without artificial order gaps', () => {
+  const offsets = computeLaneCenterOffsets([
+    { id: 20n, segmentId: 1n, direction: LaneDirection.Reverse, order: 2, widthMeters: 3.2, speedLimitMetersPerSecond: 10 },
+    { id: 21n, segmentId: 1n, direction: LaneDirection.Reverse, order: 8, widthMeters: 4.8, speedLimitMetersPerSecond: 10 },
+  ]);
+
+  assert.equal(offsets.get(20n), -1.6);
+  assert.equal(offsets.get(21n), -5.6);
 });
 
 test('subscription remains valid for a horizontal camera direction', () => {
@@ -63,8 +89,7 @@ test('subscription remains valid for a horizontal camera direction', () => {
   assert.ok(Number.isFinite(volume.maxZ));
 });
 
-function createCamera(zoom) {
-  const aspect = 16 / 9;
+function createCamera(zoom, aspect = 16 / 9) {
   const camera = new THREE.OrthographicCamera(-300 * aspect, 300 * aspect, 300, -300, 0.1, 2_000);
   camera.position.set(0, 500, 0);
   camera.up.set(0, 1, 0);
