@@ -7,5 +7,6 @@ public static class SaveFormatVersion
     public const int Pedestrian = 5;
     public const int Vehicle = 6;
     public const int Population = 7;
-    public const int Current = Population;
+    public const int RailwayInfrastructure = 8;
+    public const int Current = RailwayInfrastructure;
 }
