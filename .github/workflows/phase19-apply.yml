@@ -42,6 +42,7 @@ jobs:
 
           sed -i 's/[[:blank:]]\+$//' ROADMAP.md
           git checkout HEAD -- .github/workflows
+          rm -f .github/workflows/phase19-benchmark.yml .github/workflows/phase19-e2e.yml
           printf '0.20.2\n' > VERSION
 
           git config user.name "github-actions[bot]"
