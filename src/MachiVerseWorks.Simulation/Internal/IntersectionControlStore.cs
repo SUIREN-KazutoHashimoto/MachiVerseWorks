@@ -7,7 +7,7 @@ internal readonly record struct IntersectionEntryIntent(
 
 internal sealed class IntersectionControlStore
 {
-    private const double StopLineOffsetMeters = 2d;
+    private const double StopLineOffsetMeters = 0d;
     private readonly Dictionary<LaneConnectionId, MovementRuntime> movementsByConnection = [];
     private readonly List<ControllerRuntime> controllers = [];
     private readonly HashSet<EntryGrantKey> grants = [];
@@ -18,7 +18,7 @@ internal sealed class IntersectionControlStore
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(topology);
-        if (configuredTickRate <= 0) throw new ArgumentOutOfRangeException(nameof(configuredTickRate));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(configuredTickRate);
 
         movementsByConnection.Clear();
         controllers.Clear();
@@ -44,7 +44,6 @@ internal sealed class IntersectionControlStore
                 throw new InvalidOperationException($"Lane connection {connection.Id.Value} references an unknown RoadSegment.");
 
             var fromGeometry = topology.GetLane(connection.FromLaneId);
-            var toGeometry = topology.GetLane(connection.ToLaneId);
             var fromExitOffset = fromLane.Direction == LaneDirection.Forward ? 1d : 0d;
             var toEntryOffset = toLane.Direction == LaneDirection.Forward ? 0d : 1d;
             var stopProgress = Math.Max(0d, fromGeometry.LengthMeters - StopLineOffsetMeters);
