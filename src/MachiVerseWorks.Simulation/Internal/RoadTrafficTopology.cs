@@ -87,6 +87,7 @@ internal sealed class RoadTrafficTopology
 
     public double GetSegmentOffset(RouteLaneStep step, double progressMeters)
     {
+        _ = GetLane(step.LaneId);
         if (!double.IsFinite(progressMeters) || progressMeters < 0d || progressMeters > step.DistanceMeters + 1e-9)
             throw new ArgumentOutOfRangeException(nameof(progressMeters));
         if (step.DistanceMeters <= 1e-12) return step.EndSegmentOffset;
