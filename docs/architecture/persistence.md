@@ -80,14 +80,18 @@ custom limitで保存した場合、読込側にも同等以上のlimitを明示
 
 ## Format evolution
 
-`SaveFormatVersion.Current` をSave Data互換性の正本とし、currentはFormat 6とする。
+`SaveFormatVersion.Current` をSave Data互換性の正本とし、currentはFormat 10とする。
 
 - Format 3: Building / POI state。
 - Format 4: Road Network state。
 - Format 5: Pedestrian state / crossing permission。
 - Format 6: Vehicle state。
+- Format 7: Population state。
+- Format 8: Railway Infrastructure state。
+- Format 9: Railway Operations state。
+- Format 10: Multimodal Transit / Journey / Passenger / Taxi state。
 
-Format 3〜5は不足する後続stateを空として明示的にmigrationし、current checkpointへ変換する。Format 2以前とcurrentより新しい未知versionは拒否する。
+Format 3〜9は不足する後続stateを空として明示的にmigrationし、current checkpointへ変換する。Format 2以前とcurrentより新しい未知versionは拒否する。Format 10ではRoad/Rail/Population復元後にMultimodal Transitを復元し、Lane / Station / Platform / Railway Service / Road Vehicle / active Trip参照を検証する。
 
 Phase 14はformatを増やさない。Intersection movement / conflict / fixed-cycle phaseはFormat 6がすでに保存するRoad topology、`tickCount`、`tickRate`から再構築できるためである。`IntersectionControlSaveTests`がSave round trip後のcontroller phase / indication一致を固定する。
 

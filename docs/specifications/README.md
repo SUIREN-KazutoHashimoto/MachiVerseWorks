@@ -27,6 +27,7 @@
 - [`population-daily-activity.md`](population-daily-activity.md): Household / Person、Need / Activity、daily schedule、Trip Request生成仕様
 - [`pedestrian-simulation.md`](pedestrian-simulation.md): Road Network派生walking graph、route、fixed-tick歩行、crossing / occupancy仕様
 - [`railway-infrastructure.md`](railway-infrastructure.md): Track / connection / block / Station / Platform / Depotと3D railway topology仕様
+- [`multimodal-transit.md`](multimodal-transit.md): 徒歩 / Bus / Taxi / Railwayの共通Journey、dispatch、Passenger、Save / Protocol仕様
 - [`headless-server-poc.md`](headless-server-poc.md): Headless Server / 3D subscription基盤仕様
 - [`web-client-poc.md`](web-client-poc.md): Web Client + Audio Client Foundationの3D基盤仕様
 - [`save-data.md`](save-data.md): versioned Save Data、checkpoint state、validation仕様

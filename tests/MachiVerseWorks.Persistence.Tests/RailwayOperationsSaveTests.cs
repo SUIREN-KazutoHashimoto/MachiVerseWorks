@@ -8,14 +8,14 @@ namespace MachiVerseWorks.Persistence.Tests;
 public sealed class RailwayOperationsSaveTests
 {
     [TestMethod]
-    public void SaveV9RoundTripPreservesRailwayOperationsAndDeterministicContinuation()
+    public void CurrentSaveRoundTripPreservesRailwayOperationsAndDeterministicContinuation()
     {
         var original = new SimulationWorld(new SimulationConfig(seed: 0x1809UL));
         RailwayOperationsFixtures.SeedDeterministic(original);
         for (var tick = 0; tick < 180; tick++) original.Step();
 
         var json = WorldSaveSerializer.Serialize(original);
-        StringAssert.Contains(Encoding.UTF8.GetString(json), "\"formatVersion\": 9");
+        StringAssert.Contains(Encoding.UTF8.GetString(json), "\"formatVersion\": 10");
         StringAssert.Contains(Encoding.UTF8.GetString(json), "\"railwayOperations\"");
         var restored = WorldSaveSerializer.Deserialize(json);
 

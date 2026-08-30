@@ -21,5 +21,6 @@ public enum MessageType : ushort
     PersonDebug = 601,
     RailwayInfrastructureSnapshot = 700,
     RailwayOperationsSnapshot = 710,
+    MultimodalTransitSnapshot = 720,
     Error = 900,
 }

@@ -12,6 +12,7 @@ internal sealed class SimulationRuntime
     private bool _trafficFixturePending;
     private bool _railwayFixturePending;
     private bool _railwayOperationsFixturePending;
+    private bool _multimodalTransitFixturePending;
     private RoadNetworkReadModel? _roadReadModel;
     private RailwayInfrastructureReadModel? _railwayReadModel;
 
@@ -36,6 +37,7 @@ internal sealed class SimulationRuntime
         _trafficFixturePending = bool.TryParse(configuration["Simulation:TrafficFixture"], out var trafficFixture) && trafficFixture;
         _railwayFixturePending = bool.TryParse(configuration["Simulation:RailwayFixture"], out var railwayFixture) && railwayFixture;
         _railwayOperationsFixturePending = bool.TryParse(configuration["Simulation:RailwayOperationsFixture"], out var railwayOperationsFixture) && railwayOperationsFixture;
+        _multimodalTransitFixturePending = bool.TryParse(configuration["Simulation:MultimodalTransitFixture"], out var multimodalTransitFixture) && multimodalTransitFixture;
     }
 
     public int TickRate => _world.Config.TickRate;
@@ -60,17 +62,17 @@ internal sealed class SimulationRuntime
 
     public SimulationPublishSnapshot CapturePublishSnapshot()
     {
-        ulong tickCount; AgentSnapshot[] agents; PedestrianSnapshot[] pedestrians; VehicleSnapshot[] vehicles; TrainSnapshot[] trains; RailwayOperationsSnapshot railwayOperations; IntersectionControlSnapshot intersectionControl; RoadNetworkReadModel roadReadModel; RailwayInfrastructureReadModel railwayReadModel;
+        ulong tickCount; AgentSnapshot[] agents; PedestrianSnapshot[] pedestrians; VehicleSnapshot[] vehicles; TrainSnapshot[] trains; RailwayOperationsSnapshot railwayOperations; MultimodalTransitSnapshot multimodalTransit; IntersectionControlSnapshot intersectionControl; RoadNetworkReadModel roadReadModel; RailwayInfrastructureReadModel railwayReadModel;
         lock (_gate)
         {
             EnsureFixtures();
             tickCount = _world.Time.TickCount;
-            agents = _world.CreateAllAgentSnapshots(); pedestrians = _world.CreateAllPedestrianSnapshots(); vehicles = _world.CreateAllVehicleSnapshots(); trains = _world.CreateTrainSnapshot(); railwayOperations = _world.CreateRailwayOperationsSnapshot(); intersectionControl = _world.CreateIntersectionControlSnapshot();
+            agents = _world.CreateAllAgentSnapshots(); pedestrians = _world.CreateAllPedestrianSnapshots(); vehicles = _world.CreateAllVehicleSnapshots(); trains = _world.CreateTrainSnapshot(); railwayOperations = _world.CreateRailwayOperationsSnapshot(); multimodalTransit = _world.CreateMultimodalTransitSnapshot(); intersectionControl = _world.CreateIntersectionControlSnapshot();
             _roadReadModel ??= new RoadNetworkReadModel(1, _world.CreateRoadNetworkSnapshot());
             _railwayReadModel ??= new RailwayInfrastructureReadModel(1, _world.CreateRailwayInfrastructureSnapshot());
             roadReadModel = _roadReadModel; railwayReadModel = _railwayReadModel;
         }
-        return new SimulationPublishSnapshot(tickCount, SpatialCellSize, agents, pedestrians, vehicles, intersectionControl, roadReadModel, railwayReadModel, trains, railwayOperations);
+        return new SimulationPublishSnapshot(tickCount, SpatialCellSize, agents, pedestrians, vehicles, intersectionControl, roadReadModel, railwayReadModel, trains, railwayOperations, multimodalTransit);
     }
 
     private void EnsureFixtures()
@@ -80,6 +82,7 @@ internal sealed class SimulationRuntime
         if (_trafficFixturePending) { SeedTrafficFixture(_world); _trafficFixturePending = false; _roadReadModel = null; }
         if (_railwayFixturePending) { RailwayInfrastructureFixtures.SeedDeterministic(_world); _railwayFixturePending = false; _roadReadModel = null; _railwayReadModel = null; }
         if (_railwayOperationsFixturePending) { RailwayOperationsFixtures.SeedDeterministic(_world); _railwayOperationsFixturePending = false; _railwayReadModel = null; }
+        if (_multimodalTransitFixturePending) { MultimodalTransitFixtures.SeedDeterministic(_world); _multimodalTransitFixturePending = false; _roadReadModel = null; _railwayReadModel = null; }
     }
 
     private static void SeedPedestrianFixture(SimulationWorld world)

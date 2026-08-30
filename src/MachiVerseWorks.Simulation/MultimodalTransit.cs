@@ -11,7 +11,7 @@ public readonly record struct TaxiRequestId(ulong Value) { public override strin
 public readonly record struct JourneyId(ulong Value) { public override string ToString() => Value.ToString(CultureInfo.InvariantCulture); }
 public readonly record struct PassengerId(ulong Value) { public override string ToString() => Value.ToString(CultureInfo.InvariantCulture); }
 
-public enum TransitMode : byte { Walk = 0, Bus = 1, Railway = 2, Taxi = 3 }
+public enum TransitMode : byte { Walk = 0, Bus = 1, Railway = 2, Taxi = 3, Motor = 4 }
 public enum TransitStopKind : byte { Bus = 0, Railway = 1 }
 public enum TransitVehicleKind : byte { Bus = 0, Taxi = 1 }
 public enum TransitVehicleMovementState : byte
@@ -37,21 +37,15 @@ public readonly record struct TransitStopSnapshot(
 
 public readonly record struct TransitLineSnapshot(TransitLineId Id, TransitMode Mode);
 
-public readonly record struct TransitPatternStopSnapshot(
-    TransitStopId StopId,
-    ulong TravelTicksFromPrevious,
-    ulong DwellTicks);
+public readonly record struct TransitPatternStopSnapshot(TransitStopId StopId, ulong TravelTicksFromPrevious, ulong DwellTicks);
 
 public sealed record TransitServicePatternSnapshot(
     TransitServicePatternId Id,
     TransitLineId LineId,
-    IReadOnlyList<TransitPatternStopSnapshot> Stops);
+    IReadOnlyList<TransitPatternStopSnapshot> Stops,
+    RailwayServiceId? RailwayServiceId = null);
 
-public readonly record struct TransitTripSnapshot(
-    TransitTripId Id,
-    TransitServicePatternId PatternId,
-    ulong PlannedStartTick,
-    TransitVehicleId? VehicleId);
+public readonly record struct TransitTripSnapshot(TransitTripId Id, TransitServicePatternId PatternId, ulong PlannedStartTick, TransitVehicleId? VehicleId);
 
 public readonly record struct TransitVehicleSnapshot(
     TransitVehicleId Id,
@@ -118,3 +112,21 @@ public sealed record MultimodalTransitSnapshot(
     TaxiRequestSnapshot[] TaxiRequests,
     JourneySnapshot[] Journeys,
     PassengerSnapshot[] Passengers);
+
+public sealed record MultimodalTransitCheckpoint(
+    ulong NextStopId,
+    IReadOnlyList<TransitStopSnapshot> Stops,
+    ulong NextLineId,
+    IReadOnlyList<TransitLineSnapshot> Lines,
+    ulong NextPatternId,
+    IReadOnlyList<TransitServicePatternSnapshot> Patterns,
+    ulong NextTripId,
+    IReadOnlyList<TransitTripSnapshot> Trips,
+    ulong NextVehicleId,
+    IReadOnlyList<TransitVehicleSnapshot> Vehicles,
+    ulong NextTaxiRequestId,
+    IReadOnlyList<TaxiRequestSnapshot> TaxiRequests,
+    ulong NextJourneyId,
+    IReadOnlyList<JourneySnapshot> Journeys,
+    ulong NextPassengerId,
+    IReadOnlyList<PassengerSnapshot> Passengers);

@@ -52,14 +52,14 @@ const connection = new MachiVerseConnection(serverUrl, { minimumDelayMs: 100, ma
 
 try {
   connection.connect();
-  await waitUntil(() => state === 'connected', 'Protocol 2.7 connection');
+  await waitUntil(() => state === 'connected', 'Protocol 2.8 connection');
   connection.setSubscription({ minX: -120, minY: 0, minZ: -10, maxX: 120, maxY: 50, maxZ: 15 });
   await waitUntil(() => infrastructure !== null && infrastructure.stations.length === 2 && infrastructure.platforms.length === 2, 'Phase 18 railway infrastructure');
   await waitUntil(() => operations !== null && operations.trains.length === 2 && operations.services.length === 2 && operations.timetables.length === 2, 'two trains and services');
   await waitUntil(() => observedMovement && observedPlatform && observedDelay, 'movement, platform assignment, and delay');
   await waitUntil(() => operations !== null && operations.services.every((service) => service.state === RailwayServiceState.Completed), 'both services completing', 70_000);
 
-  assert(negotiatedVersion?.major === 2 && negotiatedVersion?.minor === 7, 'Protocol 2.7 was negotiated');
+  assert(negotiatedVersion?.major === 2 && negotiatedVersion?.minor === 8, 'Protocol 2.8 was negotiated');
   assert(infrastructure.stations.length === 2, 'two Stations were published');
   assert(infrastructure.platforms.length === 2, 'two Platforms were published');
   assert(operations.trains.length === 2, 'two Trains were published');

@@ -58,8 +58,88 @@ public sealed class MultimodalTransitTests
         var journey = world.CreateMultimodalTransitSnapshot().Journeys.Single(item => item.Id == journeyId);
         CollectionAssert.AreEqual(new[] { TransitMode.Walk, TransitMode.Bus, TransitMode.Walk }, journey.Legs.Select(static item => item.Mode).ToArray());
         var passenger = world.CreatePassenger(request.Id, journeyId);
-        for (var index = 0; index < 200; index++) world.Step();
+        for (var index = 0; index < 1000 && world.CreateMultimodalTransitSnapshot().Passengers.Single(item => item.Id == passenger).State != PassengerState.Arrived; index++) world.Step();
         Assert.AreEqual(PassengerState.Arrived, world.CreateMultimodalTransitSnapshot().Passengers.Single(item => item.Id == passenger).State);
+    }
+
+
+    [TestMethod]
+    public void RailwayServicePatternParticipatesInWalkRailwayWalkJourney()
+    {
+        var world = new SimulationWorld(new SimulationConfig(tickRate: 10));
+        var fixture = RailwayOperationsFixtures.SeedDeterministic(world);
+        var origin = world.CreateBuilding(new WorldVolume(-42, 10, 0, -38, 14, 4));
+        var destination = world.CreateBuilding(new WorldVolume(52, 10, 0, 56, 14, 4));
+        var roadStart = world.CreateRoadNode(new WorldPoint(-40, 12, 0));
+        var roadEnd = world.CreateRoadNode(new WorldPoint(54, 12, 0));
+        var roadSegment = world.CreateRoadSegment(roadStart, roadEnd);
+        world.CreateLane(roadSegment, LaneDirection.Forward, 0, speedLimitMetersPerSecond: 10d);
+        world.CreateRoadAccessPoint(roadSegment, 0d, buildingId: origin, mode: RoadAccessMode.Foot | RoadAccessMode.Motor);
+        world.CreateRoadAccessPoint(roadSegment, 1d, buildingId: destination, mode: RoadAccessMode.Foot | RoadAccessMode.Motor);
+        var line = world.CreateTransitLine(TransitMode.Railway);
+        world.CreateRailwayServicePattern(line, fixture.FirstServiceId);
+
+        var request = new TripRequest(new TripRequestId(77), TripEndpoint.ForBuilding(origin), TripEndpoint.ForBuilding(destination));
+        var journeyId = world.PlanMultimodalJourney(request);
+        var journey = world.CreateMultimodalTransitSnapshot().Journeys.Single(item => item.Id == journeyId);
+
+        Assert.IsTrue(journey.Legs.Any(static item => item.Mode == TransitMode.Railway));
+        Assert.IsTrue(journey.Legs.Any(item => item.RailwayServiceId == fixture.FirstServiceId));
+        Assert.AreEqual(TransitMode.Walk, journey.Legs[0].Mode);
+        Assert.AreEqual(TransitMode.Walk, journey.Legs[^1].Mode);
+    }
+
+    [TestMethod]
+    public void PassengerUsesTransferStateForStopToStopWalkAndCheckpointContinuesDeterministically()
+    {
+        var world = CreateRoadWorld(withEndpoints: true);
+        var lane = world.CreateRoadNetworkSnapshot().Lanes.Single().Id;
+        var busA = world.CreateBusStop(lane, new WorldPoint(15, 0, 0));
+        var busB = world.CreateBusStop(lane, new WorldPoint(40, 0, 0));
+        var busC = world.CreateBusStop(lane, new WorldPoint(60, 0, 0));
+        var busD = world.CreateBusStop(lane, new WorldPoint(85, 0, 0));
+        var firstLine = world.CreateTransitLine(TransitMode.Bus);
+        var secondLine = world.CreateTransitLine(TransitMode.Bus);
+        world.CreateTransitServicePattern(firstLine, [new(busA, 0, 1), new(busB, 5, 1)]);
+        world.CreateTransitServicePattern(secondLine, [new(busC, 0, 1), new(busD, 5, 1)]);
+        var request = new TripRequest(new TripRequestId(88), TripEndpoint.ForBuilding(new BuildingId(1)), TripEndpoint.ForBuilding(new BuildingId(2)));
+        var journeyId = world.PlanMultimodalJourney(request);
+        var journey = world.CreateMultimodalTransitSnapshot().Journeys.Single(item => item.Id == journeyId);
+        Assert.IsTrue(journey.Legs.Any(static item => item.Mode == TransitMode.Walk && item.OriginEndpoint is null && item.DestinationEndpoint is null));
+        var passenger = world.CreatePassenger(request.Id, journeyId);
+
+        var observedTransfer = false;
+        for (var index = 0; index < 1000; index++)
+        {
+            world.Step();
+            var state = world.CreateMultimodalTransitSnapshot().Passengers.Single(item => item.Id == passenger).State;
+            if (state == PassengerState.Transfer) { observedTransfer = true; break; }
+        }
+        Assert.IsTrue(observedTransfer);
+
+        var restored = SimulationWorld.RestoreCheckpoint(world.CreateCheckpoint());
+        for (var index = 0; index < 500; index++) { world.Step(); restored.Step(); }
+        Assert.AreEqual(
+            world.CreateMultimodalTransitSnapshot().Passengers.Single(item => item.Id == passenger),
+            restored.CreateMultimodalTransitSnapshot().Passengers.Single(item => item.Id == passenger));
+    }
+
+
+    [TestMethod]
+    public void DeterministicFixtureContainsWalkRailwayWalkBusAndTaxi()
+    {
+        var world = new SimulationWorld(new SimulationConfig(tickRate: 30, seed: 19_014, spatialCellSize: 64d));
+        var fixture = MultimodalTransitFixtures.SeedDeterministic(world);
+        var snapshot = world.CreateMultimodalTransitSnapshot();
+        var journey = snapshot.Journeys.Single(item => item.Id == fixture.RailwayJourneyId);
+
+        Assert.AreEqual(TransitMode.Walk, journey.Legs.First().Mode);
+        Assert.IsTrue(journey.Legs.Any(static item => item.Mode == TransitMode.Railway));
+        Assert.AreEqual(TransitMode.Walk, journey.Legs.Last().Mode);
+        Assert.IsTrue(snapshot.Lines.Any(item => item.Id == fixture.BusLineId && item.Mode == TransitMode.Bus));
+        Assert.IsTrue(snapshot.Vehicles.Any(item => item.Id == fixture.BusVehicleId && item.Kind == TransitVehicleKind.Bus));
+        Assert.IsTrue(snapshot.Vehicles.Any(item => item.Id == fixture.TaxiVehicleId && item.Kind == TransitVehicleKind.Taxi));
+        Assert.AreEqual(fixture.TaxiVehicleId, snapshot.TaxiRequests.Single(item => item.Id == fixture.TaxiRequestId).AssignedVehicleId);
     }
 
     private static SimulationWorld CreateRoadWorld(bool withEndpoints = false)

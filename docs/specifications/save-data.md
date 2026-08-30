@@ -20,8 +20,11 @@ migration対象:
 - Format 5: Format 4 + Pedestrian state。Vehicle stateは空として復元する。
 - Format 6: Format 5 + Vehicle state。Population stateは空として復元する。
 - Format 7: Format 6 + Household / Person / daily schedule / Need / active Population Trip state。
+- Format 8: Format 7 + Railway Infrastructure。
+- Format 9: Format 8 + Railway Operations。
+- Format 10: Format 9 + Multimodal Transit / Journey / Passenger / Taxi state。
 
-Format 2以前、および7より新しい未知versionは拒否する。
+Format 2以前、および10より新しい未知versionは拒否する。
 
 ## 共通Simulation state
 
@@ -199,3 +202,12 @@ Crossing permissionはPedestrian自身のroute progressとは分離して保存�
 - Vehicle progress / state / speedがRouteまたはLane occupancy invariantと整合しない状態
 - Household / Person residenceやactivity destinationがmissing Building / POIを参照する状態
 - Person active Trip / travel state / Pedestrian / Vehicle参照が相互に矛盾する状態
+
+
+## Format 8〜10 Railway / Multimodal state
+
+Format 8はTrack / connection / block / Station / Platform / Depotとnext stable IDを保存する。Format 9はFormation / Route / Timetable / Service / Trainの定義とmutable operation stateを追加する。
+
+Format 10は`simulation.multimodalTransit`へTransit Stop / Line / Service Pattern / Trip / Bus・Taxi Vehicle / Taxi Request / Journey / Passengerと各next stable IDを追加する。active Bus/TaxiのRoad Vehicle参照、Railway Pattern/JourneyのRailway Service参照、PopulationのTransit Trip参照はrestore時に整合性検証する。
+
+Format 9以前のsaveはMultimodal Transitを空としてmigrationする。Format 10のtransfer中Passengerはsave/load後も同一Journey leg/stateからfixed tick進行を継続する。

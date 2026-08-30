@@ -50,8 +50,8 @@ public enum ProtocolVehicleMovementState : byte { Driving = 0, WaitingForTraffic
 public enum ProtocolIntersectionControlMode : byte { Unsignalized = 0, FixedSignal = 1 }
 public enum ProtocolSignalIndication : byte { Red = 0, Yellow = 1, Green = 2 }
 public enum ProtocolActivityKind : byte { Home = 0, Work = 1, Education = 2, Shopping = 3, Healthcare = 4, Recreation = 5, Errand = 6 }
-public enum ProtocolPersonTravelState : byte { AtActivity = 0, Walking = 1, Driving = 2 }
-public enum ProtocolTravelMode : byte { Any = 0, Foot = 1, Motor = 2 }
+public enum ProtocolPersonTravelState : byte { AtActivity = 0, Walking = 1, Driving = 2, Transit = 3 }
+public enum ProtocolTravelMode : byte { Any = 0, Foot = 1, Motor = 2, Transit = 3 }
 
 public readonly record struct ProtocolRoadNode(ulong Id, ProtocolRoadNodeKind Kind, double X, double Y, double Z);
 public readonly record struct ProtocolRoadSegment(ulong Id, ProtocolRoadKind Kind, ulong StartNodeId, ulong EndNodeId);

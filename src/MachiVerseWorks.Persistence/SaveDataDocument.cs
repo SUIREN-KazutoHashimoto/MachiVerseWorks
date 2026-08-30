@@ -1,3 +1,5 @@
+using MachiVerseWorks.Simulation;
+
 namespace MachiVerseWorks.Persistence;
 
 internal sealed class SaveDataDocument
@@ -57,6 +59,7 @@ internal sealed class SaveSimulationData
     public ulong? NextDepotId { get; init; }
     public SaveDepotData?[]? Depots { get; init; }
     public SaveRailwayOperationsData? RailwayOperations { get; init; }
+    public MultimodalTransitCheckpoint? MultimodalTransit { get; init; }
 }
 
 internal sealed class SaveAgentData

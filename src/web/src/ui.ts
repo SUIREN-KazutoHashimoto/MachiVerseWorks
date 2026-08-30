@@ -3,6 +3,7 @@ import type { ClientPerformanceSnapshot } from './client-performance.ts';
 import type { ConnectionState } from './connection.ts';
 import type { Localizer } from './localization.ts';
 import { ActivityKind, PersonTravelState, type PersonDebugMessage, type PopulationStatisticsMessage } from './population-protocol.ts';
+import { TransitMode, TransitVehicleKind, TransitVehicleState, type MultimodalTransitSnapshotMessage } from './multimodal-transit.ts';
 import { protocolVersionToString, type ProtocolVersion } from './protocol.ts';
 import { RailwayServiceState, type RailwayOperationsSnapshotMessage } from './railway-operations.ts';
 
@@ -28,6 +29,7 @@ export class ClientUi {
   private readonly populationValue = document.createElement('span');
   private readonly trainsValue = document.createElement('span');
   private readonly railwayDebugValue = document.createElement('div');
+  private readonly transitDebugValue = document.createElement('div');
   private readonly audioValue = document.createElement('span');
   private readonly decodeValue: HTMLSpanElement | null;
   private readonly frameValue: HTMLSpanElement | null;
@@ -88,6 +90,14 @@ export class ClientUi {
     railwayDebug.append(railwayDebugTitle, this.railwayDebugValue);
     panel.append(railwayDebug);
 
+    const transitDebug = document.createElement('div');
+    transitDebug.className = 'transit-debug';
+    const transitDebugTitle = document.createElement('strong');
+    transitDebugTitle.textContent = localizer.t('transitDebug.title');
+    this.transitDebugValue.className = 'transit-debug-value';
+    transitDebug.append(transitDebugTitle, this.transitDebugValue);
+    panel.append(transitDebug);
+
     this.errorValue.className = 'client-error';
     this.errorValue.hidden = true;
     panel.append(this.errorValue);
@@ -122,6 +132,7 @@ export class ClientUi {
     this.setAgentCount(0);
     this.clearPopulation();
     this.clearRailwayOperations();
+    this.clearMultimodalTransit();
     this.setAudioState('locked');
     if (this.decodeValue !== null) this.decodeValue.textContent = '—';
     if (this.frameValue !== null) this.frameValue.textContent = '—';
@@ -186,6 +197,26 @@ export class ClientUi {
   }
 
   public clearRailwayOperations(): void { this.trainsValue.textContent = '0'; this.railwayDebugValue.textContent = this.localizer.t('railwayDebug.none'); }
+
+
+  public setMultimodalTransit(message: MultimodalTransitSnapshotMessage): void {
+    const busLines = message.lines.filter((line) => line.mode === TransitMode.Bus).length;
+    const railwayLines = message.lines.filter((line) => line.mode === TransitMode.Railway).length;
+    const buses = message.vehicles.filter((vehicle) => vehicle.kind === TransitVehicleKind.Bus && vehicle.state !== TransitVehicleState.Completed).length;
+    const taxis = message.vehicles.filter((vehicle) => vehicle.kind === TransitVehicleKind.Taxi && vehicle.state !== TransitVehicleState.Completed).length;
+    const routes = message.patterns.map((pattern) => `L${pattern.lineId.toString()}:${pattern.stops.map((stop) => stop.stopId.toString()).join('>')}`).join(', ');
+    const vehicles = message.vehicles.slice(0, 6).map((vehicle) => `V${vehicle.id.toString()}@(${vehicle.x.toFixed(1)},${vehicle.y.toFixed(1)})`).join(', ');
+    const arrivals = message.arrivalEstimates.slice(0, 6).map((arrival) => `S${arrival.stopId.toString()}@${arrival.estimatedArrivalTick.toString()}`).join(', ');
+    this.transitDebugValue.textContent = this.localizer.t('transitDebug.summary', {
+      routes: routes || '—',
+      stops: message.stops.length,
+      busLines, railwayLines, buses, taxis,
+      vehicles: vehicles || '—',
+      arrivals: arrivals || '—',
+    });
+  }
+
+  public clearMultimodalTransit(): void { this.transitDebugValue.textContent = this.localizer.t('transitDebug.none'); }
 
   public setPersonDebug(message: PersonDebugMessage): void {
     const residence = formatEndpoint(message.residenceBuildingId, message.residencePoiId);

@@ -47,5 +47,9 @@
   "status.trains": "列車",
   "railwayDebug.title": "Railway Debug",
   "railwayDebug.none": "運行情報なし",
-  "railwayDebug.summary": "遅延Service {delayed} / 完了 {completed} / 次発着 {arrivals}"
+  "railwayDebug.summary": "遅延Service {delayed} / 完了 {completed} / 次発着 {arrivals}",
+  "personTravel.transit": "公共交通",
+  "transitDebug.title": "Transit Debug",
+  "transitDebug.none": "交通情報なし",
+  "transitDebug.summary": "Route {routes} / Stop {stops} / Bus Line {busLines} / Railway Line {railwayLines} / Bus {buses} / Taxi {taxis} / Vehicle {vehicles} / 到着 {arrivals}"
 }
