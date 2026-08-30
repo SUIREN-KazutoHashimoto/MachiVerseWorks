@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using MachiVerseWorks.Simulation;
+using SimulationActivityKind = MachiVerseWorks.Simulation.ActivityKind;
 
 namespace MachiVerseWorks.Benchmarks;
 
@@ -23,7 +24,7 @@ internal static class PopulationBenchmarkRunner
         var world = new SimulationWorld(new SimulationConfig(tickRate: 30, seed: 15015, spatialCellSize: 64d));
         var residence = world.CreateBuilding(new WorldVolume(-10d, -10d, 0d, 10d, 10d, 20d), BuildingKind.Residential);
         var endpoint = TripEndpoint.ForBuilding(residence);
-        var schedule = new[] { new DailyActivityWindow(ActivityKind.Home, 0, 1440) };
+        var schedule = new[] { new DailyActivityWindow(SimulationActivityKind.Home, 0, 1440) };
 
         HouseholdId household = default;
         for (var index = 0; index < personCount; index++)
