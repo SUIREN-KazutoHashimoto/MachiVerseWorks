@@ -7,6 +7,9 @@ namespace MachiVerseWorks.Server.Tests;
 [TestClass]
 public sealed class PublishReadModelTests
 {
+    private static readonly ulong[] LeftAgentIds = [1UL];
+    private static readonly ulong[] RightAgentIds = [2UL];
+
     [TestMethod]
     public void SubscriptionQueriesShareOneAtomicTickAcrossEntityKinds()
     {
@@ -50,8 +53,8 @@ public sealed class PublishReadModelTests
         var left = published.Query(new WorldVolume(-150, -10, -10, -50, 10, 10));
         var right = published.Query(new WorldVolume(50, -10, -10, 150, 10, 10));
 
-        CollectionAssert.AreEqual(new[] { 1UL }, left.Agents.Select(static item => item.Id.Value).ToArray());
-        CollectionAssert.AreEqual(new[] { 2UL }, right.Agents.Select(static item => item.Id.Value).ToArray());
+        CollectionAssert.AreEqual(LeftAgentIds, left.Agents.Select(static item => item.Id.Value).ToArray());
+        CollectionAssert.AreEqual(RightAgentIds, right.Agents.Select(static item => item.Id.Value).ToArray());
     }
 
     [TestMethod]

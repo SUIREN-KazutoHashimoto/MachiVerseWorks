@@ -54,7 +54,7 @@ public class PublishedReadModelBenchmarks
     {
         public PublishedReadModelBenchmarkConfig()
         {
-            AddColumn(StatisticColumn.P95, StatisticColumn.P99);
+            AddColumn(StatisticColumn.P95);
         }
     }
 }
