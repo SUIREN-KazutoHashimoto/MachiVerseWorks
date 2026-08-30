@@ -15,7 +15,7 @@ roadmap = roadmap_path.read_text(encoding="utf-8")
 roadmap = replace_once(
     roadmap,
     "> **現在:** Phase 18 — Railway Operations（次）  \n> **次の実装タスク:** P18-001 — Train / Formation / Service / Timetableの責務とstable ID契約を仕様化する",
-    "> **現在:** Phase 19 — Multimodal Transit（次）  \n> **次の実装タスク:** P19-001 — Transit Stop / Line / Service pattern / Trip legの共通契約を仕様化する",
+    "> **現在:** Phase 19 — Multimodal Transit（次）\n> **次の実装タスク:** P19-001 — Transit Stop / Line / Service pattern / Trip legの共通契約を仕様化する",
     "roadmap current phase",
 )
 roadmap = replace_once(roadmap, "| 18 | Railway Operations | ⏭️ 次 |", "| 18 | Railway Operations | ✅ 完了 |", "Phase 18 summary status")
@@ -35,7 +35,7 @@ roadmap = replace_once(
 phase17_row = "| Phase 17 — Railway Infrastructure | [`docs/specifications/railway-infrastructure.md`](docs/specifications/railway-infrastructure.md)、[`docs/architecture/railway-infrastructure.md`](docs/architecture/railway-infrastructure.md)、Phase 17 E2E / Railway benchmark workflow、PR #78 |"
 phase18_row = "| Phase 18 — Railway Operations | [`docs/specifications/railway-operations.md`](docs/specifications/railway-operations.md)、[`docs/architecture/railway-operations.md`](docs/architecture/railway-operations.md)、[`docs/development/railway-operations-benchmark.md`](docs/development/railway-operations-benchmark.md)、Phase 18 E2E / Railway Operations benchmark workflow、PR #131 |"
 roadmap = replace_once(roadmap, phase17_row, phase17_row + "\n" + phase18_row, "Phase 17 evidence row")
-roadmap = replace_once(roadmap, "> **状態: ⬜ 未着手（次）**  \n> **依存:** Phase 17", "> **状態: ✅ 完了**  \n> **依存:** Phase 17", "Phase 18 section status")
+roadmap = replace_once(roadmap, "> **状態: ⬜ 未着手（次）**  \n> **依存:** Phase 17", "> **状態: ✅ 完了**\n> **依存:** Phase 17", "Phase 18 section status")
 for task in range(1, 17):
     old = f"- ⬜ **P18-{task:03d}**"
     new = f"- ✅ **P18-{task:03d}**"
