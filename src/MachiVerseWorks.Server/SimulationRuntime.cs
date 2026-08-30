@@ -10,13 +10,14 @@ internal sealed class SimulationRuntime
     private bool _pedestrianFixturePending;
     private bool _roadTrafficFixturePending;
     private bool _trafficFixturePending;
+    private bool _railwayFixturePending;
     private RoadNetworkReadModel? _roadReadModel;
+    private RailwayInfrastructureReadModel? _railwayReadModel;
 
     public SimulationRuntime(ServerOptions options, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(configuration);
-
         var savePath = configuration["Simulation:SavePath"];
         if (!string.IsNullOrWhiteSpace(savePath))
         {
@@ -24,24 +25,15 @@ internal sealed class SimulationRuntime
             _world = WorldSaveSerializer.Load(stream);
             return;
         }
-
         _world = new SimulationWorld(new SimulationConfig(options.TickRate, options.Seed, options.SpatialCellSize));
         if (options.InitialAgentCount > 0)
         {
-            _world.CreateAgents(
-                options.InitialAgentCount,
-                new WorldVolume(
-                    options.SpawnMinX,
-                    options.SpawnMinY,
-                    options.SpawnMinZ,
-                    options.SpawnMaxX,
-                    options.SpawnMaxY,
-                    options.SpawnMaxZ));
+            _world.CreateAgents(options.InitialAgentCount, new WorldVolume(options.SpawnMinX, options.SpawnMinY, options.SpawnMinZ, options.SpawnMaxX, options.SpawnMaxY, options.SpawnMaxZ));
         }
-
         _pedestrianFixturePending = bool.TryParse(configuration["Simulation:PedestrianFixture"], out var pedestrianFixture) && pedestrianFixture;
         _roadTrafficFixturePending = bool.TryParse(configuration["Simulation:RoadTrafficFixture"], out var roadTrafficFixture) && roadTrafficFixture;
         _trafficFixturePending = bool.TryParse(configuration["Simulation:TrafficFixture"], out var trafficFixture) && trafficFixture;
+        _railwayFixturePending = bool.TryParse(configuration["Simulation:RailwayFixture"], out var railwayFixture) && railwayFixture;
     }
 
     public int TickRate => _world.Config.TickRate;
@@ -52,181 +44,78 @@ internal sealed class SimulationRuntime
     public int ActivePedestrianCount { get { lock (_gate) return _world.ActivePedestrianCount; } }
     public int ActiveVehicleCount { get { lock (_gate) return _world.ActiveVehicleCount; } }
     public int RoadSegmentCount { get { lock (_gate) return _world.RoadSegmentCount; } }
+    public int TrackSegmentCount { get { lock (_gate) return _world.TrackSegmentCount; } }
     public int HouseholdCount { get { lock (_gate) return _world.HouseholdCount; } }
     public int PersonCount { get { lock (_gate) return _world.PersonCount; } }
 
-    public void Step()
-    {
-        lock (_gate) _world.Step();
-    }
-
-    public AgentSnapshot[] CreateSnapshot(WorldVolume volume)
-    {
-        lock (_gate) return _world.CreateSnapshot(volume);
-    }
-
-    public PedestrianSnapshot[] CreatePedestrianSnapshot(WorldVolume volume)
-    {
-        lock (_gate)
-        {
-            EnsureFixtures();
-            return _world.CreatePedestrianSnapshot(volume);
-        }
-    }
-
-    public RoadNetworkSnapshot CreateRoadNetworkSnapshot(WorldVolume volume)
-    {
-        lock (_gate)
-        {
-            EnsureFixtures();
-            return _world.CreateRoadNetworkSnapshot(volume);
-        }
-    }
-
-    public PopulationStatistics CreatePopulationStatistics()
-    {
-        lock (_gate) return _world.CreatePopulationStatistics();
-    }
-
-    public bool TryGetPersonSnapshot(PersonId id, out PersonSnapshot snapshot)
-    {
-        lock (_gate) return _world.TryGetPersonSnapshot(id, out snapshot);
-    }
+    public void Step() { lock (_gate) _world.Step(); }
+    public AgentSnapshot[] CreateSnapshot(WorldVolume volume) { lock (_gate) return _world.CreateSnapshot(volume); }
+    public PedestrianSnapshot[] CreatePedestrianSnapshot(WorldVolume volume) { lock (_gate) { EnsureFixtures(); return _world.CreatePedestrianSnapshot(volume); } }
+    public RoadNetworkSnapshot CreateRoadNetworkSnapshot(WorldVolume volume) { lock (_gate) { EnsureFixtures(); return _world.CreateRoadNetworkSnapshot(volume); } }
+    public RailwayInfrastructureSnapshot CreateRailwayInfrastructureSnapshot(WorldVolume volume) { lock (_gate) { EnsureFixtures(); return _world.CreateRailwayInfrastructureSnapshot(volume); } }
+    public PopulationStatistics CreatePopulationStatistics() { lock (_gate) return _world.CreatePopulationStatistics(); }
+    public bool TryGetPersonSnapshot(PersonId id, out PersonSnapshot snapshot) { lock (_gate) return _world.TryGetPersonSnapshot(id, out snapshot); }
 
     public SimulationPublishSnapshot CapturePublishSnapshot()
     {
-        ulong tickCount;
-        AgentSnapshot[] agents;
-        PedestrianSnapshot[] pedestrians;
-        VehicleSnapshot[] vehicles;
-        IntersectionControlSnapshot intersectionControl;
-        RoadNetworkReadModel roadReadModel;
+        ulong tickCount; AgentSnapshot[] agents; PedestrianSnapshot[] pedestrians; VehicleSnapshot[] vehicles; IntersectionControlSnapshot intersectionControl; RoadNetworkReadModel roadReadModel; RailwayInfrastructureReadModel railwayReadModel;
         lock (_gate)
         {
             EnsureFixtures();
             tickCount = _world.Time.TickCount;
-            agents = _world.CreateAllAgentSnapshots();
-            pedestrians = _world.CreateAllPedestrianSnapshots();
-            vehicles = _world.CreateAllVehicleSnapshots();
-            intersectionControl = _world.CreateIntersectionControlSnapshot();
+            agents = _world.CreateAllAgentSnapshots(); pedestrians = _world.CreateAllPedestrianSnapshots(); vehicles = _world.CreateAllVehicleSnapshots(); intersectionControl = _world.CreateIntersectionControlSnapshot();
             _roadReadModel ??= new RoadNetworkReadModel(1, _world.CreateRoadNetworkSnapshot());
-            roadReadModel = _roadReadModel;
+            _railwayReadModel ??= new RailwayInfrastructureReadModel(1, _world.CreateRailwayInfrastructureSnapshot());
+            roadReadModel = _roadReadModel; railwayReadModel = _railwayReadModel;
         }
-
-        return new SimulationPublishSnapshot(
-            tickCount,
-            SpatialCellSize,
-            agents,
-            pedestrians,
-            vehicles,
-            intersectionControl,
-            roadReadModel);
+        return new SimulationPublishSnapshot(tickCount, SpatialCellSize, agents, pedestrians, vehicles, intersectionControl, roadReadModel, railwayReadModel);
     }
 
     private void EnsureFixtures()
     {
-        if (_pedestrianFixturePending)
-        {
-            SeedPedestrianFixture(_world);
-            _pedestrianFixturePending = false;
-            _roadReadModel = null;
-        }
-        if (_roadTrafficFixturePending)
-        {
-            SeedRoadTrafficFixture(_world);
-            _roadTrafficFixturePending = false;
-            _roadReadModel = null;
-        }
-        if (_trafficFixturePending)
-        {
-            SeedTrafficFixture(_world);
-            _trafficFixturePending = false;
-            _roadReadModel = null;
-        }
+        if (_pedestrianFixturePending) { SeedPedestrianFixture(_world); _pedestrianFixturePending = false; _roadReadModel = null; }
+        if (_roadTrafficFixturePending) { SeedRoadTrafficFixture(_world); _roadTrafficFixturePending = false; _roadReadModel = null; }
+        if (_trafficFixturePending) { SeedTrafficFixture(_world); _trafficFixturePending = false; _roadReadModel = null; }
+        if (_railwayFixturePending) { RailwayInfrastructureFixtures.SeedDeterministic(_world); _railwayFixturePending = false; _roadReadModel = null; _railwayReadModel = null; }
     }
 
     private static void SeedPedestrianFixture(SimulationWorld world)
     {
         var originBuilding = world.CreateBuilding(new WorldVolume(-21d, -1d, 0d, -19d, 1d, 2d), BuildingKind.Residential);
         var destinationBuilding = world.CreateBuilding(new WorldVolume(19d, -1d, 0d, 21d, 1d, 2d), BuildingKind.Commercial);
-        var start = world.CreateRoadNode(new WorldPoint(-20d, 0d, 0d));
-        var crossing = world.CreateRoadNode(new WorldPoint(0d, 0d, 0d), RoadNodeKind.Intersection);
-        var end = world.CreateRoadNode(new WorldPoint(20d, 0d, 0d));
-        var firstSegment = world.CreateRoadSegment(start, crossing, RoadKind.Local);
-        var secondSegment = world.CreateRoadSegment(crossing, end, RoadKind.Local);
-        world.CreateRoadAccessPoint(firstSegment, 0d, originBuilding, mode: RoadAccessMode.Foot);
-        world.CreateRoadAccessPoint(secondSegment, 1d, destinationBuilding, mode: RoadAccessMode.Foot);
-        world.CreatePedestrian(
-            new TripRequest(new TripRequestId(1), TripEndpoint.ForBuilding(originBuilding), TripEndpoint.ForBuilding(destinationBuilding), TravelMode.Foot),
-            walkingSpeedMetersPerSecond: 4d);
+        var start = world.CreateRoadNode(new WorldPoint(-20d, 0d, 0d)); var crossing = world.CreateRoadNode(new WorldPoint(0d, 0d, 0d), RoadNodeKind.Intersection); var end = world.CreateRoadNode(new WorldPoint(20d, 0d, 0d));
+        var firstSegment = world.CreateRoadSegment(start, crossing, RoadKind.Local); var secondSegment = world.CreateRoadSegment(crossing, end, RoadKind.Local);
+        world.CreateRoadAccessPoint(firstSegment, 0d, originBuilding, mode: RoadAccessMode.Foot); world.CreateRoadAccessPoint(secondSegment, 1d, destinationBuilding, mode: RoadAccessMode.Foot);
+        world.CreatePedestrian(new TripRequest(new TripRequestId(1), TripEndpoint.ForBuilding(originBuilding), TripEndpoint.ForBuilding(destinationBuilding), TravelMode.Foot), walkingSpeedMetersPerSecond: 4d);
     }
 
     private static void SeedRoadTrafficFixture(SimulationWorld world)
     {
-        const double startX = -30d;
-        const double endX = 30d;
-        const double distanceMeters = endX - startX;
-        const double speedLimit = 10d;
-
+        const double startX = -30d, endX = 30d, distanceMeters = endX - startX, speedLimit = 10d;
         for (var index = 0; index < 3; index++)
         {
-            var y = (index - 1) * 12d;
-            var start = world.CreateRoadNode(new WorldPoint(startX, y, 0d));
-            var end = world.CreateRoadNode(new WorldPoint(endX, y, 0d));
-            var segment = world.CreateRoadSegment(start, end, RoadKind.Local);
-            var lane = world.CreateLane(segment, LaneDirection.Forward, 0, speedLimitMetersPerSecond: speedLimit);
-            world.CreateVehicle(
-            [
-                new RouteLaneStep(lane, segment, 0d, 1d, distanceMeters, distanceMeters / speedLimit, null),
-            ],
-            initialSpeedMetersPerSecond: 8d);
+            var y = (index - 1) * 12d; var start = world.CreateRoadNode(new WorldPoint(startX, y, 0d)); var end = world.CreateRoadNode(new WorldPoint(endX, y, 0d)); var segment = world.CreateRoadSegment(start, end, RoadKind.Local); var lane = world.CreateLane(segment, LaneDirection.Forward, 0, speedLimitMetersPerSecond: speedLimit);
+            world.CreateVehicle([new RouteLaneStep(lane, segment, 0d, 1d, distanceMeters, distanceMeters / speedLimit, null)], initialSpeedMetersPerSecond: 8d);
         }
     }
 
     private static void SeedTrafficFixture(SimulationWorld world)
     {
-        const double armLength = 30d;
-        const double speedLimit = 10d;
+        const double armLength = 30d, speedLimit = 10d;
         var center = world.CreateRoadNode(new WorldPoint(0d, 0d, 0d), RoadNodeKind.Intersection);
-        var west = CreateTrafficArm(world, center, new WorldPoint(-armLength, 0d, 0d), speedLimit);
-        var east = CreateTrafficArm(world, center, new WorldPoint(armLength, 0d, 0d), speedLimit);
-        var south = CreateTrafficArm(world, center, new WorldPoint(0d, -armLength, 0d), speedLimit);
-        var north = CreateTrafficArm(world, center, new WorldPoint(0d, armLength, 0d), speedLimit);
-
-        AddTrafficVehicle(world, center, west, east, TurnMovement.Straight, speedLimit);
-        AddTrafficVehicle(world, center, east, west, TurnMovement.Straight, speedLimit);
-        AddTrafficVehicle(world, center, south, north, TurnMovement.Straight, speedLimit);
-        AddTrafficVehicle(world, center, north, south, TurnMovement.Straight, speedLimit);
+        var west = CreateTrafficArm(world, center, new WorldPoint(-armLength, 0d, 0d), speedLimit); var east = CreateTrafficArm(world, center, new WorldPoint(armLength, 0d, 0d), speedLimit); var south = CreateTrafficArm(world, center, new WorldPoint(0d, -armLength, 0d), speedLimit); var north = CreateTrafficArm(world, center, new WorldPoint(0d, armLength, 0d), speedLimit);
+        AddTrafficVehicle(world, center, west, east, TurnMovement.Straight, speedLimit); AddTrafficVehicle(world, center, east, west, TurnMovement.Straight, speedLimit); AddTrafficVehicle(world, center, south, north, TurnMovement.Straight, speedLimit); AddTrafficVehicle(world, center, north, south, TurnMovement.Straight, speedLimit);
     }
 
-    private static TrafficArm CreateTrafficArm(
-        SimulationWorld world,
-        RoadNodeId center,
-        WorldPoint endpointPosition,
-        double speedLimit)
+    private static TrafficArm CreateTrafficArm(SimulationWorld world, RoadNodeId center, WorldPoint endpointPosition, double speedLimit)
     {
-        var endpoint = world.CreateRoadNode(endpointPosition);
-        var segment = world.CreateRoadSegment(center, endpoint, RoadKind.Local);
-        var outbound = world.CreateLane(segment, LaneDirection.Forward, 0, speedLimitMetersPerSecond: speedLimit);
-        var inbound = world.CreateLane(segment, LaneDirection.Reverse, 0, speedLimitMetersPerSecond: speedLimit);
-        return new TrafficArm(segment, inbound, outbound);
+        var endpoint = world.CreateRoadNode(endpointPosition); var segment = world.CreateRoadSegment(center, endpoint, RoadKind.Local); var outbound = world.CreateLane(segment, LaneDirection.Forward, 0, speedLimitMetersPerSecond: speedLimit); var inbound = world.CreateLane(segment, LaneDirection.Reverse, 0, speedLimitMetersPerSecond: speedLimit); return new TrafficArm(segment, inbound, outbound);
     }
 
-    private static void AddTrafficVehicle(
-        SimulationWorld world,
-        RoadNodeId center,
-        TrafficArm from,
-        TrafficArm to,
-        TurnMovement turnMovement,
-        double speedLimit)
+    private static void AddTrafficVehicle(SimulationWorld world, RoadNodeId center, TrafficArm from, TrafficArm to, TurnMovement turnMovement, double speedLimit)
     {
         var connection = world.CreateLaneConnection(from.InboundLaneId, to.OutboundLaneId, center, turnMovement);
-        world.CreateVehicle(
-        [
-            new RouteLaneStep(from.InboundLaneId, from.SegmentId, 1d, 0d, 30d, 30d / speedLimit, connection),
-            new RouteLaneStep(to.OutboundLaneId, to.SegmentId, 0d, 1d, 30d, 30d / speedLimit, null),
-        ],
-        initialSpeedMetersPerSecond: 8d);
+        world.CreateVehicle([new RouteLaneStep(from.InboundLaneId, from.SegmentId, 1d, 0d, 30d, 30d / speedLimit, connection), new RouteLaneStep(to.OutboundLaneId, to.SegmentId, 0d, 1d, 30d, 30d / speedLimit, null)], initialSpeedMetersPerSecond: 8d);
     }
 
     private readonly record struct TrafficArm(RoadSegmentId SegmentId, LaneId InboundLaneId, LaneId OutboundLaneId);
