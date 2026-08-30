@@ -42,6 +42,8 @@ public enum ProtocolTurnMovement : byte { Unspecified = 0, Straight = 1, Left = 
 [Flags] public enum ProtocolRoadAccessMode : byte { None = 0, Motor = 1, Foot = 2 }
 public enum ProtocolPedestrianMovementState : byte { Walking = 0, WaitingForCrossing = 1, WaitingForOccupancy = 2, Arrived = 3 }
 public enum ProtocolVehicleMovementState : byte { Driving = 0, WaitingForTraffic = 1, ChangingLane = 2, Arrived = 3 }
+public enum ProtocolIntersectionControlMode : byte { Unsignalized = 0, FixedSignal = 1 }
+public enum ProtocolSignalIndication : byte { Red = 0, Yellow = 1, Green = 2 }
 
 public readonly record struct ProtocolRoadNode(ulong Id, ProtocolRoadNodeKind Kind, double X, double Y, double Z);
 public readonly record struct ProtocolRoadSegment(ulong Id, ProtocolRoadKind Kind, ulong StartNodeId, ulong EndNodeId);
@@ -138,4 +140,28 @@ public sealed record VehicleUpdateMessage(
 public sealed record VehicleRemoveMessage(ulong VehicleId, ulong TickCount) : IProtocolMessage
 {
     public MessageType Type => MessageType.VehicleRemove;
+}
+
+public readonly record struct ProtocolIntersectionMovementState(
+    ulong MovementId,
+    ulong ConnectionId,
+    ulong FromLaneId,
+    ulong ToLaneId,
+    ProtocolTurnMovement TurnMovement,
+    double StopLineX,
+    double StopLineY,
+    double StopLineZ,
+    ProtocolSignalIndication Indication,
+    uint QueueLength,
+    bool EntryGrantedThisTick);
+
+public sealed record IntersectionControlSnapshotMessage(
+    ulong TickCount,
+    ulong IntersectionNodeId,
+    ProtocolIntersectionControlMode Mode,
+    ushort PhaseIndex,
+    ulong PhaseTick,
+    IReadOnlyList<ProtocolIntersectionMovementState> Movements) : IProtocolMessage
+{
+    public MessageType Type => MessageType.IntersectionControlSnapshot;
 }
