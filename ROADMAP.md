@@ -2,8 +2,8 @@
 
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 17 — Railway Infrastructure（次）  
-> **次の実装タスク:** P17-001 — Railway Infrastructureの軸・接続・track gauge・方向・高度契約を仕様化する
+> **現在:** Phase 18 — Railway Operations（次）  
+> **次の実装タスク:** P18-001 — Train / Formation / Service / Timetableの責務とstable ID契約を仕様化する
 
 ## 全体の現在地
 
@@ -26,8 +26,8 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 14 | Intersection & Signal Control | ✅ 完了 |
 | 15 | Population & Daily Activity | ✅ 完了 |
 | 16 | Pedestrian Simulation | ✅ 完了 |
-| 17 | Railway Infrastructure | ⏭️ 次 |
-| 18 | Railway Operations | ⏳ 待機 |
+| 17 | Railway Infrastructure | ✅ 完了 |
+| 18 | Railway Operations | ⏭️ 次 |
 | 19 | Multimodal Transit | ⏳ 待機 |
 | 20 | Industry / Jobs / Economy | ⏳ 待機 |
 | 21 | Logistics / Freight | ⏳ 待機 |
@@ -82,9 +82,9 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 
 ---
 
-## Phase 9〜16 — 完了済みFoundation / Simulation Domains
+## Phase 9〜17 — 完了済みFoundation / Simulation Domains
 
-Phase 9〜16は正式closeout済み。現行ROADMAPでは完了履歴の詳細Taskを繰り返さず、実装・仕様・benchmarkの正本へ参照を集約する。
+Phase 9〜17は正式closeout済み。現行ROADMAPでは完了履歴の詳細Taskを繰り返さず、実装・仕様・benchmarkの正本へ参照を集約する。
 
 | Phase | 主な正本 / 証跡 |
 | --- | --- |
@@ -96,6 +96,7 @@ Phase 9〜16は正式closeout済み。現行ROADMAPでは完了履歴の詳細Ta
 | Phase 14 — Intersection & Signal Control | [`docs/specifications/intersection-signal-control.md`](docs/specifications/intersection-signal-control.md)、[`docs/development/phase14-intersection-benchmark.md`](docs/development/phase14-intersection-benchmark.md) |
 | Phase 15 — Population & Daily Activity | [`docs/specifications/population-daily-activity.md`](docs/specifications/population-daily-activity.md)、[`docs/architecture/population-daily-activity.md`](docs/architecture/population-daily-activity.md)、[`docs/development/population-benchmark.md`](docs/development/population-benchmark.md) |
 | Phase 16 — Pedestrian Simulation | [`docs/specifications/pedestrian-simulation.md`](docs/specifications/pedestrian-simulation.md)、[`docs/architecture/pedestrian-simulation.md`](docs/architecture/pedestrian-simulation.md)、[`docs/development/pedestrian-benchmark.md`](docs/development/pedestrian-benchmark.md) |
+| Phase 17 — Railway Infrastructure | [`docs/specifications/railway-infrastructure.md`](docs/specifications/railway-infrastructure.md)、[`docs/architecture/railway-infrastructure.md`](docs/architecture/railway-infrastructure.md)、Phase 17 E2E / Railway benchmark workflow、PR #78 |
 
 ### Phase 13〜16 closeout
 
@@ -118,26 +119,26 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ## Phase 17 — Railway Infrastructure
 
-> **状態: ⬜ 未着手（次）**  
+> **状態: ✅ 完了**  
 > **依存:** Phase 10 / 11 / 16  
 > 線路・分岐・block・駅・ホーム・車庫を、列車運行が利用できる3D railway topologyとして確立する。
 
-- ⬜ **P17-001** — Railway Infrastructureの軸・接続・track gauge・方向・高度契約を仕様化する
-- ⬜ **P17-002** — TrackNode / TrackSegmentのstable IDと3D geometryを実装する
-- ⬜ **P17-003** — Track direction / speed limit / electrification等の最小属性を実装する
-- ⬜ **P17-004** — switch / junctionと進行可能connectionを表すtopologyを実装する
-- ⬜ **P17-005** — train separationに使うblock sectionのInfrastructureモデルを実装する
-- ⬜ **P17-006** — Station / Platformのstable ID・geometry・track connectionを実装する
-- ⬜ **P17-007** — Platform access pointをUrban World / pedestrian networkへ接続する
-- ⬜ **P17-008** — Depot / sidingの最小Infrastructureモデルを実装する
-- ⬜ **P17-009** — Railway topologyの3D spatial queryと接続validationを実装する
-- ⬜ **P17-010** — Railway Infrastructureをcheckpoint / Save Dataへ含める
-- ⬜ **P17-011** — Track / Station / PlatformのProtocol配信契約を追加する
-- ⬜ **P17-012** — Web ClientでTrack / Station / Platformを3D描画する
-- ⬜ **P17-013** — 高架・地下・複線・分岐・駅を含むdeterministic fixtureを追加する
-- ⬜ **P17-014** — Railway InfrastructureのSave→Server→Browser E2Eを追加する
-- ⬜ **P17-015** — 大規模Railway topologyのquery・validation benchmarkを記録する
-- ⬜ **P17-016** — Railway Infrastructureのspecification / architecture / ROADMAPを同期する
+- ✅ **P17-001** — Railway Infrastructureの軸・接続・track gauge・方向・高度契約を仕様化する
+- ✅ **P17-002** — TrackNode / TrackSegmentのstable IDと3D geometryを実装する
+- ✅ **P17-003** — Track direction / speed limit / electrification等の最小属性を実装する
+- ✅ **P17-004** — switch / junctionと進行可能connectionを表すtopologyを実装する
+- ✅ **P17-005** — train separationに使うblock sectionのInfrastructureモデルを実装する
+- ✅ **P17-006** — Station / Platformのstable ID・geometry・track connectionを実装する
+- ✅ **P17-007** — Platform access pointをUrban World / pedestrian networkへ接続する
+- ✅ **P17-008** — Depot / sidingの最小Infrastructureモデルを実装する
+- ✅ **P17-009** — Railway topologyの3D spatial queryと接続validationを実装する
+- ✅ **P17-010** — Railway Infrastructureをcheckpoint / Save Dataへ含める
+- ✅ **P17-011** — Track / Station / PlatformのProtocol配信契約を追加する
+- ✅ **P17-012** — Web ClientでTrack / Station / Platformを3D描画する
+- ✅ **P17-013** — 高架・地下・複線・分岐・駅を含むdeterministic fixtureを追加する
+- ✅ **P17-014** — Railway InfrastructureのSave→Server→Browser E2Eを追加する
+- ✅ **P17-015** — 大規模Railway topologyのquery・validation benchmarkを記録する
+- ✅ **P17-016** — Railway Infrastructureのspecification / architecture / ROADMAPを同期する
 
 ### Phase 17 完了条件
 
@@ -149,7 +150,7 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ## Phase 18 — Railway Operations
 
-> **状態: ⬜ 未着手**  
+> **状態: ⬜ 未着手（次）**  
 > **依存:** Phase 17  
 > Train・service・timetable・station stop・block separationを実装し、再現可能な鉄道運行を成立させる。
 
