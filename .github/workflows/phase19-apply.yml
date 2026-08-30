@@ -6,6 +6,11 @@ on:
       - feature/phase19-multimodal-transit
     paths:
       - .github/workflows/phase19-apply.yml
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - .github/workflows/phase19-apply.yml
 
 permissions:
   contents: write
