@@ -71,6 +71,46 @@ test('railway layer renders track and 3D bounds as static geometry', () => {
   assert.equal(scene.getObjectByName('railway-tracks'), undefined);
 });
 
+test('railway layer replaces a full subscription snapshot even when revision is unchanged', () => {
+  const scene = new THREE.Scene();
+  const layer = new RailwayInfrastructureLayer(scene);
+  const snapshot = decodeRailwayFrame(createFixtureFrame()).message;
+  layer.apply(snapshot);
+
+  layer.apply({
+    ...snapshot,
+    nodes: [
+      { id: 11n, kind: 0, x: 100, y: 0, z: 8 },
+      { id: 12n, kind: 0, x: 120, y: 0, z: 8 },
+    ],
+    segments: [{ ...snapshot.segments[0], id: 13n, startNodeId: 11n, endNodeId: 12n }],
+    stations: [],
+    platforms: [],
+  });
+
+  const tracks = scene.getObjectByName('railway-tracks');
+  const stations = scene.getObjectByName('railway-stations');
+  assert.equal(tracks.geometry.getAttribute('position').getX(0), 100);
+  assert.equal(stations.geometry.getAttribute('position').count, 0);
+  layer.dispose();
+});
+
+test('railway layer accumulates continuation chunks for one revision', () => {
+  const scene = new THREE.Scene();
+  const layer = new RailwayInfrastructureLayer(scene);
+  const snapshot = decodeRailwayFrame(createFixtureFrame()).message;
+  const tracks = scene.getObjectByName('railway-tracks');
+  const stations = scene.getObjectByName('railway-stations');
+
+  layer.apply({ ...snapshot, segments: [], stations: [], platforms: [] });
+  assert.equal(tracks.geometry.getAttribute('position').count, 0);
+
+  layer.apply({ ...snapshot, isFullSnapshot: false, nodes: [] });
+  assert.equal(tracks.geometry.getAttribute('position').count, 2);
+  assert.equal(stations.geometry.getAttribute('position').count, 24);
+  layer.dispose();
+});
+
 test('railway decoder rejects snapshots negotiated below 2.6', () => {
   const frame = createFixtureFrame();
   new DataView(frame).setUint16(6, 5, true);
