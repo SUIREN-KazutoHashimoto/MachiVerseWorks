@@ -39,7 +39,7 @@ public readonly record struct ProtocolFrameHeader(
         BinaryPrimitives.WriteUInt32LittleEndian(destination[12..], header.PayloadLength);
     }
 
-    internal static bool TryRead(
+    public static bool TryRead(
         ReadOnlySpan<byte> frame,
         out ProtocolFrameHeader header,
         out ProtocolDecodeError error)
