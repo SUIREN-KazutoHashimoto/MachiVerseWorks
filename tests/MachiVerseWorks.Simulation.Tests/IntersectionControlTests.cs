@@ -162,7 +162,7 @@ public sealed class IntersectionControlTests
 
         var routes = new Dictionary<LaneConnectionId, IReadOnlyList<RouteLaneStep>>();
         AddMovement(world, center, west, east, TurnMovement.Straight, routes);
-        AddMovement(world, center, south, west, TurnMovement.Left, routes);
+        AddMovement(world, center, south, east, TurnMovement.Left, routes);
         return new Fixture(world, routes);
     }
 
