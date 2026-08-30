@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
 import type { EntityStore } from './entity-store.ts';
+import type { PedestrianStore } from './pedestrian-store.ts';
 import { RoadNetworkStore } from './road-network-store.ts';
 import { LaneDirection, RoadNodeKind, type RoadNetworkSnapshotMessage, type WorldVolume } from './protocol.ts';
 
@@ -11,6 +12,7 @@ const SUBSCRIPTION_PADDING = 1.2;
 const MINIMUM_ZOOM = 0.25;
 const MAXIMUM_ZOOM = 8;
 const AGENT_HALF_SIZE = 2.5;
+const PEDESTRIAN_HALF_HEIGHT = 1.5;
 
 export interface WorldPosition {
   readonly x: number;
@@ -24,6 +26,7 @@ export class WorldView {
   public readonly renderer = new THREE.WebGLRenderer({ antialias: true });
 
   private readonly agentRenderer: AgentRenderer;
+  private readonly pedestrianRenderer: PedestrianRenderer;
   private readonly roadStore = new RoadNetworkStore();
   private readonly roadRenderer: RoadNetworkRenderer;
   private aspect = 1;
@@ -46,6 +49,7 @@ export class WorldView {
 
     this.roadRenderer = new RoadNetworkRenderer(this.scene);
     this.agentRenderer = new AgentRenderer(this.scene);
+    this.pedestrianRenderer = new PedestrianRenderer(this.scene);
     this.installControls();
     this.resize();
   }
@@ -65,9 +69,10 @@ export class WorldView {
   public applyRoadNetwork(snapshot: RoadNetworkSnapshotMessage): void { this.roadStore.replace(snapshot); }
   public clearRoadNetwork(): void { this.roadStore.clear(); }
 
-  public render(store: EntityStore, now: number): void {
+  public render(store: EntityStore, now: number, pedestrians: PedestrianStore | null = null): void {
     this.roadRenderer.update(this.roadStore);
     this.agentRenderer.update(store, now);
+    this.pedestrianRenderer.update(pedestrians, now);
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -80,6 +85,7 @@ export class WorldView {
   public dispose(): void {
     this.roadRenderer.dispose();
     this.agentRenderer.dispose();
+    this.pedestrianRenderer.dispose();
     this.renderer.dispose();
   }
 
@@ -232,7 +238,36 @@ class AgentRenderer {
     let nextCapacity = this.capacity; while (nextCapacity < required) nextCapacity *= 2;
     const previousMesh = this.mesh; this.capacity = nextCapacity; this.positions = new Float32Array(nextCapacity * 3); this.mesh = this.createMesh(nextCapacity); this.scene.remove(previousMesh); previousMesh.dispose(); this.scene.add(this.mesh);
   }
-  private createMesh(capacity: number): THREE.InstancedMesh { const mesh = new THREE.InstancedMesh(this.geometry, this.material, capacity); mesh.count = 0; mesh.frustumCulled = false; return mesh; }
+  private createMesh(capacity: number): THREE.InstancedMesh { const mesh = new THREE.InstancedMesh(this.geometry, this.material, capacity); mesh.name = 'agents'; mesh.count = 0; mesh.frustumCulled = false; return mesh; }
+}
+
+class PedestrianRenderer {
+  private readonly geometry = new THREE.BoxGeometry(1.2, 3, 1.2);
+  private readonly material = new THREE.MeshBasicMaterial({ color: 0xa7f3d0 });
+  private mesh: THREE.InstancedMesh;
+  private capacity = 1_024;
+  private readonly matrix = new THREE.Matrix4();
+  private positions = new Float32Array(this.capacity * 3);
+
+  public constructor(private readonly scene: THREE.Scene) { this.mesh = this.createMesh(this.capacity); this.scene.add(this.mesh); }
+  public update(store: PedestrianStore | null, now: number): void {
+    if (store === null) { this.mesh.count = 0; this.mesh.instanceMatrix.needsUpdate = true; return; }
+    this.ensureCapacity(store.size);
+    const count = store.writeSampledPositions(now, this.positions);
+    for (let index = 0; index < count; index += 1) {
+      const positionOffset = index * 3;
+      this.matrix.makeTranslation(this.positions[positionOffset], this.positions[positionOffset + 2] + PEDESTRIAN_HALF_HEIGHT, this.positions[positionOffset + 1]);
+      this.mesh.setMatrixAt(index, this.matrix);
+    }
+    this.mesh.count = count; this.mesh.instanceMatrix.needsUpdate = true;
+  }
+  public dispose(): void { this.scene.remove(this.mesh); this.mesh.dispose(); this.geometry.dispose(); this.material.dispose(); }
+  private ensureCapacity(required: number): void {
+    if (required <= this.capacity) return;
+    let nextCapacity = this.capacity; while (nextCapacity < required) nextCapacity *= 2;
+    const previousMesh = this.mesh; this.capacity = nextCapacity; this.positions = new Float32Array(nextCapacity * 3); this.mesh = this.createMesh(nextCapacity); this.scene.remove(previousMesh); previousMesh.dispose(); this.scene.add(this.mesh);
+  }
+  private createMesh(capacity: number): THREE.InstancedMesh { const mesh = new THREE.InstancedMesh(this.geometry, this.material, capacity); mesh.name = 'pedestrians'; mesh.count = 0; mesh.frustumCulled = false; return mesh; }
 }
 
 function appendSimulationPosition(target: number[], x: number, y: number, z: number): void { target.push(x, z, y); }
