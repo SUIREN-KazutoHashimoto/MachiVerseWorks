@@ -7,13 +7,15 @@
 - [`getting-started.md`](getting-started.md): 環境準備、build、test、Server + Web Client起動手順
 - [`e2e-poc.md`](e2e-poc.md): Phase 6 End-to-End PoC の再現手順、計測点、既知ボトルネック
 - [`performance-benchmark.md`](performance-benchmark.md): Phase 7 BenchmarkDotNet基盤、結果保存、Server/Web観測、改善候補
+- [`simulation-core-benchmark.md`](simulation-core-benchmark.md): Phase 2 Simulation Core 最小 PoC の初回性能baseline
+- [`road-network-benchmark.md`](road-network-benchmark.md): Road Network spatial query / topology snapshot benchmark
+- [`pedestrian-benchmark.md`](pedestrian-benchmark.md): Phase 16 1,000 / 10,000 Pedestrian fixed-tick / routing benchmark
 - [`git-workflow.md`](git-workflow.md): branch / PR / validation の標準フロー
 - [`repository-settings.md`](repository-settings.md): branch protection、merge方式、GitHub Security設定の基準
 - [`versioning.md`](versioning.md): `A.B.C` とルート `VERSION` の運用
 - [`ci.md`](ci.md): GitHub Actions、CI、CodeQL、Dependency Review の運用
 - [`coding-guidelines.md`](coding-guidelines.md): C# / Simulation / Server / Protocol / Web の共通実装ルール
 - [`performance.md`](performance.md): benchmark、profiling、性能指標、最適化判断の基準
-- [`simulation-core-benchmark.md`](simulation-core-benchmark.md): Phase 2 Simulation Core 最小 PoC の初回性能baseline
 - [`localization-guidelines.md`](localization-guidelines.md): 将来の多言語対応を壊さない実装ルール
 
 今後ここへ、必要に応じて次の文書を追加します。
