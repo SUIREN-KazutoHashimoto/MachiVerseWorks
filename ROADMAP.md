@@ -2,8 +2,8 @@
 
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 19 — Multimodal Transit（実装完了 / develop統合待ち）
-> **次の実装タスク:** Phase 19 PRのdevelop統合後、Phase 20へ進む
+> **現在:** Phase 20 — Server Administration Console（次）
+> **次の実装タスク:** P20-001 — Administration Consoleの目的・trust boundary・command / result契約を仕様化する
 
 ## 全体の現在地
 
@@ -28,14 +28,15 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 16 | Pedestrian Simulation | ✅ 完了 |
 | 17 | Railway Infrastructure | ✅ 完了 |
 | 18 | Railway Operations | ✅ 完了 |
-| 19 | Multimodal Transit | 🔄 実装完了 / develop統合待ち |
-| 20 | Industry / Jobs / Economy | ⏳ 待機 |
-| 21 | Logistics / Freight | ⏳ 待機 |
-| 22 | Power Infrastructure | ⏳ 待機 |
-| 23 | Urban Growth & City Generation | ⏳ 待機 |
-| 24 | City Management UI | ⏳ 待機 |
-| 25 | Distribution & Compatibility | ⏳ 待機 |
-| 26 | Extension Platform & Localization | ⏳ 待機 |
+| 19 | Multimodal Transit | ✅ 完了 |
+| 20 | Server Administration Console | ⏭️ 次 |
+| 21 | Industry / Jobs / Economy | ⏳ 待機 |
+| 22 | Logistics / Freight | ⏳ 待機 |
+| 23 | Power Infrastructure | ⏳ 待機 |
+| 24 | Urban Growth & City Generation | ⏳ 待機 |
+| 25 | City Management UI | ⏳ 待機 |
+| 26 | Distribution & Compatibility | ⏳ 待機 |
+| 27 | Extension Platform & Localization | ⏳ 待機 |
 
 Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴として [`docs/archive/roadmap-through-phase9-plan.md`](docs/archive/roadmap-through-phase9-plan.md) に保存しています。Phase 13〜16の正式closeout時点のTask状態と検証証跡は [`docs/archive/roadmap-phase13-through-phase16-closeout.md`](docs/archive/roadmap-phase13-through-phase16-closeout.md) に保存しています。
 
@@ -69,6 +70,7 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
   -> Railway Infrastructure
   -> Railway Operations
   -> Multimodal Transit
+  -> Server Administration Console
   -> Industry / Jobs / Economy
   -> Logistics / Freight
   -> Power Infrastructure
@@ -78,7 +80,7 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
   -> Extension Platform / Localization
 ```
 
-この順番は、後続機能が前段の正本モデルを再利用できることを優先する。先行mergeを行っても、Phaseの正式closeout順は依存関係に従う。
+この順番は、後続機能が前段の正本モデルを再利用できることを優先する。先行mergeを行っても、Phaseの正式closeout順は依存関係に従う。Phase 20はServer横断の管理境界としてPhase 19後へ挿入するが、Phase 21以降の各Simulation domainがAdministration Consoleの実装へ直接依存することを意味しない。
 
 ---
 
@@ -111,8 +113,8 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 | --- | --- |
 | Road上のBuilding / POI access | Phase 11 `RoadAccessPoint` |
 | 徒歩networkへのBuilding / POI access | Phase 16 |
-| Parcel / zoning / land use / development | Phase 23 |
-| Building / Parcel / POIのInspector・編集UI | Phase 24 |
+| Parcel / zoning / land use / development | Phase 24 |
+| Building / Parcel / POIのInspector・編集UI | Phase 25 |
 | 建物mesh / floor / room / entrance | 必要になるdomain Phaseで契約追加。Phase 10では`WorldVolume`のみを正本とする |
 | PopulationによるPOI選択 | Phase 15 |
 
@@ -188,7 +190,7 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ## Phase 19 — Multimodal Transit
 
-> **状態: 🔄 実装完了 / develop統合待ち**
+> **状態: ✅ 完了**
 > **依存:** Phase 14 / 16 / 18
 > 徒歩・自動車・Bus・Taxi・Railwayを共通Tripとして組み合わせ、公共交通を含む移動を成立させる。
 
@@ -219,36 +221,78 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 - Simulation / Save: BusとTaxiはRoad Trafficを再利用し、Railway Serviceを共通Journeyへ投影する。transfer中Passengerのcheckpoint / Save Format 10 continuationを検証する。
 - Protocol / Web: Protocol 2.8 message 720でLine / Stop / Pattern / realtime Bus・Taxi / arrival estimateを配信し、Transit Debugへ表示する。
-- E2E: `Phase 19 Multimodal Transit E2E`はfixture起動時にWalk→Railway→Walk Journeyを検証し、実Server→WebSocket→headless browserでBus / Taxi / RailwayとRoad-backed vehicle movementを確認する。
-- Benchmark: `Phase 19 Multimodal Transit Benchmark`でjourney planning / nearest Taxi dispatch / transfer checkpoint continuationをShortRun計測する。初回run値は[`docs/development/multimodal-transit-benchmark.md`](docs/development/multimodal-transit-benchmark.md)を正本とする。
-- develop統合前のためPhase全体の正式closeoutは未実施。PRがCI greenで統合された後にPhase 19を「✅ 完了」へ切り替える。
+- E2E: `Phase 19 Multimodal Transit E2E` run `33337277275`で実Server→WebSocket→headless browserを検証し、Bus / Taxi / Railway snapshot、Road-backed Bus movement、arrival estimate / Transit Debug表示を確認した。
+- Benchmark: `Phase 19 Multimodal Transit Benchmark` run `33337277231`でjourney planning / nearest Taxi dispatch / transfer checkpoint continuationをShortRun計測した。baselineは[`docs/development/multimodal-transit-benchmark.md`](docs/development/multimodal-transit-benchmark.md)を正本とする。
+- CI run `33337277276`を含む検証が成功し、PR #132として`develop`へ統合済み。Phase 19を正式closeoutする。
 
 ---
 
-## Phase 20 — Industry / Jobs / Economy
+## Phase 20 — Server Administration Console
+
+> **状態: ⬜ 未着手**
+> **依存:** Phase 4 / 8 / 19
+> Headless Serverの標準入力から、Simulationの運転制御・状態確認・主要Entityの追加/更新/削除・保存操作を安全に実行できる管理Consoleと、将来のRemote Admin / City Management UIから再利用できるserver-authoritative command境界を確立する。
+
+- ⬜ **P20-001** — Administration Consoleの目的・trust boundary・command grammar・stable result/error code・引数/単位/enum表現を仕様化する
+- ⬜ **P20-002** — stdin / command parser / bounded AdminCommandQueue / executor / SimulationRuntimeの責務とtick境界をarchitecture文書化し、Remote Adminから再利用する境界をADR化する
+- ⬜ **P20-003** — `AdminCommand` / `AdminCommandResult` / structured parameterの共通契約を実装し、表示文字列と実行結果を分離する
+- ⬜ **P20-004** — quoted token・`--option`・Invariant数値・stable ID・enumを扱う`AdminCommandParser`とcommand metadataベースの`help`生成を実装する
+- ⬜ **P20-005** — bounded single-reader `AdminCommandQueue`と逐次executorを実装し、World mutationを`SimulationRuntime`のauthoritative境界で安全に適用する
+- ⬜ **P20-006** — stdinを読むoptional `ServerConsoleService`をHostedServiceとして実装し、無効化設定・EOF・cancellation・graceful shutdownを扱う
+- ⬜ **P20-007** — `help` / `status` / `version` / `exit` / `server stop`の基本管理commandを実装する
+- ⬜ **P20-008** — `simulation status` / `pause` / `resume` / paused時の`step [count]`を実装し、automatic tickとmanual stepの順序をdeterministicにする
+- ⬜ **P20-009** — Agentの`list` / `show` / `add` / `update` / `remove`と位置・速度更新の正式Simulation APIを実装する
+- ⬜ **P20-010** — Buildingの`list` / `show` / `add` / `update` / `remove`とPOI・Road Access・Population参照を壊さない整合性検証を実装する
+- ⬜ **P20-011** — POIの`list` / `show` / `add` / `update` / `remove`とBuilding境界・参照整合性検証を実装する
+- ⬜ **P20-012** — Road Node / Segment / Laneの`list` / `show` / `add` / `update` / `remove` commandを既存Road Network mutation APIへ接続する
+- ⬜ **P20-013** — Lane Connection / Road Access Pointの`list` / `show` / `add` / `update` / `remove` commandを実装する
+- ⬜ **P20-014** — runtime Road topology変更時にServer read model revisionを単調増加させ、接続済みClientへ最新topologyが再配信されるinvalidate契約を実装する
+- ⬜ **P20-015** — Vehicleの`list` / `show` / `remove`と、Routing結果を必須にする安全な`spawn` command契約を実装する
+- ⬜ **P20-016** — Railway InfrastructureのNode / Segment / Connection / Block / Station / Platform / Access / Depotにread commandと既存Create APIを使うadd commandを実装する
+- ⬜ **P20-017** — Railway Infrastructureのupdate / removeに必要な正式Simulation APIと参照整合性validationを追加し、Console commandへ公開する
+- ⬜ **P20-018** — Train / Formation / Railway Route / Timetable / Serviceのread commandを実装し、既存Simulation APIで安全に表現できる生成操作だけを管理commandとして公開する
+- ⬜ **P20-019** — Server connectionの`list` / `show` / `disconnect` commandを実装し、Simulation Entity操作とconnection管理をnamespaceで分離する
+- ⬜ **P20-020** — `world save <path>`をcheckpoint captureとfile I/Oに分離して実装し、Simulation lock中の長時間I/Oを避ける
+- ⬜ **P20-021** — runtime `world load <path>`のWorld差し替え、known entity state、Road/Railway revision、publish read modelのinvalidate契約を設計・実装する
+- ⬜ **P20-022** — malformed input・unknown command・invalid enum/number・missing entity・reference conflict・queue full・invalid simulation stateをServer停止へ波及させないnegative testを追加する
+- ⬜ **P20-023** — parser / queue FIFO / executor / pause-step-resume / Entity mutation / Saveのunit・integration testを追加する
+- ⬜ **P20-024** — stdin→AdminCommandQueue→SimulationRuntime→publishまでを実Serverで検証し、pause中編集とresume後のClient反映を確認するE2Eを追加する
+- ⬜ **P20-025** — Administration Consoleのspecification / architecture / ADR / Server README / ROADMAPを同期する
+
+### Phase 20 完了条件
+
+- Headless Serverの標準入力から主要Simulation Entityを調査・追加・更新・削除でき、すべてのmutationがSimulationの正式APIとauthoritative command境界を通る。
+- `pause` / `step` / `resume`を含むcommand順序が再現可能で、Console入力がSimulation tick途中の半更新状態へ直接割り込まない。
+- Road / Railway等のtopology変更やWorld load後にServer側read modelとClient配信状態が正しくinvalidateされ、変更が接続済みClientへ反映される。
+- 不正command・参照制約違反・stdin EOF・Console無効化・graceful shutdownでServer全体を不必要に停止させない。
+- command実行契約がstdin固有実装から分離され、将来のRemote Admin / City Management UIから再利用できる。
+
+---
+
+## Phase 21 — Industry / Jobs / Economy
 
 > **状態: ⬜ 未着手**
 > **依存:** Phase 15 / 19
 > 企業・職場・雇用・所得・生産・消費の最小循環を作り、都市活動へ経済的な理由を与える。
 
-- ⬜ **P20-001** — Company / Establishment / Job / Economic Actorの責務とstable IDを仕様化する
-- ⬜ **P20-002** — Company / EstablishmentをBuilding / POIへ配置できるモデルを実装する
-- ⬜ **P20-003** — Job position・必要worker数・wageの最小モデルを実装する
-- ⬜ **P20-004** — PersonとJobを結ぶemployment stateを実装する
-- ⬜ **P20-005** — residenceとworkplaceから通勤activity / Trip需要を生成する
-- ⬜ **P20-006** — Household income / cash balanceの最小stateを実装する
-- ⬜ **P20-007** — Company cash balance / revenue / expenseの最小stateを実装する
-- ⬜ **P20-008** — Industry sectorと簡易production capacityを実装する
-- ⬜ **P20-009** — Householdの基本消費需要とCommercial POIでの支出を実装する
-- ⬜ **P20-010** — wage支払と消費による最小economic cycleを固定tick上で実装する
-- ⬜ **P20-011** — Economy stateをcheckpoint / Save Dataへ含める
-- ⬜ **P20-012** — employment / income / company / productionの集計statisticsをServer配信可能にする
-- ⬜ **P20-013** — Web Clientで選択Company / Householdと経済統計をdebug表示する
-- ⬜ **P20-014** — 複数日economic cycleのdeterministic integration testを追加する
-- ⬜ **P20-015** — 大規模Economic Actorのtick・planner・memory benchmarkを記録する
-- ⬜ **P20-016** — Economyのspecification / architecture / ROADMAPを同期する
+- ⬜ **P21-001** — Company / Establishment / Job / Economic Actorの責務とstable IDを仕様化する
+- ⬜ **P21-002** — Company / EstablishmentをBuilding / POIへ配置できるモデルを実装する
+- ⬜ **P21-003** — Job position・必要worker数・wageの最小モデルを実装する
+- ⬜ **P21-004** — PersonとJobを結ぶemployment stateを実装する
+- ⬜ **P21-005** — residenceとworkplaceから通勤activity / Trip需要を生成する
+- ⬜ **P21-006** — Household income / cash balanceの最小stateを実装する
+- ⬜ **P21-007** — Company cash balance / revenue / expenseの最小stateを実装する
+- ⬜ **P21-008** — Industry sectorと簡易production capacityを実装する
+- ⬜ **P21-009** — Householdの基本消費需要とCommercial POIでの支出を実装する
+- ⬜ **P21-010** — wage支払と消費による最小economic cycleを固定tick上で実装する
+- ⬜ **P21-011** — Economy stateをcheckpoint / Save Dataへ含める
+- ⬜ **P21-012** — employment / income / company / productionの集計statisticsをServer配信可能にする
+- ⬜ **P21-013** — Web Clientで選択Company / Householdと経済統計をdebug表示する
+- ⬜ **P21-014** — 複数日economic cycleのdeterministic integration testを追加する
+- ⬜ **P21-015** — 大規模Economic Actorのtick・planner・memory benchmarkを記録する
+- ⬜ **P21-016** — Economyのspecification / architecture / ROADMAPを同期する
 
-### Phase 20 完了条件
+### Phase 21 完了条件
 
 - HouseholdとCompanyの間に雇用・賃金・消費による最小循環が存在する。
 - 通勤需要がPopulation / Transitへ自然に接続される。
@@ -256,29 +300,29 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ---
 
-## Phase 21 — Logistics / Freight
+## Phase 22 — Logistics / Freight
 
 > **状態: ⬜ 未着手**
-> **依存:** Phase 13 / 20
+> **依存:** Phase 13 / 21
 > 生産・在庫・注文・Shipment・Freight Vehicleを接続し、都市内物流をSimulationする。
 
-- ⬜ **P21-001** — Commodity / Inventory / Order / Shipmentの正本契約を仕様化する
-- ⬜ **P21-002** — Establishmentごとのinventoryとcapacityを実装する
-- ⬜ **P21-003** — production / consumptionから補充Orderを生成する最小ruleを実装する
-- ⬜ **P21-004** — OrderをShipmentへまとめるallocation policyを実装する
-- ⬜ **P21-005** — Warehouse / loading point / delivery pointをUrban Worldへ接続する
-- ⬜ **P21-006** — Freight VehicleをRoad Trafficへ接続する
-- ⬜ **P21-007** — pickup / loading / transit / unloading / deliveredのShipment state machineを実装する
-- ⬜ **P21-008** — Freight routeと配送順序をRoutingへ接続する
-- ⬜ **P21-009** — 渋滞・配送遅延がinventoryへ影響する最低限の連携を実装する
-- ⬜ **P21-010** — Logistics stateをcheckpoint / Save Dataへ含める
-- ⬜ **P21-011** — Shipment / inventory / freight statisticsをProtocol / Serverで配信する
-- ⬜ **P21-012** — Web ClientでFreight Vehicle / Shipment / inventoryをdebug表示する
-- ⬜ **P21-013** — 生産→配送→在庫補充を実Server→Browserで検証するE2Eを追加する
-- ⬜ **P21-014** — 大規模Shipment / Inventoryのtick・routing・memory benchmarkを記録する
-- ⬜ **P21-015** — Logistics / Freightのspecification / architecture / ROADMAPを同期する
+- ⬜ **P22-001** — Commodity / Inventory / Order / Shipmentの正本契約を仕様化する
+- ⬜ **P22-002** — Establishmentごとのinventoryとcapacityを実装する
+- ⬜ **P22-003** — production / consumptionから補充Orderを生成する最小ruleを実装する
+- ⬜ **P22-004** — OrderをShipmentへまとめるallocation policyを実装する
+- ⬜ **P22-005** — Warehouse / loading point / delivery pointをUrban Worldへ接続する
+- ⬜ **P22-006** — Freight VehicleをRoad Trafficへ接続する
+- ⬜ **P22-007** — pickup / loading / transit / unloading / deliveredのShipment state machineを実装する
+- ⬜ **P22-008** — Freight routeと配送順序をRoutingへ接続する
+- ⬜ **P22-009** — 渋滞・配送遅延がinventoryへ影響する最低限の連携を実装する
+- ⬜ **P22-010** — Logistics stateをcheckpoint / Save Dataへ含める
+- ⬜ **P22-011** — Shipment / inventory / freight statisticsをProtocol / Serverで配信する
+- ⬜ **P22-012** — Web ClientでFreight Vehicle / Shipment / inventoryをdebug表示する
+- ⬜ **P22-013** — 生産→配送→在庫補充を実Server→Browserで検証するE2Eを追加する
+- ⬜ **P22-014** — 大規模Shipment / Inventoryのtick・routing・memory benchmarkを記録する
+- ⬜ **P22-015** — Logistics / Freightのspecification / architecture / ROADMAPを同期する
 
-### Phase 21 完了条件
+### Phase 22 完了条件
 
 - 生産側の物資がShipmentとして道路網を移動し、需要側inventoryへ到着する。
 - FreightがRoad Trafficの渋滞を共有し、配送遅延が観測できる。
@@ -286,28 +330,28 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ---
 
-## Phase 22 — Power Infrastructure
+## Phase 23 — Power Infrastructure
 
 > **状態: ⬜ 未着手**
-> **依存:** Phase 10 / 20
+> **依存:** Phase 10 / 21
 > 発電・送配電・需要を都市Entityと接続し、電力供給状態をSimulationへ導入する。
 
-- ⬜ **P22-001** — Generator / Substation / PowerLine / Loadの正本契約を仕様化する
-- ⬜ **P22-002** — PowerNode / PowerLine topologyとstable IDを実装する
-- ⬜ **P22-003** — Generator capacity / output / operating stateの最小モデルを実装する
-- ⬜ **P22-004** — Building / EstablishmentをPower Loadへ関連付ける契約を実装する
-- ⬜ **P22-005** — 時刻・用途・activityからload demandを計算する最小ruleを実装する
-- ⬜ **P22-006** — network接続とcapacityを考慮する簡易power balance / dispatchを実装する
-- ⬜ **P22-007** — insufficient supply時のunserved demand / outage stateを実装する
-- ⬜ **P22-008** — outageをBuilding / Industryの稼働状態へ反映する最小連携を実装する
-- ⬜ **P22-009** — Power stateをcheckpoint / Save Dataへ含める
-- ⬜ **P22-010** — Power topology / supply / demand / outageをProtocol / Serverで配信する
-- ⬜ **P22-011** — Web ClientでPower networkと供給状態をdebug可視化する
-- ⬜ **P22-012** — 需要変動・generator停止・outage復旧を検証するdeterministic E2Eを追加する
-- ⬜ **P22-013** — 大規模Power node/loadのtick・topology benchmarkを記録する
-- ⬜ **P22-014** — Power Infrastructureのspecification / architecture / ROADMAPを同期する
+- ⬜ **P23-001** — Generator / Substation / PowerLine / Loadの正本契約を仕様化する
+- ⬜ **P23-002** — PowerNode / PowerLine topologyとstable IDを実装する
+- ⬜ **P23-003** — Generator capacity / output / operating stateの最小モデルを実装する
+- ⬜ **P23-004** — Building / EstablishmentをPower Loadへ関連付ける契約を実装する
+- ⬜ **P23-005** — 時刻・用途・activityからload demandを計算する最小ruleを実装する
+- ⬜ **P23-006** — network接続とcapacityを考慮する簡易power balance / dispatchを実装する
+- ⬜ **P23-007** — insufficient supply時のunserved demand / outage stateを実装する
+- ⬜ **P23-008** — outageをBuilding / Industryの稼働状態へ反映する最小連携を実装する
+- ⬜ **P23-009** — Power stateをcheckpoint / Save Dataへ含める
+- ⬜ **P23-010** — Power topology / supply / demand / outageをProtocol / Serverで配信する
+- ⬜ **P23-011** — Web ClientでPower networkと供給状態をdebug可視化する
+- ⬜ **P23-012** — 需要変動・generator停止・outage復旧を検証するdeterministic E2Eを追加する
+- ⬜ **P23-013** — 大規模Power node/loadのtick・topology benchmarkを記録する
+- ⬜ **P23-014** — Power Infrastructureのspecification / architecture / ROADMAPを同期する
 
-### Phase 22 完了条件
+### Phase 23 完了条件
 
 - 都市のBuilding / Industryに電力需要があり、発電・network capacityに応じて供給状態が変化する。
 - outageを保存・配信・可視化できる。
@@ -315,30 +359,30 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ---
 
-## Phase 23 — Urban Growth & City Generation
+## Phase 24 — Urban Growth & City Generation
 
 > **状態: ⬜ 未着手**
-> **依存:** Phase 10〜22の主要都市モデル
+> **依存:** Phase 10〜19 / 21〜23の主要都市モデル
 > Parcel / Zoning / Land Useとdeterministic city generationを導入し、都市を手作業fixtureだけでなく生成・成長させられるようにする。Phase 10から委譲されたParcel / land-useの正本はこのPhaseで導入する。
 
-- ⬜ **P23-001** — Parcel境界・Zone種別・土地利用・占有/development stateの正本契約を仕様化する
-- ⬜ **P23-002** — Parcel store / stable ID lifecycleとZone designationを設定するSimulation commandを実装する
-- ⬜ **P23-003** — Road access・parcel size・land useからdevelopment suitabilityを評価する
-- ⬜ **P23-004** — Zoneに応じたBuilding用途・規模候補を選ぶdevelopment ruleを実装する
-- ⬜ **P23-005** — 空ParcelへのBuilding development lifecycleを実装する
-- ⬜ **P23-006** — demand変化に応じたredevelopment / vacancyの最小ruleを実装する
-- ⬜ **P23-007** — seedからRoad Networkを生成するdeterministic generatorを実装する
-- ⬜ **P23-008** — Road NetworkからParcelを生成するdeterministic subdivisionを実装する
-- ⬜ **P23-009** — Parcel / ZoneからBuilding / POIを生成するdeterministic generatorを実装する
-- ⬜ **P23-010** — 初期Population / Household / Jobを生成都市へ配置するseeding処理を実装する
-- ⬜ **P23-011** — Railway / Power等の既存Infrastructureを壊さないgeneration constraintを定義する
-- ⬜ **P23-012** — Parcel / Zone / city generation設定・seed・生成結果をSave / checkpoint契約へ統合する
-- ⬜ **P23-013** — Parcel / Zone / development stateをProtocol / Serverで配信し、Web Clientで可視化する
-- ⬜ **P23-014** — 同一seedで同一都市を生成するreproducibility E2Eを追加する
-- ⬜ **P23-015** — 小/中/大規模都市generation時間・memory・初期Simulation負荷benchmarkを記録する
-- ⬜ **P23-016** — Urban Growth / City Generationのspecification / architecture / ROADMAPを同期する
+- ⬜ **P24-001** — Parcel境界・Zone種別・土地利用・占有/development stateの正本契約を仕様化する
+- ⬜ **P24-002** — Parcel store / stable ID lifecycleとZone designationを設定するSimulation commandを実装する
+- ⬜ **P24-003** — Road access・parcel size・land useからdevelopment suitabilityを評価する
+- ⬜ **P24-004** — Zoneに応じたBuilding用途・規模候補を選ぶdevelopment ruleを実装する
+- ⬜ **P24-005** — 空ParcelへのBuilding development lifecycleを実装する
+- ⬜ **P24-006** — demand変化に応じたredevelopment / vacancyの最小ruleを実装する
+- ⬜ **P24-007** — seedからRoad Networkを生成するdeterministic generatorを実装する
+- ⬜ **P24-008** — Road NetworkからParcelを生成するdeterministic subdivisionを実装する
+- ⬜ **P24-009** — Parcel / ZoneからBuilding / POIを生成するdeterministic generatorを実装する
+- ⬜ **P24-010** — 初期Population / Household / Jobを生成都市へ配置するseeding処理を実装する
+- ⬜ **P24-011** — Railway / Power等の既存Infrastructureを壊さないgeneration constraintを定義する
+- ⬜ **P24-012** — Parcel / Zone / city generation設定・seed・生成結果をSave / checkpoint契約へ統合する
+- ⬜ **P24-013** — Parcel / Zone / development stateをProtocol / Serverで配信し、Web Clientで可視化する
+- ⬜ **P24-014** — 同一seedで同一都市を生成するreproducibility E2Eを追加する
+- ⬜ **P24-015** — 小/中/大規模都市generation時間・memory・初期Simulation負荷benchmarkを記録する
+- ⬜ **P24-016** — Urban Growth / City Generationのspecification / architecture / ROADMAPを同期する
 
-### Phase 23 完了条件
+### Phase 24 完了条件
 
 - Parcel / Zone / land-useがSimulation正本として存在し、Zone指定からBuilding developmentへ状態が遷移できる。
 - 同一seed・設定から同一のRoad / Parcel / Buildingを再生成できる。
@@ -346,31 +390,31 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ---
 
-## Phase 24 — City Management UI
+## Phase 25 — City Management UI
 
 > **状態: ⬜ 未着手**
-> **依存:** Phase 23
+> **依存:** Phase 24
 > Browserから都市状態を調査・編集・管理するためのserver-authoritative UIとcommand境界を整える。
 
-- ⬜ **P24-001** — Build / Edit commandの認可・validation・ack/error契約を仕様化する
-- ⬜ **P24-002** — Protocolへserver-authoritative command request / resultの共通枠組みを追加する
-- ⬜ **P24-003** — Web Clientで3D Entityを選択するpicking / selection基盤を実装する
-- ⬜ **P24-004** — Building / Parcel / POI / Person / Vehicle等をServer read modelから表示するInspector基盤を実装する
-- ⬜ **P24-005** — Road / Laneのbuild / edit / remove commandとUIを実装する
-- ⬜ **P24-006** — Building / POI / Parcel / Zoneのbuild / edit commandとUIを実装する
-- ⬜ **P24-007** — Railway track / station / platformのbuild / edit commandとUIを実装する
-- ⬜ **P24-008** — Power Infrastructureのbuild / edit commandとUIを実装する
-- ⬜ **P24-009** — command失敗時にClient側だけ状態が進まないoptimistic-state禁止またはrollback方針を実装する
-- ⬜ **P24-010** — Simulation speed / pause / resume等の運転controlをServer commandとして実装する
-- ⬜ **P24-011** — Population / Traffic / Transit / Economy / Logistics / PowerのDashboard統計を実装する
-- ⬜ **P24-012** — Server configurationの変更可能項目・restart必要項目を分離してUI化する
-- ⬜ **P24-013** — current Save formatのsave / load操作をServer経由で実行する管理UIを追加する
-- ⬜ **P24-014** — destructive commandのconfirmationとstable error localizationを実装する
-- ⬜ **P24-015** — Inspector / build / edit / config / save操作のBrowser E2Eを追加する
-- ⬜ **P24-016** — 大規模都市でselection・overlay・dashboardが描画hot pathを阻害しないperformance testを追加する
-- ⬜ **P24-017** — City Management UIのarchitecture / UX contract / ROADMAPを同期する
+- ⬜ **P25-001** — Build / Edit commandの認可・validation・ack/error契約を仕様化する
+- ⬜ **P25-002** — Protocolへserver-authoritative command request / resultの共通枠組みを追加する
+- ⬜ **P25-003** — Web Clientで3D Entityを選択するpicking / selection基盤を実装する
+- ⬜ **P25-004** — Building / Parcel / POI / Person / Vehicle等をServer read modelから表示するInspector基盤を実装する
+- ⬜ **P25-005** — Road / Laneのbuild / edit / remove commandとUIを実装する
+- ⬜ **P25-006** — Building / POI / Parcel / Zoneのbuild / edit commandとUIを実装する
+- ⬜ **P25-007** — Railway track / station / platformのbuild / edit commandとUIを実装する
+- ⬜ **P25-008** — Power Infrastructureのbuild / edit commandとUIを実装する
+- ⬜ **P25-009** — command失敗時にClient側だけ状態が進まないoptimistic-state禁止またはrollback方針を実装する
+- ⬜ **P25-010** — Simulation speed / pause / resume等の運転controlをServer commandとして実装する
+- ⬜ **P25-011** — Population / Traffic / Transit / Economy / Logistics / PowerのDashboard統計を実装する
+- ⬜ **P25-012** — Server configurationの変更可能項目・restart必要項目を分離してUI化する
+- ⬜ **P25-013** — current Save formatのsave / load操作をServer経由で実行する管理UIを追加する
+- ⬜ **P25-014** — destructive commandのconfirmationとstable error localizationを実装する
+- ⬜ **P25-015** — Inspector / build / edit / config / save操作のBrowser E2Eを追加する
+- ⬜ **P25-016** — 大規模都市でselection・overlay・dashboardが描画hot pathを阻害しないperformance testを追加する
+- ⬜ **P25-017** — City Management UIのarchitecture / UX contract / ROADMAPを同期する
 
-### Phase 24 完了条件
+### Phase 25 完了条件
 
 - 都市の主要EntityをBrowserから選択・調査できる。
 - build/edit操作は必ずServer-authoritative commandを経由し、Clientだけで正本状態を変更しない。
@@ -378,36 +422,36 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ---
 
-## Phase 25 — Distribution & Compatibility
+## Phase 26 — Distribution & Compatibility
 
 > **状態: ⬜ 未着手**
-> **依存:** Phase 24
+> **依存:** Phase 25
 > Save migrationと配布物を整備し、開発環境外でもversion付き成果物として起動・更新・復元できる状態にする。
 
 ### Save互換性
 
-- ⬜ **P25-001** — Save migrationのsupport範囲・失敗契約・version policyを仕様化する
-- ⬜ **P25-002** — Save formatごとのmigration stepを登録できるframeworkを実装する
-- ⬜ **P25-003** — repositoryに旧Save format fixtureを保持し、自動migration testを追加する
-- ⬜ **P25-004** — migration中断・unsupported version・破損dataを安全に拒否する
-- ⬜ **P25-005** — migration前後でstable IDと継続可能stateを保持するintegration testを追加する
+- ⬜ **P26-001** — Save migrationのsupport範囲・失敗契約・version policyを仕様化する
+- ⬜ **P26-002** — Save formatごとのmigration stepを登録できるframeworkを実装する
+- ⬜ **P26-003** — repositoryに旧Save format fixtureを保持し、自動migration testを追加する
+- ⬜ **P26-004** — migration中断・unsupported version・破損dataを安全に拒否する
+- ⬜ **P26-005** — migration前後でstable IDと継続可能stateを保持するintegration testを追加する
 
 ### 配布・Deployment
 
-- ⬜ **P25-006** — Server standalone binaryのsupported OS / architecture matrixを定義する
-- ⬜ **P25-007** — Windows / Linux向けServer publish artifactをCIで生成する
-- ⬜ **P25-008** — 必要性を検証した上で追加architecture / OS向けartifactを生成する
-- ⬜ **P25-009** — Web Client production buildのbase path / Server endpoint設定をdeployment向けに整理する
-- ⬜ **P25-010** — static hosting向けWeb Client artifactをCIで生成する
-- ⬜ **P25-011** — Server用container imageとruntime configuration契約を実装する
-- ⬜ **P25-012** — release artifactへVERSION・commit SHA・license / third-party noticeを同梱する
-- ⬜ **P25-013** — release artifactのchecksum / SBOM等、配布時に必要なintegrity metadataを生成する
-- ⬜ **P25-014** — package / binary / Web / containerを起動するrelease smoke testをCIへ追加する
-- ⬜ **P25-015** — install / upgrade / rollback / backup / restore手順をdocument化する
-- ⬜ **P25-016** — develop→main release時のversion / artifact / release note手順を自動化可能な形へ整理する
-- ⬜ **P25-017** — Distribution / Compatibilityのarchitecture / development docs / ROADMAPを同期する
+- ⬜ **P26-006** — Server standalone binaryのsupported OS / architecture matrixを定義する
+- ⬜ **P26-007** — Windows / Linux向けServer publish artifactをCIで生成する
+- ⬜ **P26-008** — 必要性を検証した上で追加architecture / OS向けartifactを生成する
+- ⬜ **P26-009** — Web Client production buildのbase path / Server endpoint設定をdeployment向けに整理する
+- ⬜ **P26-010** — static hosting向けWeb Client artifactをCIで生成する
+- ⬜ **P26-011** — Server用container imageとruntime configuration契約を実装する
+- ⬜ **P26-012** — release artifactへVERSION・commit SHA・license / third-party noticeを同梱する
+- ⬜ **P26-013** — release artifactのchecksum / SBOM等、配布時に必要なintegrity metadataを生成する
+- ⬜ **P26-014** — package / binary / Web / containerを起動するrelease smoke testをCIへ追加する
+- ⬜ **P26-015** — install / upgrade / rollback / backup / restore手順をdocument化する
+- ⬜ **P26-016** — develop→main release時のversion / artifact / release note手順を自動化可能な形へ整理する
+- ⬜ **P26-017** — Distribution / Compatibilityのarchitecture / development docs / ROADMAPを同期する
 
-### Phase 25 完了条件
+### Phase 26 完了条件
 
 - 開発toolchainを手作業構築しなくても、配布artifactからServerとWeb Clientを起動できる。
 - 対応対象の旧Save Dataを明示的なmigration経路で読み込める。
@@ -415,41 +459,41 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ---
 
-## Phase 26 — Extension Platform & Localization
+## Phase 27 — Extension Platform & Localization
 
 > **状態: ⬜ 未着手**
-> **依存:** Phase 25
+> **依存:** Phase 26
 > 正本Simulationと互換性境界を壊さず、外部拡張と追加localeを導入できる公開拡張基盤を作る。
 
 ### Extension Platform
 
-- ⬜ **P26-001** — Extension / Modで公開する範囲と非公開内部APIの境界を仕様化する
-- ⬜ **P26-002** — Extension manifest・stable ID・version・dependency契約を定義する
-- ⬜ **P26-003** — data-only extensionとcode extensionを分離したloading modelを設計する
-- ⬜ **P26-004** — code extensionの信頼境界・権限・非sandbox性を明示し、安全なdefault policyを実装する
-- ⬜ **P26-005** — Simulationへextension contentを登録するversioned public APIを実装する
-- ⬜ **P26-006** — Extension固有Save Dataをnamespace付きで保存し、missing extension時の挙動を定義する
-- ⬜ **P26-007** — Protocolへextension固有wire typeを直接衝突させない拡張契約を設計する
-- ⬜ **P26-008** — Extensionのload order / dependency cycle / incompatible versionをvalidationする
-- ⬜ **P26-009** — Extension packageの開発・test用templateとsample extensionを追加する
+- ⬜ **P27-001** — Extension / Modで公開する範囲と非公開内部APIの境界を仕様化する
+- ⬜ **P27-002** — Extension manifest・stable ID・version・dependency契約を定義する
+- ⬜ **P27-003** — data-only extensionとcode extensionを分離したloading modelを設計する
+- ⬜ **P27-004** — code extensionの信頼境界・権限・非sandbox性を明示し、安全なdefault policyを実装する
+- ⬜ **P27-005** — Simulationへextension contentを登録するversioned public APIを実装する
+- ⬜ **P27-006** — Extension固有Save Dataをnamespace付きで保存し、missing extension時の挙動を定義する
+- ⬜ **P27-007** — Protocolへextension固有wire typeを直接衝突させない拡張契約を設計する
+- ⬜ **P27-008** — Extensionのload order / dependency cycle / incompatible versionをvalidationする
+- ⬜ **P27-009** — Extension packageの開発・test用templateとsample extensionを追加する
 
 ### Localization
 
-- ⬜ **P26-010** — `ja-JP`をdefaultにしたlocale discovery / fallback policyを再確認・固定する
-- ⬜ **P26-011** — 追加locale resource packを導入できるWeb Client loading境界を実装する
-- ⬜ **P26-012** — 数値・日時・単位・plural等のlocale formattingを共通化する
-- ⬜ **P26-013** — stable error code / structured parameterから各localeの表示文を生成するcoverageを拡張する
-- ⬜ **P26-014** — translation key欠落・未使用key・parameter不一致をCIで検出する
-- ⬜ **P26-015** — 少なくとも1つの追加localeで主要UI / Inspector / Dashboard / error表示をE2E確認する
+- ⬜ **P27-010** — `ja-JP`をdefaultにしたlocale discovery / fallback policyを再確認・固定する
+- ⬜ **P27-011** — 追加locale resource packを導入できるWeb Client loading境界を実装する
+- ⬜ **P27-012** — 数値・日時・単位・plural等のlocale formattingを共通化する
+- ⬜ **P27-013** — stable error code / structured parameterから各localeの表示文を生成するcoverageを拡張する
+- ⬜ **P27-014** — translation key欠落・未使用key・parameter不一致をCIで検出する
+- ⬜ **P27-015** — 少なくとも1つの追加localeで主要UI / Inspector / Dashboard / error表示をE2E確認する
 
 ### Closeout
 
-- ⬜ **P26-016** — Extension有無・追加locale有無でSave / Protocol / Simulation determinismが壊れないintegration testを追加する
-- ⬜ **P26-017** — Extension loadingとlocalizationのstartup / memory costをbenchmarkする
-- ⬜ **P26-018** — Extension author guide / localization guide / compatibility policyを整備する
-- ⬜ **P26-019** — architecture / ADR / ROADMAPを同期し、Phase 10〜26で計画した旧Backlogのcloseoutを確認する
+- ⬜ **P27-016** — Extension有無・追加locale有無でSave / Protocol / Simulation determinismが壊れないintegration testを追加する
+- ⬜ **P27-017** — Extension loadingとlocalizationのstartup / memory costをbenchmarkする
+- ⬜ **P27-018** — Extension author guide / localization guide / compatibility policyを整備する
+- ⬜ **P27-019** — architecture / ADR / ROADMAPを同期し、Phase 10〜27で計画した旧Backlogのcloseoutを確認する
 
-### Phase 26 完了条件
+### Phase 27 完了条件
 
 - 既存Simulation内部実装へ直接依存せず、versionedな公開境界からExtensionを追加できる。
 - Extension固有stateがSave Dataと衝突せず、missing/incompatible extensionを安全に扱える。
@@ -459,7 +503,7 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ## 旧「将来 Backlog」のPhase移行
 
-Phase 9終了時点で列挙していた将来Backlogは、以下の通りPhase 10〜26へ移行した。今後は各Phase内Taskを正本として追跡する。
+Phase 9終了時点で列挙していた将来Backlogは、以下の通りPhase 10〜27へ移行した。今後は各Phase内Taskを正本として追跡する。
 
 | 旧Backlogテーマ | 移行先 |
 | --- | --- |
@@ -473,31 +517,32 @@ Phase 9終了時点で列挙していた将来Backlogは、以下の通りPhase 
 | Railway infrastructure | Phase 17 |
 | Railway operation / timetable | Phase 18 |
 | Bus / taxi / multimodal transit | Phase 19 |
-| Industry / jobs / economy | Phase 20 |
-| Logistics / freight | Phase 21 |
-| Power generation / grid / demand | Phase 22 |
-| Parcel / zoning / land use | Phase 23 |
-| City generation | Phase 23 |
-| Inspector / dashboard / statistics UI | Phase 24 |
-| Build / edit commands | Phase 24 |
-| Server configuration UI | Phase 24 |
-| Save migration | Phase 25 |
-| Release packaging | Phase 25 |
-| Server binary distribution | Phase 25 |
-| Web Client deployment | Phase 25 |
-| Container image | Phase 25 |
-| Mod / extension architecture | Phase 26 |
-| Additional locales | Phase 26 |
+| Server administration / runtime command console | Phase 20 |
+| Industry / jobs / economy | Phase 21 |
+| Logistics / freight | Phase 22 |
+| Power generation / grid / demand | Phase 23 |
+| Parcel / zoning / land use | Phase 24 |
+| City generation | Phase 24 |
+| Inspector / dashboard / statistics UI | Phase 25 |
+| Build / edit commands | Phase 25 |
+| Server configuration UI | Phase 25 |
+| Save migration | Phase 26 |
+| Release packaging | Phase 26 |
+| Server binary distribution | Phase 26 |
+| Web Client deployment | Phase 26 |
+| Container image | Phase 26 |
+| Mod / extension architecture | Phase 27 |
+| Additional locales | Phase 27 |
 
 ## Phase 9から継続する計画済み項目
 
-Phase 9では「3D座標を正本として扱える基盤」までを完了とし、具体的な物理・地形ルールは後続へ分離していた。Phase 10〜26へ直接割り当てられない項目も消さず、現行Backlogとして保持する。
+Phase 9では「3D座標を正本として扱える基盤」までを完了とし、具体的な物理・地形ルールは後続へ分離していた。Phase 10〜27へ直接割り当てられない項目も消さず、現行Backlogとして保持する。
 
 | Phase 9で非対象とした項目 | 現在の扱い |
 | --- | --- |
 | 道路・線路・建物ごとの高度制約 | Phase 10 / 11 / 17の3D geometry・topology・validationで扱う |
 | 地下・高架を考慮したpathfinding | Phase 12で扱う |
-| 旧Save formatから新formatへのmigration | Phase 25で扱う |
+| 旧Save formatから新formatへのmigration | Phase 26で扱う |
 | 重力・落下・ジャンプ等の垂直物理 | 継続Backlog（Phase未割当） |
 | 飛行・空中移動等のairborne movement | 継続Backlog（Phase未割当） |
 | terrain model / terrain collision | 継続Backlog（Phase未割当） |
@@ -505,7 +550,7 @@ Phase 9では「3D座標を正本として扱える基盤」までを完了と�
 
 ### 継続Backlog（Phase未割当）
 
-以下は計画済みだが、Phase 10〜26の完了に必須とはしない。着手時に独立Phaseまたは既存Phaseへの追加Taskとして分解する。
+以下は計画済みだが、Phase 10〜27の完了に必須とはしない。着手時に独立Phaseまたは既存Phaseへの追加Taskとして分解する。
 
 - Physics Foundation — 重力、落下、ジャンプ、垂直速度・加速度、物理stateのSave / Protocol / E2E
 - Airborne Movement — 飛行可能Entity、空中経路、飛行高度ルール、3D空間交通との競合境界

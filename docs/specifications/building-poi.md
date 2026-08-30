@@ -95,8 +95,8 @@ Phase 10で扱わない計画済み項目は削除せず、次へ明示的に委
 | --- | --- |
 | Road上のBuilding / POI access | Phase 11 `RoadAccessPoint` |
 | 徒歩networkへのBuilding / POI access | Phase 16 pedestrian network |
-| Parcel / zoning / land use / development | Phase 23 Urban Growth & City Generation |
-| Building / Parcel / POIのInspector・編集UI | Phase 24 City Management UI |
+| Parcel / zoning / land use / development | Phase 24 Urban Growth & City Generation |
+| Building / Parcel / POIのInspector・編集UI | Phase 25 City Management UI |
 | 建物mesh / floor / room / entrance | 必要になるdomain Phaseで契約追加。Phase 10では`WorldVolume`を正本とする |
 | Agent needs / schedule / householdとPOI選択 | Phase 15 Population & Daily Activity |
 | 名称・住所・locale対応 | UI / localization境界の後続Phase |

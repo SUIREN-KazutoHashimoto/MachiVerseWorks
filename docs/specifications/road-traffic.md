@@ -16,7 +16,7 @@ Phase 13 の責務は次の通り。
 - checkpoint / Save Data
 - Protocol / Server subscription / Web Client 描画
 
-交差点の競合・信号現示は Phase 14、Person が移動する理由と mode dispatch は Phase 15、Freight 固有状態は Phase 21 の責務とする。
+交差点の競合・信号現示は Phase 14、Person が移動する理由と mode dispatch は Phase 15、Freight 固有状態は Phase 22 の責務とする。
 
 ## Vehicle identity and state
 
