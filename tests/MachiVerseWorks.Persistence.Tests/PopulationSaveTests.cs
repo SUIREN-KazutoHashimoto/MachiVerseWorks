@@ -36,6 +36,8 @@ public sealed class PopulationSaveTests
         Assert.AreEqual(PersonTravelState.Walking, travelling.TravelState);
         Assert.IsNotNull(travelling.ActiveTripRequestId);
         Assert.IsNotNull(travelling.PedestrianId);
+        Assert.IsTrue(world.TryGetPersonDebugSnapshot(person, out var beforeSave));
+        Assert.IsNotNull(beforeSave);
 
         var bytes = WorldSaveSerializer.Serialize(world);
         using var document = JsonDocument.Parse(bytes);
@@ -49,8 +51,8 @@ public sealed class PopulationSaveTests
         Assert.AreEqual(1, restored.PersonCount);
         Assert.IsTrue(restored.TryGetPersonDebugSnapshot(person, out var debug));
         Assert.IsNotNull(debug);
-        Assert.AreEqual(schedule[0], debug.Schedule[0]);
-        CollectionAssert.AreEqual(needs, debug.Needs.ToArray());
+        CollectionAssert.AreEqual(beforeSave.Schedule.ToArray(), debug.Schedule.ToArray());
+        CollectionAssert.AreEqual(beforeSave.Needs.ToArray(), debug.Needs.ToArray());
         Assert.AreEqual(PersonTravelState.Walking, debug.Person.TravelState);
         Assert.AreEqual(travelling.ActiveTripRequestId, debug.Person.ActiveTripRequestId);
         Assert.AreEqual(travelling.PedestrianId, debug.Person.PedestrianId);
