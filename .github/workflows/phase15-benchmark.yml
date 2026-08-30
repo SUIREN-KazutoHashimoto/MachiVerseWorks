@@ -42,6 +42,7 @@ jobs:
         run: dotnet restore MachiVerseWorks.slnx
       - name: Run population benchmark
         run: |
+          set -o pipefail
           mkdir -p .artifacts/phase15-benchmark
           dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-restore -- --population --warmup 10 --ticks 50 | tee .artifacts/phase15-benchmark/results.csv
       - name: Upload benchmark artifact
