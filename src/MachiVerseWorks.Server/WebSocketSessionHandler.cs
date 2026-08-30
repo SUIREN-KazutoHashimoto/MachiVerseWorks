@@ -21,7 +21,7 @@ internal sealed class WebSocketSessionHandler(ClientConnectionRegistry connectio
             {
                 var frame = await ReceiveFrameAsync(socket, cancellationToken);
                 if (frame is null) break;
-                if (!ProtocolCodec.TryDeserialize(frame, out var envelope, out var decodeError) || envelope is null)
+                if (!TryDeserializeFrame(frame, out var envelope, out var decodeError) || envelope is null)
                 {
                     await SendDecodeErrorAsync(connection, decodeError, cancellationToken);
                     await CloseSafelyAsync(socket, WebSocketCloseStatus.InvalidPayloadData, "Invalid protocol frame.", cancellationToken);
@@ -93,10 +93,35 @@ internal sealed class WebSocketSessionHandler(ClientConnectionRegistry connectio
                     await SendErrorAsync(connection, ProtocolErrorCode.InvalidRequest, [new ProtocolErrorParameter(ProtocolErrorParameterKeys.Field, "volume")], connection.NegotiatedVersion, cancellationToken);
                     return true;
                 }
+            case InspectPersonMessage inspectPerson:
+                if (!connection.NegotiatedVersion.SupportsPopulation)
+                {
+                    await SendErrorAsync(connection, ProtocolErrorCode.InvalidRequest, [new ProtocolErrorParameter(ProtocolErrorParameterKeys.MessageType, ((ushort)envelope.Message.Type).ToString(CultureInfo.InvariantCulture))], connection.NegotiatedVersion, cancellationToken);
+                    return true;
+                }
+                if (!simulation.TryGetPersonSnapshot(new PersonId(inspectPerson.PersonId), out _))
+                {
+                    await SendErrorAsync(connection, ProtocolErrorCode.InvalidRequest, [new ProtocolErrorParameter(ProtocolErrorParameterKeys.Field, "personId"), new ProtocolErrorParameter(ProtocolErrorParameterKeys.DetailCode, "personNotFound")], connection.NegotiatedVersion, cancellationToken);
+                    return true;
+                }
+                await commandQueue.WriteAsync(new InspectPersonCommand(connection.Id, inspectPerson.PersonId), cancellationToken);
+                return true;
             default:
                 await SendErrorAsync(connection, ProtocolErrorCode.InvalidRequest, [new ProtocolErrorParameter(ProtocolErrorParameterKeys.MessageType, ((ushort)envelope.Message.Type).ToString(CultureInfo.InvariantCulture))], connection.NegotiatedVersion, cancellationToken);
                 return true;
         }
+    }
+
+    private static bool TryDeserializeFrame(ReadOnlySpan<byte> frame, out ProtocolEnvelope? envelope, out ProtocolDecodeError error)
+    {
+        if (!ProtocolFrameHeader.TryRead(frame, out var header, out error))
+        {
+            envelope = null;
+            return false;
+        }
+        return header.MessageType is MessageType.InspectPerson or MessageType.PopulationStatistics or MessageType.PersonDebug
+            ? PopulationProtocolCodec.TryDeserialize(frame, out envelope, out error)
+            : ProtocolCodec.TryDeserialize(frame, out envelope, out error);
     }
 
     private static async Task<byte[]?> ReceiveFrameAsync(WebSocket socket, CancellationToken cancellationToken)

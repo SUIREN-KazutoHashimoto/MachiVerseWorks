@@ -16,6 +16,7 @@ internal sealed class ClientConnection : IDisposable
     private HashSet<ulong> _knownPedestrianIds = [];
     private HashSet<ulong> _knownVehicleIds = [];
     private WorldVolume? _subscription;
+    private ulong? _inspectedPersonId;
     private long _subscriptionRevision;
     private long _lastRoadSubscriptionRevision = long.MinValue;
     private ulong _lastRoadRevision;
@@ -46,6 +47,26 @@ internal sealed class ClientConnection : IDisposable
         {
             _subscription = volume;
             _subscriptionRevision = checked(_subscriptionRevision + 1);
+        }
+    }
+
+    public void SetInspectedPerson(ulong personId)
+    {
+        if (personId == 0) throw new ArgumentOutOfRangeException(nameof(personId));
+        lock (_stateGate) _inspectedPersonId = personId;
+    }
+
+    public bool TryGetInspectedPersonId(out ulong personId)
+    {
+        lock (_stateGate)
+        {
+            if (_inspectedPersonId is not { } value)
+            {
+                personId = 0;
+                return false;
+            }
+            personId = value;
+            return true;
         }
     }
 
@@ -113,9 +134,12 @@ internal sealed class ClientConnection : IDisposable
         try
         {
             var encodeStarted = Stopwatch.GetTimestamp();
-            var frame = message is IntersectionControlSnapshotMessage intersection
-                ? IntersectionControlProtocolCodec.Serialize(intersection, version)
-                : ProtocolCodec.Serialize(message, version);
+            var frame = message switch
+            {
+                IntersectionControlSnapshotMessage intersection => IntersectionControlProtocolCodec.Serialize(intersection, version),
+                InspectPersonMessage or PopulationStatisticsMessage or PersonDebugMessage => PopulationProtocolCodec.Serialize(message, version),
+                _ => ProtocolCodec.Serialize(message, version),
+            };
             var encodeTimeMs = Stopwatch.GetElapsedTime(encodeStarted).TotalMilliseconds;
             await _sendGate.WaitAsync(cancellationToken);
             try
@@ -225,6 +249,7 @@ internal sealed class ClientConnectionRegistry
 
 internal abstract record ClientCommand(Guid ConnectionId);
 internal sealed record SubscribeVolumeCommand(Guid ConnectionId, WorldVolume Volume) : ClientCommand(ConnectionId);
+internal sealed record InspectPersonCommand(Guid ConnectionId, ulong PersonId) : ClientCommand(ConnectionId);
 
 internal sealed class ClientCommandQueue
 {
@@ -258,6 +283,9 @@ internal sealed class ClientCommandProcessor(ClientCommandQueue queue, ClientCon
                 {
                     case SubscribeVolumeCommand subscribe:
                         connection.SetSubscription(subscribe.Volume);
+                        break;
+                    case InspectPersonCommand inspect:
+                        connection.SetInspectedPerson(inspect.PersonId);
                         break;
                     default:
                         ServerLog.UnsupportedClientCommand(logger, command.GetType().Name);

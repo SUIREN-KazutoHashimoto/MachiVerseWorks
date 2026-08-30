@@ -10,7 +10,13 @@ import {
   encodeSubscribeVolume,
 } from './protocol.ts';
 import {
-  WEB_PROTOCOL_VERSION,
+  WEB_POPULATION_PROTOCOL_VERSION,
+  decodePopulationFrame,
+  encodeInspectPerson,
+  isPopulationFrame,
+  type PopulationProtocolMessage,
+} from './population-protocol.ts';
+import {
   decodeTrafficFrame,
   isTrafficFrame,
   type TrafficProtocolMessage,
@@ -18,7 +24,7 @@ import {
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'handshaking' | 'connected' | 'reconnecting';
 export interface FrameDecodeMetrics { readonly frameBytes: number; readonly decodeTimeMs: number; }
-export interface ConnectionCallbacks { readonly onStateChanged: (state: ConnectionState) => void; readonly onMessage: (message: ProtocolMessage | TrafficProtocolMessage) => void; readonly onProtocolError: (message: ProtocolErrorMessage) => void; readonly onClientError: (error: Error) => void; readonly onDisconnected: () => void; readonly onHelloAck: (version: ProtocolVersion, tickRate: number) => void; readonly onFrameDecoded?: (metrics: FrameDecodeMetrics) => void; }
+export interface ConnectionCallbacks { readonly onStateChanged: (state: ConnectionState) => void; readonly onMessage: (message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage) => void; readonly onProtocolError: (message: ProtocolErrorMessage) => void; readonly onClientError: (error: Error) => void; readonly onDisconnected: () => void; readonly onHelloAck: (version: ProtocolVersion, tickRate: number) => void; readonly onFrameDecoded?: (metrics: FrameDecodeMetrics) => void; }
 export interface ReconnectOptions { readonly minimumDelayMs: number; readonly maximumDelayMs: number; }
 
 export class MachiVerseConnection {
@@ -29,6 +35,7 @@ export class MachiVerseConnection {
   private shouldReconnect = false;
   private negotiatedVersion: ProtocolVersion | null = null;
   private desiredSubscription: WorldVolume | null = null;
+  private desiredPersonId: bigint | null = null;
 
   public constructor(private readonly serverUrl: string, private readonly reconnectOptions: ReconnectOptions, private readonly callbacks: ConnectionCallbacks) {}
 
@@ -46,6 +53,12 @@ export class MachiVerseConnection {
 
   public setSubscription(volume: WorldVolume): void { this.desiredSubscription = { ...volume }; this.sendDesiredSubscription(); }
 
+  public inspectPerson(personId: bigint): void {
+    if (personId <= 0n) throw new RangeError('Person ID must be greater than zero.');
+    this.desiredPersonId = personId;
+    this.sendDesiredInspection();
+  }
+
   private openSocket(isReconnect: boolean): void {
     const currentSocket = this.socket;
     if (currentSocket !== null && currentSocket.readyState < WebSocket.CLOSING) currentSocket.close(1000, 'Connection replaced');
@@ -53,7 +66,7 @@ export class MachiVerseConnection {
     const socket = new WebSocket(this.serverUrl);
     socket.binaryType = 'arraybuffer';
     this.socket = socket;
-    socket.addEventListener('open', () => { if (this.socket !== socket) return; this.setState('handshaking'); socket.send(encodeHello(WEB_PROTOCOL_VERSION)); });
+    socket.addEventListener('open', () => { if (this.socket !== socket) return; this.setState('handshaking'); socket.send(encodeHello(WEB_POPULATION_PROTOCOL_VERSION)); });
     socket.addEventListener('message', (event) => { void this.handleMessage(socket, event.data); });
     socket.addEventListener('error', () => { if (this.socket === socket) this.callbacks.onClientError(new Error('WebSocket transport error.')); });
     socket.addEventListener('close', () => {
@@ -86,13 +99,20 @@ export class MachiVerseConnection {
         this.setState('connected');
         this.callbacks.onHelloAck(negotiatedVersion, envelope.message.tickRate);
         this.sendDesiredSubscription();
+        this.sendDesiredInspection();
         return;
       }
 
-      const envelope = isTrafficFrame(buffer) ? decodeTrafficFrame(buffer) : decodeFrame(buffer);
+      const populationFrame = isPopulationFrame(buffer);
+      const trafficFrame = !populationFrame && isTrafficFrame(buffer);
+      const envelope = populationFrame
+        ? decodePopulationFrame(buffer)
+        : trafficFrame
+          ? decodeTrafficFrame(buffer)
+          : decodeFrame(buffer);
       if (onFrameDecoded !== undefined) onFrameDecoded({ frameBytes: buffer.byteLength, decodeTimeMs: Math.max(0, performance.now() - decodeStartedAt) });
       if (this.state !== 'connected') {
-        if (!isTrafficFrame(buffer) && envelope.message.type === MessageType.Error) this.callbacks.onProtocolError(envelope.message as ProtocolErrorMessage);
+        if (!populationFrame && !trafficFrame && envelope.message.type === MessageType.Error) this.callbacks.onProtocolError(envelope.message as ProtocolErrorMessage);
         return;
       }
 
@@ -100,7 +120,7 @@ export class MachiVerseConnection {
       if (negotiatedVersion === null || !protocolVersionsEqual(envelope.version, negotiatedVersion)) {
         throw new ProtocolDecodeFailure('Server frame version changed after protocol negotiation.');
       }
-      if (!isTrafficFrame(buffer) && envelope.message.type === MessageType.Error) {
+      if (!populationFrame && !trafficFrame && envelope.message.type === MessageType.Error) {
         this.callbacks.onProtocolError(envelope.message as ProtocolErrorMessage);
         return;
       }
@@ -120,6 +140,14 @@ export class MachiVerseConnection {
     socket.send(encodeSubscribeVolume(volume, version));
   }
 
+  private sendDesiredInspection(): void {
+    const socket = this.socket;
+    const version = this.negotiatedVersion;
+    const personId = this.desiredPersonId;
+    if (this.state !== 'connected' || socket === null || socket.readyState !== WebSocket.OPEN || version === null || version.major !== 2 || version.minor < 5 || personId === null) return;
+    socket.send(encodeInspectPerson(personId, version));
+  }
+
   private scheduleReconnect(): void {
     if (this.reconnectTimer !== null) return;
     const delay = Math.min(this.reconnectOptions.maximumDelayMs, this.reconnectOptions.minimumDelayMs * (2 ** this.reconnectAttempt));
@@ -135,7 +163,7 @@ export class MachiVerseConnection {
 export function resolveNegotiatedProtocolVersion(
   frameVersion: ProtocolVersion,
   acknowledgedVersion: ProtocolVersion,
-  supportedVersion: ProtocolVersion = WEB_PROTOCOL_VERSION,
+  supportedVersion: ProtocolVersion = WEB_POPULATION_PROTOCOL_VERSION,
 ): ProtocolVersion {
   if (!protocolVersionsEqual(frameVersion, acknowledgedVersion)) {
     throw new ProtocolDecodeFailure('HelloAck frame version and payload version do not match.');
