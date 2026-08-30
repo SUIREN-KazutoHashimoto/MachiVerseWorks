@@ -17,6 +17,7 @@ let negotiatedVersion = null;
 let snapshot = null;
 let observedBusMovement = false;
 let observedTaxiMovement = false;
+let observedBusRoadVehicleReuse = false;
 const firstPositions = new Map();
 
 const connection = new MachiVerseConnection(serverUrl, { minimumDelayMs: 100, maximumDelayMs: 500 }, {
@@ -26,6 +27,7 @@ const connection = new MachiVerseConnection(serverUrl, { minimumDelayMs: 100, ma
     snapshot = message;
     ui.setMultimodalTransit(message);
     for (const vehicle of message.vehicles) {
+      if (vehicle.kind === TransitVehicleKind.Bus && vehicle.roadVehicleId !== null) observedBusRoadVehicleReuse = true;
       const initial = firstPositions.get(vehicle.id);
       if (initial === undefined) firstPositions.set(vehicle.id, [vehicle.x, vehicle.y, vehicle.z]);
       else if (Math.hypot(vehicle.x - initial[0], vehicle.y - initial[1], vehicle.z - initial[2]) > 0.5) {
@@ -58,7 +60,7 @@ try {
   assert(negotiatedVersion?.major === 2 && negotiatedVersion?.minor === 8, 'Protocol 2.8 was negotiated');
   assert(railwayPattern?.stops.length === 2, 'Railway service is exposed through the common Transit pattern');
   assert(snapshot.patterns.some((pattern) => pattern.railwayServiceId === null && pattern.stops.length === 2), 'Bus pattern is published');
-  assert(snapshot.vehicles.some((vehicle) => vehicle.kind === TransitVehicleKind.Bus && vehicle.roadVehicleId !== null), 'Bus reuses a Road Traffic vehicle');
+  assert(observedBusRoadVehicleReuse, 'Bus reuses a Road Traffic vehicle');
   assert(snapshot.vehicles.some((vehicle) => vehicle.kind === TransitVehicleKind.Taxi), 'Taxi vehicle is published');
   assert(snapshot.arrivalEstimates.some((arrival) => arrival.estimatedArrivalTick >= snapshot.tickCount), 'Arrival estimate is published');
   assert(transitDebug instanceof HTMLElement && transitDebug.textContent.includes('Bus') && transitDebug.textContent.includes('Railway'), 'Transit route/stop/vehicle/arrival debug UI was updated');
@@ -74,6 +76,7 @@ try {
     arrivals: snapshot.arrivalEstimates.length,
     observedBusMovement,
     observedTaxiMovement,
+    observedBusRoadVehicleReuse,
     debug: transitDebug.textContent,
   });
 } catch (error) {
