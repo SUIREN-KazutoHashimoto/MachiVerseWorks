@@ -195,6 +195,10 @@ export class RailwayInfrastructureLayer {
   private readonly tracks = new THREE.LineSegments(new THREE.BufferGeometry(), this.trackMaterial);
   private readonly stations = new THREE.LineSegments(new THREE.BufferGeometry(), this.stationMaterial);
   private readonly platforms = new THREE.LineSegments(new THREE.BufferGeometry(), this.platformMaterial);
+  private readonly nodes = new Map<bigint, TrackNode>();
+  private readonly segments = new Map<bigint, TrackSegment>();
+  private readonly stationBounds = new Map<bigint, Station>();
+  private readonly platformBounds = new Map<bigint, Platform>();
   private revision: bigint | null = null;
 
   public constructor(private readonly scene: THREE.Scene) {
@@ -204,22 +208,31 @@ export class RailwayInfrastructureLayer {
   }
 
   public apply(snapshot: RailwayInfrastructureSnapshotMessage): void {
-    if (this.revision === snapshot.revision) return;
-    this.revision = snapshot.revision;
-    const nodes = new Map(snapshot.nodes.map((item) => [item.id, item]));
+    if (snapshot.isFullSnapshot) {
+      this.resetSnapshotState();
+      this.revision = snapshot.revision;
+    } else if (this.revision !== snapshot.revision) {
+      return;
+    }
+
+    for (const item of snapshot.nodes) this.nodes.set(item.id, item);
+    for (const item of snapshot.segments) this.segments.set(item.id, item);
+    for (const item of snapshot.stations) this.stationBounds.set(item.id, item);
+    for (const item of snapshot.platforms) this.platformBounds.set(item.id, item);
+
     const trackPositions: number[] = [];
-    for (const segment of snapshot.segments) {
-      const start = nodes.get(segment.startNodeId); const end = nodes.get(segment.endNodeId);
+    for (const segment of this.segments.values()) {
+      const start = this.nodes.get(segment.startNodeId); const end = this.nodes.get(segment.endNodeId);
       if (start === undefined || end === undefined) continue;
       appendPosition(trackPositions, start.x, start.y, start.z); appendPosition(trackPositions, end.x, end.y, end.z);
     }
-    const stationPositions: number[] = []; for (const station of snapshot.stations) appendBoxEdges(stationPositions, station);
-    const platformPositions: number[] = []; for (const platform of snapshot.platforms) appendBoxEdges(platformPositions, platform);
+    const stationPositions: number[] = []; for (const station of this.stationBounds.values()) appendBoxEdges(stationPositions, station);
+    const platformPositions: number[] = []; for (const platform of this.platformBounds.values()) appendBoxEdges(platformPositions, platform);
     replacePositions(this.tracks.geometry, trackPositions); replacePositions(this.stations.geometry, stationPositions); replacePositions(this.platforms.geometry, platformPositions);
   }
 
   public clear(): void {
-    this.revision = null;
+    this.resetSnapshotState();
     replacePositions(this.tracks.geometry, []); replacePositions(this.stations.geometry, []); replacePositions(this.platforms.geometry, []);
   }
 
@@ -227,6 +240,15 @@ export class RailwayInfrastructureLayer {
     this.scene.remove(this.tracks, this.stations, this.platforms);
     this.tracks.geometry.dispose(); this.stations.geometry.dispose(); this.platforms.geometry.dispose();
     this.trackMaterial.dispose(); this.stationMaterial.dispose(); this.platformMaterial.dispose();
+    this.resetSnapshotState();
+  }
+
+  private resetSnapshotState(): void {
+    this.revision = null;
+    this.nodes.clear();
+    this.segments.clear();
+    this.stationBounds.clear();
+    this.platformBounds.clear();
   }
 }
 
