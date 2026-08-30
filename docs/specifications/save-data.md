@@ -4,208 +4,125 @@ MachiVerseWorks のauthoritativeな`SimulationWorld`を停止点から同じ状�
 
 ## 目的
 
-- authoritative な Simulation 状態を保存・復元できること。
-- save → load 後も Agent / Building / POI ID、tick、乱数系列を継続できること。
-- BuildingとPOIの参照整合性を保存・復元後も維持すること。
-- application version や表示localeに依存しない保存契約を持つこと。
-- 将来の migration 判断に使える独立した Save format version を持つこと。
-- defaultの保存APIで生成できたデータはdefaultの読込APIで復元できること。
+- authoritative Simulation状態を保存・復元できること。
+- save → load後もstable ID、tick、乱数系列、route progressを継続できること。
+- application version、Protocol version、表示localeに依存しないこと。
+- default保存APIで生成できたデータはdefault読込APIで復元できること。
 
 ## Save format version
 
-current formatは `formatVersion = 3` とする。
+current formatは `formatVersion = 5` とする。Save format versionはルート`VERSION`とProtocol versionから独立する。
 
-Save format version はルート `VERSION` のapplication version、およびProtocol versionとは独立する。current以外のversionは暗黙migrationせず安全に拒否する。
+migration対象:
 
-- Format 2はネイティブ3D Agent stateまでを保持する旧契約である。
-- Format 3はFormat 2の内容にBuilding / POI stateとそれぞれの次IDを追加する。
-- Format 2をFormat 3として解釈するfallbackは持たない。旧Save migrationは別Taskで扱う。
+- Format 3: Agent + Building / POI。Road Networkは空として復元する。
+- Format 4: Format 3 + Road Network。Pedestrian stateは空として復元する。
+- Format 5: Format 4 + Pedestrian state。
 
-## Version 3 が保持する情報
+Format 2以前、および5より新しい未知versionは拒否する。
 
-トップレベル:
+## 共通Simulation state
 
-- `formatVersion`
-- `simulation`
+`simulation`は少なくとも次を保持する。
 
-`simulation`:
+- `tickRate`, `seed`, `spatialCellSize`
+- `tickCount`, `elapsedTicks`, `randomState`
+- `nextAgentId`, `agents`
+- `nextBuildingId`, `buildings`
+- `nextPoiId`, `pois`
+- `nextRoadNodeId`, `roadNodes`
+- `nextRoadSegmentId`, `roadSegments`
+- `nextLaneId`, `lanes`
+- `nextLaneConnectionId`, `laneConnections`
+- `nextRoadAccessPointId`, `roadAccessPoints`
+- `nextPedestrianId`, `pedestrians`
 
-- `tickRate`
-- `seed`
-- `spatialCellSize`
-- `tickCount`
-- `elapsedTicks`
-- `randomState`
-- `nextAgentId`
-- `agents`
-- `nextBuildingId`
-- `buildings`
-- `nextPoiId`
-- `pois`
+Agent / Building / POI / Roadのfield意味は各仕様を参照する。表示文字列ではなくraw numeric valueとstable IDを保存する。
 
-各 Agent:
+## Format 5 Pedestrian state
 
-- `id`
-- `x`
-- `y`
-- `z`
-- `velocityX`
-- `velocityY`
-- `velocityZ`
-- `isActive`
-
-各 Building:
+各Pedestrianは次を保持する。
 
 - `id`
-- `kind`: `BuildingKind`のnumeric value
-- `minX`
-- `minY`
-- `minZ`
-- `maxX`
-- `maxY`
-- `maxZ`
+- `tripRequestId`
+- `originBuildingId` / `originPoiId`: どちらか一方だけ非null
+- `destinationBuildingId` / `destinationPoiId`: どちらか一方だけ非null
+- `mode`: `TravelMode` numeric value
+- `walkingSpeedMetersPerSecond`
+- `legIndex`
+- `progressMeters`
+- `state`: `PedestrianMovementState` numeric value
 
-各 POI:
+Walking graphそのものやroute leg配列は保存しない。Road Networkから決定的に再構築し、origin / destinationから同じrouteを再計算したうえで`legIndex`と`progressMeters`を適用する。
 
-- `id`
-- `kind`: `PoiKind`のnumeric value
-- `x`
-- `y`
-- `z`
-- `buildingId`: 所属Buildingがある場合のみそのstable ID。未所属の場合は`null`
+`Arrived`状態も明示削除されるまで保存する。これによりPedestrian stable IDとTrip完了stateをload後も保持できる。
 
-`isActive = false` の Agent も保持する。これは削除済みIDを再利用せず、`TotalCreatedAgentCount` と次回生成IDを保存前と同じ意味で継続するためである。
+## Restore順序
 
-Building / POIは現在のstoreから削除済みentryを保持しないが、`nextBuildingId` / `nextPoiId`を独立保存することで削除済みIDを再利用しない。
+Format 5は次の順で復元する。
 
-`randomState` はseedだけではなく保存時点のdeterministic random generator状態を表す。これによりload後に新規Agentを生成した場合も、保存しなかった場合と同じ乱数系列を継続できる。
+1. JSON / resource limit / required field検証
+2. Simulation config / time / random state検証
+3. Agent / Building / POI検証
+4. Road topology / access参照検証
+5. Pedestrian ID / Trip endpoint / speed / progress / state検証
+6. Road Network復元
+7. derived Pedestrian Network再構築
+8. walking route再計算
+9. 保存されたroute progressを適用
 
-時間は固定tick durationで進む。したがって `elapsedTicks` は `tickCount × SimulationConfig.TickDuration.Ticks` と一致しなければならず、両者を独立した任意値として扱わない。
+いずれかが不正な場合は部分Worldを返さない。
 
-## JSON例
+## 時間とdeterminism
 
-```json
-{
-  "formatVersion": 3,
-  "simulation": {
-    "tickRate": 30,
-    "seed": 1,
-    "spatialCellSize": 64,
-    "tickCount": 120,
-    "elapsedTicks": 39999960,
-    "randomState": 1663341875487337578,
-    "nextAgentId": 2,
-    "agents": [
-      {
-        "id": 1,
-        "x": 10.5,
-        "y": 20.25,
-        "z": 4.0,
-        "velocityX": 0.5,
-        "velocityY": -0.25,
-        "velocityZ": 0.0,
-        "isActive": true
-      }
-    ],
-    "nextBuildingId": 2,
-    "buildings": [
-      {
-        "id": 1,
-        "kind": 5,
-        "minX": 0,
-        "minY": 0,
-        "minZ": 0,
-        "maxX": 40,
-        "maxY": 30,
-        "maxZ": 25
-      }
-    ],
-    "nextPoiId": 3,
-    "pois": [
-      {
-        "id": 1,
-        "kind": 2,
-        "x": 20,
-        "y": 15,
-        "z": 5,
-        "buildingId": 1
-      },
-      {
-        "id": 2,
-        "kind": 7,
-        "x": 100,
-        "y": 50,
-        "z": 0,
-        "buildingId": null
-      }
-    ]
-  }
-}
-```
+`elapsedTicks`は`tickCount × SimulationConfig.TickDuration.Ticks`と一致しなければならない。`randomState`はseedではなく保存時点のdeterministic random generator状態を保持する。
 
-## 保存・読込の資源上限
+Pedestrianのcheckpoint復元後も、同じRoad Network / Trip / crossing permission入力のもとでは同じfixed-tick continuationを得る。
 
-Save Dataは構造が正しくても無制限には扱わない。`WorldSaveLimits` の既定値は次とする。
+## Resource limits
 
-- 最大UTF-8 Save Dataサイズ: 128 MiB
-- 最大Agent数: 1,000,000
-- 最大Building数: 1,000,000
-- 最大POI数: 1,000,000
+`WorldSaveLimits`のdefault上限:
 
-同じ`WorldSaveLimits`契約をwrite/readの両方へ適用する。
+- UTF-8 Save Data: 128 MiB
+- Agent: 1,000,000
+- Building: 1,000,000
+- POI: 1,000,000
+- RoadNode: 1,000,000
+- RoadSegment: 1,000,000
+- Lane: 2,000,000
+- LaneConnection: 4,000,000
+- RoadAccessPoint: 1,000,000
+- Pedestrian: 1,000,000
 
-### Serialize / Save
+同じlimit contractをserialize / deserializeへ適用する。collection件数は`Utf8JsonReader`でDTO materialization前にも検証し、巨大配列を先に確保しない。
 
-- Agent / Building / POI数上限はJSON生成前にcheckpointへ適用する。
-- serialized UTF-8 byte数が上限を超えた場合は`InvalidDataException`で失敗する。
-- `Save(Stream, ...)`は全体がlimit内であることを確認してからdestinationへ書き込むため、limit超過で部分Saveを残さない。
-- 引数を省略したdefault `Serialize` / `Save`は`WorldSaveLimits.Default`を使用する。
-
-### Deserialize / Load
-
-- byte上限はJSON parse前に適用する。
-- Stream入力は上限を超えて無制限にbufferしない。
-- `agents` / `buildings` / `pois`は`Utf8JsonReader`によるallocation-freeなtoken scanでDTO deserialization前に件数検証し、上限を超えた時点で拒否する。
-- DTOからcheckpoint配列へ変換する前にも同じ上限を再確認する。
-- 引数を省略したdefault `Deserialize` / `Load`は`WorldSaveLimits.Default`を使用する。
-
-したがって、default `Serialize` / `Save`が成功した出力は、同じformat versionのdefault `Deserialize` / `Load`のresource limitによって拒否されない。custom limitを使用して保存した場合は、読込にも同等以上のlimitを明示する。
+`Save(Stream, ...)`は全体がlimit内であることを確認してからdestinationへ書き込むため、limit超過時にpartial Saveを残さない。
 
 ## 保存しない情報
 
-Save Format 3には次を保存しない。
-
 - application version
 - Protocol version
-- locale tag
-- 翻訳済みUIラベル / エラーメッセージ
-- Building / POIの表示名・住所・mesh等、Phase 10で未定義の情報
-- Web Clientのcamera / connection / subscription状態
-- Audio Client状態
-- Serverの接続一覧やWebSocket状態
-- benchmark / diagnostics値
+- locale / 翻訳済み文字列
+- Web camera / connection / subscription
+- Audio Client state
+- Server connection / WebSocket state
+- derived Pedestrian Network graph
+- benchmark / diagnostics
 
-表示文字列ではなく raw value / stable ID を保存する。ユーザー入力名など将来追加される非翻訳データは、その機能の仕様策定時に別途契約を定義する。
+Crossing permissionはPhase 16ではSignal / intersection controlから供給されるruntime入力境界として扱い、Pedestrian自身のroute progressとは分離する。
 
-## 読込時の拒否条件
+## 拒否条件
 
-少なくとも次は不正Save Dataとして拒否する。
+少なくとも次を拒否する。
 
-- JSONとして不正
-- configured byte上限超過
-- configured Agent / Building / POI数上限超過
-- current以外の`formatVersion`
-- 必須field欠落
-- 未知field
-- 無効なSimulation設定値
-- 負のelapsed time
-- `tickCount` と `elapsedTicks` が固定tick durationから導かれる値として一致しない状態
-- 次の1 tickで`tickCount`またはelapsed timeがoverflowする状態
-- 0または重複したAgent / Building / POI ID
-- 各`next*Id`が保存済み同種ID以下
-- 非finiteなXYZ座標 / XYZ速度 / Building bounds
-- 不正な`BuildingKind` / `PoiKind`
-- POIが存在しないBuildingを参照する状態
-- Building所属POIのpositionが参照先Building bounds外にある状態
-
-不正Save Dataから部分的にWorldを構築して使用しない。全体のvalidation成功後に復元Worldとして返す。
+- malformed JSON / unknown field / unsupported format
+- configured byte / collection count超過
+- required field欠落
+- invalid Simulation config / elapsed time / overflow
+- 0または重複stable ID
+- `next*Id`が保存済み最大ID以下
+- non-finite XYZ / velocity / bounds / speed / progress
+- invalid enum numeric value
+- dangling Building / POI / Road reference
+- Pedestrian endpointがBuilding/POIを同時またはどちらも参照する状態
+- Pedestrian route progressが再構築routeと整合しない状態
