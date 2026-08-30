@@ -92,10 +92,10 @@ public sealed class IntersectionControlRegressionTests
     private static void CreateFourWayController(SimulationWorld world, WorldPoint origin)
     {
         var center = world.CreateRoadNode(origin, RoadNodeKind.Intersection);
-        var west = CreateArm(world, center, origin with { X = origin.X - 20d }, 0);
-        var east = CreateArm(world, center, origin with { X = origin.X + 20d }, 0);
-        var south = CreateArm(world, center, origin with { Y = origin.Y - 20d }, 0);
-        var north = CreateArm(world, center, origin with { Y = origin.Y + 20d }, 0);
+        var west = CreateArm(world, center, new WorldPoint(origin.X - 20d, origin.Y, origin.Z), 0);
+        var east = CreateArm(world, center, new WorldPoint(origin.X + 20d, origin.Y, origin.Z), 0);
+        var south = CreateArm(world, center, new WorldPoint(origin.X, origin.Y - 20d, origin.Z), 0);
+        var north = CreateArm(world, center, new WorldPoint(origin.X, origin.Y + 20d, origin.Z), 0);
         world.CreateLaneConnection(west.Inbound, east.Outbound, center, TurnMovement.Straight);
         world.CreateLaneConnection(east.Inbound, west.Outbound, center, TurnMovement.Straight);
         world.CreateLaneConnection(south.Inbound, north.Outbound, center, TurnMovement.Straight);
