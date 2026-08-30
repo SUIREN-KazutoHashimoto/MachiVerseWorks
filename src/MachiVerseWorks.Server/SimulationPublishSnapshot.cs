@@ -6,21 +6,32 @@ internal sealed class SimulationPublishSnapshot
 {
     private readonly PublishedEntitySpatialIndex<AgentSnapshot> _agents;
     private readonly PublishedEntitySpatialIndex<PedestrianSnapshot> _pedestrians;
+    private readonly PublishedEntitySpatialIndex<VehicleSnapshot> _vehicles;
+    private readonly PublishedEntitySpatialIndex<IntersectionControllerSnapshot> _intersections;
 
     public SimulationPublishSnapshot(
         ulong tickCount,
         double spatialCellSize,
         AgentSnapshot[] agents,
         PedestrianSnapshot[] pedestrians,
+        VehicleSnapshot[] vehicles,
+        IntersectionControlSnapshot intersectionControl,
         RoadNetworkReadModel roadNetwork)
     {
         TickCount = tickCount;
         SpatialCellSize = spatialCellSize;
         ArgumentNullException.ThrowIfNull(agents);
         ArgumentNullException.ThrowIfNull(pedestrians);
+        ArgumentNullException.ThrowIfNull(vehicles);
+        ArgumentNullException.ThrowIfNull(intersectionControl);
         RoadNetwork = roadNetwork ?? throw new ArgumentNullException(nameof(roadNetwork));
         _agents = new PublishedEntitySpatialIndex<AgentSnapshot>(agents, spatialCellSize, static item => item.Position);
         _pedestrians = new PublishedEntitySpatialIndex<PedestrianSnapshot>(pedestrians, spatialCellSize, static item => item.Position);
+        _vehicles = new PublishedEntitySpatialIndex<VehicleSnapshot>(vehicles, spatialCellSize, static item => item.Position);
+        _intersections = new PublishedEntitySpatialIndex<IntersectionControllerSnapshot>(
+            intersectionControl.Controllers.ToArray(),
+            spatialCellSize,
+            item => roadNetwork.GetNodePosition(item.IntersectionNodeId));
     }
 
     public ulong TickCount { get; }
@@ -30,7 +41,9 @@ internal sealed class SimulationPublishSnapshot
     public EntityPublishSnapshot QueryEntities(WorldVolume volume) => new(
         TickCount,
         _agents.Query(volume),
-        _pedestrians.Query(volume));
+        _pedestrians.Query(volume),
+        _vehicles.Query(volume),
+        _intersections.Query(volume));
 
     public SubscriptionPublishSnapshot Query(WorldVolume volume)
     {
@@ -46,7 +59,9 @@ internal sealed class SimulationPublishSnapshot
 internal sealed record EntityPublishSnapshot(
     ulong TickCount,
     AgentSnapshot[] Agents,
-    PedestrianSnapshot[] Pedestrians);
+    PedestrianSnapshot[] Pedestrians,
+    VehicleSnapshot[] Vehicles,
+    IntersectionControllerSnapshot[] Intersections);
 
 internal sealed record SubscriptionPublishSnapshot(
     ulong TickCount,
@@ -68,6 +83,13 @@ internal sealed class RoadNetworkReadModel
     }
 
     public ulong Revision { get; }
+
+    public WorldPoint GetNodePosition(RoadNodeId id)
+    {
+        if (!_nodes.TryGetValue(id, out var node))
+            throw new InvalidOperationException($"Road read model is missing node {id.Value}.");
+        return node.Position;
+    }
 
     public RoadNetworkSnapshot Query(WorldVolume volume)
     {
