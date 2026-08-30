@@ -25,4 +25,6 @@ public sealed partial class SimulationWorld
         }
         return result;
     }
+
+    public VehicleSnapshot[] CreateAllVehicleSnapshots() => _vehicles.CreateAllSnapshots(Time.TickCount);
 }

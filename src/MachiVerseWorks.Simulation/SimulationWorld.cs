@@ -54,6 +54,7 @@ public sealed partial class SimulationWorld
     {
         var nextTime = Time.Advance(Config.TickRate);
         _agents.Step(Config.TickDurationSeconds, _spatialIndex);
+        StepVehicles(Config.TickDurationSeconds);
         StepPedestrians(Config.TickDurationSeconds);
         Time = nextTime;
     }
@@ -74,7 +75,8 @@ public sealed partial class SimulationWorld
             _roads.NextLaneId, _roads.CreateLaneCheckpoint(),
             _roads.NextConnectionId, _roads.CreateConnectionCheckpoint(),
             _roads.NextAccessPointId, _roads.CreateAccessPointCheckpoint(),
-            _pedestrians.NextId, _pedestrians.CreateCheckpoint(), _pedestrianNetwork.CreateCrossingCheckpoint());
+            _pedestrians.NextId, _pedestrians.CreateCheckpoint(), _pedestrianNetwork.CreateCrossingCheckpoint(),
+            _vehicles.NextId, _vehicles.CreateCheckpoint());
     }
 
     public static SimulationWorld RestoreCheckpoint(SimulationCheckpoint checkpoint)
@@ -98,6 +100,7 @@ public sealed partial class SimulationWorld
         ValidateUrbanObjectCheckpoint(checkpoint, config.SpatialCellSize);
         ValidateRoadNetworkCheckpoint(checkpoint, config.SpatialCellSize);
         ValidatePedestrianCheckpoint(checkpoint);
+        ValidateVehicleCheckpoint(checkpoint);
         var expectedElapsedTicks = CalculateExpectedElapsedTicks(checkpoint.TickCount, config.TickRate);
         if (checkpoint.ElapsedTicks != expectedElapsedTicks
             && (!TryCalculateLegacyElapsedTicks(checkpoint.TickCount, config.TickRate, out var legacyElapsedTicks)
@@ -113,6 +116,8 @@ public sealed partial class SimulationWorld
         world._agents.Restore(checkpoint.Agents, checkpoint.NextAgentId, world._spatialIndex);
         world.RestoreUrbanObjects(checkpoint);
         world._roads.Restore(checkpoint);
+        world.EnsureRoadTrafficTopology();
+        world._vehicles.Restore(checkpoint.Vehicles ?? Array.Empty<SimulationVehicleCheckpoint>(), checkpoint.NextVehicleId, world._roadTrafficTopology);
         world.EnsurePedestrianNetwork();
         world._pedestrianNetwork.RestoreCrossingPermissions(checkpoint.PedestrianCrossings ?? Array.Empty<SimulationPedestrianCrossingCheckpoint>());
         world._pedestrians.Restore(

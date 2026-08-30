@@ -16,7 +16,11 @@ public sealed partial class SimulationWorld
         return _roadRouter.FindRoute(request);
     }
 
-    private void InvalidateRouting() => _roadRouter.Invalidate();
+    private void InvalidateRouting()
+    {
+        _roadRouter.Invalidate();
+        _roadTrafficTopology.Invalidate();
+    }
 
     internal RoutingCacheStatistics GetRoutingCacheStatistics() => _roadRouter.GetCacheStatistics();
 }
