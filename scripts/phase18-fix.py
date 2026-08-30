@@ -23,6 +23,16 @@ replace_once(
     'json = json.Replace("\\\"formatVersion\\\": 9", "\\\"formatVersion\\\": 7", StringComparison.Ordinal);',
 )
 replace_once(
+    "src/MachiVerseWorks.Simulation/RailwayOperationsFixture.cs",
+    "            new TimetableStopSnapshot(stationA, 80, 100, 10, platformA),\n            new TimetableStopSnapshot(stationB, 170, 190, 10, platformB),",
+    "            new TimetableStopSnapshot(stationA, 330, 345, 10, platformA),\n            new TimetableStopSnapshot(stationB, 580, 595, 10, platformB),",
+)
+replace_once(
+    "src/MachiVerseWorks.Simulation/RailwayOperationsFixture.cs",
+    "            new TimetableStopSnapshot(stationA, 105, 125, 10, platformA),\n            new TimetableStopSnapshot(stationB, 195, 215, 10, platformB),",
+    "            new TimetableStopSnapshot(stationA, 350, 365, 10, platformA),\n            new TimetableStopSnapshot(stationB, 600, 615, 10, platformB),",
+)
+replace_once(
     "src/MachiVerseWorks.Server/HostedServices.cs",
     "var railwayOperationsMessage = connection.NegotiatedVersion.SupportsRailwayOperations ? RailwayOperationsMessageMapper.Create(publishSnapshot.RailwayOperations, snapshot.Trains, snapshot.TickCount) : null;",
     "var railwayOperationsMessage = connection.NegotiatedVersion.SupportsRailwayOperations && snapshot.Trains.Length > 0 ? RailwayOperationsMessageMapper.Create(publishSnapshot.RailwayOperations, snapshot.Trains, snapshot.TickCount) : null;",
