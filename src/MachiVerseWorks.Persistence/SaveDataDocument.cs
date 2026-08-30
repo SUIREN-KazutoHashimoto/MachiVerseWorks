@@ -30,6 +30,8 @@ internal sealed class SaveSimulationData
     public SaveLaneConnectionData?[]? LaneConnections { get; init; }
     public ulong? NextRoadAccessPointId { get; init; }
     public SaveRoadAccessPointData?[]? RoadAccessPoints { get; init; }
+    public ulong? NextPedestrianId { get; init; }
+    public SavePedestrianData?[]? Pedestrians { get; init; }
 }
 
 internal sealed class SaveAgentData
@@ -110,4 +112,19 @@ internal sealed class SaveRoadAccessPointData
     public required ulong? BuildingId { get; init; }
     public required ulong? PoiId { get; init; }
     public byte? Mode { get; init; }
+}
+
+internal sealed class SavePedestrianData
+{
+    public ulong? Id { get; init; }
+    public ulong? TripRequestId { get; init; }
+    public required ulong? OriginBuildingId { get; init; }
+    public required ulong? OriginPoiId { get; init; }
+    public required ulong? DestinationBuildingId { get; init; }
+    public required ulong? DestinationPoiId { get; init; }
+    public byte? Mode { get; init; }
+    public double? WalkingSpeedMetersPerSecond { get; init; }
+    public int? LegIndex { get; init; }
+    public double? ProgressMeters { get; init; }
+    public byte? State { get; init; }
 }
