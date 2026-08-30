@@ -56,11 +56,13 @@ Vehicle update は `SimulationWorld.Step()` の固定 tick 内で行う。
 1. 現在 Lane の speed limit と Vehicle performance から target speed を決める。
 2. Lane occupancy から前走 Vehicle を取得する。
 3. minimum gap / time headway を満たすよう target speed と advance distance を制限する。
-4. acceleration / comfortable deceleration の範囲で speed を target へ近づける。
+4. 通常走行では acceleration / comfortable deceleration の範囲で speed を target へ近づける。
 5. Route progress を進める。
 6. step 終端では次 Lane の occupancy と entry permission を確認して transition する。
 7. Route 終端へ到達したら `Arrived` へ遷移する。
 8. 更新後に pose と invariant を検証する。
+
+前走車とのfree gapがなくadvanceできない場合、またはLane transition / intersection entryが拒否される場合は、安全側の停止処理としてそのtickで速度を`0`へ設定し`WaitingForTraffic`へ遷移できる。この停止は通常のspeed approachとは別の安全制約であり、`ComfortableDecelerationMetersPerSecondSquared`以内の減速度を保証しない。
 
 3D position と forward vector は RoadSegment geometry、Lane direction、segment offset から導出する。Vehicle が独立した任意 3D 座標を正本として Road geometry から乖離することは許可しない。
 
@@ -69,7 +71,9 @@ Vehicle update は `SimulationWorld.Step()` の固定 tick 内で行う。
 Lane occupancy は Lane ごとの順序付き index と Vehicle location lookup を持つ。
 
 - 前走車検索を全 Vehicle の全件走査で実装しない。
-- spawn / restore / Lane transition 時に必要 gap を満たさない occupancy は拒否する。
+- spawn と Lane transition では Vehicle performance の minimum gap を満たさない occupancy を拒否する。
+- checkpoint restore では既存Save / checkpointを復元可能にするため車体の非重複だけを検証し、各Vehicleの `MinimumGapMeters` までは保証しない。
+- restore直後にminimum gap未満のVehicleが存在し得る場合も、後続tickのcar-following / advance制約でgapを悪化させない。
 - tick 後に Vehicle 同士が重なる状態を許可しない。
 - leader の速度と bumper gap を利用し、minimum gap を侵害する advance を抑制する。
 
@@ -110,7 +114,7 @@ Vehicle state は Simulation checkpoint と Save Data に含める。
 
 Save format 6 で next Vehicle ID、Vehicle ID、dimensions / performance、Route steps、route step index / progress、speed、movement state を保存する。
 
-restore 後も stable ID、Route progress、speed、state を保持し、同一条件で継続可能であることを要求する。
+restore 後も stable ID、Route progress、speed、state を保持し、同一条件で継続可能であることを要求する。restore時のoccupancy validationは車体の非重複を保証し、performance由来のminimum gapは次のSimulation tickから走行制約として適用する。
 
 ## Protocol and Server
 
