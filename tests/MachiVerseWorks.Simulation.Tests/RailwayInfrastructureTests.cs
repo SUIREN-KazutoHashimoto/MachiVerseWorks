@@ -41,7 +41,7 @@ public sealed class RailwayInfrastructureTests
         var route = world.FindWalkingRouteToPlatform(fixture.WalkingOrigin, fixture.PlatformId);
 
         Assert.IsTrue(route.TotalLengthMeters > 0d);
-        Assert.IsTrue(route.Steps.Count > 0);
+        Assert.IsTrue(route.Legs.Count > 0);
     }
 
     [TestMethod]
