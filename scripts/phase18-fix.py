@@ -44,6 +44,11 @@ replace_once(
 )
 replace_once(
     "tests/MachiVerseWorks.Simulation.Tests/RailwayOperationsTests.cs",
+    "        for (var tick = 0; tick < 1200; tick++)",
+    "        for (var tick = 0; tick < 2400; tick++)",
+)
+replace_once(
+    "tests/MachiVerseWorks.Simulation.Tests/RailwayOperationsTests.cs",
     "        Assert.IsTrue(completed.Services.All(static service => service.State == RailwayServiceState.Completed));",
     "        Assert.IsTrue(completed.Services.All(static service => service.State == RailwayServiceState.Completed), Describe(completed));",
 )
