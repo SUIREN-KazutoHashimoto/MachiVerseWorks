@@ -133,9 +133,9 @@ public sealed class MultimodalTransitTests
         var snapshot = world.CreateMultimodalTransitSnapshot();
         var journey = snapshot.Journeys.Single(item => item.Id == fixture.RailwayJourneyId);
 
-        Assert.AreEqual(TransitMode.Walk, journey.Legs.First().Mode);
+        Assert.AreEqual(TransitMode.Walk, journey.Legs[0].Mode);
         Assert.IsTrue(journey.Legs.Any(static item => item.Mode == TransitMode.Railway));
-        Assert.AreEqual(TransitMode.Walk, journey.Legs.Last().Mode);
+        Assert.AreEqual(TransitMode.Walk, journey.Legs[^1].Mode);
         Assert.IsTrue(snapshot.Lines.Any(item => item.Id == fixture.BusLineId && item.Mode == TransitMode.Bus));
         Assert.IsTrue(snapshot.Vehicles.Any(item => item.Id == fixture.BusVehicleId && item.Kind == TransitVehicleKind.Bus));
         Assert.IsTrue(snapshot.Vehicles.Any(item => item.Id == fixture.TaxiVehicleId && item.Kind == TransitVehicleKind.Taxi));

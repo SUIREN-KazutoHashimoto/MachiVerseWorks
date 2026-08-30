@@ -26,10 +26,10 @@ public class MultimodalTransitBenchmarks
         _transferCheckpoint = CreateTransferWorld().CreateCheckpoint();
     }
 
-    [InvocationSetup(Target = nameof(DispatchNearestTaxi))]
+    [IterationSetup(Target = nameof(DispatchNearestTaxi))]
     public void ResetDispatchWorld() => _dispatchWorld = SimulationWorld.RestoreCheckpoint(_dispatchCheckpoint);
 
-    [InvocationSetup(Target = nameof(TransferCheckpointContinuation))]
+    [IterationSetup(Target = nameof(TransferCheckpointContinuation))]
     public void ResetTransferWorld() => _transferWorld = SimulationWorld.RestoreCheckpoint(_transferCheckpoint);
 
     [Benchmark]
