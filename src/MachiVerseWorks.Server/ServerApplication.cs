@@ -13,7 +13,7 @@ public static class ServerApplication
         builder.WebHost.ConfigureKestrel(kestrel => kestrel.Listen(options.ListenAddress, options.Port));
         builder.Services.AddSingleton(options); builder.Services.AddSingleton(new WebSocketOriginPolicy(options.AllowedWebSocketOrigins)); builder.Services.AddSingleton<SimulationRuntime>(); builder.Services.AddSingleton<ClientConnectionRegistry>(); builder.Services.AddSingleton<ClientCommandQueue>(); builder.Services.AddSingleton<E2eMetrics>(); builder.Services.AddSingleton<WebSocketSessionHandler>(); builder.Services.AddHostedService<SimulationTickService>(); builder.Services.AddHostedService<ClientCommandProcessor>(); builder.Services.AddHostedService<SnapshotPublishService>();
         var app = builder.Build(); app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30), KeepAliveTimeout = TimeSpan.FromSeconds(15) });
-        app.MapGet("/health", (SimulationRuntime simulation, ClientConnectionRegistry connections) => Results.Ok(new { status = "ok", tick = simulation.TickCount, agents = simulation.ActiveAgentCount, roadSegments = simulation.RoadSegmentCount, connections = connections.Count }));
+        app.MapGet("/health", (SimulationRuntime simulation, ClientConnectionRegistry connections) => Results.Ok(new { status = "ok", tick = simulation.TickCount, agents = simulation.ActiveAgentCount, pedestrians = simulation.ActivePedestrianCount, roadSegments = simulation.RoadSegmentCount, connections = connections.Count }));
         app.MapGet("/metrics/e2e", (E2eMetrics metrics) => Results.Ok(metrics.Capture()));
         app.Map("/ws", async context =>
         {
