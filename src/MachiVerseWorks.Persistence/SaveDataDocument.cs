@@ -35,6 +35,11 @@ internal sealed class SaveSimulationData
     public SavePedestrianCrossingData?[]? PedestrianCrossings { get; init; }
     public ulong? NextVehicleId { get; init; }
     public SaveVehicleData?[]? Vehicles { get; init; }
+    public ulong? NextHouseholdId { get; init; }
+    public SaveHouseholdData?[]? Households { get; init; }
+    public ulong? NextPersonId { get; init; }
+    public SavePersonData?[]? Persons { get; init; }
+    public ulong? NextTripRequestId { get; init; }
 }
 
 internal sealed class SaveAgentData
@@ -165,4 +170,53 @@ internal sealed class SaveVehicleRouteStepData
     public double? DistanceMeters { get; init; }
     public double? EstimatedTravelTimeSeconds { get; init; }
     public required ulong? ExitConnectionId { get; init; }
+}
+
+internal sealed class SaveHouseholdData
+{
+    public ulong? Id { get; init; }
+    public required ulong? ResidenceBuildingId { get; init; }
+    public required ulong? ResidencePoiId { get; init; }
+}
+
+internal sealed class SavePersonData
+{
+    public ulong? Id { get; init; }
+    public ulong? HouseholdId { get; init; }
+    public int? AgeYears { get; init; }
+    public bool? IsEmployed { get; init; }
+    public bool? IsStudent { get; init; }
+    public bool? HasPrivateVehicle { get; init; }
+    public required ulong? ResidenceBuildingId { get; init; }
+    public required ulong? ResidencePoiId { get; init; }
+    public required ulong? CurrentBuildingId { get; init; }
+    public required ulong? CurrentPoiId { get; init; }
+    public byte? CurrentActivity { get; init; }
+    public byte? TravelState { get; init; }
+    public required ulong? DestinationBuildingId { get; init; }
+    public required ulong? DestinationPoiId { get; init; }
+    public byte? DestinationActivity { get; init; }
+    public ulong? ActiveTripRequestId { get; init; }
+    public byte? ActiveTravelMode { get; init; }
+    public ulong? PedestrianId { get; init; }
+    public ulong? VehicleId { get; init; }
+    public SaveDailyActivityWindowData?[]? Schedule { get; init; }
+    public SavePersonNeedData?[]? Needs { get; init; }
+}
+
+internal sealed class SaveDailyActivityWindowData
+{
+    public byte? Activity { get; init; }
+    public ushort? StartMinuteOfDay { get; init; }
+    public ushort? EndMinuteOfDay { get; init; }
+    public required ulong? DestinationBuildingId { get; init; }
+    public required ulong? DestinationPoiId { get; init; }
+    public byte? Priority { get; init; }
+}
+
+internal sealed class SavePersonNeedData
+{
+    public byte? Kind { get; init; }
+    public double? Satisfaction { get; init; }
+    public double? DecayPerHour { get; init; }
 }

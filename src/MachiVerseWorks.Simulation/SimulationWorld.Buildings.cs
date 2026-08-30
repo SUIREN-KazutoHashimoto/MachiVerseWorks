@@ -38,6 +38,12 @@ public sealed partial class SimulationWorld
                 $"Building {id.Value} cannot be removed while one or more road access points reference it.");
         }
 
+        if (_population.ContainsBuildingReference(id))
+        {
+            throw new InvalidOperationException(
+                $"Building {id.Value} cannot be removed while one or more Households, Persons, or daily activities reference it.");
+        }
+
         return _buildings.Remove(id);
     }
 
@@ -92,6 +98,12 @@ public sealed partial class SimulationWorld
         {
             throw new InvalidOperationException(
                 $"POI {id.Value} cannot be removed while one or more road access points reference it.");
+        }
+
+        if (_population.ContainsPoiReference(id))
+        {
+            throw new InvalidOperationException(
+                $"POI {id.Value} cannot be removed while one or more Households, Persons, or daily activities reference it.");
         }
 
         return _pois.Remove(id);
