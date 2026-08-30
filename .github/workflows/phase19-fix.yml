@@ -1,0 +1,64 @@
+name: Phase 19 Compile Fix
+
+on:
+  push:
+    branches:
+      - feature/phase19-multimodal-transit
+    paths:
+      - .github/workflows/phase19-fix.yml
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - .github/workflows/phase19-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Apply compile fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/MachiVerseWorks.Simulation/MultimodalTransitFixture.cs")
+          text = path.read_text()
+          old = "world.CreateLane(road, LaneDirection.Forward, laneIndex: 0, speedLimitMetersPerSecond: 12d)"
+          new = "world.CreateLane(road, LaneDirection.Forward, order: 0, speedLimitMetersPerSecond: 12d)"
+          if old not in text:
+              raise SystemExit(f"expected CreateLane expression not found in {path}")
+          path.write_text(text.replace(old, new, 1))
+
+          path = Path("src/MachiVerseWorks.Simulation/Internal/MultimodalTransitStore.cs")
+          text = path.read_text()
+          old = "var maximum = ids.DefaultIfEmpty(0).Max();"
+          new = "var maximum = ids.Any() ? ids.Max() : 0UL;"
+          if old not in text:
+              raise SystemExit(f"expected DefaultIfEmpty expression not found in {path}")
+          path.write_text(text.replace(old, new, 1))
+
+          path = Path("src/MachiVerseWorks.Simulation/SimulationWorld.MultimodalTransit.cs")
+          text = path.read_text()
+          old = "    private void ValidateMultimodalTransitCheckpointReferences(SimulationCheckpoint checkpoint)"
+          new = "    private static void ValidateMultimodalTransitCheckpointReferences(SimulationCheckpoint checkpoint)"
+          if old not in text:
+              raise SystemExit(f"expected checkpoint validator declaration not found in {path}")
+          path.write_text(text.replace(old, new, 1))
+          PY
+
+          printf '0.20.5\n' > VERSION
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/MachiVerseWorks.Simulation VERSION
+          git diff --cached --check
+          git commit -m "fix: resolve Phase 19 compile errors"
+          git push
