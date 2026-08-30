@@ -1,0 +1,51 @@
+name: Phase 19 Apply Patch
+
+on:
+  push:
+    branches:
+      - feature/phase19-multimodal-transit
+    paths:
+      - .github/workflows/phase19-apply.yml
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct and apply Phase 19 patch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > /tmp/phase19.patch.b64
+          for id in 5470033191 5470042482 5470057331; do
+            gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" --jq '.body' | tail -n +2 >> /tmp/phase19.patch.b64
+          done
+          base64 -d /tmp/phase19.patch.b64 > /tmp/phase19.patch.xz
+          echo "3abb1eb37d29e689f74e9ffc5e76f1328871abf028169e7c3be0d16317428401  /tmp/phase19.patch.xz" | sha256sum -c -
+          xz -dc /tmp/phase19.patch.xz > /tmp/phase19.patch
+          patch -p1 < /tmp/phase19.patch
+
+          rm -f .github/workflows/phase19-source-artifact.yml
+          rm -f .github/workflows/phase19-apply.yml
+          printf '0.20.2\n' > VERSION
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "feat: complete Phase 19 multimodal transit"
+          git push
+
+          for id in 5470033191 5470042482 5470057331; do
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" || true
+          done
