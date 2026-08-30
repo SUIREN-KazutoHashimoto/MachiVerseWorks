@@ -81,4 +81,7 @@ public sealed record RailwayInfrastructureSnapshotMessage(
     IReadOnlyList<ProtocolStation> Stations,
     IReadOnlyList<ProtocolPlatform> Platforms,
     IReadOnlyList<ProtocolPlatformAccessPoint> PlatformAccessPoints,
-    IReadOnlyList<ProtocolDepot> Depots) : Message(MessageType.RailwayInfrastructureSnapshot);
+    IReadOnlyList<ProtocolDepot> Depots) : IProtocolMessage
+{
+    public MessageType Type => MessageType.RailwayInfrastructureSnapshot;
+}
