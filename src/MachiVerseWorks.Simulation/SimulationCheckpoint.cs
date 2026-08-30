@@ -48,7 +48,17 @@ public sealed record SimulationCheckpoint(
     ulong NextPlatformAccessPointId = 1,
     IReadOnlyList<SimulationPlatformAccessPointCheckpoint>? PlatformAccessPoints = null,
     ulong NextDepotId = 1,
-    IReadOnlyList<SimulationDepotCheckpoint>? Depots = null);
+    IReadOnlyList<SimulationDepotCheckpoint>? Depots = null,
+    ulong NextTrainFormationId = 1,
+    IReadOnlyList<TrainFormationSnapshot>? TrainFormations = null,
+    ulong NextRailwayRouteId = 1,
+    IReadOnlyList<RailwayRouteSnapshot>? RailwayRoutes = null,
+    ulong NextTimetableId = 1,
+    IReadOnlyList<TimetableSnapshot>? Timetables = null,
+    ulong NextRailwayServiceId = 1,
+    IReadOnlyList<RailwayServiceSnapshot>? RailwayServices = null,
+    ulong NextTrainId = 1,
+    IReadOnlyList<TrainSnapshot>? Trains = null);
 
 public readonly record struct SimulationAgentCheckpoint(AgentId Id, WorldPoint Position, WorldVector Velocity, bool IsActive);
 public readonly record struct SimulationBuildingCheckpoint(BuildingId Id, BuildingKind Kind, WorldVolume Bounds);
