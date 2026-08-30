@@ -26,6 +26,7 @@ public sealed partial class SimulationWorld
     {
         ValidatePoint(position);
         ValidateEnum(kind, nameof(kind));
+        ValidateIncidentRoadSegmentGeometry(id, position);
         InvalidatePedestrianNetwork();
         var updated = _roads.UpdateNode(id, position, kind);
         if (updated) InvalidateRouting();
@@ -43,6 +44,7 @@ public sealed partial class SimulationWorld
     public RoadSegmentId CreateRoadSegment(RoadNodeId startNodeId, RoadNodeId endNodeId, RoadKind kind = RoadKind.Local)
     {
         ValidateEnum(kind, nameof(kind));
+        ValidateRoadSegmentGeometry(startNodeId, endNodeId);
         InvalidatePedestrianNetwork();
         var id = _roads.AddSegment(startNodeId, endNodeId, kind);
         InvalidateRouting();
@@ -52,6 +54,7 @@ public sealed partial class SimulationWorld
     public bool UpdateRoadSegment(RoadSegmentId id, RoadNodeId startNodeId, RoadNodeId endNodeId, RoadKind kind)
     {
         ValidateEnum(kind, nameof(kind));
+        ValidateRoadSegmentGeometry(startNodeId, endNodeId);
         InvalidatePedestrianNetwork();
         var updated = _roads.UpdateSegment(id, startNodeId, endNodeId, kind);
         if (updated) InvalidateRouting();
@@ -144,6 +147,29 @@ public sealed partial class SimulationWorld
     public bool TryGetLaneConnectionSnapshot(LaneConnectionId id, out LaneConnectionSnapshot snapshot) => _roads.TryGetConnection(id, out snapshot);
     public bool TryGetRoadAccessPointSnapshot(RoadAccessPointId id, out RoadAccessPointSnapshot snapshot) => _roads.TryGetAccessPoint(id, out snapshot);
 
+    private void ValidateRoadSegmentGeometry(RoadNodeId startNodeId, RoadNodeId endNodeId)
+    {
+        if (!_roads.TryGetNode(startNodeId, out var start) || !_roads.TryGetNode(endNodeId, out var end)) return;
+        if (start.Position == end.Position)
+            throw new ArgumentException("A road segment must have non-zero 3D length.");
+    }
+
+    private void ValidateIncidentRoadSegmentGeometry(RoadNodeId nodeId, WorldPoint position)
+    {
+        if (!_roads.TryGetNode(nodeId, out _)) return;
+        var snapshot = _roads.CreateSnapshot();
+        foreach (var segment in snapshot.Segments)
+        {
+            RoadNodeId otherNodeId;
+            if (segment.StartNodeId == nodeId) otherNodeId = segment.EndNodeId;
+            else if (segment.EndNodeId == nodeId) otherNodeId = segment.StartNodeId;
+            else continue;
+
+            if (_roads.TryGetNode(otherNodeId, out var other) && position == other.Position)
+                throw new ArgumentException("Updating the road node would create a zero-length road segment.", nameof(position));
+        }
+    }
+
     private void ValidateAccessReferences(BuildingId? buildingId, PoiId? poiId)
     {
         if (buildingId is { } linkedBuilding && !_buildings.Contains(linkedBuilding)) throw new ArgumentException($"Building {linkedBuilding.Value} does not exist.", nameof(buildingId));
@@ -172,6 +198,7 @@ public sealed partial class SimulationWorld
             if (segment.Id.Value == 0 || !segments.TryAdd(segment.Id, segment)) throw new ArgumentException($"Road segment ID {segment.Id.Value} is zero or duplicated.", nameof(checkpoint));
             ValidateEnum(segment.Kind, nameof(checkpoint));
             if (segment.StartNodeId == segment.EndNodeId || !nodes.ContainsKey(segment.StartNodeId) || !nodes.ContainsKey(segment.EndNodeId)) throw new ArgumentException($"Road segment {segment.Id.Value} has invalid node references.", nameof(checkpoint));
+            if (nodes[segment.StartNodeId].Position == nodes[segment.EndNodeId].Position) throw new ArgumentException($"Road segment {segment.Id.Value} has zero-length geometry.", nameof(checkpoint));
             degree[segment.StartNodeId]++; degree[segment.EndNodeId]++;
         }
         foreach (var entry in degree) if (nodes[entry.Key].Kind == RoadNodeKind.Endpoint && entry.Value > 1) throw new ArgumentException($"Endpoint road node {entry.Key.Value} has degree {entry.Value}.", nameof(checkpoint));

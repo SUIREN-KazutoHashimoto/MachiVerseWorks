@@ -42,6 +42,8 @@ Per-client volume filtering happens after capture. `RailwayOperationsMessageMapp
 
 Protocol 2.7 message 710 is serialized by `RailwayOperationsProtocolCodec`; earlier negotiated minors never receive it. Static Railway Infrastructure remains message 700 and revision-driven rather than tick-driven.
 
+message 710はsingle-frame contractでchunkingを行わない。`RailwayOperationsProtocolCodec.GetPayloadLength()`はTrain / Service / Timetable stopを含む正確なencoded payload長をallocation前に算出し、`SnapshotPublishService`の`RailwayOperationsSnapshotMessagePlanner`が1 MiB上限をpreflightする。上限超過時はRailway snapshotの代わりにsubscription-localなstructured `InvalidRequest`を送信し、delivery schedulerへunexpected exceptionを残さない。したがって1 Clientの広いsubscriptionや大規模Operations stateがsnapshot publisher全体をfaultさせない。
+
 ## Web architecture
 
 `connection.ts` dispatches message 710 to the dedicated Railway Operations decoder. `RailwayOperationsLayer` owns a Three.js group and a stable Train-ID-to-mesh map. Spawn/update/remove behavior is derived from each snapshot without duplicating Simulation state.
@@ -52,8 +54,8 @@ The UI consumes Service/Timetable fields only for debug presentation. It never f
 
 - Simulation tests: route validation, exclusive Block/Platform ownership, lifecycle, deterministic checkpoint continuation.
 - Persistence tests: Format 9 round-trip and Format 8 migration.
-- Protocol tests: 2.7 binary round-trip and 2.6 rejection.
-- Server tests: visible Train to Service/Timetable mapping.
+- Protocol tests: 2.7 binary round-trip, 2.6 rejection, 1 MiB payload preflight boundary.
+- Server tests: visible Train to Service/Timetable mapping and oversize snapshot structured-error planning.
 - Web tests: decoder validation and Three.js pose update.
 - Phase 18 E2E: real Server/WebSocket/headless browser through a complete two-Train operating cycle.
 - Benchmark: 100 and 1,000 Train/Service fixed-tick and snapshot scaling.

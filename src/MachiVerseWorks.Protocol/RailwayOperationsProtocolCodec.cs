@@ -10,18 +10,36 @@ public static class RailwayOperationsProtocolCodec
     private const int TimetableHeaderLength = 12;
     private const int TimetableStopLength = 40;
 
+    public static long GetPayloadLength(RailwayOperationsSnapshotMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(message.Trains);
+        ArgumentNullException.ThrowIfNull(message.Services);
+        ArgumentNullException.ThrowIfNull(message.Timetables);
+
+        long payloadLength = SnapshotHeaderLength;
+        payloadLength = checked(payloadLength + ((long)message.Trains.Count * TrainLength));
+        payloadLength = checked(payloadLength + ((long)message.Services.Count * ServiceLength));
+        foreach (var timetable in message.Timetables)
+        {
+            ArgumentNullException.ThrowIfNull(timetable);
+            ArgumentNullException.ThrowIfNull(timetable.Stops);
+            payloadLength = checked(payloadLength + TimetableHeaderLength + ((long)timetable.Stops.Count * TimetableStopLength));
+        }
+        return payloadLength;
+    }
+
+    public static bool FitsSingleFrame(RailwayOperationsSnapshotMessage message) =>
+        (ulong)GetPayloadLength(message) <= ProtocolFrameHeader.MaxPayloadLength;
+
     public static byte[] Serialize(RailwayOperationsSnapshotMessage message, ProtocolVersion version)
     {
         ArgumentNullException.ThrowIfNull(message);
         if (!version.SupportsRailwayOperations) throw new ArgumentOutOfRangeException(nameof(version), version, "Railway operations snapshots require Protocol 2.7 or newer.");
         Validate(message);
-        var payloadLength = checked(
-            SnapshotHeaderLength
-            + checked(message.Trains.Count * TrainLength)
-            + checked(message.Services.Count * ServiceLength)
-            + message.Timetables.Sum(static item => checked(TimetableHeaderLength + checked(item.Stops.Count * TimetableStopLength))));
-        if ((uint)payloadLength > ProtocolFrameHeader.MaxPayloadLength) throw new ArgumentOutOfRangeException(nameof(message), "Railway operations snapshot exceeds the maximum protocol payload size.");
-        var frame = new byte[checked(ProtocolFrameHeader.Size + payloadLength)];
+        var payloadLength = GetPayloadLength(message);
+        if ((ulong)payloadLength > ProtocolFrameHeader.MaxPayloadLength) throw new ArgumentOutOfRangeException(nameof(message), "Railway operations snapshot exceeds the maximum protocol payload size.");
+        var frame = new byte[checked(ProtocolFrameHeader.Size + (int)payloadLength)];
         ProtocolFrameHeader.Write(frame, new ProtocolFrameHeader(version, MessageType.RailwayOperationsSnapshot, checked((uint)payloadLength)));
         var writer = new SpanWriter(frame.AsSpan(ProtocolFrameHeader.Size));
         writer.WriteUInt64(message.TickCount);

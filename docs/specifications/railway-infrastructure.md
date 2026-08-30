@@ -54,6 +54,8 @@ Connections are directed. Bidirectional junction traversal is represented by two
 
 A `BlockSection` contains one or more TrackSegment IDs. A TrackSegment belongs to at most one block section. Phase 17 defines only the static separation boundary; occupancy and reservation are Phase 18 state.
 
+1つの`BlockSection`が保持できるTrackSegment membershipは最大100,000件とする。この上限はSimulation mutation、Checkpoint / Save復元の双方で適用し、Protocol 2.6の単一BlockSection itemが1 MiB payload上限内へ必ず収まることを保証する。
+
 ## Stations and platforms
 
 A `Station` owns a 3D `WorldVolume` and stable ID. A `Platform` references exactly one Station and one TrackSegment, has a normalized `[startSegmentOffset, endSegmentOffset]` interval on that segment, and owns its own 3D bounds.
@@ -70,6 +72,8 @@ This keeps railway infrastructure independent from pedestrian pathfinding while 
 
 A `Depot` owns a 3D volume and one or more TrackSegments. Depot membership accepts siding/depot usage segments and rejects mainline-only segments. Phase 17 models infrastructure only; train storage and entry/exit lifecycle belong to Phase 18.
 
+1つの`Depot`が保持できるTrackSegment membershipも最大100,000件とする。BlockSectionと同様に、CreateとCheckpoint / Save復元の両境界で検証する。
+
 ## Spatial query and validation
 
 `CreateRailwayInfrastructureSnapshot(WorldVolume)` returns the railway entities relevant to the requested 3D volume. Segment selection is based on 3D segment bounds, and dependent Station/Platform/Depot entities are included when their geometry or referenced track is selected.
@@ -80,13 +84,15 @@ A `Depot` owns a 3D volume and one or more TrackSegments. Depot membership accep
 
 Save Format 8 adds all railway entities and next-ID counters. Formats 3 through 7 remain readable and migrate to an empty railway infrastructure with all railway next IDs initialized to 1.
 
-All railway collections remain subject to bounded deserialization and materialization limits. Save Data stores raw numeric values and enum codes, never localized presentation strings.
+All railway collections remain subject to bounded deserialization and materialization limits. Save Data stores raw numeric values and enum codes, never localized presentation strings. BlockSection / Depot membershipの100,000件上限はrestore validationにも適用し、Protocolでは送信不能な正当stateをSaveから導入しない。
 
 ## Protocol and server distribution
 
 Protocol 2.6 adds message type `700`, `RailwayInfrastructureSnapshot`. It carries revision, full-snapshot flag, TrackNodes, TrackSegments, TrackConnections, BlockSections, Stations, Platforms, PlatformAccessPoints, and Depots.
 
 The Server treats railway topology as static infrastructure with a revision. It sends a filtered snapshot when a client subscribes, when the subscription volume changes, or when the railway revision changes; it does not resend identical static topology every simulation tick.
+
+Railway Infrastructure snapshot全体が1 MiBを超える場合は複数frameへchunkするが、1つのBlockSection / Depot item自体は分割しない。Simulation側membership上限により各itemは必ず1 frameへ収まり、正当なauthoritative stateが`RailwayInfrastructureProtocolChunker`のsingle-item overflowでpublisherをfaultさせない。
 
 ## Web rendering
 

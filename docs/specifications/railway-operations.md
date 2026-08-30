@@ -86,6 +86,8 @@ Protocol 2.7 adds message type `710`, `RailwayOperationsSnapshot`. It carries:
 
 The Server filters Trains by the client's 3D subscription volume from an immutable publish snapshot. Only Services and Timetables referenced by those visible Trains are included. Protocol 2.6 clients continue to receive static Railway Infrastructure but never receive message 710.
 
+message 710はsingle-frame snapshotであり、Protocol 2.7ではchunking / reassembly contractを持たない。payload上限はProtocol共通の1 MiBで、Serverは送信前に`RailwayOperationsProtocolCodec.GetPayloadLength()`で正確なpayload長をpreflightする。1 MiBを超える場合は対象subscriptionに`InvalidRequest` Errorを1件返し、`detailCode=railwayOperationsSnapshotTooLarge`、`field=volume`、`payloadBytes`、`maximumPayloadBytes`を通知する。partial Railway Operations snapshotは送信せず、当該Clientのoversize状態をpublisher全体のfaultへ波及させない。
+
 ## Web rendering and debug view
 
 The Web Client negotiates Protocol 2.7, decodes Railway Operations separately from static Railway Infrastructure, and renders each Train as a reusable Three.js mesh. Simulation `(X,Y,Z)` is mapped to Three.js `(X,Z,Y)` so altitude remains the rendering Y axis.

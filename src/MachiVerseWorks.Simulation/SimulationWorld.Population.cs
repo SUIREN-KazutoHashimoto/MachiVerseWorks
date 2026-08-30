@@ -223,7 +223,16 @@ public sealed partial class SimulationWorld
         }
         if (route.Steps.Count == 0) return false;
 
-        var vehicleId = CreateVehicle(route);
+        VehicleId vehicleId;
+        try
+        {
+            vehicleId = CreateVehicle(route);
+        }
+        catch (InvalidOperationException)
+        {
+            // A temporarily occupied spawn lane is a normal dispatch failure. The caller may fall back to another mode.
+            return false;
+        }
         BeginTrip(person, destinationActivity, destination, tripId, TravelMode.Motor);
         person.VehicleId = vehicleId;
         return true;

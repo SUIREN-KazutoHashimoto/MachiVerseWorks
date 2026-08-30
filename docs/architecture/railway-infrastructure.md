@@ -16,11 +16,15 @@ The store does not infer connectivity from geometry. `TrackConnection` is the on
 
 Road/pedestrian integration occurs at `PlatformAccessPoint`: Simulation validates that the referenced `RoadAccessPoint` exists and permits foot access, then delegates walking route calculation to the existing pedestrian network.
 
+`BlockSection`と`Depot`の可変長TrackSegment membershipはそれぞれ100,000件をhard limitとする。public mutationとCheckpoint validationで同じ上限を適用し、Protocol transportの制約より大きいauthoritative aggregateを作成・復元できないようにする。
+
 ## Persistence boundary
 
 `SimulationCheckpoint` is the in-memory persistence contract. Format 8 projects railway records to JSON DTOs in `MachiVerseWorks.Persistence`, including every stable ID and next-ID counter.
 
 Migration is one-way at load time: formats 3–7 produce empty railway collections and next IDs of 1. No older format is rewritten in place. Existing bounded-input checks are reused for railway arrays so hostile collection counts are rejected before unbounded materialization.
+
+BlockSection / Depotの100,000件membership上限はCheckpoint restore boundaryでも検証されるため、Save DataからProtocol配信不能な単一aggregateをauthoritative stateへ導入しない。
 
 ## Server read model
 
@@ -35,6 +39,8 @@ This keeps the hot path proportional to client interest rather than world-wide r
 Railway distribution uses a dedicated Protocol 2.6 codec rather than expanding the original generic message codec. Message type 700 contains all static Phase 17 railway entity kinds.
 
 The decoder performs fixed-size/count checks before collection materialization and validates IDs, enum ranges, finite dimensions, normalized platform offsets, and volume ordering. Referential/topological correctness remains Simulation responsibility; the wire codec guarantees structurally valid transport data.
+
+Snapshot全体が1 MiBを超える場合、`RailwayInfrastructureProtocolChunker`はentity境界で複数frameへ分割する。一方、BlockSection / Depot 1件のmembership自体は分割しない。Simulation側の100,000件上限によりBlockSectionは約0.8 MiB、Depotも約0.8 MiB以内へ収まり、single-item overflowを正当stateから発生させない。
 
 ## Web boundary
 
