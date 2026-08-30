@@ -1,0 +1,54 @@
+name: Phase 15 Population Benchmark
+
+on:
+  push:
+    branches:
+      - develop
+      - 'feature/**'
+      - 'perf/**'
+    paths:
+      - 'src/MachiVerseWorks.Simulation/**'
+      - 'benchmarks/**'
+      - '.github/workflows/phase15-benchmark.yml'
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'src/MachiVerseWorks.Simulation/**'
+      - 'benchmarks/**'
+      - '.github/workflows/phase15-benchmark.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase15-benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: population-1k-10k-100k
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore MachiVerseWorks.slnx
+      - name: Run population benchmark
+        run: |
+          mkdir -p .artifacts/phase15-benchmark
+          dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-restore -- --population --warmup 10 --ticks 50 | tee .artifacts/phase15-benchmark/results.csv
+      - name: Upload benchmark artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: phase15-population-benchmark
+          path: .artifacts/phase15-benchmark
+          if-no-files-found: error
+          retention-days: 14

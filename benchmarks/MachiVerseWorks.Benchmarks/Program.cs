@@ -7,6 +7,17 @@ if (args.Contains("--read-model-latency", StringComparer.Ordinal))
     return;
 }
 
+if (args.Contains("--population", StringComparer.Ordinal))
+{
+    var benchmarkArgs = args.Where(static argument => argument != "--population").ToArray();
+    var options = BenchmarkOptions.Parse(benchmarkArgs);
+    var results = PopulationBenchmarkRunner.Run(options);
+
+    Console.WriteLine("persons,households,ticks,average_ms,p50_ms,p95_ms,p99_ms,max_ms,allocated_bytes_per_tick,managed_bytes");
+    foreach (var result in results) Console.WriteLine(result.ToCsv());
+    return;
+}
+
 if (args.Any(static argument => argument is "--warmup" or "--ticks"))
 {
     var options = BenchmarkOptions.Parse(args);
