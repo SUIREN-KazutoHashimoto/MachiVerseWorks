@@ -14,6 +14,7 @@ internal sealed class ClientConnection : IDisposable
     private readonly SemaphoreSlim _sendGate = new(1, 1);
     private HashSet<ulong> _knownAgentIds = [];
     private HashSet<ulong> _knownPedestrianIds = [];
+    private HashSet<ulong> _knownVehicleIds = [];
     private WorldVolume? _subscription;
     private long _subscriptionRevision;
     private long _lastRoadSubscriptionRevision = long.MinValue;
@@ -61,7 +62,8 @@ internal sealed class ClientConnection : IDisposable
                 volume,
                 _subscriptionRevision,
                 new HashSet<ulong>(_knownAgentIds),
-                new HashSet<ulong>(_knownPedestrianIds));
+                new HashSet<ulong>(_knownPedestrianIds),
+                new HashSet<ulong>(_knownVehicleIds));
             return true;
         }
     }
@@ -85,17 +87,24 @@ internal sealed class ClientConnection : IDisposable
         }
     }
 
-    public bool TryReplaceKnownAgentIds(long revision, HashSet<ulong> agentIds) => TryReplaceKnownEntityIds(revision, agentIds, new HashSet<ulong>(_knownPedestrianIds));
+    public bool TryReplaceKnownAgentIds(long revision, HashSet<ulong> agentIds) =>
+        TryReplaceKnownEntityIds(revision, agentIds, new HashSet<ulong>(_knownPedestrianIds), new HashSet<ulong>(_knownVehicleIds));
 
-    public bool TryReplaceKnownEntityIds(long revision, HashSet<ulong> agentIds, HashSet<ulong> pedestrianIds)
+    public bool TryReplaceKnownEntityIds(long revision, HashSet<ulong> agentIds, HashSet<ulong> pedestrianIds) =>
+        TryReplaceKnownEntityIds(revision, agentIds, pedestrianIds, new HashSet<ulong>(_knownVehicleIds));
+
+    public bool TryReplaceKnownEntityIds(long revision, HashSet<ulong> agentIds, HashSet<ulong> pedestrianIds, HashSet<ulong> vehicleIds)
     {
         ArgumentNullException.ThrowIfNull(agentIds);
         ArgumentNullException.ThrowIfNull(pedestrianIds);
+        ArgumentNullException.ThrowIfNull(vehicleIds);
         lock (_stateGate)
         {
+            if (_subscriptionRevision != revision) return false;
             _knownAgentIds = agentIds;
             _knownPedestrianIds = pedestrianIds;
-            return _subscriptionRevision == revision;
+            _knownVehicleIds = vehicleIds;
+            return true;
         }
     }
 
@@ -105,7 +114,9 @@ internal sealed class ClientConnection : IDisposable
         try
         {
             var encodeStarted = Stopwatch.GetTimestamp();
-            var frame = ProtocolCodec.Serialize(message, version);
+            var frame = message is IntersectionControlSnapshotMessage intersection
+                ? IntersectionControlProtocolCodec.Serialize(intersection, version)
+                : ProtocolCodec.Serialize(message, version);
             var encodeTimeMs = Stopwatch.GetElapsedTime(encodeStarted).TotalMilliseconds;
             await _sendGate.WaitAsync(cancellationToken);
             try
@@ -174,10 +185,20 @@ internal readonly record struct ClientSubscriptionState(
     WorldVolume Volume,
     long Revision,
     HashSet<ulong> KnownAgentIds,
-    HashSet<ulong> KnownPedestrianIds)
+    HashSet<ulong> KnownPedestrianIds,
+    HashSet<ulong> KnownVehicleIds)
 {
     public ClientSubscriptionState(WorldVolume volume, long revision, HashSet<ulong> knownAgentIds)
-        : this(volume, revision, knownAgentIds, [])
+        : this(volume, revision, knownAgentIds, [], [])
+    {
+    }
+
+    public ClientSubscriptionState(
+        WorldVolume volume,
+        long revision,
+        HashSet<ulong> knownAgentIds,
+        HashSet<ulong> knownPedestrianIds)
+        : this(volume, revision, knownAgentIds, knownPedestrianIds, [])
     {
     }
 }
