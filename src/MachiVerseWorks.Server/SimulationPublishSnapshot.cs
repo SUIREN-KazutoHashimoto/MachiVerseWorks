@@ -14,6 +14,23 @@ internal sealed class SimulationPublishSnapshot
         double spatialCellSize,
         AgentSnapshot[] agents,
         PedestrianSnapshot[] pedestrians,
+        RoadNetworkReadModel roadNetwork)
+        : this(
+            tickCount,
+            spatialCellSize,
+            agents,
+            pedestrians,
+            [],
+            new IntersectionControlSnapshot([], tickCount),
+            roadNetwork)
+    {
+    }
+
+    public SimulationPublishSnapshot(
+        ulong tickCount,
+        double spatialCellSize,
+        AgentSnapshot[] agents,
+        PedestrianSnapshot[] pedestrians,
         VehicleSnapshot[] vehicles,
         IntersectionControlSnapshot intersectionControl,
         RoadNetworkReadModel roadNetwork)
