@@ -32,6 +32,7 @@ internal sealed class SaveSimulationData
     public SaveRoadAccessPointData?[]? RoadAccessPoints { get; init; }
     public ulong? NextPedestrianId { get; init; }
     public SavePedestrianData?[]? Pedestrians { get; init; }
+    public SavePedestrianCrossingData?[]? PedestrianCrossings { get; init; }
 }
 
 internal sealed class SaveAgentData
@@ -127,4 +128,10 @@ internal sealed class SavePedestrianData
     public int? LegIndex { get; init; }
     public double? ProgressMeters { get; init; }
     public byte? State { get; init; }
+}
+
+internal sealed class SavePedestrianCrossingData
+{
+    public ulong? Id { get; init; }
+    public bool? IsOpen { get; init; }
 }

@@ -6,6 +6,7 @@ public sealed partial class SimulationWorld
 {
     private readonly PedestrianNetworkStore _pedestrianNetwork = new();
     private readonly PedestrianStore _pedestrians = new();
+    private readonly PedestrianSpatialIndex _pedestrianSpatialIndex;
     private bool _pedestrianNetworkDirty = true;
 
     public int PedestrianCount => _pedestrians.Count;
@@ -33,19 +34,19 @@ public sealed partial class SimulationWorld
         ValidateEnum(request.Mode, nameof(request));
         EnsurePedestrianNetwork();
         var route = _pedestrianNetwork.FindRoute(request.Origin, request.Destination);
-        return _pedestrians.Add(request, route, walkingSpeedMetersPerSecond, _pedestrianNetwork);
+        return _pedestrians.Add(request, route, walkingSpeedMetersPerSecond, _pedestrianNetwork, _pedestrianSpatialIndex);
     }
 
-    public bool RemovePedestrian(PedestrianId id) => _pedestrians.Remove(id);
+    public bool RemovePedestrian(PedestrianId id) => _pedestrians.Remove(id, _pedestrianSpatialIndex);
 
     public bool TryGetPedestrianSnapshot(PedestrianId id, out PedestrianSnapshot snapshot) =>
         _pedestrians.TryGetSnapshot(id, Time.TickCount, out snapshot);
 
     public PedestrianSnapshot[] CreatePedestrianSnapshot(WorldVolume volume)
     {
-        _spatialIndex.ValidatePosition(new WorldPoint(volume.MinX, volume.MinY, volume.MinZ));
-        _spatialIndex.ValidatePosition(new WorldPoint(volume.MaxX, volume.MaxY, volume.MaxZ));
-        return _pedestrians.CreateSnapshot(volume, Time.TickCount);
+        _pedestrianSpatialIndex.ValidatePosition(new WorldPoint(volume.MinX, volume.MinY, volume.MinZ));
+        _pedestrianSpatialIndex.ValidatePosition(new WorldPoint(volume.MaxX, volume.MaxY, volume.MaxZ));
+        return _pedestrians.CreateSnapshot(volume, _pedestrianSpatialIndex, Time.TickCount);
     }
 
     public bool SetPedestrianCrossingOpen(PedestrianCrossingId id, bool isOpen)
@@ -58,7 +59,7 @@ public sealed partial class SimulationWorld
     {
         if (_pedestrians.Count == 0) return;
         EnsurePedestrianNetwork();
-        _pedestrians.Step(deltaSeconds, _pedestrianNetwork);
+        _pedestrians.Step(deltaSeconds, _pedestrianNetwork, _pedestrianSpatialIndex);
     }
 
     private void InvalidatePedestrianNetwork()
@@ -108,5 +109,12 @@ public sealed partial class SimulationWorld
         }
         if (checkpoint.NextPedestrianId <= maximum)
             throw new ArgumentOutOfRangeException(nameof(checkpoint), checkpoint.NextPedestrianId, "Next Pedestrian ID must be greater than every stored Pedestrian ID.");
+
+        var crossingIds = new HashSet<ulong>(checkpoint.PedestrianCrossings?.Count ?? 0);
+        foreach (var crossing in checkpoint.PedestrianCrossings ?? Array.Empty<SimulationPedestrianCrossingCheckpoint>())
+        {
+            if (crossing.Id.Value == 0 || !crossingIds.Add(crossing.Id.Value))
+                throw new ArgumentException($"Pedestrian crossing ID {crossing.Id.Value} is zero or duplicated.", nameof(checkpoint));
+        }
     }
 }

@@ -12,6 +12,7 @@ public sealed class WorldSaveLimits
     public const int DefaultMaximumLaneConnectionCount = 4_000_000;
     public const int DefaultMaximumRoadAccessPointCount = 1_000_000;
     public const int DefaultMaximumPedestrianCount = 1_000_000;
+    public const int DefaultMaximumPedestrianCrossingCount = 4_000_000;
 
     public WorldSaveLimits(
         int maximumBytes = DefaultMaximumBytes,
@@ -23,7 +24,8 @@ public sealed class WorldSaveLimits
         int maximumLaneCount = DefaultMaximumLaneCount,
         int maximumLaneConnectionCount = DefaultMaximumLaneConnectionCount,
         int maximumRoadAccessPointCount = DefaultMaximumRoadAccessPointCount,
-        int maximumPedestrianCount = DefaultMaximumPedestrianCount)
+        int maximumPedestrianCount = DefaultMaximumPedestrianCount,
+        int maximumPedestrianCrossingCount = DefaultMaximumPedestrianCrossingCount)
     {
         MaximumBytes = RequirePositive(maximumBytes, nameof(maximumBytes), "Maximum Save Data bytes");
         MaximumAgentCount = RequirePositive(maximumAgentCount, nameof(maximumAgentCount), "Maximum Agent count");
@@ -35,6 +37,7 @@ public sealed class WorldSaveLimits
         MaximumLaneConnectionCount = RequirePositive(maximumLaneConnectionCount, nameof(maximumLaneConnectionCount), "Maximum LaneConnection count");
         MaximumRoadAccessPointCount = RequirePositive(maximumRoadAccessPointCount, nameof(maximumRoadAccessPointCount), "Maximum RoadAccessPoint count");
         MaximumPedestrianCount = RequirePositive(maximumPedestrianCount, nameof(maximumPedestrianCount), "Maximum Pedestrian count");
+        MaximumPedestrianCrossingCount = RequirePositive(maximumPedestrianCrossingCount, nameof(maximumPedestrianCrossingCount), "Maximum PedestrianCrossing count");
     }
 
     public static WorldSaveLimits Default { get; } = new();
@@ -48,6 +51,7 @@ public sealed class WorldSaveLimits
     public int MaximumLaneConnectionCount { get; }
     public int MaximumRoadAccessPointCount { get; }
     public int MaximumPedestrianCount { get; }
+    public int MaximumPedestrianCrossingCount { get; }
 
     private static int RequirePositive(int value, string parameterName, string label)
     {

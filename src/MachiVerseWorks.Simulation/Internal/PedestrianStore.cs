@@ -4,6 +4,8 @@ internal sealed class PedestrianStore
 {
     private const double OccupancyBinLengthMeters = 0.75d;
     private readonly Dictionary<PedestrianId, PedestrianState> pedestrians = [];
+    private readonly List<PedestrianId> orderedIds = [];
+    private readonly Dictionary<(PedestrianEdgeId EdgeId, int Bin), PedestrianId> occupancy = [];
     private ulong nextId = 1;
 
     public int Count => pedestrians.Count;
@@ -18,21 +20,37 @@ internal sealed class PedestrianStore
     }
     public ulong NextId => nextId;
 
-    public PedestrianId Add(TripRequest request, PedestrianRoute route, double walkingSpeedMetersPerSecond, PedestrianNetworkStore network)
+    public PedestrianId Add(
+        TripRequest request,
+        PedestrianRoute route,
+        double walkingSpeedMetersPerSecond,
+        PedestrianNetworkStore network,
+        PedestrianSpatialIndex spatialIndex)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(route);
+        ArgumentNullException.ThrowIfNull(network);
+        ArgumentNullException.ThrowIfNull(spatialIndex);
         if (request.Id.Value == 0) throw new ArgumentOutOfRangeException(nameof(request), "Trip Request ID must be greater than zero.");
         if (request.Mode is not (TravelMode.Any or TravelMode.Foot)) throw new ArgumentException("Pedestrians require a Foot or Any Trip Request.", nameof(request));
         if (!double.IsFinite(walkingSpeedMetersPerSecond) || walkingSpeedMetersPerSecond <= 0d) throw new ArgumentOutOfRangeException(nameof(walkingSpeedMetersPerSecond));
         if (nextId == ulong.MaxValue) throw new OverflowException("Pedestrian ID capacity has been exhausted.");
         var id = new PedestrianId(nextId++);
         var state = CreateState(id, request, route, walkingSpeedMetersPerSecond, 0, 0d, route.Legs.Count == 0 ? PedestrianMovementState.Arrived : PedestrianMovementState.Walking, network);
+        spatialIndex.ValidatePosition(state.Position);
         pedestrians.Add(id, state);
+        orderedIds.Add(id);
+        spatialIndex.Register(id, state.Position);
         return id;
     }
 
-    public bool Remove(PedestrianId id) => pedestrians.Remove(id);
+    public bool Remove(PedestrianId id, PedestrianSpatialIndex spatialIndex)
+    {
+        ArgumentNullException.ThrowIfNull(spatialIndex);
+        if (!pedestrians.Remove(id)) return false;
+        if (!spatialIndex.Remove(id)) throw new InvalidOperationException($"Pedestrian {id.Value} was missing from the spatial index during removal.");
+        return true;
+    }
 
     public bool TryGetSnapshot(PedestrianId id, ulong tickCount, out PedestrianSnapshot snapshot)
     {
@@ -41,36 +59,44 @@ internal sealed class PedestrianStore
         return true;
     }
 
-    public PedestrianSnapshot[] CreateSnapshot(WorldVolume volume, ulong tickCount)
+    public PedestrianSnapshot[] CreateSnapshot(WorldVolume volume, PedestrianSpatialIndex spatialIndex, ulong tickCount)
     {
-        var result = new List<PedestrianSnapshot>();
-        foreach (var pedestrian in pedestrians.Values)
+        ArgumentNullException.ThrowIfNull(spatialIndex);
+        var candidates = spatialIndex.Query(volume);
+        candidates.Sort(static (left, right) => left.Value.CompareTo(right.Value));
+        var result = new List<PedestrianSnapshot>(candidates.Count);
+        foreach (var id in candidates)
         {
+            if (!pedestrians.TryGetValue(id, out var pedestrian)) continue;
             if (volume.Contains(pedestrian.Position)) result.Add(ToSnapshot(pedestrian, tickCount));
         }
-        result.Sort(static (left, right) => left.Id.Value.CompareTo(right.Id.Value));
         return result.ToArray();
     }
 
-    public void Step(double deltaSeconds, PedestrianNetworkStore network)
+    public void Step(double deltaSeconds, PedestrianNetworkStore network, PedestrianSpatialIndex spatialIndex)
     {
+        ArgumentNullException.ThrowIfNull(network);
+        ArgumentNullException.ThrowIfNull(spatialIndex);
         if (pedestrians.Count == 0) return;
-        var occupancy = new Dictionary<(PedestrianEdgeId EdgeId, int Bin), PedestrianId>(pedestrians.Count);
-        foreach (var pedestrian in pedestrians.Values)
+
+        occupancy.Clear();
+        foreach (var id in orderedIds)
         {
+            if (!pedestrians.TryGetValue(id, out var pedestrian)) continue;
             if (pedestrian.State == PedestrianMovementState.Arrived || pedestrian.Route.Legs.Count == 0) continue;
             var key = GetOccupancyKey(pedestrian.CurrentLeg, pedestrian.ProgressMeters);
             if (!occupancy.TryAdd(key, pedestrian.Id) && occupancy[key].Value > pedestrian.Id.Value) occupancy[key] = pedestrian.Id;
         }
 
-        var ordered = pedestrians.Values.ToArray();
-        Array.Sort(ordered, static (left, right) => left.Id.Value.CompareTo(right.Id.Value));
-        foreach (var pedestrian in ordered)
+        foreach (var id in orderedIds)
         {
+            if (!pedestrians.TryGetValue(id, out var pedestrian)) continue;
             if (pedestrian.State == PedestrianMovementState.Arrived || pedestrian.Route.Legs.Count == 0) continue;
             var oldKey = GetOccupancyKey(pedestrian.CurrentLeg, pedestrian.ProgressMeters);
             if (occupancy.TryGetValue(oldKey, out var oldOwner) && oldOwner == pedestrian.Id) occupancy.Remove(oldKey);
+            var oldPosition = pedestrian.Position;
             StepPedestrian(pedestrian, deltaSeconds, network, occupancy);
+            if (pedestrian.Position != oldPosition) spatialIndex.Update(pedestrian.Id, pedestrian.Position);
             if (pedestrian.State != PedestrianMovementState.Arrived)
             {
                 var newKey = GetOccupancyKey(pedestrian.CurrentLeg, pedestrian.ProgressMeters);
@@ -79,29 +105,50 @@ internal sealed class PedestrianStore
         }
     }
 
-    public IReadOnlyList<SimulationPedestrianCheckpoint> CreateCheckpoint() => pedestrians.Values
-        .OrderBy(static item => item.Id.Value)
-        .Select(static item => new SimulationPedestrianCheckpoint(
-            item.Id,
-            item.Request.Id,
-            item.Request.Origin,
-            item.Request.Destination,
-            item.Request.Mode,
-            item.WalkingSpeedMetersPerSecond,
-            item.LegIndex,
-            item.ProgressMeters,
-            item.State))
-        .ToArray();
-
-    public void Restore(IReadOnlyList<SimulationPedestrianCheckpoint> checkpoints, ulong restoredNextId, PedestrianNetworkStore network)
+    public IReadOnlyList<SimulationPedestrianCheckpoint> CreateCheckpoint()
     {
+        var result = new List<SimulationPedestrianCheckpoint>(pedestrians.Count);
+        foreach (var id in orderedIds)
+        {
+            if (!pedestrians.TryGetValue(id, out var item)) continue;
+            result.Add(new SimulationPedestrianCheckpoint(
+                item.Id,
+                item.Request.Id,
+                item.Request.Origin,
+                item.Request.Destination,
+                item.Request.Mode,
+                item.WalkingSpeedMetersPerSecond,
+                item.LegIndex,
+                item.ProgressMeters,
+                item.State));
+        }
+        return result.ToArray();
+    }
+
+    public void Restore(
+        IReadOnlyList<SimulationPedestrianCheckpoint> checkpoints,
+        ulong restoredNextId,
+        PedestrianNetworkStore network,
+        PedestrianSpatialIndex spatialIndex)
+    {
+        ArgumentNullException.ThrowIfNull(checkpoints);
+        ArgumentNullException.ThrowIfNull(network);
+        ArgumentNullException.ThrowIfNull(spatialIndex);
         pedestrians.Clear();
-        foreach (var checkpoint in checkpoints)
+        orderedIds.Clear();
+        occupancy.Clear();
+
+        var orderedCheckpoints = checkpoints.ToArray();
+        Array.Sort(orderedCheckpoints, static (left, right) => left.Id.Value.CompareTo(right.Id.Value));
+        foreach (var checkpoint in orderedCheckpoints)
         {
             var request = new TripRequest(checkpoint.TripRequestId, checkpoint.Origin, checkpoint.Destination, checkpoint.Mode);
             var route = network.FindRoute(checkpoint.Origin, checkpoint.Destination);
             var state = CreateState(checkpoint.Id, request, route, checkpoint.WalkingSpeedMetersPerSecond, checkpoint.LegIndex, checkpoint.ProgressMeters, checkpoint.State, network);
+            spatialIndex.ValidatePosition(state.Position);
             pedestrians.Add(checkpoint.Id, state);
+            orderedIds.Add(checkpoint.Id);
+            spatialIndex.Register(checkpoint.Id, state.Position);
         }
         nextId = restoredNextId;
     }
@@ -195,7 +242,11 @@ internal sealed class PedestrianStore
 
     private static (PedestrianEdgeId EdgeId, int Bin) GetOccupancyKey(PedestrianRouteLeg leg, double progress)
     {
-        var bin = (int)Math.Floor(progress / OccupancyBinLengthMeters);
+        var canonicalProgress = leg.FromNodeId.Value <= leg.ToNodeId.Value
+            ? progress
+            : leg.LengthMeters - progress;
+        canonicalProgress = Math.Clamp(canonicalProgress, 0d, leg.LengthMeters);
+        var bin = (int)Math.Floor(canonicalProgress / OccupancyBinLengthMeters);
         return (leg.EdgeId, bin);
     }
 

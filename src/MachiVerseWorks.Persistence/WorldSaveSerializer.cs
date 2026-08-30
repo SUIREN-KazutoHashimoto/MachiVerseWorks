@@ -108,6 +108,7 @@ public static class WorldSaveSerializer
         ValidateCount(checkpoint.LaneConnections.Count, limits.MaximumLaneConnectionCount, "LaneConnections");
         ValidateCount(checkpoint.RoadAccessPoints.Count, limits.MaximumRoadAccessPointCount, "RoadAccessPoints");
         ValidateCount(checkpoint.Pedestrians?.Count ?? 0, limits.MaximumPedestrianCount, "Pedestrians");
+        ValidateCount(checkpoint.PedestrianCrossings?.Count ?? 0, limits.MaximumPedestrianCrossingCount, "PedestrianCrossings");
     }
 
     private static SaveDataDocument CreateDocument(SimulationCheckpoint checkpoint)
@@ -198,6 +199,11 @@ public static class WorldSaveSerializer
             ProgressMeters = item.ProgressMeters,
             State = (byte)item.State,
         }).ToArray();
+        var pedestrianCrossings = (checkpoint.PedestrianCrossings ?? []).Select(static item => new SavePedestrianCrossingData
+        {
+            Id = item.Id.Value,
+            IsOpen = item.IsOpen,
+        }).ToArray();
 
         return new SaveDataDocument
         {
@@ -228,6 +234,7 @@ public static class WorldSaveSerializer
                 RoadAccessPoints = accessPoints,
                 NextPedestrianId = checkpoint.NextPedestrianId,
                 Pedestrians = pedestrians,
+                PedestrianCrossings = pedestrianCrossings,
             },
         };
     }
@@ -252,6 +259,7 @@ public static class WorldSaveSerializer
         var connectionsData = hasRoadNetwork ? simulation.LaneConnections ?? throw new InvalidDataException("Save Data is missing LaneConnection state.") : [];
         var accessData = hasRoadNetwork ? simulation.RoadAccessPoints ?? throw new InvalidDataException("Save Data is missing RoadAccessPoint state.") : [];
         var pedestrianData = hasPedestrians ? simulation.Pedestrians ?? throw new InvalidDataException("Save Data is missing Pedestrian state.") : [];
+        var pedestrianCrossingData = hasPedestrians ? simulation.PedestrianCrossings ?? [] : [];
         ValidateMaterializedCounts(
             savedAgents.Length,
             savedBuildings.Length,
@@ -262,6 +270,7 @@ public static class WorldSaveSerializer
             connectionsData.Length,
             accessData.Length,
             pedestrianData.Length,
+            pedestrianCrossingData.Length,
             limits);
 
         var agents = new SimulationAgentCheckpoint[savedAgents.Length];
@@ -375,6 +384,15 @@ public static class WorldSaveSerializer
                 (PedestrianMovementState)Require(item.State, $"pedestrians[{index}].state"));
         }
 
+        var pedestrianCrossings = new SimulationPedestrianCrossingCheckpoint[pedestrianCrossingData.Length];
+        for (var index = 0; index < pedestrianCrossings.Length; index++)
+        {
+            var item = pedestrianCrossingData[index] ?? throw new InvalidDataException($"PedestrianCrossing entry {index} is null.");
+            pedestrianCrossings[index] = new SimulationPedestrianCrossingCheckpoint(
+                new PedestrianCrossingId(Require(item.Id, $"pedestrianCrossings[{index}].id")),
+                Require(item.IsOpen, $"pedestrianCrossings[{index}].isOpen"));
+        }
+
         var checkpoint = new SimulationCheckpoint(
             Require(simulation.TickRate, "simulation.tickRate"),
             Require(simulation.Seed, "simulation.seed"),
@@ -399,7 +417,8 @@ public static class WorldSaveSerializer
             hasRoadNetwork ? Require(simulation.NextRoadAccessPointId, "simulation.nextRoadAccessPointId") : 1UL,
             accessPoints,
             hasPedestrians ? Require(simulation.NextPedestrianId, "simulation.nextPedestrianId") : 1UL,
-            pedestrians);
+            pedestrians,
+            pedestrianCrossings);
         return SimulationWorld.RestoreCheckpoint(checkpoint);
     }
 
@@ -419,6 +438,7 @@ public static class WorldSaveSerializer
         int connections,
         int accessPoints,
         int pedestrians,
+        int pedestrianCrossings,
         WorldSaveLimits limits)
     {
         ValidateCount(agents, limits.MaximumAgentCount, "Agents");
@@ -430,6 +450,7 @@ public static class WorldSaveSerializer
         ValidateCount(connections, limits.MaximumLaneConnectionCount, "LaneConnections");
         ValidateCount(accessPoints, limits.MaximumRoadAccessPointCount, "RoadAccessPoints");
         ValidateCount(pedestrians, limits.MaximumPedestrianCount, "Pedestrians");
+        ValidateCount(pedestrianCrossings, limits.MaximumPedestrianCrossingCount, "PedestrianCrossings");
     }
 
     private static void ValidateCount(int count, int maximum, string name)
@@ -452,6 +473,7 @@ public static class WorldSaveSerializer
             else if (reader.ValueTextEquals("laneConnections")) ValidateNamedArrayElementCount(ref reader, limits.MaximumLaneConnectionCount, "LaneConnection");
             else if (reader.ValueTextEquals("roadAccessPoints")) ValidateNamedArrayElementCount(ref reader, limits.MaximumRoadAccessPointCount, "RoadAccessPoint");
             else if (reader.ValueTextEquals("pedestrians")) ValidateNamedArrayElementCount(ref reader, limits.MaximumPedestrianCount, "Pedestrian");
+            else if (reader.ValueTextEquals("pedestrianCrossings")) ValidateNamedArrayElementCount(ref reader, limits.MaximumPedestrianCrossingCount, "PedestrianCrossing");
         }
     }
 

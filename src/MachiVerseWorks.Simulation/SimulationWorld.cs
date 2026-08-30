@@ -12,6 +12,7 @@ public sealed partial class SimulationWorld
     {
         Config = config ?? new SimulationConfig();
         _spatialIndex = new SpatialIndex(Config.SpatialCellSize);
+        _pedestrianSpatialIndex = new PedestrianSpatialIndex(Config.SpatialCellSize);
         _roads = new RoadNetworkStore(Config.SpatialCellSize);
         _random = new DeterministicRandom(Config.Seed);
         Time = default;
@@ -60,17 +61,21 @@ public sealed partial class SimulationWorld
     public bool TryGetAgentSnapshot(AgentId id, out AgentSnapshot snapshot) => _agents.TryGetSnapshot(id, Time.TickCount, out snapshot);
     public AgentSnapshot[] CreateSnapshot(WorldVolume volume) => _agents.CreateSnapshot(volume, _spatialIndex, Time.TickCount);
 
-    public SimulationCheckpoint CreateCheckpoint() => new(
-        Config.TickRate, Config.Seed, Config.SpatialCellSize, Time.TickCount, Time.Elapsed.Ticks, _random.State,
-        _agents.NextId, _agents.CreateCheckpoint(),
-        _buildings.NextId, _buildings.CreateCheckpoint(),
-        _pois.NextId, _pois.CreateCheckpoint(),
-        _roads.NextNodeId, _roads.CreateNodeCheckpoint(),
-        _roads.NextSegmentId, _roads.CreateSegmentCheckpoint(),
-        _roads.NextLaneId, _roads.CreateLaneCheckpoint(),
-        _roads.NextConnectionId, _roads.CreateConnectionCheckpoint(),
-        _roads.NextAccessPointId, _roads.CreateAccessPointCheckpoint(),
-        _pedestrians.NextId, _pedestrians.CreateCheckpoint());
+    public SimulationCheckpoint CreateCheckpoint()
+    {
+        EnsurePedestrianNetwork();
+        return new SimulationCheckpoint(
+            Config.TickRate, Config.Seed, Config.SpatialCellSize, Time.TickCount, Time.Elapsed.Ticks, _random.State,
+            _agents.NextId, _agents.CreateCheckpoint(),
+            _buildings.NextId, _buildings.CreateCheckpoint(),
+            _pois.NextId, _pois.CreateCheckpoint(),
+            _roads.NextNodeId, _roads.CreateNodeCheckpoint(),
+            _roads.NextSegmentId, _roads.CreateSegmentCheckpoint(),
+            _roads.NextLaneId, _roads.CreateLaneCheckpoint(),
+            _roads.NextConnectionId, _roads.CreateConnectionCheckpoint(),
+            _roads.NextAccessPointId, _roads.CreateAccessPointCheckpoint(),
+            _pedestrians.NextId, _pedestrians.CreateCheckpoint(), _pedestrianNetwork.CreateCrossingCheckpoint());
+    }
 
     public static SimulationWorld RestoreCheckpoint(SimulationCheckpoint checkpoint)
     {
@@ -103,7 +108,12 @@ public sealed partial class SimulationWorld
         world.RestoreUrbanObjects(checkpoint);
         world._roads.Restore(checkpoint);
         world.EnsurePedestrianNetwork();
-        world._pedestrians.Restore(checkpoint.Pedestrians ?? Array.Empty<SimulationPedestrianCheckpoint>(), checkpoint.NextPedestrianId, world._pedestrianNetwork);
+        world._pedestrianNetwork.RestoreCrossingPermissions(checkpoint.PedestrianCrossings ?? Array.Empty<SimulationPedestrianCrossingCheckpoint>());
+        world._pedestrians.Restore(
+            checkpoint.Pedestrians ?? Array.Empty<SimulationPedestrianCheckpoint>(),
+            checkpoint.NextPedestrianId,
+            world._pedestrianNetwork,
+            world._pedestrianSpatialIndex);
         return world;
     }
 

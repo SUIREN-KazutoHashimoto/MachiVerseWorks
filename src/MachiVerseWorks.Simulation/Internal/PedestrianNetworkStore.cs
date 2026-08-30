@@ -109,6 +109,22 @@ internal sealed class PedestrianNetworkStore
         return new PedestrianNetworkSnapshot(nodeArray, edgeArray, crossingArray);
     }
 
+    public SimulationPedestrianCrossingCheckpoint[] CreateCrossingCheckpoint() => crossings.Keys
+        .OrderBy(static id => id.Value)
+        .Select(id => new SimulationPedestrianCrossingCheckpoint(id, IsCrossingOpen(id)))
+        .ToArray();
+
+    public void RestoreCrossingPermissions(IReadOnlyList<SimulationPedestrianCrossingCheckpoint> checkpoints)
+    {
+        ArgumentNullException.ThrowIfNull(checkpoints);
+        foreach (var checkpoint in checkpoints)
+        {
+            if (!crossings.ContainsKey(checkpoint.Id))
+                throw new ArgumentException($"Pedestrian crossing {checkpoint.Id.Value} does not exist in the restored Road Network.", nameof(checkpoints));
+            crossingPermissions[checkpoint.Id] = checkpoint.IsOpen;
+        }
+    }
+
     public bool TrySetCrossingOpen(PedestrianCrossingId id, bool isOpen)
     {
         if (!crossings.ContainsKey(id)) return false;
@@ -126,24 +142,40 @@ internal sealed class PedestrianNetworkStore
 
     public PedestrianRoute FindRoute(TripEndpoint origin, TripEndpoint destination)
     {
-        var start = ResolveEndpoint(origin, nameof(origin));
-        var end = ResolveEndpoint(destination, nameof(destination));
-        if (start == end) return new PedestrianRoute(start, end, 0d, []);
+        var starts = ResolveEndpointCandidates(origin, nameof(origin));
+        var ends = ResolveEndpointCandidates(destination, nameof(destination));
+        var startSet = new HashSet<PedestrianNodeId>(starts);
+        var endSet = new HashSet<PedestrianNodeId>(ends);
 
-        var distances = new Dictionary<PedestrianNodeId, double> { [start] = 0d };
+        foreach (var start in starts)
+        {
+            if (endSet.Contains(start)) return new PedestrianRoute(start, start, 0d, []);
+        }
+
+        var distances = new Dictionary<PedestrianNodeId, double>(starts.Count);
         var previous = new Dictionary<PedestrianNodeId, (PedestrianNodeId Node, PedestrianEdgeId Edge)>();
         var queue = new PriorityQueue<PedestrianNodeId, (double Distance, ulong NodeId)>();
-        queue.Enqueue(start, (0d, start.Value));
+        foreach (var start in starts)
+        {
+            distances[start] = 0d;
+            queue.Enqueue(start, (0d, start.Value));
+        }
 
+        PedestrianNodeId? selectedEnd = null;
         while (queue.TryDequeue(out var current, out var priority))
         {
             if (!distances.TryGetValue(current, out var known) || priority.Distance > known) continue;
-            if (current == end) break;
+            if (endSet.Contains(current))
+            {
+                selectedEnd = current;
+                break;
+            }
             if (!adjacency.TryGetValue(current, out var incident)) continue;
             foreach (var edgeId in incident)
             {
                 var edge = edges[edgeId];
                 var next = edge.FirstNodeId == current ? edge.SecondNodeId : edge.FirstNodeId;
+                if (startSet.Contains(next)) continue;
                 var candidate = known + edge.LengthMeters;
                 if (!distances.TryGetValue(next, out var old) || candidate < old || (candidate == old && IsPreferredPredecessor(current, edgeId, previous, next)))
                 {
@@ -154,18 +186,20 @@ internal sealed class PedestrianNetworkStore
             }
         }
 
-        if (!distances.TryGetValue(end, out var total)) throw new InvalidOperationException("No walkable pedestrian route exists between the requested endpoints.");
+        if (selectedEnd is not { } end || !distances.TryGetValue(end, out var total))
+            throw new InvalidOperationException("No walkable pedestrian route exists between the requested endpoints.");
+
         var reversed = new List<PedestrianRouteLeg>();
         var cursor = end;
-        while (cursor != start)
+        while (previous.TryGetValue(cursor, out var step))
         {
-            if (!previous.TryGetValue(cursor, out var step)) throw new InvalidOperationException("Pedestrian route predecessor chain is incomplete.");
             var edge = edges[step.Edge];
             reversed.Add(new PedestrianRouteLeg(step.Edge, step.Node, cursor, edge.LengthMeters));
             cursor = step.Node;
         }
+        if (!startSet.Contains(cursor)) throw new InvalidOperationException("Pedestrian route predecessor chain does not terminate at an origin access point.");
         reversed.Reverse();
-        return new PedestrianRoute(start, end, total, reversed.ToArray());
+        return new PedestrianRoute(cursor, end, total, reversed.ToArray());
     }
 
     public WorldPoint GetNodePosition(PedestrianNodeId id)
@@ -243,13 +277,12 @@ internal sealed class PedestrianNetworkStore
         crossingPermissions[id] = open;
     }
 
-    private PedestrianNodeId ResolveEndpoint(TripEndpoint endpoint, string parameterName)
+    private IReadOnlyList<PedestrianNodeId> ResolveEndpointCandidates(TripEndpoint endpoint, string parameterName)
     {
         if ((endpoint.BuildingId is null) == (endpoint.PoiId is null)) throw new ArgumentException("Trip endpoint must reference exactly one Building or POI.", parameterName);
-        PedestrianNodeId? resolved = null;
-        if (endpoint.PoiId is { } poiId && poiNodes.TryGetValue(poiId, out var poiCandidates) && poiCandidates.Count > 0) resolved = poiCandidates[0];
-        if (resolved is null && endpoint.BuildingId is { } buildingId && buildingNodes.TryGetValue(buildingId, out var buildingCandidates) && buildingCandidates.Count > 0) resolved = buildingCandidates[0];
-        return resolved ?? throw new InvalidOperationException("Trip endpoint does not have a Foot road access point on the pedestrian network.");
+        if (endpoint.PoiId is { } poiId && poiNodes.TryGetValue(poiId, out var poiCandidates) && poiCandidates.Count > 0) return poiCandidates;
+        if (endpoint.BuildingId is { } buildingId && buildingNodes.TryGetValue(buildingId, out var buildingCandidates) && buildingCandidates.Count > 0) return buildingCandidates;
+        throw new InvalidOperationException("Trip endpoint does not have a Foot road access point on the pedestrian network.");
     }
 
     private static bool IsPreferredPredecessor(PedestrianNodeId current, PedestrianEdgeId edge, Dictionary<PedestrianNodeId, (PedestrianNodeId Node, PedestrianEdgeId Edge)> previous, PedestrianNodeId next)
