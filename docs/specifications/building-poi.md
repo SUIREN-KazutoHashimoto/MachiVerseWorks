@@ -28,7 +28,7 @@ Buildingは次の値を持つ。
 | 4 | `Civic` | 公共・行政・公共施設 |
 | 5 | `MixedUse` | 複合用途 |
 
-Buildingの形状はPhase 10では`WorldVolume`だけを正本とする。polygon footprint、rotation、mesh、floor、entrance、capacity、所有者、住所、名称はまだ持たない。
+Buildingの形状はPhase 10では`WorldVolume`だけを正本とする。polygon footprint、rotation、mesh、floor、entrance、capacity、所有者、住所、名称は持たない。`Bounds`のMinZ / MaxZが3D占有高度を表すため、別のbase altitude / height fieldを重複して正本化しない。
 
 ## POI
 
@@ -72,10 +72,10 @@ IDを表示名の代わりに使うことは想定しない。名称・住所な
 - 存在しないBuildingを参照するPOIは作成・復元できない。
 - Buildingに所属するPOIはBuilding範囲外へ置けない。
 - POIから参照されているBuildingは削除できない。
-- 現Phaseに参照付替えAPIはないため、削除したい場合は参照POIを先に削除する。
+- RoadAccessPointやPedestrian Trip等、後続domainから参照されているBuilding / POIも参照を解消するまで削除できない。
 - checkpoint / Save Data復元時も同じ参照整合性を全件検証する。
 
-## Snapshot / checkpoint
+## Snapshot / checkpoint / Save
 
 Simulationのmutable storeは外部公開しない。
 
@@ -83,17 +83,22 @@ Simulationのmutable storeは外部公開しない。
 - 全件snapshotはID昇順で返し、同一stateから決定的な順序を得る。
 - `SimulationCheckpoint`はBuilding / POIの全stateと次IDを保持する。
 - restore完了後に新規生成したIDは、保存・復元しなかったWorldと同じID系列を継続する。
+- Building / POIはSave Dataのauthoritative stateとして保存し、round-trip後もstable ID、3D値、親Building参照を維持する。
 
-## Phase 10 の非対象
+## Phase 10 の責務境界
 
-- ProtocolへのBuilding / POI message追加
-- Server subscriptionによるBuilding / POI配信
-- Web Clientでの建物・POI描画
-- 建物mesh / floor / room / entrance
-- Agent needs / schedule / householdとPOI選択
-- 道路・歩道・鉄道との接続
-- zoning / parcel / land use
-- 建設・撤去command UI
-- 名称・住所・locale対応
+Phase 10は**Building / POIの最小authoritative foundation**までを対象とする。Parcel、zoning、generic urban rendering等までを同じPhaseの完了条件へ含めない。この境界をROADMAPのPhase 10と正本として一致させる。
 
-これらはBuilding / POIの正本モデルを参照する後続Phaseで定義する。
+Phase 10で扱わない計画済み項目は削除せず、次へ明示的に委譲する。
+
+| 項目 | 正本となるPhase / 境界 |
+| --- | --- |
+| Road上のBuilding / POI access | Phase 11 `RoadAccessPoint` |
+| 徒歩networkへのBuilding / POI access | Phase 16 pedestrian network |
+| Parcel / zoning / land use / development | Phase 23 Urban Growth & City Generation |
+| Building / Parcel / POIのInspector・編集UI | Phase 24 City Management UI |
+| 建物mesh / floor / room / entrance | 必要になるdomain Phaseで契約追加。Phase 10では`WorldVolume`を正本とする |
+| Agent needs / schedule / householdとPOI選択 | Phase 15 Population & Daily Activity |
+| 名称・住所・locale対応 | UI / localization境界の後続Phase |
+
+Protocol / Server / WebへBuilding / POIそのものを汎用配信する必要が生じた場合も、利用目的を持つ後続Phaseでversioned contractとして追加する。Phase 10のmodelをWeb表示都合へ拡張して完了条件を後付けしない。

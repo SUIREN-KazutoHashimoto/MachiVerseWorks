@@ -2,8 +2,8 @@
 
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 10 — Urban World Foundation（次）
-> **次の実装タスク:** P10-001 — Urban World の静的 Entity 契約・責務境界を仕様化する
+> **現在:** Phase 12 — Routing Foundation（次）
+> **次の実装タスク:** P12-001 — Route request / result / routing costの責務とstable ID参照契約を仕様化する
 
 ## 全体の現在地
 
@@ -19,13 +19,13 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 7 | 性能基盤の拡張 | ✅ 完了 |
 | 8 | 保存・復元基盤 | ✅ 完了 |
 | 9 | 3D Simulation Foundation | ✅ 完了 |
-| 10 | Urban World Foundation | ⏭️ 次 |
-| 11 | Road Network Foundation | ⏳ 待機 |
-| 12 | Routing Foundation | ⏳ 待機 |
+| 10 | Urban World Foundation | ✅ 完了 |
+| 11 | Road Network Foundation | ✅ 完了・develop統合済み |
+| 12 | Routing Foundation | ⏭️ 次 |
 | 13 | Road Traffic Simulation | ⏳ 待機 |
 | 14 | Intersection & Signal Control | ⏳ 待機 |
 | 15 | Population & Daily Activity | ⏳ 待機 |
-| 16 | Pedestrian Simulation | ⏳ 待機 |
+| 16 | Pedestrian Simulation | 🟦 develop統合済み・依存closeout待ち |
 | 17 | Railway Infrastructure | ⏳ 待機 |
 | 18 | Railway Operations | ⏳ 待機 |
 | 19 | Multimodal Transit | ⏳ 待機 |
@@ -52,6 +52,8 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 - 作業中に新しい依存関係が見つかった場合は、後続PhaseのTaskを更新してから実装を進める。
 - Phaseから外した計画済み項目は暗黙に削除せず、対応Phaseまたは継続Backlogへ必ず移す。
 - 完了済みPhaseの詳細は必要に応じて `docs/archive/` へ移し、現行ROADMAPを次の判断に使いやすく保つ。
+- **Task実装状態・`develop`統合状態・Phase正式closeoutは別の状態として扱う。** 後続Phaseの実装を依存Phase完了前に先行mergeする場合、安定した既存境界だけに依存し、未完了依存を完了扱いにせず、ROADMAPへ「develop統合済み / closeout待ち」と理由を記録する。
+- 先行mergeは依存順を無効化しない。依存Phaseが正式完了するまで、後続Phase全体を✅へせず、依存部分のTaskを明示的に未完了で残す。
 
 ## Phase 10以降の依存順
 
@@ -76,7 +78,7 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
   -> Extension Platform / Localization
 ```
 
-この順番は、後続機能が前段の正本モデルを再利用できることを優先する。見た目だけを先行させず、Simulationの状態・保存・配信・描画・検証をPhase内で閉じる。
+この順番は、後続機能が前段の正本モデルを再利用できることを優先する。先行mergeを行っても、Phaseの正式closeout順は依存関係に従う。
 
 ---
 
@@ -123,56 +125,45 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 
 ---
 
-## Phase 10 — Urban World Foundation
+## Phase 10 — Urban World Foundation（完了）
 
-> **状態: ⬜ 未着手（次）**  
+> **状態: ✅ 完了**  
 > **依存:** Phase 9  
-> 建物・POI・区画・土地用途をSimulationの正本データとして保持し、都市の静的な3D空間を保存・配信・描画できる基盤を作る。
+> Building / POIを後続domainがstable IDで参照できる最小authoritative 3D foundationとして確立する。Phase 10の正本スコープは[`docs/specifications/building-poi.md`](docs/specifications/building-poi.md)と一致し、Parcel / zoning / generic Web表示は後続Phaseへ委譲する。
 
-### 契約・データモデル
+- ✅ **P10-001** — Building / POIの所有責務・stable ID・native 3D座標契約を仕様化する
+- ✅ **P10-002** — Buildingのstable ID・用途分類・`WorldVolume Bounds`を表す最小モデルとstore lifecycleを実装する
+- ✅ **P10-003** — POIのstable ID・category・3D位置・任意の親Building参照を表すモデルを実装する
+- ✅ **P10-004** — Building / POIのcreate/remove/queryと参照整合性・failure atomicityを実装する
+- ✅ **P10-005** — Building / POIをsnapshot / checkpointへ含め、stable IDとnext IDのdeterministic restoreを検証する
+- ✅ **P10-006** — Building / POIをSave Dataへ含め、3D値と参照関係のround-tripを検証する
+- ✅ **P10-007** — Building / POI specificationとROADMAPの責務境界・既実装evidenceを同期する
 
-- ⬜ **P10-001** — Urban Worldの静的Entity種別・所有責務・ID・座標契約を仕様化する
-- ⬜ **P10-002** — Buildingのfootprint・基準高度・高さ・用途・状態を表す最小データモデルを実装する
-- ⬜ **P10-003** — POIのstable ID・category・3D位置・親Building参照を表すモデルを実装する
-- ⬜ **P10-004** — Parcelの境界・土地用途・占有状態を表す最小データモデルを実装する
-- ⬜ **P10-005** — Building / POIの入口・access pointを3D位置として表す契約を追加する
+### Phase 10から後続へ委譲した計画済み項目
 
-### Simulation・空間検索
-
-- ⬜ **P10-006** — Building / POI / Parcelのstoreとstable ID lifecycleをSimulationへ追加する
-- ⬜ **P10-007** — Urban Entityを`WorldVolume`で検索できる3D spatial indexを実装する
-- ⬜ **P10-008** — Urban Entityの追加・更新・削除commandをfailure atomicに実装する
-- ⬜ **P10-009** — Urban World stateをsnapshot / checkpointへ含め、round-tripとdeterminismをテストする
-
-### Save・Protocol・Server
-
-- ⬜ **P10-010** — Urban World stateをSave Dataへ追加し、必要ならSave format versionを更新する
-- ⬜ **P10-011** — 静的Entityのspawn/update/removeまたはsnapshot配信契約をProtocolへ追加し、必要ならProtocol versionを更新する
-- ⬜ **P10-012** — Serverがsubscription volume内のUrban EntityだけをClientへ配信する経路を実装する
-
-### Web Client・検証
-
-- ⬜ **P10-013** — Web Clientに静的Urban Entity storeを追加し、再接続・subscription変更でも整合させる
-- ⬜ **P10-014** — Buildingを実3D geometryとして描画し、高度・footprint・高さを視覚反映する
-- ⬜ **P10-015** — POI / Parcel / land-useをdebug表示できる最小可視化を追加する
-- ⬜ **P10-016** — Building / POI / Parcelを含むdeterministicな小規模都市fixtureを追加する
-- ⬜ **P10-017** — Save→Server→Protocol→BrowserまでUrban World stateを確認するE2Eを追加する
-- ⬜ **P10-018** — 10,000 / 100,000級の静的Entityを対象にspatial query・配信・描画のbenchmarkを記録する
-- ⬜ **P10-019** — Urban Worldのspecification / architecture / ROADMAPを実装結果へ同期する
+| 項目 | 正本となるPhase / 境界 |
+| --- | --- |
+| Road上のBuilding / POI access | Phase 11 `RoadAccessPoint` |
+| 徒歩networkへのBuilding / POI access | Phase 16 |
+| Parcel / zoning / land use / development | Phase 23 |
+| Building / Parcel / POIのInspector・編集UI | Phase 24 |
+| 建物mesh / floor / room / entrance | 必要になるdomain Phaseで契約追加。Phase 10では`WorldVolume`のみを正本とする |
+| PopulationによるPOI選択 | Phase 15 |
 
 ### Phase 10 完了条件
 
-- Building / POI / ParcelがSimulationの正本状態として存在し、3D空間検索・保存復元・subscription配信できる。
-- Browser上でAgentだけでなく都市の静的構造が実geometryとして観測できる。
-- 大規模な静的Entity数で、空間検索・配信・描画の基準値が再現可能な形で残っている。
+- Building / POIが独立したstable IDとnative 3D stateを持つSimulation正本状態として存在する。
+- 親Building参照を含む整合性をcheckpoint / Save round-trip後も維持できる。
+- Parcel / zoning / generic UIをPhase 10完了条件へ混在させず、後続Phaseの責務として一意に追跡できる。
 
 ---
 
-## Phase 11 — Road Network Foundation
+## Phase 11 — Road Network Foundation（完了・develop統合済み）
 
-> **状態: 実装検証済み・Phase 10 closeout待ち**  
+> **状態: ✅ 完了 / develop統合済み**  
 > **依存:** Phase 10  
-> 道路・交差点接続・車線を、経路探索と交通Simulationが利用できる3D topologyとして確立する。個別Taskは先行実装・検証済みだが、依存するPhase 10全体が未完了のため、Phase 11の正式closeoutと`develop`への統合判定はPhase 10完了後に行う。
+> **統合:** PR #47、merge commit `0d1d0f5bb32ae656bab238596a588493061ad36a`  
+> 道路・交差点接続・車線を、経路探索と交通Simulationが利用できる3D topologyとして確立する。PR #47はPhase 10の旧ROADMAP closeoutより先にdevelopへ統合されたが、これはTask実装・develop統合・Phase正式closeoutを分離して扱う先行mergeであり、依存完了を意味するものではなかった。Phase 10の正本スコープ同期とcloseoutにより、Phase 11も正式closeoutとする。
 
 - ✅ **P11-001** — Road Networkの軸・接続・方向・高度・道路種別の正本契約を仕様化する
 - ✅ **P11-002** — RoadNode / RoadSegmentのstable IDと3D geometryを実装する
@@ -199,9 +190,8 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 - Road NetworkをcheckpointとSave format 4へ保存し、道路を持たないformat 3をformat 4へ移行できる。
 - Protocol 2.1でRoad Network snapshotを追加し、2.0 connectionにはRoad messageを送らず既存Agent契約を維持する。
 - deterministic fixtureは地下・地上・高架を含み、Browser E2Eで9 Node / 5 Segment / 2 Lane / 1 LaneConnection / 1 RoadAccessPointと、`-15m` / `0m` / `20m`の描画高度を実Server経由で確認した。
-- [`docs/development/road-network-benchmark.md`](docs/development/road-network-benchmark.md)へ10,000 / 100,000 Segmentの実測基準を記録し、100,000 Segmentでspatial query 3.816ms、全件snapshot 22.556ms、stable ID lookup 3.575nsを確認した。
-- closeout候補`0.13.14`でCI、Dependency Review、Phase 6 E2E、Phase 7 benchmark、Phase 9 regression benchmark、Phase 11 Road Network E2E、Phase 11 Road Network Benchmarkがすべて成功した。
-- Phase 10が未完了のため、全体の現在地ではPhase 11を`⏳ 待機`のままとし、依存順を飛ばして正式完了扱いにはしない。
+- [`docs/development/road-network-benchmark.md`](docs/development/road-network-benchmark.md)へ10,000 / 100,000 Segmentの実測基準を記録した。
+- PR #47は依存Phaseの旧closeout表記より先にdevelopへmergeされた。今後同様の先行mergeはROADMAP運用ルールに従い、統合済みと正式closeout待ちを明示的に分離する。
 
 ### Phase 11 完了条件
 
@@ -213,7 +203,7 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 
 ## Phase 12 — Routing Foundation
 
-> **状態: ⬜ 未着手**  
+> **状態: ⬜ 未着手（次）**  
 > **依存:** Phase 11  
 > Road / Lane topology上で決定的な経路探索を行い、後続交通modeが共有できるRoute契約を作る。
 
@@ -334,31 +324,32 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 
 ## Phase 16 — Pedestrian Simulation
 
-> **状態: ⬜ 未着手**  
+> **状態: 🟦 develop統合済み・Phase 12 / 15 closeout待ち**  
 > **依存:** Phase 12 / 15  
-> 徒歩移動ネットワークとPedestrianを実装し、Building entrance間を実際に徒歩移動できるようにする。
+> **統合:** PR #61、merge commit `8fd6f2ef866464cc6051111ef343de11948a1eaf`  
+> 徒歩network・Pedestrian entity・保存・Protocol/Server/Web・E2E/benchmarkは先行実装されdevelopへ統合済み。Population由来Trip Requestとの接続はPhase 15が未実装のためP16-009を未完了で残し、Phase 16全体は正式closeoutしない。
 
-- ⬜ **P16-001** — pedestrian network / sidewalk / crossingの正本契約を仕様化する
-- ⬜ **P16-002** — Road Networkから歩行可能edgeとcrossingを構築する境界を実装する
-- ⬜ **P16-003** — Building / POI access pointをpedestrian networkへ接続する
-- ⬜ **P16-004** — 徒歩専用routingとRoute resultを実装する
-- ⬜ **P16-005** — Pedestrian entity・stable ID・歩行速度・route progressを実装する
-- ⬜ **P16-006** — sidewalk geometryに沿う3D歩行更新を固定tickで実装する
-- ⬜ **P16-007** — 横断歩道でSignal / intersection permissionを考慮する
-- ⬜ **P16-008** — 最小の歩行密度 / occupancy制約を実装し、同一点集中を抑制する
-- ⬜ **P16-009** — 徒歩TripをPopulationのTrip Requestへ接続する
-- ⬜ **P16-010** — Pedestrian stateをcheckpoint / Save Dataへ含める
-- ⬜ **P16-011** — PedestrianをProtocol / Serverでsubscription配信する
-- ⬜ **P16-012** — Web ClientでPedestrianをinstance描画・補間する
-- ⬜ **P16-013** — Building間徒歩Tripを実Server→Browserで検証するE2Eを追加する
-- ⬜ **P16-014** — 大規模Pedestrianのtick・routing・occupancy benchmarkを記録する
-- ⬜ **P16-015** — Pedestrianのspecification / architecture / ROADMAPを同期する
+- ✅ **P16-001** — pedestrian network / sidewalk / crossingの正本契約を仕様化する
+- ✅ **P16-002** — Road Networkから歩行可能edgeとcrossingを構築する境界を実装する
+- ✅ **P16-003** — Building / POI access pointをpedestrian networkへ接続する
+- ✅ **P16-004** — 徒歩専用routingとRoute resultを実装する
+- ✅ **P16-005** — Pedestrian entity・stable ID・歩行速度・route progressを実装する
+- ✅ **P16-006** — sidewalk geometryに沿う3D歩行更新を固定tickで実装する
+- ✅ **P16-007** — crossing permission seamを実装し、横断可否で待機/再開できるようにする
+- ✅ **P16-008** — 最小の歩行occupancy制約を実装し、同一edge位置の競合を抑制する
+- ⬜ **P16-009** — 徒歩TripをPopulationのTrip Requestへ接続する（Phase 15待ち）
+- ✅ **P16-010** — Pedestrian stateとcrossing permissionをcheckpoint / Save Dataへ含める
+- ✅ **P16-011** — PedestrianをProtocol / Serverでsubscription配信する
+- ✅ **P16-012** — Web ClientでPedestrianをinstance描画・補間する
+- ✅ **P16-013** — Building間徒歩Tripを実Server→Browserで検証するE2Eを追加する
+- ✅ **P16-014** — 1,000 / 10,000 Pedestrianのtick・routing・occupancy benchmarkを記録する
+- ✅ **P16-015** — Pedestrianのspecification / architecture / ROADMAPを同期する
 
 ### Phase 16 完了条件
 
-- Personが道路交通を使わず、Building / POI間を徒歩Routeで移動できる。
-- crossingで道路・信号との最低限の相互作用がある。
-- 多数Pedestrianでも全件相互比較に依存しない実装になっている。
+- Populationが生成するTrip Requestから徒歩Tripを開始できること。**P16-009が未完了のため現在未達。**
+- Building / POI間を徒歩Routeで移動し、crossing permissionとoccupancyを考慮できる。
+- Pedestrian stateを保存・subscription配信・Browser描画でき、多数Pedestrianで全件相互比較に依存しない。
 
 ---
 
@@ -549,10 +540,10 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 
 > **状態: ⬜ 未着手**  
 > **依存:** Phase 10〜22の主要都市モデル  
-> Zoning / Land Useとdeterministic city generationを導入し、都市を手作業fixtureだけでなく生成・成長させられるようにする。
+> Parcel / Zoning / Land Useとdeterministic city generationを導入し、都市を手作業fixtureだけでなく生成・成長させられるようにする。Phase 10から委譲されたParcel / land-useの正本はこのPhaseで導入する。
 
-- ⬜ **P23-001** — Zone種別・土地利用・development stateの正本契約を仕様化する
-- ⬜ **P23-002** — ParcelへZone designationを設定できるSimulation commandを実装する
+- ⬜ **P23-001** — Parcel境界・Zone種別・土地利用・占有/development stateの正本契約を仕様化する
+- ⬜ **P23-002** — Parcel store / stable ID lifecycleとZone designationを設定するSimulation commandを実装する
 - ⬜ **P23-003** — Road access・parcel size・land useからdevelopment suitabilityを評価する
 - ⬜ **P23-004** — Zoneに応じたBuilding用途・規模候補を選ぶdevelopment ruleを実装する
 - ⬜ **P23-005** — 空ParcelへのBuilding development lifecycleを実装する
@@ -562,17 +553,17 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 - ⬜ **P23-009** — Parcel / ZoneからBuilding / POIを生成するdeterministic generatorを実装する
 - ⬜ **P23-010** — 初期Population / Household / Jobを生成都市へ配置するseeding処理を実装する
 - ⬜ **P23-011** — Railway / Power等の既存Infrastructureを壊さないgeneration constraintを定義する
-- ⬜ **P23-012** — city generation設定・seed・生成結果をSave / checkpoint契約へ統合する
-- ⬜ **P23-013** — Web ClientでZone / development state / generation結果を可視化する
+- ⬜ **P23-012** — Parcel / Zone / city generation設定・seed・生成結果をSave / checkpoint契約へ統合する
+- ⬜ **P23-013** — Parcel / Zone / development stateをProtocol / Serverで配信し、Web Clientで可視化する
 - ⬜ **P23-014** — 同一seedで同一都市を生成するreproducibility E2Eを追加する
 - ⬜ **P23-015** — 小/中/大規模都市generation時間・memory・初期Simulation負荷benchmarkを記録する
 - ⬜ **P23-016** — Urban Growth / City Generationのspecification / architecture / ROADMAPを同期する
 
 ### Phase 23 完了条件
 
-- Zone指定からBuilding developmentへ状態が遷移できる。
+- Parcel / Zone / land-useがSimulation正本として存在し、Zone指定からBuilding developmentへ状態が遷移できる。
 - 同一seed・設定から同一のRoad / Parcel / Buildingを再生成できる。
-- 生成都市へPopulation・Economy・Infrastructureを接続してSimulationを開始できる。
+- Parcel / Zone状態を保存・配信・可視化できる。
 
 ---
 
@@ -585,7 +576,7 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 - ⬜ **P24-001** — Build / Edit commandの認可・validation・ack/error契約を仕様化する
 - ⬜ **P24-002** — Protocolへserver-authoritative command request / resultの共通枠組みを追加する
 - ⬜ **P24-003** — Web Clientで3D Entityを選択するpicking / selection基盤を実装する
-- ⬜ **P24-004** — Building / Parcel / POI / Person / Vehicle等を表示するInspector基盤を実装する
+- ⬜ **P24-004** — Building / Parcel / POI / Person / Vehicle等をServer read modelから表示するInspector基盤を実装する
 - ⬜ **P24-005** — Road / Laneのbuild / edit / remove commandとUIを実装する
 - ⬜ **P24-006** — Building / POI / Parcel / Zoneのbuild / edit commandとUIを実装する
 - ⬜ **P24-007** — Railway track / station / platformのbuild / edit commandとUIを実装する
@@ -706,7 +697,7 @@ Phase 9終了時点で列挙していた将来Backlogは、以下の通りPhase 
 | Industry / jobs / economy | Phase 20 |
 | Logistics / freight | Phase 21 |
 | Power generation / grid / demand | Phase 22 |
-| Zoning / land use | Phase 23 |
+| Parcel / zoning / land use | Phase 23 |
 | City generation | Phase 23 |
 | Inspector / dashboard / statistics UI | Phase 24 |
 | Build / edit commands | Phase 24 |

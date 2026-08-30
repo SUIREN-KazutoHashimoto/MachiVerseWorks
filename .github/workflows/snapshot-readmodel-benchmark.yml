@@ -31,15 +31,24 @@ jobs:
           global-json-file: global.json
       - name: Restore
         run: dotnet restore MachiVerseWorks.slnx
-      - name: Run 10/100 client benchmark
+      - name: Build benchmark project
+        run: dotnet build benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-restore
+      - name: Measure 10/100 client average p95 p99
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/snapshot-readmodel-benchmark
+          dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-build -- --read-model-latency \
+            | tee .artifacts/snapshot-readmodel-benchmark/latency.csv
+      - name: Run BenchmarkDotNet allocation benchmark
         env:
           MACHIVERSE_BENCHMARK_ARTIFACTS: ${{ github.workspace }}/.artifacts/snapshot-readmodel-benchmark
-        run: dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-restore -- --filter '*PublishedReadModelBenchmarks*' --job short
+        run: dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-build -- --filter '*PublishedReadModelBenchmarks*' --job short
       - name: Upload benchmark artifacts
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: snapshot-readmodel-benchmark
           path: .artifacts/snapshot-readmodel-benchmark
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14

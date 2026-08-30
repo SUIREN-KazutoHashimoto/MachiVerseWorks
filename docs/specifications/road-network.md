@@ -24,6 +24,8 @@ Road NetworkはRouting・Road Traffic・Intersection Controlが共有するSimul
 
 LaneはRoadSegmentに所属し、`Direction`、`Order`、`WidthMeters`、`SpeedLimitMetersPerSecond`を持つ。`Forward`はsegmentのStart→End、`Reverse`はEnd→Startである。同一segment・同一direction内で`Order`は一意とする。幅と速度上限はfiniteかつ0より大きい。
 
+`Order`は**物理距離ではなく内側から外側への順序key**であり、0からの連番を要求しない。表示や将来のlane center geometryを求める場合は同一segment・directionのLaneを`Order`昇順に並べ、対象Laneより前の`WidthMeters`合計 + 自Lane幅の1/2をcenter offsetとする。したがって可変幅Laneでもgap / overlapを作らず、`Order=0, 5, 20`のような欠番を距離へ直接換算しない。Forward / Reverseでは道路中心線に対するoffset符号を反転する。
+
 ## LaneConnection / intersection
 
 車線間移動は`LaneConnection`だけが表す。connectionは`FromLaneId`、`ToLaneId`、`ViaNodeId`、`TurnMovement`を持つ。From Laneの退出nodeとTo Laneの進入nodeは同じ`ViaNodeId`でなければならず、Via Nodeは`Intersection`でなければならない。
@@ -49,6 +51,14 @@ RoadAccessPointから参照されているBuilding / POIは、該当RoadAccessPo
 ## 3D spatial query
 
 RoadNodeは3D cell、RoadSegmentは3D AABBをspatial indexへ登録する。巨大segmentはcell全展開を避け、別集合でbroad-phase判定する。query結果はsegment AABBとvolumeの交差を確認し、選択segmentのendpoint node、lane、内部lane connection、access pointを一緒に返す。
+
+Serverのmulti-client配信ではauthoritative Road storeをClientごとにqueryせず、publish cycleのimmutable Road read modelを各volumeへfilterする。静的topology revisionとsubscription revisionが不変ならRoad snapshotを再送しない。
+
+## Protocol境界
+
+Road Network wire contractはProtocol 2.1以上。entity種別ごとのID uniquenessとSegment→Node、Lane→Segment、LaneConnection→Lane/Node、RoadAccessPoint→Segmentの参照整合性をC# serializer / decoderとWeb decoderで同じように検証する。
+
+Road snapshotは現Protocolでは単一frameで、payload上限は1 MiB。上限超過はServerが送信前に検出し対象subscriptionへ構造化Errorを返す。publisher全体のfaultにはしない。binary layoutは[`../architecture/protocol.md`](../architecture/protocol.md)を正本とする。
 
 ## Phase 11以降
 
