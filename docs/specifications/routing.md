@@ -97,10 +97,14 @@ RoutingはXY平面だけで接続判定しない。
 unconstrainedな`RouteRequest`はprocess-local LRU cacheの対象とする。
 
 - key: Origin / Destinationの3D coordinate bit patternと`RoutingCostMetric`
-- capacity: 1,024 entries
-- eviction: least recently used
+- entry capacity: 最大1,024 entries
+- retained route size budget: cache全体で最大100,000 Lane steps
+- single-route policy: 100,000 Lane stepsを超えるrouteはcacheしない
+- eviction: entry数またはLane step総数が上限を超える間、least recently used entryから削除する
 - topology mutation: cache全消去とderived routing graphの再構築を要求する
 - `ClosedLaneIds`または`ClosedConnectionIds`を含むrequest: cache対象外
+
+entry数だけでなく保持Lane step総数にも上限を設けるのは、100,000 Lane級の長距離routeを多数cacheした場合に`RouteResult`保持量がentry数以上に増幅することを防ぐためである。
 
 constraint付きrequestをcacheしないのは、事故・工事・運行規制など短寿命の動的状態を通常route cacheへ混在させないためである。
 

@@ -151,6 +151,34 @@ public sealed class RoutingTests
     }
 
     [TestMethod]
+    public void RouteCacheEvictsLeastRecentlyUsedEntryAtCapacity()
+    {
+        var world = new SimulationWorld();
+        var start = world.CreateRoadNode(new WorldPoint(0, 0, 0));
+        var end = world.CreateRoadNode(new WorldPoint(10, 0, 0));
+        var segment = world.CreateRoadSegment(start, end);
+        world.CreateLane(segment, LaneDirection.Forward, 0);
+        var firstRequest = new RouteRequest(new WorldPoint(0.001d, 0, 0), new WorldPoint(9d, 0, 0));
+
+        _ = world.FindRoadRoute(firstRequest);
+        for (var index = 1; index <= 1024; index++)
+        {
+            var request = new RouteRequest(
+                new WorldPoint(0.001d + index * 1e-9d, 0, 0),
+                new WorldPoint(9d, 0, 0));
+            _ = world.FindRoadRoute(request);
+        }
+
+        var afterFill = world.GetRoutingCacheStatistics();
+        Assert.AreEqual(1024, afterFill.Entries);
+        Assert.AreEqual(1025L, afterFill.Misses);
+
+        _ = world.FindRoadRoute(firstRequest);
+        var afterReplay = world.GetRoutingCacheStatistics();
+        Assert.AreEqual(1026L, afterReplay.Misses);
+    }
+
+    [TestMethod]
     public void UnknownStableConstraintReferenceIsRejected()
     {
         var (world, _, _, _) = CreateLinearFixture();
