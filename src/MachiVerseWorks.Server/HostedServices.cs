@@ -135,21 +135,22 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
                 roadMessage = RoadSnapshotMessagePlanner.Create(publishSnapshot.RoadNetwork.Query(subscription.Volume), snapshot.TickCount); roadStateHandled = true;
             }
 
-            RailwayInfrastructureSnapshotMessage? railwayMessage = null; var railwayStateHandled = false;
+            IReadOnlyList<RailwayInfrastructureSnapshotMessage> railwayMessages = []; var railwayStateHandled = false;
             if (connection.NegotiatedVersion.SupportsRailwayInfrastructure && connection.NeedsRailwaySnapshot(subscription.Revision, publishSnapshot.RailwayInfrastructure.Revision))
             {
-                railwayMessage = RailwayInfrastructureMessageMapper.Create(publishSnapshot.RailwayInfrastructure.Query(subscription.Volume), publishSnapshot.RailwayInfrastructure.Revision); railwayStateHandled = true;
+                var railwayMessage = RailwayInfrastructureMessageMapper.Create(publishSnapshot.RailwayInfrastructure.Query(subscription.Volume), publishSnapshot.RailwayInfrastructure.Revision);
+                railwayMessages = RailwayInfrastructureProtocolChunker.Split(railwayMessage); railwayStateHandled = true;
             }
 
             long bytes = 0; double encodeTimeMs = 0; double sendTimeMs = 0;
-            var messageCount = agentPlan.Messages.Count + pedestrianPlan.Messages.Count + vehiclePlan.Messages.Count + intersectionMessages.Length + (roadMessage is null ? 0 : 1) + (railwayMessage is null ? 0 : 1);
+            var messageCount = agentPlan.Messages.Count + pedestrianPlan.Messages.Count + vehiclePlan.Messages.Count + intersectionMessages.Length + (roadMessage is null ? 0 : 1) + railwayMessages.Count;
             using var sendCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             foreach (var message in agentPlan.Messages) { sendCancellation.CancelAfter(ClientSendTimeout); var sent = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation.Token); bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs; }
             foreach (var message in pedestrianPlan.Messages) { sendCancellation.CancelAfter(ClientSendTimeout); var sent = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation.Token); bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs; }
             foreach (var message in vehiclePlan.Messages) { sendCancellation.CancelAfter(ClientSendTimeout); var sent = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation.Token); bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs; }
             foreach (var message in intersectionMessages) { sendCancellation.CancelAfter(ClientSendTimeout); var sent = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation.Token); bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs; }
             if (roadMessage is not null) { sendCancellation.CancelAfter(ClientSendTimeout); var sent = await connection.SendAsync(roadMessage, connection.NegotiatedVersion, sendCancellation.Token); bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs; }
-            if (railwayMessage is not null) { sendCancellation.CancelAfter(ClientSendTimeout); var sent = await connection.SendAsync(railwayMessage, connection.NegotiatedVersion, sendCancellation.Token); bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs; }
+            foreach (var railwayMessage in railwayMessages) { sendCancellation.CancelAfter(ClientSendTimeout); var sent = await connection.SendAsync(railwayMessage, connection.NegotiatedVersion, sendCancellation.Token); bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs; }
 
             connection.TryReplaceKnownEntityIds(subscription.Revision, agentPlan.CurrentAgentIds, pedestrianPlan.CurrentPedestrianIds, vehiclePlan.CurrentVehicleIds);
             if (roadStateHandled) connection.TryMarkRoadSnapshotDelivered(subscription.Revision, publishSnapshot.RoadNetwork.Revision);
