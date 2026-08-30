@@ -43,5 +43,9 @@
   "error.protocol.5": "Serverがrequestを受理できませんでした。",
   "error.protocol.1000": "Server内部でエラーが発生しました。",
   "error.protocol.unknown": "Protocol error ({code})",
-  "hint.camera": "ドラッグ: 移動 / ホイール: ズーム"
+  "hint.camera": "ドラッグ: 移動 / ホイール: ズーム",
+  "status.trains": "列車",
+  "railwayDebug.title": "Railway Debug",
+  "railwayDebug.none": "運行情報なし",
+  "railwayDebug.summary": "遅延Service {delayed} / 完了 {completed} / 次発着 {arrivals}"
 }

@@ -8,5 +8,6 @@ public static class SaveFormatVersion
     public const int Vehicle = 6;
     public const int Population = 7;
     public const int RailwayInfrastructure = 8;
-    public const int Current = RailwayInfrastructure;
+    public const int RailwayOperations = 9;
+    public const int Current = RailwayOperations;
 }

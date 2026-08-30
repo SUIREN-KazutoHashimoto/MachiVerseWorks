@@ -49,12 +49,12 @@ public static class RailwayOperationsFixtures
         var formation = world.CreateTrainFormation(42d, 18d, 1.4d, 1.8d, 180);
         var route = world.CreateRailwayRoute([depotOut, westMain, eastMain, depotIn]);
         var timetable1 = world.CreateTimetable([
-            new TimetableStopSnapshot(stationA, 80, 100, 10, platformA),
-            new TimetableStopSnapshot(stationB, 170, 190, 10, platformB),
+            new TimetableStopSnapshot(stationA, 330, 345, 10, platformA),
+            new TimetableStopSnapshot(stationB, 580, 595, 10, platformB),
         ]);
         var timetable2 = world.CreateTimetable([
-            new TimetableStopSnapshot(stationA, 105, 125, 10, platformA),
-            new TimetableStopSnapshot(stationB, 195, 215, 10, platformB),
+            new TimetableStopSnapshot(stationA, 350, 365, 10, platformA),
+            new TimetableStopSnapshot(stationB, 600, 615, 10, platformB),
         ]);
         var service1 = world.CreateRailwayService(formation, route, timetable1, originDepot, destinationDepot, plannedStartTick: 1);
         var service2 = world.CreateRailwayService(formation, route, timetable2, originDepot, destinationDepot, plannedStartTick: 2);

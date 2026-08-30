@@ -11,6 +11,7 @@ internal sealed class SimulationRuntime
     private bool _roadTrafficFixturePending;
     private bool _trafficFixturePending;
     private bool _railwayFixturePending;
+    private bool _railwayOperationsFixturePending;
     private RoadNetworkReadModel? _roadReadModel;
     private RailwayInfrastructureReadModel? _railwayReadModel;
 
@@ -34,6 +35,7 @@ internal sealed class SimulationRuntime
         _roadTrafficFixturePending = bool.TryParse(configuration["Simulation:RoadTrafficFixture"], out var roadTrafficFixture) && roadTrafficFixture;
         _trafficFixturePending = bool.TryParse(configuration["Simulation:TrafficFixture"], out var trafficFixture) && trafficFixture;
         _railwayFixturePending = bool.TryParse(configuration["Simulation:RailwayFixture"], out var railwayFixture) && railwayFixture;
+        _railwayOperationsFixturePending = bool.TryParse(configuration["Simulation:RailwayOperationsFixture"], out var railwayOperationsFixture) && railwayOperationsFixture;
     }
 
     public int TickRate => _world.Config.TickRate;
@@ -58,17 +60,17 @@ internal sealed class SimulationRuntime
 
     public SimulationPublishSnapshot CapturePublishSnapshot()
     {
-        ulong tickCount; AgentSnapshot[] agents; PedestrianSnapshot[] pedestrians; VehicleSnapshot[] vehicles; IntersectionControlSnapshot intersectionControl; RoadNetworkReadModel roadReadModel; RailwayInfrastructureReadModel railwayReadModel;
+        ulong tickCount; AgentSnapshot[] agents; PedestrianSnapshot[] pedestrians; VehicleSnapshot[] vehicles; TrainSnapshot[] trains; RailwayOperationsSnapshot railwayOperations; IntersectionControlSnapshot intersectionControl; RoadNetworkReadModel roadReadModel; RailwayInfrastructureReadModel railwayReadModel;
         lock (_gate)
         {
             EnsureFixtures();
             tickCount = _world.Time.TickCount;
-            agents = _world.CreateAllAgentSnapshots(); pedestrians = _world.CreateAllPedestrianSnapshots(); vehicles = _world.CreateAllVehicleSnapshots(); intersectionControl = _world.CreateIntersectionControlSnapshot();
+            agents = _world.CreateAllAgentSnapshots(); pedestrians = _world.CreateAllPedestrianSnapshots(); vehicles = _world.CreateAllVehicleSnapshots(); trains = _world.CreateTrainSnapshot(); railwayOperations = _world.CreateRailwayOperationsSnapshot(); intersectionControl = _world.CreateIntersectionControlSnapshot();
             _roadReadModel ??= new RoadNetworkReadModel(1, _world.CreateRoadNetworkSnapshot());
             _railwayReadModel ??= new RailwayInfrastructureReadModel(1, _world.CreateRailwayInfrastructureSnapshot());
             roadReadModel = _roadReadModel; railwayReadModel = _railwayReadModel;
         }
-        return new SimulationPublishSnapshot(tickCount, SpatialCellSize, agents, pedestrians, vehicles, intersectionControl, roadReadModel, railwayReadModel);
+        return new SimulationPublishSnapshot(tickCount, SpatialCellSize, agents, pedestrians, vehicles, intersectionControl, roadReadModel, railwayReadModel, trains, railwayOperations);
     }
 
     private void EnsureFixtures()
@@ -77,6 +79,7 @@ internal sealed class SimulationRuntime
         if (_roadTrafficFixturePending) { SeedRoadTrafficFixture(_world); _roadTrafficFixturePending = false; _roadReadModel = null; }
         if (_trafficFixturePending) { SeedTrafficFixture(_world); _trafficFixturePending = false; _roadReadModel = null; }
         if (_railwayFixturePending) { RailwayInfrastructureFixtures.SeedDeterministic(_world); _railwayFixturePending = false; _roadReadModel = null; _railwayReadModel = null; }
+        if (_railwayOperationsFixturePending) { RailwayOperationsFixtures.SeedDeterministic(_world); _railwayOperationsFixturePending = false; _railwayReadModel = null; }
     }
 
     private static void SeedPedestrianFixture(SimulationWorld world)

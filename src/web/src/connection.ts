@@ -22,6 +22,11 @@ import {
   type RailwayProtocolMessage,
 } from './railway-infrastructure.ts';
 import {
+  decodeRailwayOperationsFrame,
+  isRailwayOperationsFrame,
+  type RailwayOperationsProtocolMessage,
+} from './railway-operations.ts';
+import {
   decodeTrafficFrame,
   isTrafficFrame,
   type TrafficProtocolMessage,
@@ -29,7 +34,7 @@ import {
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'handshaking' | 'connected' | 'reconnecting';
 export interface FrameDecodeMetrics { readonly frameBytes: number; readonly decodeTimeMs: number; }
-export interface ConnectionCallbacks { readonly onStateChanged: (state: ConnectionState) => void; readonly onMessage: (message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage) => void; readonly onProtocolError: (message: ProtocolErrorMessage) => void; readonly onClientError: (error: Error) => void; readonly onDisconnected: () => void; readonly onHelloAck: (version: ProtocolVersion, tickRate: number) => void; readonly onFrameDecoded?: (metrics: FrameDecodeMetrics) => void; }
+export interface ConnectionCallbacks { readonly onStateChanged: (state: ConnectionState) => void; readonly onMessage: (message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage) => void; readonly onProtocolError: (message: ProtocolErrorMessage) => void; readonly onClientError: (error: Error) => void; readonly onDisconnected: () => void; readonly onHelloAck: (version: ProtocolVersion, tickRate: number) => void; readonly onFrameDecoded?: (metrics: FrameDecodeMetrics) => void; }
 export interface ReconnectOptions { readonly minimumDelayMs: number; readonly maximumDelayMs: number; }
 
 export class MachiVerseConnection {
@@ -109,18 +114,21 @@ export class MachiVerseConnection {
       }
 
       const railwayFrame = isRailwayFrame(buffer);
-      const populationFrame = !railwayFrame && isPopulationFrame(buffer);
-      const trafficFrame = !railwayFrame && !populationFrame && isTrafficFrame(buffer);
+      const railwayOperationsFrame = !railwayFrame && isRailwayOperationsFrame(buffer);
+      const populationFrame = !railwayFrame && !railwayOperationsFrame && isPopulationFrame(buffer);
+      const trafficFrame = !railwayFrame && !railwayOperationsFrame && !populationFrame && isTrafficFrame(buffer);
       const envelope = railwayFrame
         ? decodeRailwayFrame(buffer)
-        : populationFrame
+        : railwayOperationsFrame
+          ? decodeRailwayOperationsFrame(buffer)
+          : populationFrame
           ? decodePopulationFrame(buffer)
           : trafficFrame
             ? decodeTrafficFrame(buffer)
             : decodeFrame(buffer);
       if (onFrameDecoded !== undefined) onFrameDecoded({ frameBytes: buffer.byteLength, decodeTimeMs: Math.max(0, performance.now() - decodeStartedAt) });
       if (this.state !== 'connected') {
-        if (!railwayFrame && !populationFrame && !trafficFrame && envelope.message.type === MessageType.Error) this.callbacks.onProtocolError(envelope.message as ProtocolErrorMessage);
+        if (!railwayFrame && !railwayOperationsFrame && !populationFrame && !trafficFrame && envelope.message.type === MessageType.Error) this.callbacks.onProtocolError(envelope.message as ProtocolErrorMessage);
         return;
       }
 
@@ -128,7 +136,7 @@ export class MachiVerseConnection {
       if (negotiatedVersion === null || !protocolVersionsEqual(envelope.version, negotiatedVersion)) {
         throw new ProtocolDecodeFailure('Server frame version changed after protocol negotiation.');
       }
-      if (!railwayFrame && !populationFrame && !trafficFrame && envelope.message.type === MessageType.Error) {
+      if (!railwayFrame && !railwayOperationsFrame && !populationFrame && !trafficFrame && envelope.message.type === MessageType.Error) {
         this.callbacks.onProtocolError(envelope.message as ProtocolErrorMessage);
         return;
       }

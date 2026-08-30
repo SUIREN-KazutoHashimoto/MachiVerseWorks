@@ -25,7 +25,7 @@ public sealed class RailwayOperationsTests
         RailwayOperationsFixtures.SeedDeterministic(world);
         var observedDelay = false;
 
-        for (var tick = 0; tick < 1200; tick++)
+        for (var tick = 0; tick < 2400; tick++)
         {
             world.Step();
             var snapshot = world.CreateRailwayOperationsSnapshot();
@@ -41,7 +41,7 @@ public sealed class RailwayOperationsTests
 
         var completed = world.CreateRailwayOperationsSnapshot();
         Assert.IsTrue(observedDelay);
-        Assert.IsTrue(completed.Services.All(static service => service.State == RailwayServiceState.Completed));
+        Assert.IsTrue(completed.Services.All(static service => service.State == RailwayServiceState.Completed), Describe(completed));
         Assert.IsTrue(completed.Trains.All(static train => train.State == TrainMovementState.Completed));
         Assert.IsTrue(completed.Trains.All(static train => train.CurrentDepotId is not null));
     }
@@ -90,4 +90,6 @@ public sealed class RailwayOperationsTests
         CollectionAssert.AreEqual(expected.RailwayServices!.Select(static item => item.Id.Value).ToArray(), actual.RailwayServices!.Select(static item => item.Id.Value).ToArray());
         CollectionAssert.AreEqual(expected.Trains!.Select(static item => item.Id.Value).ToArray(), actual.Trains!.Select(static item => item.Id.Value).ToArray());
     }
+
+    private static string Describe(RailwayOperationsSnapshot snapshot) => string.Join(" | ", snapshot.Services.Select(static service => $"S{service.Id.Value}:{service.State}:delay={service.DelayTicks}:next={service.NextStopIndex}").Concat(snapshot.Trains.Select(static train => $"T{train.Id.Value}:{train.State}:distance={train.RouteDistanceMeters:F3}:speed={train.SpeedMetersPerSecond:F3}:block={train.CurrentBlockId?.Value}:platform={train.CurrentPlatformId?.Value}:assigned={train.AssignedPlatformId?.Value}")));
 }

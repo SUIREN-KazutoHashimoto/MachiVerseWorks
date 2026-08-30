@@ -278,6 +278,18 @@ internal sealed class RailwayOperationsStore
 
         var stepIndex = route.FindStepIndex(train.RouteDistanceMeters);
         var step = route.Steps[stepIndex];
+        if (step.BlockId != train.CurrentBlockId)
+        {
+            if (step.BlockId is { } stepBlock && !TryReserveBlock(stepBlock, train.Id))
+            {
+                train.SpeedMetersPerSecond = 0d;
+                train.State = TrainMovementState.WaitingForBlock;
+                return;
+            }
+            if (train.CurrentBlockId is { } previousBlock) ReleaseBlock(previousBlock, train.Id);
+            train.CurrentBlockId = step.BlockId;
+            if (train.State == TrainMovementState.WaitingForBlock) train.State = TrainMovementState.Running;
+        }
         var targetSpeed = Math.Min(formation.MaximumSpeedMetersPerSecond, step.Segment.SpeedLimitMetersPerSecond);
         if (stopDistance is { } targetStop)
         {

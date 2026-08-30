@@ -8,6 +8,7 @@ internal sealed class SimulationPublishSnapshot
     private readonly PublishedEntitySpatialIndex<PedestrianSnapshot> _pedestrians;
     private readonly PublishedEntitySpatialIndex<VehicleSnapshot> _vehicles;
     private readonly PublishedEntitySpatialIndex<IntersectionControllerSnapshot> _intersections;
+    private readonly PublishedEntitySpatialIndex<TrainSnapshot> _trains;
 
     public SimulationPublishSnapshot(
         ulong tickCount,
@@ -39,7 +40,9 @@ internal sealed class SimulationPublishSnapshot
         VehicleSnapshot[] vehicles,
         IntersectionControlSnapshot intersectionControl,
         RoadNetworkReadModel roadNetwork,
-        RailwayInfrastructureReadModel railwayInfrastructure)
+        RailwayInfrastructureReadModel railwayInfrastructure,
+        TrainSnapshot[]? trains = null,
+        RailwayOperationsSnapshot? railwayOperations = null)
     {
         TickCount = tickCount;
         SpatialCellSize = spatialCellSize;
@@ -49,18 +52,22 @@ internal sealed class SimulationPublishSnapshot
         ArgumentNullException.ThrowIfNull(intersectionControl);
         RoadNetwork = roadNetwork ?? throw new ArgumentNullException(nameof(roadNetwork));
         RailwayInfrastructure = railwayInfrastructure ?? throw new ArgumentNullException(nameof(railwayInfrastructure));
+        trains ??= [];
+        RailwayOperations = railwayOperations ?? EmptyRailwayOperations();
         _agents = new PublishedEntitySpatialIndex<AgentSnapshot>(agents, spatialCellSize, static item => item.Position);
         _pedestrians = new PublishedEntitySpatialIndex<PedestrianSnapshot>(pedestrians, spatialCellSize, static item => item.Position);
         _vehicles = new PublishedEntitySpatialIndex<VehicleSnapshot>(vehicles, spatialCellSize, static item => item.Position);
         _intersections = new PublishedEntitySpatialIndex<IntersectionControllerSnapshot>(intersectionControl.Controllers.ToArray(), spatialCellSize, item => roadNetwork.GetNodePosition(item.IntersectionNodeId));
+        _trains = new PublishedEntitySpatialIndex<TrainSnapshot>(trains, spatialCellSize, static item => item.Position);
     }
 
     public ulong TickCount { get; }
     public double SpatialCellSize { get; }
     public RoadNetworkReadModel RoadNetwork { get; }
     public RailwayInfrastructureReadModel RailwayInfrastructure { get; }
+    public RailwayOperationsSnapshot RailwayOperations { get; }
 
-    public EntityPublishSnapshot QueryEntities(WorldVolume volume) => new(TickCount, _agents.Query(volume), _pedestrians.Query(volume), _vehicles.Query(volume), _intersections.Query(volume));
+    public EntityPublishSnapshot QueryEntities(WorldVolume volume) => new(TickCount, _agents.Query(volume), _pedestrians.Query(volume), _vehicles.Query(volume), _intersections.Query(volume), _trains.Query(volume));
 
     public SubscriptionPublishSnapshot Query(WorldVolume volume)
     {
@@ -69,9 +76,10 @@ internal sealed class SimulationPublishSnapshot
     }
 
     private static RailwayInfrastructureSnapshot EmptyRailway() => new([], [], [], [], [], [], [], []);
+    private static RailwayOperationsSnapshot EmptyRailwayOperations() => new([], [], [], [], []);
 }
 
-internal sealed record EntityPublishSnapshot(ulong TickCount, AgentSnapshot[] Agents, PedestrianSnapshot[] Pedestrians, VehicleSnapshot[] Vehicles, IntersectionControllerSnapshot[] Intersections);
+internal sealed record EntityPublishSnapshot(ulong TickCount, AgentSnapshot[] Agents, PedestrianSnapshot[] Pedestrians, VehicleSnapshot[] Vehicles, IntersectionControllerSnapshot[] Intersections, TrainSnapshot[] Trains);
 internal sealed record SubscriptionPublishSnapshot(ulong TickCount, AgentSnapshot[] Agents, PedestrianSnapshot[] Pedestrians, RoadNetworkSnapshot RoadNetwork);
 
 internal sealed class RoadNetworkReadModel
