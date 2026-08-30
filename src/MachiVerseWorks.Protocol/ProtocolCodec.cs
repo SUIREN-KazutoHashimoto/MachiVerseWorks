@@ -12,6 +12,8 @@ public static class ProtocolCodec
     private const int AgentRemovePayloadLength = 16;
     private const int PedestrianStatePayloadLength = 81;
     private const int PedestrianRemovePayloadLength = 16;
+    private const int VehicleStatePayloadLength = 105;
+    private const int VehicleRemovePayloadLength = 16;
     private const int RoadHeaderLength = 28;
     private const int RoadNodeLength = 33;
     private const int RoadSegmentLength = 25;
@@ -35,6 +37,8 @@ public static class ProtocolCodec
         }
         if (IsPedestrianMessage(message.Type) && !selectedVersion.SupportsPedestrians)
             throw new ArgumentException($"Pedestrian messages require Protocol 2.2 or newer, but {selectedVersion} was selected.", nameof(version));
+        if (IsVehicleMessage(message.Type) && !selectedVersion.SupportsVehicles)
+            throw new ArgumentException($"Vehicle messages require Protocol 2.3 or newer, but {selectedVersion} was selected.", nameof(version));
 
         var payloadLength = GetPayloadLength(message);
         if ((uint)payloadLength > ProtocolFrameHeader.MaxPayloadLength)
@@ -56,6 +60,11 @@ public static class ProtocolCodec
             return false;
         }
         if (IsPedestrianMessage(header.MessageType) && !header.Version.SupportsPedestrians)
+        {
+            error = ProtocolDecodeError.InvalidPayload;
+            return false;
+        }
+        if (IsVehicleMessage(header.MessageType) && !header.Version.SupportsVehicles)
         {
             error = ProtocolDecodeError.InvalidPayload;
             return false;
@@ -86,6 +95,9 @@ public static class ProtocolCodec
             PedestrianSpawnMessage => PedestrianStatePayloadLength,
             PedestrianUpdateMessage => PedestrianStatePayloadLength,
             PedestrianRemoveMessage => PedestrianRemovePayloadLength,
+            VehicleSpawnMessage => VehicleStatePayloadLength,
+            VehicleUpdateMessage => VehicleStatePayloadLength,
+            VehicleRemoveMessage => VehicleRemovePayloadLength,
             RoadNetworkSnapshotMessage road => GetRoadPayloadLength(road),
             ProtocolErrorMessage protocolError => GetErrorPayloadLength(protocolError),
             _ => throw new ArgumentException($"Unsupported protocol message implementation: {message.GetType().FullName}.", nameof(message)),
@@ -95,6 +107,7 @@ public static class ProtocolCodec
     public static bool FitsSingleFrame(IProtocolMessage message) => (uint)GetPayloadLength(message) <= ProtocolFrameHeader.MaxPayloadLength;
 
     private static bool IsPedestrianMessage(MessageType type) => type is MessageType.PedestrianSpawn or MessageType.PedestrianUpdate or MessageType.PedestrianRemove;
+    private static bool IsVehicleMessage(MessageType type) => type is MessageType.VehicleSpawn or MessageType.VehicleUpdate or MessageType.VehicleRemove;
 
     private static int GetRoadPayloadLength(RoadNetworkSnapshotMessage message)
     {
@@ -179,6 +192,17 @@ public static class ProtocolCodec
                 WriteUInt64(payload, pedestrianRemove.PedestrianId);
                 WriteUInt64(payload[8..], pedestrianRemove.TickCount);
                 return;
+            case VehicleSpawnMessage vehicleSpawn:
+                WriteVehicle(payload, vehicleSpawn.VehicleId, vehicleSpawn.LaneId, vehicleSpawn.X, vehicleSpawn.Y, vehicleSpawn.Z, vehicleSpawn.ForwardX, vehicleSpawn.ForwardY, vehicleSpawn.ForwardZ, vehicleSpawn.SpeedMetersPerSecond, vehicleSpawn.LengthMeters, vehicleSpawn.WidthMeters, vehicleSpawn.HeightMeters, vehicleSpawn.State, vehicleSpawn.TickCount);
+                return;
+            case VehicleUpdateMessage vehicleUpdate:
+                WriteVehicle(payload, vehicleUpdate.VehicleId, vehicleUpdate.LaneId, vehicleUpdate.X, vehicleUpdate.Y, vehicleUpdate.Z, vehicleUpdate.ForwardX, vehicleUpdate.ForwardY, vehicleUpdate.ForwardZ, vehicleUpdate.SpeedMetersPerSecond, vehicleUpdate.LengthMeters, vehicleUpdate.WidthMeters, vehicleUpdate.HeightMeters, vehicleUpdate.State, vehicleUpdate.TickCount);
+                return;
+            case VehicleRemoveMessage vehicleRemove:
+                ValidateStableId(vehicleRemove.VehicleId, nameof(message));
+                WriteUInt64(payload, vehicleRemove.VehicleId);
+                WriteUInt64(payload[8..], vehicleRemove.TickCount);
+                return;
             case RoadNetworkSnapshotMessage road:
                 WriteRoad(payload, road);
                 return;
@@ -231,6 +255,37 @@ public static class ProtocolCodec
         WriteDouble(payload[64..], walkingSpeed);
         payload[72] = (byte)state;
         WriteUInt64(payload[73..], tick);
+    }
+
+    private static void WriteVehicle(Span<byte> payload, ulong id, ulong laneId, double x, double y, double z, double forwardX, double forwardY, double forwardZ, double speed, double length, double width, double height, ProtocolVehicleMovementState state, ulong tick)
+    {
+        ValidateStableId(id, nameof(id));
+        ValidateStableId(laneId, nameof(laneId));
+        ValidateFinite(x, nameof(x));
+        ValidateFinite(y, nameof(y));
+        ValidateFinite(z, nameof(z));
+        ValidateFinite(forwardX, nameof(forwardX));
+        ValidateFinite(forwardY, nameof(forwardY));
+        ValidateFinite(forwardZ, nameof(forwardZ));
+        if (forwardX * forwardX + forwardY * forwardY + forwardZ * forwardZ <= 1e-12) throw new ArgumentOutOfRangeException(nameof(forwardX), "Vehicle forward direction must be non-zero.");
+        if (!double.IsFinite(speed) || speed < 0d) throw new ArgumentOutOfRangeException(nameof(speed));
+        if (!double.IsFinite(length) || length <= 0d || !double.IsFinite(width) || width <= 0d || !double.IsFinite(height) || height <= 0d)
+            throw new ArgumentOutOfRangeException(nameof(length), "Vehicle dimensions must be finite and greater than zero.");
+        ValidateEnum(state, nameof(state));
+        WriteUInt64(payload, id);
+        WriteUInt64(payload[8..], laneId);
+        WriteDouble(payload[16..], x);
+        WriteDouble(payload[24..], y);
+        WriteDouble(payload[32..], z);
+        WriteDouble(payload[40..], forwardX);
+        WriteDouble(payload[48..], forwardY);
+        WriteDouble(payload[56..], forwardZ);
+        WriteDouble(payload[64..], speed);
+        WriteDouble(payload[72..], length);
+        WriteDouble(payload[80..], width);
+        WriteDouble(payload[88..], height);
+        payload[96] = (byte)state;
+        WriteUInt64(payload[97..], tick);
     }
 
     private static void WriteRoad(Span<byte> payload, RoadNetworkSnapshotMessage message)
@@ -388,6 +443,14 @@ public static class ProtocolCodec
                 if (payload.Length != PedestrianRemovePayloadLength || ReadUInt64(payload) == 0) return InvalidPayload(out message, out error);
                 message = new PedestrianRemoveMessage(ReadUInt64(payload), ReadUInt64(payload[8..]));
                 break;
+            case MessageType.VehicleSpawn:
+                return TryReadVehicle(payload, true, out message, out error);
+            case MessageType.VehicleUpdate:
+                return TryReadVehicle(payload, false, out message, out error);
+            case MessageType.VehicleRemove:
+                if (payload.Length != VehicleRemovePayloadLength || ReadUInt64(payload) == 0) return InvalidPayload(out message, out error);
+                message = new VehicleRemoveMessage(ReadUInt64(payload), ReadUInt64(payload[8..]));
+                break;
             case MessageType.RoadNetworkSnapshot:
                 return TryReadRoad(payload, out message, out error);
             case MessageType.Error:
@@ -451,6 +514,53 @@ public static class ProtocolCodec
         message = spawn
             ? new PedestrianSpawnMessage(id, tripRequestId, x, y, z, velocityX, velocityY, velocityZ, walkingSpeed, state, tick)
             : new PedestrianUpdateMessage(id, tripRequestId, x, y, z, velocityX, velocityY, velocityZ, walkingSpeed, state, tick);
+        error = ProtocolDecodeError.None;
+        return true;
+    }
+
+    private static bool TryReadVehicle(ReadOnlySpan<byte> payload, bool spawn, out IProtocolMessage message, out ProtocolDecodeError error)
+    {
+        if (payload.Length != VehicleStatePayloadLength) return InvalidPayload(out message, out error);
+        var id = ReadUInt64(payload);
+        var laneId = ReadUInt64(payload[8..]);
+        var x = ReadDouble(payload[16..]);
+        var y = ReadDouble(payload[24..]);
+        var z = ReadDouble(payload[32..]);
+        var forwardX = ReadDouble(payload[40..]);
+        var forwardY = ReadDouble(payload[48..]);
+        var forwardZ = ReadDouble(payload[56..]);
+        var speed = ReadDouble(payload[64..]);
+        var length = ReadDouble(payload[72..]);
+        var width = ReadDouble(payload[80..]);
+        var height = ReadDouble(payload[88..]);
+        var state = (ProtocolVehicleMovementState)payload[96];
+        var tick = ReadUInt64(payload[97..]);
+        var forwardLengthSquared = forwardX * forwardX + forwardY * forwardY + forwardZ * forwardZ;
+        if (id == 0
+            || laneId == 0
+            || !double.IsFinite(x)
+            || !double.IsFinite(y)
+            || !double.IsFinite(z)
+            || !double.IsFinite(forwardX)
+            || !double.IsFinite(forwardY)
+            || !double.IsFinite(forwardZ)
+            || !double.IsFinite(forwardLengthSquared)
+            || forwardLengthSquared <= 1e-12
+            || !double.IsFinite(speed)
+            || speed < 0d
+            || !double.IsFinite(length)
+            || length <= 0d
+            || !double.IsFinite(width)
+            || width <= 0d
+            || !double.IsFinite(height)
+            || height <= 0d
+            || !Enum.IsDefined(state))
+        {
+            return InvalidPayload(out message, out error);
+        }
+        message = spawn
+            ? new VehicleSpawnMessage(id, laneId, x, y, z, forwardX, forwardY, forwardZ, speed, length, width, height, state, tick)
+            : new VehicleUpdateMessage(id, laneId, x, y, z, forwardX, forwardY, forwardZ, speed, length, width, height, state, tick);
         error = ProtocolDecodeError.None;
         return true;
     }
