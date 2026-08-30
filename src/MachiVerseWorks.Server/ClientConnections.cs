@@ -100,11 +100,10 @@ internal sealed class ClientConnection : IDisposable
         ArgumentNullException.ThrowIfNull(vehicleIds);
         lock (_stateGate)
         {
-            if (_subscriptionRevision != revision) return false;
             _knownAgentIds = agentIds;
             _knownPedestrianIds = pedestrianIds;
             _knownVehicleIds = vehicleIds;
-            return true;
+            return _subscriptionRevision == revision;
         }
     }
 
