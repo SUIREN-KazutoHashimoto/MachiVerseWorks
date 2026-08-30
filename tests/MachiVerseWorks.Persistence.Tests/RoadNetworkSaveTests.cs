@@ -8,7 +8,7 @@ namespace MachiVerseWorks.Persistence.Tests;
 public sealed class RoadNetworkSaveTests
 {
     [TestMethod]
-    public void FormatFourRoundTripPreservesRoadTopologyAndAccessReferences()
+    public void CurrentFormatRoundTripPreservesRoadTopologyAndAccessReferences()
     {
         var world = new SimulationWorld();
         var building = world.CreateBuilding(new WorldVolume(20, 10, 0, 40, 30, 20));
@@ -25,7 +25,7 @@ public sealed class RoadNetworkSaveTests
 
         var bytes = WorldSaveSerializer.Serialize(world);
         using var json = JsonDocument.Parse(bytes);
-        Assert.AreEqual(SaveFormatVersion.RoadNetwork, json.RootElement.GetProperty("formatVersion").GetInt32());
+        Assert.AreEqual(SaveFormatVersion.Current, json.RootElement.GetProperty("formatVersion").GetInt32());
         Assert.AreEqual(3, json.RootElement.GetProperty("simulation").GetProperty("roadNodes").GetArrayLength());
         var restored = WorldSaveSerializer.Deserialize(bytes);
         var expected = world.CreateRoadNetworkSnapshot(); var actual = restored.CreateRoadNetworkSnapshot();
@@ -43,6 +43,15 @@ public sealed class RoadNetworkSaveTests
         var restored = WorldSaveSerializer.Deserialize(legacy);
         Assert.AreEqual(0, restored.RoadNodeCount); Assert.AreEqual(0, restored.RoadSegmentCount);
         Assert.AreEqual(1UL, restored.CreateRoadNode(new WorldPoint(0, 0, 0)).Value);
+    }
+
+    [TestMethod]
+    public void FormatFourMigratesToEmptyPedestrianState()
+    {
+        var legacy = """{"formatVersion":4,"simulation":{"tickRate":30,"seed":1,"spatialCellSize":64,"tickCount":0,"elapsedTicks":0,"randomState":1,"nextAgentId":1,"agents":[],"nextBuildingId":1,"buildings":[],"nextPoiId":1,"pois":[],"nextRoadNodeId":1,"roadNodes":[],"nextRoadSegmentId":1,"roadSegments":[],"nextLaneId":1,"lanes":[],"nextLaneConnectionId":1,"laneConnections":[],"nextRoadAccessPointId":1,"roadAccessPoints":[]}}"""u8.ToArray();
+        var restored = WorldSaveSerializer.Deserialize(legacy);
+        Assert.AreEqual(0, restored.PedestrianCount);
+        Assert.AreEqual(0, restored.ActivePedestrianCount);
     }
 
     [TestMethod]
