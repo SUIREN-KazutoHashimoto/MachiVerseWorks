@@ -30,15 +30,21 @@ LaneはRoadSegmentに所属し、`Direction`、`Order`、`WidthMeters`、`SpeedL
 
 `TurnMovement`は`Unspecified`、`Straight`、`Left`、`Right`、`UTurn`を持つ。これは現Phaseでは意味分類であり、信号現示や優先関係はPhase 14で扱う。
 
+既存`LaneConnection`の`ViaNodeId`として参照されているIntersectionは、参照を解消するまで`Endpoint`へ降格できない。RoadNode種別変更によって既存connectionの不変条件を破壊することを禁止する。
+
 ## Building / POI access boundary
 
 `RoadAccessPoint`はRoadSegment上の正規化offset `[0,1]` と、任意の`BuildingId` / `PoiId`、`RoadAccessMode`を持つ。BuildingまたはPOIの少なくとも一方を必須とし、参照先はSimulation内に存在しなければならない。位置はsegment両端から導出でき、都市オブジェクト側のgeometryをRoad modelへ複製しない。
 
 `RoadAccessMode`は`Motor`と`Foot`のflagsを持つ。将来の歩道・駐車場・鉄道接続はこの境界を拡張し、Building / POIそのものへRoad固有topologyを埋め込まない。
 
+RoadAccessPointから参照されているBuilding / POIは、該当RoadAccessPointを削除または更新して参照を解消するまで削除できない。Road側とUrban World側のどちらから操作してもdangling stable IDを残さない。
+
 ## atomic mutation
 
-追加・更新は全validation完了後にstateを変更する。参照されているNode / Segment / Laneは先に参照を解消しない限り削除できない。Lane更新で既存connectionが不正になる場合は更新をrollbackする。
+追加・更新は全validation完了後にstateを変更する。参照されているNode / Segment / Lane、RoadAccessPointから参照されているBuilding / POIは、先に参照を解消しない限り削除できない。Lane更新やRoadSegment更新で既存connectionが不正になる場合は更新をrollbackする。LaneConnectionのViaNodeとなるIntersectionの種別変更もstate変更前に拒否する。
+
+失敗したmutationはstable ID counterを含む正本stateを成功時だけ進め、途中状態やdangling connectionを観測可能にしない。
 
 ## 3D spatial query
 

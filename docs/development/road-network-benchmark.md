@@ -18,7 +18,24 @@ dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Bench
   --filter '*RoadNetworkBenchmarks*' --job short
 ```
 
-GitHub Actionsの`Phase 11 Road Network Benchmark`は同じsuiteを10,000 / 100,000 Segmentで実行し、Markdown / JSON / CSV measurementをartifactとして保存する。Phase 11 closeoutではこのworkflowの成功結果を基準値として扱い、後続Routing / Traffic実装で同じbenchmarkを再実行して退行を比較する。
+GitHub Actionsの`Phase 11 Road Network Benchmark`は同じsuiteを10,000 / 100,000 Segmentで実行し、Markdown / JSON / CSV measurementをartifactとして保存する。後続Routing / Traffic実装では同じbenchmarkを再実行して退行を比較する。
+
+## Phase 11基準値
+
+2026-08-30のGitHub Actions ShortRunで取得した基準値を以下に記録する。runnerはUbuntu 24.04.4、AMD EPYC 7763、.NET SDK 10.0.400 / Runtime 10.0.11、BenchmarkDotNet 0.15.8で、1 launch・3 warmup・3 iterationで実行した。
+
+| RoadSegment数 | 操作 | Mean | Allocated / op |
+| ---: | --- | ---: | ---: |
+| 10,000 | `QuerySpatialVolume` | 440.737 us | 502,696 B |
+| 10,000 | `CreateFullTopologySnapshot` | 1.992 ms | 3,227,055 B |
+| 10,000 | `LookupStableSegment` | 3.557 ns | 0 B |
+| 100,000 | `QuerySpatialVolume` | 3.816 ms | 2,411,172 B |
+| 100,000 | `CreateFullTopologySnapshot` | 22.556 ms | 32,683,328 B |
+| 100,000 | `LookupStableSegment` | 3.575 ns | 0 B |
+
+この値はPhase 11 closeout候補の性能基準であり、SLAや固定上限ではない。GitHub hosted runnerの揺らぎを考慮し、後続Phaseでは単発値ではなく同一suite・同等runner条件での傾向を比較する。
+
+10,000→100,000 Segmentでstable ID lookupはほぼ一定で、spatial queryは約8.7倍、全件snapshotは約11.3倍となった。全件snapshotは意図どおり件数に応じてallocationが増える一方、stable lookupにはmanaged allocationがない。
 
 ## 評価上の注意
 
