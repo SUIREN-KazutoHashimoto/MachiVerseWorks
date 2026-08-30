@@ -11,7 +11,14 @@ Phase 2で成立させた最小Simulation Coreを基礎とし、Phase 9以降は
 - tick rateは`SimulationConfig.TickRate`で保持する。
 - 既定値は30 ticks/secとする。
 - `Step()` 1回につきtick counterを1増やす。
-- Simulation timeはwall clockではなくtick rateから算出する。
+- **`TickCount`と`TickRate`をSimulation時刻の正本**とし、wall clockや前tickの丸め済み`TimeSpan`を正本にしない。
+- 物理積分に使う1 tickは`1d / TickRate`秒とする。
+- `SimulationTime.Elapsed`は各tickで丸めたdurationを加算せず、`TickCount * TimeSpan.TicksPerSecond / TickRate`から毎回導出する。`TimeSpan`へ変換する際の端数はその時点で整数tickへ切り捨てるため、30Hz / 60Hzのように1 tickが割り切れないrateでも端数誤差を毎tick累積しない。
+- `SimulationConfig.MaximumTickRate`は`TimeSpan.TicksPerSecond`とし、1 tick未満に丸められてElapsedだけ停止する設定を禁止する。
+- checkpoint / Save復元では保存された`TickCount`、`Elapsed`、`TickRate`の整合性を検証し、復元後も同じ時間モデルを継続する。
+- 時間モデル変更前にformat 5以前で保存されたSaveについては、`TickCount * TimeSpan.FromSeconds(1 / TickRate).Ticks`と完全一致する旧累積丸め値も互換入力として受理する。復元時に新しいderived elapsedへ正規化し、次回保存からcanonical値を書き出す。任意の不一致elapsedを許容するfallbackにはしない。
+
+この契約により、同じ`TickCount`でAgent積分が表す経過秒数とSimulation clockの意味を分離しない。
 
 ## Seedと再現性
 
@@ -31,7 +38,7 @@ Phase 2で成立させた最小Simulation Coreを基礎とし、Phase 9以降は
 
 `AgentId`は単調増加し、削除や内部slotの都合で再採番しない。
 
-1 tickの最小更新は全3軸で`position += velocity * tickDuration`とする。自動生成Agentの`VelocityZ = 0`は生成ポリシーであり、Z軸を省略する互換表現ではない。
+1 tickの最小更新は全3軸で`position += velocity * (1 / TickRate)`とする。自動生成Agentの`VelocityZ = 0`は生成ポリシーであり、Z軸を省略する互換表現ではない。
 
 ## Spatial Index
 
@@ -53,15 +60,16 @@ Client配信用の最小snapshotは次を持つ。
 
 Snapshotは値としてコピーし、Simulation内部のmutable stateへの参照を外部へ渡さない。
 
-指定`WorldVolume`のsnapshotはSpatial Indexで候補を絞った後、実座標を`WorldVolume.Contains`で判定する。
+指定`WorldVolume`のsnapshotはSpatial Indexで候補を絞った後、実座標を`WorldVolume.Contains`で判定する。Serverのmulti-client配信ではauthoritative Worldから1回のatomic publish snapshotを作成し、そのdetached read modelを各Clientのvolumeへfilterする。Client数に応じてSimulation mutation lock内のqueryを繰り返さない。配信枠を予約できたClientが1件以上ある周期だけWorld captureを行い、既にslow deliveryがin-flightのClientしかいない周期では全Worldコピーを生成しない。
+
+Road topologyは静的revisionが変わった、またはsubscriptionが変わったClientにだけfilter/materializeする。定常Agent / Pedestrian更新周期やProtocol 2.0 ClientのためにRoad全件走査を繰り返さない。
 
 ## 現時点で扱わないもの
 
-- 経路探索
-- 衝突回避
+- 汎用Vehicle経路探索
+- Agent衝突回避
 - Agent種別
-- 建物・道路・交通機関固有のルール
 - 重力・terrain collision・ground snapping
 - 並列tick
 
-これらは後続Phaseで必要な責務へ分離して追加する。
+道路・Building / POI・Pedestrianなど、既に後続Phaseで正本化されたdomain stateは各専用仕様を参照する。

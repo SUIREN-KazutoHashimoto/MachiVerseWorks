@@ -80,7 +80,7 @@ internal sealed class WebSocketSessionHandler(ClientConnectionRegistry connectio
                 try
                 {
                     var volume = new WorldVolume(subscribeVolume.MinX, subscribeVolume.MinY, subscribeVolume.MinZ, subscribeVolume.MaxX, subscribeVolume.MaxY, subscribeVolume.MaxZ);
-                    if (!SubscriptionVolumePolicy.TryValidate(volume, options.SpatialCellSize, options.MaximumSubscriptionCellCount, out var detailCode))
+                    if (!SubscriptionVolumePolicy.TryValidate(volume, simulation.SpatialCellSize, options.MaximumSubscriptionCellCount, out var detailCode))
                     {
                         await SendErrorAsync(connection, ProtocolErrorCode.InvalidRequest, [new ProtocolErrorParameter(ProtocolErrorParameterKeys.Field, "volume"), new ProtocolErrorParameter(ProtocolErrorParameterKeys.DetailCode, detailCode ?? SubscriptionVolumePolicy.OutsideSpatialGridDetailCode)], connection.NegotiatedVersion, cancellationToken);
                         return true;

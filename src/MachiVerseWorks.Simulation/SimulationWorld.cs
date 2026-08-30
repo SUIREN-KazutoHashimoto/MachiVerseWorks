@@ -52,7 +52,7 @@ public sealed partial class SimulationWorld
 
     public void Step()
     {
-        var nextTime = Time.Advance(Config.TickDuration);
+        var nextTime = Time.Advance(Config.TickRate);
         _agents.Step(Config.TickDurationSeconds, _spatialIndex);
         StepPedestrians(Config.TickDurationSeconds);
         Time = nextTime;
@@ -98,11 +98,17 @@ public sealed partial class SimulationWorld
         ValidateUrbanObjectCheckpoint(checkpoint, config.SpatialCellSize);
         ValidateRoadNetworkCheckpoint(checkpoint, config.SpatialCellSize);
         ValidatePedestrianCheckpoint(checkpoint);
-        var restoredTime = new SimulationTime(checkpoint.TickCount, TimeSpan.FromTicks(checkpoint.ElapsedTicks));
-        try { _ = restoredTime.Advance(config.TickDuration); }
+        var expectedElapsedTicks = CalculateExpectedElapsedTicks(checkpoint.TickCount, config.TickRate);
+        if (checkpoint.ElapsedTicks != expectedElapsedTicks
+            && (!TryCalculateLegacyElapsedTicks(checkpoint.TickCount, config.TickRate, out var legacyElapsedTicks)
+                || checkpoint.ElapsedTicks != legacyElapsedTicks))
+        {
+            throw new ArgumentException($"Elapsed time {checkpoint.ElapsedTicks} does not match tick count {checkpoint.TickCount} and tick rate {checkpoint.TickRate}.", nameof(checkpoint));
+        }
+
+        var restoredTime = new SimulationTime(checkpoint.TickCount, TimeSpan.FromTicks(expectedElapsedTicks));
+        try { _ = restoredTime.Advance(config.TickRate); }
         catch (OverflowException) { throw new ArgumentOutOfRangeException(nameof(checkpoint), "Simulation time must allow at least one additional tick."); }
-        var expectedElapsedTicks = CalculateExpectedElapsedTicks(checkpoint.TickCount, config.TickDuration);
-        if (checkpoint.ElapsedTicks != expectedElapsedTicks) throw new ArgumentException($"Elapsed time {checkpoint.ElapsedTicks} does not match tick count {checkpoint.TickCount} and tick rate {checkpoint.TickRate}.", nameof(checkpoint));
         var world = new SimulationWorld(config) { Time = restoredTime, _random = new DeterministicRandom(checkpoint.RandomState) };
         world._agents.Restore(checkpoint.Agents, checkpoint.NextAgentId, world._spatialIndex);
         world.RestoreUrbanObjects(checkpoint);
@@ -120,11 +126,30 @@ public sealed partial class SimulationWorld
     private double NextCoordinate(double minimum, double maximum) => minimum == maximum ? minimum : _random.NextDouble(minimum, maximum);
     private WorldVector NextVelocity() => new(_random.NextDouble(-1d, 1d), _random.NextDouble(-1d, 1d), 0d);
 
-    private static long CalculateExpectedElapsedTicks(ulong tickCount, TimeSpan tickDuration)
+    private static long CalculateExpectedElapsedTicks(ulong tickCount, int tickRate)
     {
-        var ticks = tickDuration.Ticks; if (ticks == 0) return 0; var maximum = (ulong)(long.MaxValue / ticks);
-        if (tickCount > maximum) throw new ArgumentOutOfRangeException(nameof(tickCount), tickCount, "Tick count cannot be represented by the configured elapsed-time range.");
-        return (long)(tickCount * (ulong)ticks);
+        try
+        {
+            return SimulationTime.CalculateElapsedTicks(tickCount, tickRate);
+        }
+        catch (OverflowException)
+        {
+            throw new ArgumentOutOfRangeException(nameof(tickCount), tickCount, "Tick count cannot be represented by the configured elapsed-time range.");
+        }
+    }
+
+    private static bool TryCalculateLegacyElapsedTicks(ulong tickCount, int tickRate, out long elapsedTicks)
+    {
+        var legacyTickDurationTicks = TimeSpan.FromSeconds(1d / tickRate).Ticks;
+        var total = (UInt128)tickCount * (ulong)legacyTickDurationTicks;
+        if (total > long.MaxValue)
+        {
+            elapsedTicks = 0;
+            return false;
+        }
+
+        elapsedTicks = (long)total;
+        return true;
     }
 
     private static void ValidatePoint(WorldPoint point)

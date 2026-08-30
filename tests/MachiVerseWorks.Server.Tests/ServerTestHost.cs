@@ -23,7 +23,12 @@ internal sealed class ServerTestHost : IAsyncDisposable
     public WebApplication App { get; }
     public Uri HttpAddress { get; }
 
-    public static async Task<ServerTestHost> StartAsync(int initialAgentCount = 4, int tickRate = 30, int snapshotRate = 30, double spawnHalfExtent = 5d)
+    public static async Task<ServerTestHost> StartAsync(
+        int initialAgentCount = 4,
+        int tickRate = 30,
+        int snapshotRate = 30,
+        double spawnHalfExtent = 5d,
+        IReadOnlyDictionary<string, string?>? additionalConfiguration = null)
     {
         var app = ServerApplication.Build([], builder =>
         {
@@ -42,6 +47,7 @@ internal sealed class ServerTestHost : IAsyncDisposable
                 ["Simulation:SpawnVolume:MaxY"] = spawnHalfExtent.ToString(CultureInfo.InvariantCulture),
                 ["Simulation:SpawnVolume:MaxZ"] = spawnHalfExtent.ToString(CultureInfo.InvariantCulture),
             });
+            if (additionalConfiguration is not null) builder.Configuration.AddInMemoryCollection(additionalConfiguration);
         });
 
         await app.StartAsync();

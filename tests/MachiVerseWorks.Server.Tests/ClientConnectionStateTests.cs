@@ -42,6 +42,38 @@ public sealed class ClientConnectionStateTests
         Assert.AreEqual(0, nextSubscription.KnownAgentIds.Count);
     }
 
+    [TestMethod]
+    public void RoadSnapshotIsNeededOncePerSubscriptionAndRoadRevision()
+    {
+        using var socket = new StubWebSocket();
+        using var connection = new ClientConnection(Guid.NewGuid(), socket);
+        connection.SetSubscription(new WorldVolume(-100, -100, -100, 100, 100, 100));
+        Assert.IsTrue(connection.TryCaptureSubscription(out var subscription));
+
+        Assert.IsTrue(connection.NeedsRoadSnapshot(subscription.Revision, 1));
+        Assert.IsTrue(connection.TryMarkRoadSnapshotDelivered(subscription.Revision, 1));
+        Assert.IsFalse(connection.NeedsRoadSnapshot(subscription.Revision, 1));
+        Assert.IsTrue(connection.NeedsRoadSnapshot(subscription.Revision, 2));
+
+        connection.SetSubscription(new WorldVolume(-200, -200, -200, 200, 200, 200));
+        Assert.IsTrue(connection.TryCaptureSubscription(out var next));
+        Assert.IsTrue(connection.NeedsRoadSnapshot(next.Revision, 1));
+    }
+
+    [TestMethod]
+    public void StaleRoadDeliveryDoesNotSuppressCurrentSubscriptionRoadSnapshot()
+    {
+        using var socket = new StubWebSocket();
+        using var connection = new ClientConnection(Guid.NewGuid(), socket);
+        connection.SetSubscription(new WorldVolume(-100, -100, -100, 100, 100, 100));
+        Assert.IsTrue(connection.TryCaptureSubscription(out var stale));
+        connection.SetSubscription(new WorldVolume(0, 0, 0, 10, 10, 10));
+        Assert.IsTrue(connection.TryCaptureSubscription(out var current));
+
+        Assert.IsFalse(connection.TryMarkRoadSnapshotDelivered(stale.Revision, 1));
+        Assert.IsTrue(connection.NeedsRoadSnapshot(current.Revision, 1));
+    }
+
     private sealed class StubWebSocket : WebSocket
     {
         public override WebSocketCloseStatus? CloseStatus => null;

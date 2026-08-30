@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import type { EntityStore } from './entity-store.ts';
 import type { PedestrianStore } from './pedestrian-store.ts';
 import { RoadNetworkStore } from './road-network-store.ts';
-import { LaneDirection, RoadNodeKind, type RoadNetworkSnapshotMessage, type WorldVolume } from './protocol.ts';
+import { LaneDirection, RoadNodeKind, type Lane, type RoadNetworkSnapshotMessage, type WorldVolume } from './protocol.ts';
 
 const CAMERA_HEIGHT = 500;
 const CAMERA_TILT_DISTANCE = 250;
@@ -11,6 +11,7 @@ const INITIAL_HALF_HEIGHT = 300;
 const SUBSCRIPTION_PADDING = 1.2;
 const MINIMUM_ZOOM = 0.25;
 const MAXIMUM_ZOOM = 8;
+const SUBSCRIPTION_RETRY_ZOOM_FACTOR = 1.25;
 const AGENT_HALF_SIZE = 2.5;
 const PEDESTRIAN_HALF_HEIGHT = 1.5;
 
@@ -78,6 +79,13 @@ export class WorldView {
 
   public getSubscriptionVolume(): WorldVolume { return computeOrthographicSubscriptionVolume(this.camera, SUBSCRIPTION_PADDING); }
 
+  public zoomInForSubscriptionRetry(): boolean {
+    if (this.camera.zoom >= MAXIMUM_ZOOM) return false;
+    this.camera.zoom = clamp(this.camera.zoom * SUBSCRIPTION_RETRY_ZOOM_FACTOR, MINIMUM_ZOOM, MAXIMUM_ZOOM);
+    this.camera.updateProjectionMatrix();
+    return true;
+  }
+
   public getListenerPosition(): WorldPosition {
     return { x: this.camera.position.x, y: this.camera.position.z, z: this.camera.position.y };
   }
@@ -143,6 +151,27 @@ export function computeOrthographicSubscriptionVolume(camera: THREE.Orthographic
   return { minX: minX - paddingX, minY: minY - paddingY, minZ: minZ - paddingZ, maxX: maxX + paddingX, maxY: maxY + paddingY, maxZ: maxZ + paddingZ };
 }
 
+export function computeLaneCenterOffsets(lanes: readonly Lane[]): ReadonlyMap<bigint, number> {
+  const groups = new Map<string, Lane[]>();
+  for (const lane of lanes) {
+    const key = `${lane.segmentId.toString()}:${String(lane.direction)}`;
+    const group = groups.get(key);
+    if (group === undefined) groups.set(key, [lane]); else group.push(lane);
+  }
+
+  const offsets = new Map<bigint, number>();
+  for (const group of groups.values()) {
+    group.sort((left, right) => left.order - right.order || compareBigInt(left.id, right.id));
+    let innerEdge = 0;
+    for (const lane of group) {
+      const magnitude = innerEdge + lane.widthMeters / 2;
+      offsets.set(lane.id, lane.direction === LaneDirection.Forward ? magnitude : -magnitude);
+      innerEdge += lane.widthMeters;
+    }
+  }
+  return offsets;
+}
+
 export function simulationToThreePosition(x: number, y: number, z: number, target = new THREE.Vector3()): THREE.Vector3 { return target.set(x, z, y); }
 
 class RoadNetworkRenderer {
@@ -183,6 +212,7 @@ class RoadNetworkRenderer {
       appendSimulationPosition(roadPositions, end.x, end.y, end.z);
     }
 
+    const laneOffsets = computeLaneCenterOffsets(snapshot.lanes);
     const lanePositions: number[] = [];
     for (const lane of snapshot.lanes) {
       const segment = store.getSegment(lane.segmentId);
@@ -191,8 +221,7 @@ class RoadNetworkRenderer {
       if (start === undefined || end === undefined) continue;
       const dx = end.x - start.x, dy = end.y - start.y;
       const horizontalLength = Math.hypot(dx, dy);
-      const directionSide = lane.direction === LaneDirection.Forward ? 1 : -1;
-      const offset = directionSide * (lane.order + 0.5) * lane.widthMeters;
+      const offset = laneOffsets.get(lane.id) ?? 0;
       const offsetX = horizontalLength > 0 ? (-dy / horizontalLength) * offset : 0;
       const offsetY = horizontalLength > 0 ? (dx / horizontalLength) * offset : 0;
       appendSimulationPosition(lanePositions, start.x + offsetX, start.y + offsetY, start.z);
@@ -272,4 +301,5 @@ class PedestrianRenderer {
 
 function appendSimulationPosition(target: number[], x: number, y: number, z: number): void { target.push(x, z, y); }
 function replacePositions(geometry: THREE.BufferGeometry, values: readonly number[]): void { geometry.setAttribute('position', new THREE.Float32BufferAttribute(values, 3)); geometry.computeBoundingSphere(); }
+function compareBigInt(left: bigint, right: bigint): number { return left < right ? -1 : left > right ? 1 : 0; }
 function clamp(value: number, minimum: number, maximum: number): number { return Math.min(maximum, Math.max(minimum, value)); }

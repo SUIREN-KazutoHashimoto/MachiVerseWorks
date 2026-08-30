@@ -1,6 +1,12 @@
 using BenchmarkDotNet.Running;
 using MachiVerseWorks.Benchmarks;
 
+if (args.Contains("--read-model-latency", StringComparer.Ordinal))
+{
+    PublishedReadModelLatencyRunner.Run(Console.Out);
+    return;
+}
+
 if (args.Any(static argument => argument is "--warmup" or "--ticks"))
 {
     var options = BenchmarkOptions.Parse(args);
@@ -16,5 +22,5 @@ if (args.Any(static argument => argument is "--warmup" or "--ticks"))
 }
 
 BenchmarkSwitcher
-    .FromAssembly(typeof(Program).Assembly)
+    .FromAssembly(typeof(PublishedReadModelBenchmarks).Assembly)
     .Run(args, PerformanceBenchmarkConfig.Create());

@@ -1,15 +1,16 @@
+using System.Globalization;
 using System.Net.WebSockets;
 using MachiVerseWorks.Protocol;
 using MachiVerseWorks.Simulation;
 
 namespace MachiVerseWorks.Server;
 
-internal sealed class SimulationTickService(SimulationRuntime simulation, ServerOptions options, ILogger<SimulationTickService> logger) : BackgroundService
+internal sealed class SimulationTickService(SimulationRuntime simulation, ILogger<SimulationTickService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        ServerLog.SimulationTickStarted(logger, options.TickRate);
-        using var timer = new PeriodicTimer(options.TickInterval);
+        ServerLog.SimulationTickStarted(logger, simulation.TickRate);
+        using var timer = new PeriodicTimer(simulation.TickInterval);
         try
         {
             while (await timer.WaitForNextTickAsync(stoppingToken)) simulation.Step();
@@ -76,6 +77,28 @@ internal static class PedestrianSnapshotMessagePlanner
     }
 }
 
+internal static class RoadSnapshotMessagePlanner
+{
+    public const string TooLargeDetailCode = "roadSnapshotTooLarge";
+
+    public static IProtocolMessage Create(RoadNetworkSnapshot snapshot, ulong tickCount)
+    {
+        var message = RoadNetworkMessageMapper.Create(snapshot, tickCount);
+        if (ProtocolCodec.FitsSingleFrame(message)) return message;
+
+        return new ProtocolErrorMessage(
+            ProtocolErrorCode.InvalidRequest,
+            [
+                new ProtocolErrorParameter(ProtocolErrorParameterKeys.Field, "volume"),
+                new ProtocolErrorParameter(ProtocolErrorParameterKeys.DetailCode, TooLargeDetailCode),
+                new ProtocolErrorParameter("payloadBytes", ProtocolCodec.GetPayloadLength(message).ToString(CultureInfo.InvariantCulture)),
+                new ProtocolErrorParameter("maximumPayloadBytes", ProtocolFrameHeader.MaxPayloadLength.ToString(CultureInfo.InvariantCulture)),
+            ]);
+    }
+}
+
+internal readonly record struct PendingSnapshotDelivery(ClientConnection Connection, ClientSubscriptionState Subscription);
+
 internal sealed class SnapshotPublishService(SimulationRuntime simulation, ServerOptions options, ClientConnectionRegistry connections, E2eMetrics metrics, ILogger<SnapshotPublishService> logger) : BackgroundService
 {
     private static readonly TimeSpan ClientSendTimeout = TimeSpan.FromSeconds(5);
@@ -90,7 +113,19 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
                 _deliveryScheduler.ThrowIfFaulted();
-                SchedulePublish(stoppingToken);
+                var pending = CapturePendingDeliveries();
+                if (pending.Length == 0) continue;
+
+                try
+                {
+                    var publishSnapshot = simulation.CapturePublishSnapshot();
+                    SchedulePublish(publishSnapshot, pending, stoppingToken);
+                }
+                catch
+                {
+                    ReleaseReservations(pending);
+                    throw;
+                }
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -103,28 +138,54 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
         ServerLog.SnapshotPublisherStopped(logger);
     }
 
-    private void SchedulePublish(CancellationToken cancellationToken)
+    private PendingSnapshotDelivery[] CapturePendingDeliveries()
     {
-        foreach (var connection in connections.CreateSnapshot())
+        var candidates = connections.CreateSnapshot();
+        var pending = new List<PendingSnapshotDelivery>(candidates.Length);
+        foreach (var connection in candidates)
         {
-            if (connection.HandshakeCompleted && connection.Socket.State == WebSocketState.Open && connection.TryCaptureSubscription(out var subscription))
-                _deliveryScheduler.TrySchedule(connection.Id, () => PublishConnectionAsync(connection, subscription, cancellationToken));
+            if (!connection.HandshakeCompleted || connection.Socket.State != WebSocketState.Open || !connection.TryCaptureSubscription(out var subscription)) continue;
+            if (!_deliveryScheduler.TryReserve(connection.Id)) continue;
+            pending.Add(new PendingSnapshotDelivery(connection, subscription));
+        }
+        return pending.ToArray();
+    }
+
+    private void SchedulePublish(SimulationPublishSnapshot publishSnapshot, PendingSnapshotDelivery[] pending, CancellationToken cancellationToken)
+    {
+        foreach (var delivery in pending)
+        {
+            _deliveryScheduler.StartReserved(
+                delivery.Connection.Id,
+                () => PublishConnectionAsync(delivery.Connection, delivery.Subscription, publishSnapshot, cancellationToken));
         }
     }
 
-    private async Task PublishConnectionAsync(ClientConnection connection, ClientSubscriptionState subscription, CancellationToken cancellationToken)
+    private void ReleaseReservations(PendingSnapshotDelivery[] pending)
+    {
+        foreach (var delivery in pending) _deliveryScheduler.ReleaseReservation(delivery.Connection.Id);
+    }
+
+    private async Task PublishConnectionAsync(ClientConnection connection, ClientSubscriptionState subscription, SimulationPublishSnapshot publishSnapshot, CancellationToken cancellationToken)
     {
         try
         {
-            var snapshots = simulation.CreateSnapshot(subscription.Volume);
-            var tick = simulation.TickCount;
-            var agentPlan = SnapshotMessagePlanner.Create(snapshots, subscription.KnownAgentIds, tick);
+            await Task.Yield();
+            var snapshot = publishSnapshot.QueryEntities(subscription.Volume);
+            var agentPlan = SnapshotMessagePlanner.Create(snapshot.Agents, subscription.KnownAgentIds, snapshot.TickCount);
             var pedestrianPlan = connection.NegotiatedVersion.SupportsPedestrians
-                ? PedestrianSnapshotMessagePlanner.Create(simulation.CreatePedestrianSnapshot(subscription.Volume), subscription.KnownPedestrianIds, tick)
+                ? PedestrianSnapshotMessagePlanner.Create(snapshot.Pedestrians, subscription.KnownPedestrianIds, snapshot.TickCount)
                 : new PedestrianSnapshotMessagePlan([], []);
-            var roadMessage = connection.NegotiatedVersion.SupportsRoadNetwork
-                ? RoadNetworkMessageMapper.Create(simulation.CreateRoadNetworkSnapshot(subscription.Volume), tick)
-                : null;
+
+            IProtocolMessage? roadMessage = null;
+            var roadStateHandled = false;
+            if (connection.NegotiatedVersion.SupportsRoadNetwork
+                && connection.NeedsRoadSnapshot(subscription.Revision, publishSnapshot.RoadNetwork.Revision))
+            {
+                var roadSnapshot = publishSnapshot.RoadNetwork.Query(subscription.Volume);
+                roadMessage = RoadSnapshotMessagePlanner.Create(roadSnapshot, snapshot.TickCount);
+                roadStateHandled = true;
+            }
 
             long bytes = 0;
             double encodeTimeMs = 0;
@@ -149,9 +210,11 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
                 var sent = await connection.SendAsync(roadMessage, connection.NegotiatedVersion, sendCancellation.Token);
                 bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs;
             }
+
             connection.TryReplaceKnownEntityIds(subscription.Revision, agentPlan.CurrentAgentIds, pedestrianPlan.CurrentPedestrianIds);
-            metrics.RecordSnapshotDelivery(snapshots.Length, messageCount, bytes, encodeTimeMs, sendTimeMs);
-            ServerLog.SnapshotDeliveryMetrics(logger, connection.Id, snapshots.Length, messageCount, bytes, encodeTimeMs, sendTimeMs);
+            if (roadStateHandled) connection.TryMarkRoadSnapshotDelivered(subscription.Revision, publishSnapshot.RoadNetwork.Revision);
+            metrics.RecordSnapshotDelivery(snapshot.Agents.Length, messageCount, bytes, encodeTimeMs, sendTimeMs);
+            ServerLog.SnapshotDeliveryMetrics(logger, connection.Id, snapshot.Agents.Length, messageCount, bytes, encodeTimeMs, sendTimeMs);
         }
         catch (Exception exception) when (SnapshotDeliveryFailurePolicy.IsExpectedClientFailure(exception))
         {
