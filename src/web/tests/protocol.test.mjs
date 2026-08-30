@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as protocol from '../src/protocol.ts';
 
-const { CURRENT_PROTOCOL_VERSION, MessageType, PROTOCOL_HEADER_SIZE, PROTOCOL_MAGIC, decodeFrame, encodeHello, encodeSubscribeVolume } = protocol;
+const { CURRENT_PROTOCOL_VERSION, MessageType, PedestrianMovementState, PROTOCOL_HEADER_SIZE, PROTOCOL_MAGIC, decodeFrame, encodeHello, encodeSubscribeVolume } = protocol;
 
-test('Hello frame matches Protocol 2.1 header contract', () => {
+test('Hello frame matches Protocol 2.2 header contract', () => {
   const frame = encodeHello(); const view = new DataView(frame);
-  assert.equal(frame.byteLength, PROTOCOL_HEADER_SIZE); assert.equal(CURRENT_PROTOCOL_VERSION.major, 2); assert.equal(CURRENT_PROTOCOL_VERSION.minor, 1);
+  assert.equal(frame.byteLength, PROTOCOL_HEADER_SIZE); assert.equal(CURRENT_PROTOCOL_VERSION.major, 2); assert.equal(CURRENT_PROTOCOL_VERSION.minor, 2);
   assert.equal(view.getUint32(0, true), PROTOCOL_MAGIC); assert.equal(view.getUint16(8, true), MessageType.Hello);
 });
 
@@ -17,12 +17,42 @@ test('SubscribeVolume round-trips a native 3D volume through the client codec', 
 
 test('legacy 2D subscription API is not exported', () => { assert.equal('encodeSubscribeArea' in protocol, false); assert.equal('SubscribeArea' in MessageType, false); });
 
-test('Agent update decoder reads the Protocol 2.1 3D payload layout', () => {
+test('Agent update decoder keeps the Protocol 2.1 3D payload compatible', () => {
   const frame = new ArrayBuffer(PROTOCOL_HEADER_SIZE + 64); const view = new DataView(frame);
   view.setUint32(0, PROTOCOL_MAGIC, true); view.setUint16(4, 2, true); view.setUint16(6, 1, true); view.setUint16(8, MessageType.AgentUpdate, true); view.setUint16(10, 0, true); view.setUint32(12, 64, true);
   view.setBigUint64(16, 42n, true); view.setFloat64(24, 12.5, true); view.setFloat64(32, -8.25, true); view.setFloat64(40, 75.5, true); view.setFloat64(48, 1.5, true); view.setFloat64(56, -2, true); view.setFloat64(64, 3.25, true); view.setBigUint64(72, 99n, true);
   const envelope = decodeFrame(frame);
   assert.deepEqual(envelope.message, { type: MessageType.AgentUpdate, agentId: 42n, x: 12.5, y: -8.25, z: 75.5, velocityX: 1.5, velocityY: -2, velocityZ: 3.25, tickCount: 99n });
+});
+
+test('Pedestrian update decoder reads Protocol 2.2 state and 3D movement', () => {
+  const frame = new ArrayBuffer(PROTOCOL_HEADER_SIZE + 81); const view = new DataView(frame);
+  view.setUint32(0, PROTOCOL_MAGIC, true); view.setUint16(4, 2, true); view.setUint16(6, 2, true); view.setUint16(8, MessageType.PedestrianUpdate, true); view.setUint16(10, 0, true); view.setUint32(12, 81, true);
+  const offset = PROTOCOL_HEADER_SIZE;
+  view.setBigUint64(offset, 7n, true); view.setBigUint64(offset + 8, 9n, true);
+  view.setFloat64(offset + 16, 1.25, true); view.setFloat64(offset + 24, 2.5, true); view.setFloat64(offset + 32, 3.75, true);
+  view.setFloat64(offset + 40, 0.5, true); view.setFloat64(offset + 48, 0.25, true); view.setFloat64(offset + 56, 0.125, true);
+  view.setFloat64(offset + 64, 1.4, true); view.setUint8(offset + 72, PedestrianMovementState.WaitingForCrossing); view.setBigUint64(offset + 73, 123n, true);
+  assert.deepEqual(decodeFrame(frame).message, {
+    type: MessageType.PedestrianUpdate,
+    pedestrianId: 7n,
+    tripRequestId: 9n,
+    x: 1.25,
+    y: 2.5,
+    z: 3.75,
+    velocityX: 0.5,
+    velocityY: 0.25,
+    velocityZ: 0.125,
+    walkingSpeedMetersPerSecond: 1.4,
+    state: PedestrianMovementState.WaitingForCrossing,
+    tickCount: 123n,
+  });
+});
+
+test('Pedestrian messages are rejected below Protocol 2.2', () => {
+  const frame = new ArrayBuffer(PROTOCOL_HEADER_SIZE + 16); const view = new DataView(frame);
+  view.setUint32(0, PROTOCOL_MAGIC, true); view.setUint16(4, 2, true); view.setUint16(6, 1, true); view.setUint16(8, MessageType.PedestrianRemove, true); view.setUint32(12, 16, true); view.setBigUint64(16, 1n, true);
+  assert.throws(() => decodeFrame(frame), /2\.2/);
 });
 
 test('Road Network decoder preserves 3D grade separation and explicit references', () => {
