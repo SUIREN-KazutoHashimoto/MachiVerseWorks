@@ -46,14 +46,14 @@ public sealed class RailwayInfrastructureProtocolTests
 
         var chunks = RailwayInfrastructureProtocolChunker.Split(message);
 
-        Assert.IsGreaterThan(1, chunks.Count);
+        Assert.IsTrue(chunks.Count > 1);
         Assert.IsTrue(chunks[0].IsFullSnapshot);
         Assert.IsTrue(chunks.Skip(1).All(static chunk => !chunk.IsFullSnapshot));
         Assert.AreEqual(nodes.Length, chunks.Sum(static chunk => chunk.Nodes.Count));
         foreach (var chunk in chunks)
         {
             var frame = RailwayInfrastructureProtocolCodec.Serialize(chunk, ProtocolVersion.Current);
-            Assert.IsLessThanOrEqualTo(ProtocolFrameHeader.Size + (long)ProtocolFrameHeader.MaxPayloadLength, frame.LongLength);
+            Assert.IsTrue(frame.LongLength <= ProtocolFrameHeader.Size + (long)ProtocolFrameHeader.MaxPayloadLength);
         }
     }
 
