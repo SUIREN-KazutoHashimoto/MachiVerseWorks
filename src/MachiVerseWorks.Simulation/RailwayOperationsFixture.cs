@@ -23,9 +23,9 @@ public static class RailwayOperationsFixtures
         ArgumentNullException.ThrowIfNull(world);
 
         var n0 = world.CreateTrackNode(new WorldPoint(-100d, 24d, 2d));
-        var n1 = world.CreateTrackNode(new WorldPoint(-60d, 24d, 2d));
-        var n2 = world.CreateTrackNode(new WorldPoint(0d, 24d, 2d));
-        var n3 = world.CreateTrackNode(new WorldPoint(60d, 24d, 2d));
+        var n1 = world.CreateTrackNode(new WorldPoint(-60d, 24d, 2d), TrackNodeKind.Junction);
+        var n2 = world.CreateTrackNode(new WorldPoint(0d, 24d, 2d), TrackNodeKind.Junction);
+        var n3 = world.CreateTrackNode(new WorldPoint(60d, 24d, 2d), TrackNodeKind.Junction);
         var n4 = world.CreateTrackNode(new WorldPoint(100d, 24d, 2d));
         var depotOut = world.CreateTrackSegment(n0, n1, TrackDirection.StartToEnd, 1.067d, 10d, TrackElectrification.Overhead, TrackUsage.Depot);
         var westMain = world.CreateTrackSegment(n1, n2, TrackDirection.StartToEnd, 1.067d, 18d, TrackElectrification.Overhead, TrackUsage.Mainline);
