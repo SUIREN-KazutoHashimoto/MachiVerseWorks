@@ -48,7 +48,7 @@ public sealed class RailwayInfrastructureProtocolTests
     {
         var message = new RailwayInfrastructureSnapshotMessage(1, true, [new ProtocolTrackNode(1, 0, 0d, 0d, 0d)], [], [], [], [], [], [], []);
         var frame = RailwayInfrastructureProtocolCodec.Serialize(message, ProtocolVersion.Current);
-        frame[^1] = 0xff;
+        frame[ProtocolFrameHeader.Size + sizeof(ulong)] = 2;
 
         var success = RailwayInfrastructureProtocolCodec.TryDeserialize(frame, out _, out var error);
 
