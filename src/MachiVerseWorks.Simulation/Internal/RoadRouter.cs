@@ -3,6 +3,7 @@ namespace MachiVerseWorks.Simulation.Internal;
 internal sealed class RoadRouter
 {
     internal const int CacheCapacity = 1024;
+    internal const int CacheStepCapacity = 100_000;
 
     private readonly Dictionary<LaneId, RoutingLane> lanes = [];
     private readonly Dictionary<LaneId, LaneConnectionSnapshot[]> outgoing = [];
@@ -11,6 +12,7 @@ internal sealed class RoadRouter
     private readonly LinkedList<RouteCacheEntry> lru = new();
     private RoutingLane[] orderedLanes = [];
     private bool topologyDirty = true;
+    private int cachedSteps;
     private long cacheHits;
     private long cacheMisses;
     private long invalidations;
@@ -26,6 +28,7 @@ internal sealed class RoadRouter
         connections.Clear();
         cache.Clear();
         lru.Clear();
+        cachedSteps = 0;
         invalidations++;
     }
 
@@ -37,6 +40,7 @@ internal sealed class RoadRouter
         connections.Clear();
         cache.Clear();
         lru.Clear();
+        cachedSteps = 0;
 
         var nodes = snapshot.Nodes.ToDictionary(static item => item.Id);
         var segments = snapshot.Segments.ToDictionary(static item => item.Id);
@@ -203,22 +207,22 @@ internal sealed class RoadRouter
 
     private RouteResult BuildResult(
         RoutingCostMetric metric,
-        IReadOnlyList<LaneId> laneSequence,
-        IReadOnlyList<LaneConnectionId> transitionSequence,
+        LaneId[] laneSequence,
+        LaneConnectionId[] transitionSequence,
         double originOffset,
         double destinationOffset)
     {
-        var steps = new RouteLaneStep[laneSequence.Count];
+        var steps = new RouteLaneStep[laneSequence.Length];
         var totalDistance = 0d;
         var totalTime = 0d;
-        for (var index = 0; index < laneSequence.Count; index++)
+        for (var index = 0; index < laneSequence.Length; index++)
         {
             var lane = lanes[laneSequence[index]];
             var startOffset = index == 0 ? originOffset : EntryOffset(lane);
-            var endOffset = index == laneSequence.Count - 1 ? destinationOffset : ExitOffset(lane);
+            var endOffset = index == laneSequence.Length - 1 ? destinationOffset : ExitOffset(lane);
             var distance = DistanceBetween(lane, startOffset, endOffset);
             var time = distance / lane.Snapshot.SpeedLimitMetersPerSecond;
-            LaneConnectionId? exitConnection = index < transitionSequence.Count ? transitionSequence[index] : null;
+            LaneConnectionId? exitConnection = index < transitionSequence.Length ? transitionSequence[index] : null;
             steps[index] = new RouteLaneStep(lane.Snapshot.Id, lane.Snapshot.SegmentId, startOffset, endOffset, distance, time, exitConnection);
             totalDistance += distance;
             totalTime += time;
@@ -280,20 +284,32 @@ internal sealed class RoadRouter
 
     private void AddCached(RouteCacheKey key, RouteResult result)
     {
+        var stepCount = result.Steps.Count;
+        if (stepCount > CacheStepCapacity) return;
+
         if (cache.TryGetValue(key, out var existing))
         {
+            cachedSteps -= existing.Value.Result.Steps.Count;
             existing.Value = new RouteCacheEntry(key, result);
+            cachedSteps += stepCount;
             lru.Remove(existing);
             lru.AddFirst(existing);
-            return;
         }
-        var node = new LinkedListNode<RouteCacheEntry>(new RouteCacheEntry(key, result));
-        lru.AddFirst(node);
-        cache.Add(key, node);
-        if (cache.Count <= CacheCapacity) return;
-        var last = lru.Last!;
-        lru.RemoveLast();
-        cache.Remove(last.Value.Key);
+        else
+        {
+            var node = new LinkedListNode<RouteCacheEntry>(new RouteCacheEntry(key, result));
+            lru.AddFirst(node);
+            cache.Add(key, node);
+            cachedSteps += stepCount;
+        }
+
+        while (cache.Count > CacheCapacity || cachedSteps > CacheStepCapacity)
+        {
+            var last = lru.Last!;
+            lru.RemoveLast();
+            cache.Remove(last.Value.Key);
+            cachedSteps -= last.Value.Result.Steps.Count;
+        }
     }
 
     private static bool IsPreferredPredecessor(
