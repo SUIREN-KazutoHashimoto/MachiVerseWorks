@@ -7,7 +7,7 @@ internal readonly record struct IntersectionEntryIntent(
 
 internal sealed class IntersectionControlStore
 {
-    private const double StopLineOffsetMeters = 0d;
+    private const double ConflictProbeMeters = 2d;
     private readonly Dictionary<LaneConnectionId, MovementRuntime> movementsByConnection = [];
     private readonly List<ControllerRuntime> controllers = [];
     private readonly HashSet<EntryGrantKey> grants = [];
@@ -44,19 +44,20 @@ internal sealed class IntersectionControlStore
                 throw new InvalidOperationException($"Lane connection {connection.Id.Value} references an unknown RoadSegment.");
 
             var fromGeometry = topology.GetLane(connection.FromLaneId);
+            var toGeometry = topology.GetLane(connection.ToLaneId);
             var fromExitOffset = fromLane.Direction == LaneDirection.Forward ? 1d : 0d;
             var toEntryOffset = toLane.Direction == LaneDirection.Forward ? 0d : 1d;
-            var stopProgress = Math.Max(0d, fromGeometry.LengthMeters - StopLineOffsetMeters);
-            var stopOffset = fromLane.Direction == LaneDirection.Forward
-                ? stopProgress / fromGeometry.LengthMeters
-                : 1d - stopProgress / fromGeometry.LengthMeters;
+            var fromProbeRatio = Math.Min(0.45d, ConflictProbeMeters / fromGeometry.LengthMeters);
+            var toProbeRatio = Math.Min(0.45d, ConflictProbeMeters / toGeometry.LengthMeters);
+            var fromProbeOffset = fromLane.Direction == LaneDirection.Forward ? 1d - fromProbeRatio : fromProbeRatio;
+            var toProbeOffset = toLane.Direction == LaneDirection.Forward ? toProbeRatio : 1d - toProbeRatio;
 
             var movement = new MovementRuntime(
                 new IntersectionMovementId(connection.Id.Value),
                 connection,
-                topology.GetPosition(connection.FromLaneId, Math.Clamp(stopOffset, 0d, 1d)),
                 topology.GetPosition(connection.FromLaneId, fromExitOffset),
-                topology.GetPosition(connection.ToLaneId, toEntryOffset),
+                topology.GetPosition(connection.FromLaneId, fromProbeOffset),
+                topology.GetPosition(connection.ToLaneId, toProbeOffset),
                 GetRoadPriority(fromSegment.Kind),
                 GetTurnPriority(connection.Movement),
                 fromLane.SegmentId);
