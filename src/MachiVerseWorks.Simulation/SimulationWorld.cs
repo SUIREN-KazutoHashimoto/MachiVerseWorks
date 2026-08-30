@@ -54,8 +54,10 @@ public sealed partial class SimulationWorld
     {
         var nextTime = Time.Advance(Config.TickRate);
         _agents.Step(Config.TickDurationSeconds, _spatialIndex);
+        PlanPopulationTrips(nextTime);
         StepVehicles(Config.TickDurationSeconds, nextTime.TickCount);
         StepPedestrians(Config.TickDurationSeconds);
+        CompletePopulationTrips();
         Time = nextTime;
     }
 
@@ -76,7 +78,9 @@ public sealed partial class SimulationWorld
             _roads.NextConnectionId, _roads.CreateConnectionCheckpoint(),
             _roads.NextAccessPointId, _roads.CreateAccessPointCheckpoint(),
             _pedestrians.NextId, _pedestrians.CreateCheckpoint(), _pedestrianNetwork.CreateCrossingCheckpoint(),
-            _vehicles.NextId, _vehicles.CreateCheckpoint());
+            _vehicles.NextId, _vehicles.CreateCheckpoint(),
+            _population.NextHouseholdId, _population.CreateHouseholdCheckpoint(),
+            _population.NextPersonId, _population.CreatePersonCheckpoint(), _population.NextTripRequestId);
     }
 
     public static SimulationWorld RestoreCheckpoint(SimulationCheckpoint checkpoint)
@@ -101,6 +105,7 @@ public sealed partial class SimulationWorld
         ValidateRoadNetworkCheckpoint(checkpoint, config.SpatialCellSize);
         ValidatePedestrianCheckpoint(checkpoint);
         ValidateVehicleCheckpoint(checkpoint);
+        ValidatePopulationCheckpoint(checkpoint);
         var expectedElapsedTicks = CalculateExpectedElapsedTicks(checkpoint.TickCount, config.TickRate);
         if (checkpoint.ElapsedTicks != expectedElapsedTicks
             && (!TryCalculateLegacyElapsedTicks(checkpoint.TickCount, config.TickRate, out var legacyElapsedTicks)
@@ -125,6 +130,12 @@ public sealed partial class SimulationWorld
             checkpoint.NextPedestrianId,
             world._pedestrianNetwork,
             world._pedestrianSpatialIndex);
+        world._population.Restore(
+            checkpoint.Households ?? Array.Empty<SimulationHouseholdCheckpoint>(),
+            checkpoint.NextHouseholdId,
+            checkpoint.Persons ?? Array.Empty<SimulationPersonCheckpoint>(),
+            checkpoint.NextPersonId,
+            checkpoint.NextTripRequestId);
         return world;
     }
 

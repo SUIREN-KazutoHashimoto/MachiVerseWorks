@@ -11,6 +11,7 @@
 - [`road-network-benchmark.md`](road-network-benchmark.md): Road Network spatial query / topology snapshot benchmark
 - [`routing-benchmark.md`](routing-benchmark.md): Phase 12 small / medium / large Road routing search / cache benchmark
 - [`phase14-intersection-benchmark.md`](phase14-intersection-benchmark.md): Phase 14 queued intersection tick / controller snapshot benchmark baseline
+- [`population-benchmark.md`](population-benchmark.md): Phase 15 1,000 / 10,000 / 100,000 Person planner / tick / managed memory benchmark
 - [`pedestrian-benchmark.md`](pedestrian-benchmark.md): Phase 16 1,000 / 10,000 Pedestrian fixed-tick / routing benchmark
 - [`git-workflow.md`](git-workflow.md): branch / PR / validation の標準フロー
 - [`repository-settings.md`](repository-settings.md): branch protection、merge方式、GitHub Security設定の基準

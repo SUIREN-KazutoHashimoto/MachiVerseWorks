@@ -6,6 +6,7 @@ import { MachiVerseConnection } from './connection.ts';
 import { EntityStore } from './entity-store.ts';
 import { initializeLocalization, type LocaleParameters } from './localization.ts';
 import { PedestrianStore } from './pedestrian-store.ts';
+import { PopulationMessageType, type PopulationProtocolMessage, type PopulationStatisticsMessage, type PersonDebugMessage } from './population-protocol.ts';
 import { MessageType, ProtocolErrorCode, type AgentStateMessage, type PedestrianStateMessage, type ProtocolErrorMessage, type ProtocolMessage, type WorldVolume } from './protocol.ts';
 import { ClientUi } from './ui.ts';
 import { TrafficMessageType, type TrafficProtocolMessage, type VehicleStateMessage } from './traffic-protocol.ts';
@@ -53,6 +54,7 @@ export class Application {
           this.intersections.clear();
           this.view.clearRoadNetwork();
           this.ui.setAgentCount(0);
+          this.ui.clearPopulation();
           this.ui.setProtocol(null);
         },
         onHelloAck: (version) => { this.ui.clearError(); this.ui.setProtocol(version); },
@@ -61,6 +63,7 @@ export class Application {
     );
     this.audio.onStateChanged((state) => this.ui.setAudioState(state));
     this.ui.onAudioUnlock(() => { void this.audio.unlock().catch((error: unknown) => { const detail = error instanceof Error ? error.message : String(error); this.ui.showError(this.localizer.t('error.client', { detail })); }); });
+    this.ui.onInspectPerson((personId) => { this.connection.inspectPerson(personId); });
     window.addEventListener('resize', this.handleResize);
   }
 
@@ -102,7 +105,7 @@ export class Application {
     this.lastPerformanceUiAt = now; this.ui.setPerformanceMetrics(metrics.snapshot());
   }
 
-  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage): void {
+  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage): void {
     switch (message.type) {
       case MessageType.AgentSpawn: this.applyAgentSpawn(message); return;
       case MessageType.AgentUpdate: this.applyAgentUpdate(message); return;
@@ -118,6 +121,8 @@ export class Application {
       case TrafficMessageType.VehicleUpdate: this.applyVehicleUpdate(message); return;
       case TrafficMessageType.VehicleRemove: this.vehicles.remove(message.vehicleId); return;
       case TrafficMessageType.IntersectionControlSnapshot: this.intersections.apply(message); return;
+      case PopulationMessageType.PopulationStatistics: this.applyPopulationStatistics(message); return;
+      case PopulationMessageType.PersonDebug: this.applyPersonDebug(message); return;
       case MessageType.Hello:
       case MessageType.HelloAck:
       case MessageType.SubscribeVolume:
@@ -140,6 +145,8 @@ export class Application {
   private applyPedestrianUpdate(message: PedestrianStateMessage): void { if (!this.pedestrians.update(message)) this.pedestrians.spawn(message); }
   private applyVehicleSpawn(message: VehicleStateMessage): void { this.vehicles.spawn(message); }
   private applyVehicleUpdate(message: VehicleStateMessage): void { if (!this.vehicles.update(message)) this.vehicles.spawn(message); }
+  private applyPopulationStatistics(message: PopulationStatisticsMessage): void { this.ui.setPopulationStatistics(message); }
+  private applyPersonDebug(message: PersonDebugMessage): void { this.ui.setPersonDebug(message); }
   private updateEntityAudioPosition(message: AgentStateMessage): void { if (this.audio.hasEntityEmitters(message.agentId)) this.audio.updateEntityPosition(message.agentId, { x: message.x, y: message.y, z: message.z }); }
 
   private handleProtocolError(message: ProtocolErrorMessage): void {

@@ -69,7 +69,10 @@ internal sealed class ServerTestHost : IAsyncDisposable
 
     public static Task SendAsync(ClientWebSocket socket, IProtocolMessage message, ProtocolVersion? version = null)
     {
-        var frame = ProtocolCodec.Serialize(message, version);
+        var resolvedVersion = version ?? ProtocolVersion.Current;
+        var frame = message is InspectPersonMessage inspectPerson
+            ? PopulationProtocolCodec.Serialize(inspectPerson, resolvedVersion)
+            : ProtocolCodec.Serialize(message, resolvedVersion);
         return socket.SendAsync(new ArraySegment<byte>(frame), WebSocketMessageType.Binary, true, CancellationToken.None);
     }
 
@@ -85,8 +88,15 @@ internal sealed class ServerTestHost : IAsyncDisposable
             stream.Write(buffer, 0, result.Count);
             if (result.EndOfMessage) break;
         }
+
         var frame = stream.ToArray();
-        if (!ProtocolCodec.TryDeserialize(frame, out var envelope, out var error) || envelope is null) throw new InvalidOperationException($"Server returned an invalid protocol frame: {error}.");
+        if (!ProtocolFrameHeader.TryRead(frame, out var header, out var headerError))
+            throw new InvalidOperationException($"Server returned an invalid protocol frame: {headerError}.");
+
+        var decoded = header.MessageType is MessageType.PopulationStatistics or MessageType.PersonDebug
+            ? PopulationProtocolCodec.TryDeserialize(frame, out var envelope, out var error)
+            : ProtocolCodec.TryDeserialize(frame, out envelope, out error);
+        if (!decoded || envelope is null) throw new InvalidOperationException($"Server returned an invalid protocol frame: {error}.");
         return envelope;
     }
 

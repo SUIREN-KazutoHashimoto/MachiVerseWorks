@@ -14,6 +14,8 @@ public sealed class WorldSaveLimits
     public const int DefaultMaximumPedestrianCount = 1_000_000;
     public const int DefaultMaximumPedestrianCrossingCount = 4_000_000;
     public const int DefaultMaximumVehicleCount = 1_000_000;
+    public const int DefaultMaximumHouseholdCount = 1_000_000;
+    public const int DefaultMaximumPersonCount = 1_000_000;
 
     public WorldSaveLimits(
         int maximumBytes = DefaultMaximumBytes,
@@ -27,7 +29,9 @@ public sealed class WorldSaveLimits
         int maximumRoadAccessPointCount = DefaultMaximumRoadAccessPointCount,
         int maximumPedestrianCount = DefaultMaximumPedestrianCount,
         int maximumPedestrianCrossingCount = DefaultMaximumPedestrianCrossingCount,
-        int maximumVehicleCount = DefaultMaximumVehicleCount)
+        int maximumVehicleCount = DefaultMaximumVehicleCount,
+        int maximumHouseholdCount = DefaultMaximumHouseholdCount,
+        int maximumPersonCount = DefaultMaximumPersonCount)
     {
         MaximumBytes = RequirePositive(maximumBytes, nameof(maximumBytes), "Maximum Save Data bytes");
         MaximumAgentCount = RequirePositive(maximumAgentCount, nameof(maximumAgentCount), "Maximum Agent count");
@@ -41,6 +45,8 @@ public sealed class WorldSaveLimits
         MaximumPedestrianCount = RequirePositive(maximumPedestrianCount, nameof(maximumPedestrianCount), "Maximum Pedestrian count");
         MaximumPedestrianCrossingCount = RequirePositive(maximumPedestrianCrossingCount, nameof(maximumPedestrianCrossingCount), "Maximum PedestrianCrossing count");
         MaximumVehicleCount = RequirePositive(maximumVehicleCount, nameof(maximumVehicleCount), "Maximum Vehicle count");
+        MaximumHouseholdCount = RequirePositive(maximumHouseholdCount, nameof(maximumHouseholdCount), "Maximum Household count");
+        MaximumPersonCount = RequirePositive(maximumPersonCount, nameof(maximumPersonCount), "Maximum Person count");
     }
 
     public static WorldSaveLimits Default { get; } = new();
@@ -56,6 +62,8 @@ public sealed class WorldSaveLimits
     public int MaximumPedestrianCount { get; }
     public int MaximumPedestrianCrossingCount { get; }
     public int MaximumVehicleCount { get; }
+    public int MaximumHouseholdCount { get; }
+    public int MaximumPersonCount { get; }
 
     private static int RequirePositive(int value, string parameterName, string label)
     {

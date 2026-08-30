@@ -50,6 +50,8 @@ internal sealed class SimulationRuntime
     public int ActivePedestrianCount { get { lock (_gate) return _world.ActivePedestrianCount; } }
     public int ActiveVehicleCount { get { lock (_gate) return _world.ActiveVehicleCount; } }
     public int RoadSegmentCount { get { lock (_gate) return _world.RoadSegmentCount; } }
+    public int HouseholdCount { get { lock (_gate) return _world.HouseholdCount; } }
+    public int PersonCount { get { lock (_gate) return _world.PersonCount; } }
 
     public void Step()
     {
@@ -77,6 +79,16 @@ internal sealed class SimulationRuntime
             EnsureFixtures();
             return _world.CreateRoadNetworkSnapshot(volume);
         }
+    }
+
+    public PopulationStatistics CreatePopulationStatistics()
+    {
+        lock (_gate) return _world.CreatePopulationStatistics();
+    }
+
+    public bool TryGetPersonSnapshot(PersonId id, out PersonSnapshot snapshot)
+    {
+        lock (_gate) return _world.TryGetPersonSnapshot(id, out snapshot);
     }
 
     public SimulationPublishSnapshot CapturePublishSnapshot()

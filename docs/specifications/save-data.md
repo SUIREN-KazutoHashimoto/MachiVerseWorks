@@ -11,16 +11,17 @@ MachiVerseWorks のauthoritativeな`SimulationWorld`を停止点から同じ状�
 
 ## Save format version
 
-current formatは `formatVersion = 6` とする。Save format versionはルート`VERSION`とProtocol versionから独立する。
+current formatは `formatVersion = 7` とする。Save format versionはルート`VERSION`とProtocol versionから独立する。
 
 migration対象:
 
 - Format 3: Agent + Building / POI。Road Networkは空として復元する。
 - Format 4: Format 3 + Road Network。Pedestrian stateは空として復元する。
 - Format 5: Format 4 + Pedestrian state。Vehicle stateは空として復元する。
-- Format 6: Format 5 + Vehicle state。
+- Format 6: Format 5 + Vehicle state。Population stateは空として復元する。
+- Format 7: Format 6 + Household / Person / daily schedule / Need / active Population Trip state。
 
-Format 2以前、および6より新しい未知versionは拒否する。
+Format 2以前、および7より新しい未知versionは拒否する。
 
 ## 共通Simulation state
 
@@ -39,8 +40,11 @@ Format 2以前、および6より新しい未知versionは拒否する。
 - `nextPedestrianId`, `pedestrians`
 - `pedestrianCrossings`
 - `nextVehicleId`, `vehicles`
+- `nextHouseholdId`, `households`
+- `nextPersonId`, `persons`
+- `nextTripRequestId`
 
-Agent / Building / POI / Roadのfield意味は各仕様を参照する。表示文字列ではなくraw numeric valueとstable IDを保存する。
+Agent / Building / POI / Road / Populationのfield意味は各仕様を参照する。表示文字列ではなくraw numeric valueとstable IDを保存する。
 
 ## Format 5 Pedestrian state
 
@@ -75,6 +79,29 @@ Walking graphそのものやroute leg配列は保存しない。Road Networkか�
 
 Vehicleのworld position / forward vectorは独立して保存しない。Road/Lane topologyとRoute progressから復元時に再計算する。Lane occupancy indexも保存せず、Vehicle checkpointをstable ID順に復元しながら再構築する。
 
+## Format 7 Population state
+
+Householdは次を保持する。
+
+- `id`
+- residence Building / POI endpoint
+
+Personは次を保持する。
+
+- `id`
+- `householdId`
+- demographics: age / employed / student / private vehicle availability
+- residence / current location
+- current activity / travel state
+- optional destination / destination activity
+- optional active `TripRequestId` / travel mode / Pedestrian ID / Vehicle ID
+- daily activity windows
+- Need kind / satisfaction / decay rate
+
+Population plannerのderived decision cacheは保存しない。schedule / Need / current activity / active Trip execution referenceをauthoritative stateとして保存し、load後に同じfixed-tick state machineを継続する。
+
+Format 6以前のsaveはHousehold / Person collectionを空、next Population IDを初期値としてmigrationする。
+
 ## Phase 14 Signal controller state
 
 Phase 14の固定cycle Signalには、Save Dataへ追加すべき独立mutable stateがない。
@@ -83,13 +110,13 @@ Phase 14の固定cycle Signalには、Save Dataへ追加すべき独立mutable s
 - current phase / phase tickは保存済み`tickCount`と`tickRate`から決定的に派生する。
 - current-tick queue / entry grantは次tickで再計算されるephemeral observationであり、継続状態として保存しない。
 
-このためPhase 14ではSave formatを7へ上げず、Format 6のauthoritative入力からcontrollerを再構築する。`IntersectionControlSaveTests`がsave → load前後で同一tickのcontroller mode / phase / indicationを比較する。
+このためPhase 14ではSave formatを上げず、Road Traffic stateを含む既存authoritative入力からcontrollerを再構築する。`IntersectionControlSaveTests`がsave → load前後で同一tickのcontroller mode / phase / indicationを比較する。
 
 将来adaptive signalがdetector履歴、manual offset、preemption、学習状態などの独立mutable stateを持つ場合は、その時点で明示Save fieldとformat versionを追加する。
 
 ## Restore順序
 
-Format 6は次の順で復元する。
+Format 7は次の順で復元する。
 
 1. JSON / resource limit / required field検証
 2. Simulation config / time / random state検証
@@ -97,12 +124,14 @@ Format 6は次の順で復元する。
 4. Road topology / access参照検証
 5. Pedestrian ID / Trip endpoint / speed / progress / state検証
 6. Vehicle ID / dimensions / performance / Route / progress / state検証
-7. Road Network復元
-8. derived Road Traffic topologyとIntersection Control topology再構築
-9. Vehicle stateとLane occupancy index復元
-10. derived Pedestrian Network再構築
-11. walking route再計算
-12. 保存されたPedestrian route progress / crossing permissionを適用
+7. Household / Person ID、Household所属、Building / POI endpoint、schedule / Need、active Trip参照検証
+8. Road Network復元
+9. derived Road Traffic topologyとIntersection Control topology再構築
+10. Vehicle stateとLane occupancy index復元
+11. derived Pedestrian Network再構築
+12. walking route再計算
+13. 保存されたPedestrian route progress / crossing permissionを適用
+14. Household / Person / active Population Trip stateを復元
 
 いずれかが不正な場合は部分Worldを返さない。
 
@@ -110,7 +139,7 @@ Format 6は次の順で復元する。
 
 `elapsedTicks`は`tickCount`とSimulation TickRateから得られるdeterministic elapsed timeと一致しなければならない。`randomState`はseedではなく保存時点のdeterministic random generator状態を保持する。
 
-Vehicle / Pedestrianのcheckpoint復元後も、同じRoad Network / Route / Trip / crossing permission入力のもとでは同じfixed-tick continuationを得る。固定cycle Signalのphaseも同じ`tickCount`から復元される。
+Vehicle / Pedestrian / Populationのcheckpoint復元後も、同じRoad Network / Route / Trip / schedule入力のもとでは同じfixed-tick continuationを得る。固定cycle Signalのphaseも同じ`tickCount`から復元される。
 
 ## Resource limits
 
@@ -126,8 +155,10 @@ Vehicle / Pedestrianのcheckpoint復元後も、同じRoad Network / Route / Tri
 - LaneConnection: 4,000,000
 - RoadAccessPoint: 1,000,000
 - Pedestrian: 1,000,000
-- PedestrianCrossing: 1,000,000
+- PedestrianCrossing: 4,000,000
 - Vehicle: 1,000,000
+- Household: 1,000,000
+- Person: 1,000,000
 
 同じlimit contractをserialize / deserializeへ適用する。collection件数は`Utf8JsonReader`でDTO materialization前にも検証し、巨大配列を先に確保しない。
 
@@ -144,6 +175,7 @@ Vehicle / Pedestrianのcheckpoint復元後も、同じRoad Network / Route / Tri
 - derived Pedestrian Network graph
 - derived Road Traffic topology / Lane occupancy index
 - derived Intersection movement / conflict / fixed-cycle phase state
+- Population statistics / Person debug view
 - benchmark / diagnostics
 
 Crossing permissionはPedestrian自身のroute progressとは分離して保存する。Signal / intersection controlとの連携を拡張する場合も、Pedestrian route stateとcontroller stateの正本を混在させない。
@@ -158,10 +190,12 @@ Crossing permissionはPedestrian自身のroute progressとは分離して保存�
 - invalid Simulation config / elapsed time / overflow
 - 0または重複stable ID
 - `next*Id`が保存済み最大ID以下
-- non-finite XYZ / velocity / bounds / speed / progress
+- non-finite XYZ / velocity / bounds / speed / progress / Need値
 - invalid enum numeric value
-- dangling Building / POI / Road reference
+- dangling Building / POI / Road / Household reference
 - Pedestrian endpointがBuilding/POIを同時またはどちらも参照する状態
 - Pedestrian route progressが再構築routeと整合しない状態
 - Vehicle Routeがmissing Lane / Segment / LaneConnectionを参照する状態
 - Vehicle progress / state / speedがRouteまたはLane occupancy invariantと整合しない状態
+- Household / Person residenceやactivity destinationがmissing Building / POIを参照する状態
+- Person active Trip / travel state / Pedestrian / Vehicle参照が相互に矛盾する状態

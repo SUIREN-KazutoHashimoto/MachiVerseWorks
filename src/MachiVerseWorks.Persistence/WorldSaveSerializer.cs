@@ -110,6 +110,8 @@ public static class WorldSaveSerializer
         ValidateCount(checkpoint.Pedestrians?.Count ?? 0, limits.MaximumPedestrianCount, "Pedestrians");
         ValidateCount(checkpoint.PedestrianCrossings?.Count ?? 0, limits.MaximumPedestrianCrossingCount, "PedestrianCrossings");
         ValidateCount(checkpoint.Vehicles?.Count ?? 0, limits.MaximumVehicleCount, "Vehicles");
+        ValidateCount(checkpoint.Households?.Count ?? 0, limits.MaximumHouseholdCount, "Households");
+        ValidateCount(checkpoint.Persons?.Count ?? 0, limits.MaximumPersonCount, "Persons");
     }
 
     private static SaveDataDocument CreateDocument(SimulationCheckpoint checkpoint)
@@ -231,6 +233,49 @@ public static class WorldSaveSerializer
             SpeedMetersPerSecond = item.SpeedMetersPerSecond,
             State = (byte)item.State,
         }).ToArray();
+        var households = (checkpoint.Households ?? []).Select(static item => new SaveHouseholdData
+        {
+            Id = item.Id.Value,
+            ResidenceBuildingId = item.Residence.BuildingId?.Value,
+            ResidencePoiId = item.Residence.PoiId?.Value,
+        }).ToArray();
+        var persons = (checkpoint.Persons ?? []).Select(static item => new SavePersonData
+        {
+            Id = item.Id.Value,
+            HouseholdId = item.HouseholdId.Value,
+            AgeYears = item.Demographics.AgeYears,
+            IsEmployed = item.Demographics.IsEmployed,
+            IsStudent = item.Demographics.IsStudent,
+            HasPrivateVehicle = item.Demographics.HasPrivateVehicle,
+            ResidenceBuildingId = item.Residence.BuildingId?.Value,
+            ResidencePoiId = item.Residence.PoiId?.Value,
+            CurrentBuildingId = item.CurrentLocation.BuildingId?.Value,
+            CurrentPoiId = item.CurrentLocation.PoiId?.Value,
+            CurrentActivity = (byte)item.CurrentActivity,
+            TravelState = (byte)item.TravelState,
+            DestinationBuildingId = item.Destination?.BuildingId?.Value,
+            DestinationPoiId = item.Destination?.PoiId?.Value,
+            DestinationActivity = item.DestinationActivity is { } destinationActivity ? (byte)destinationActivity : null,
+            ActiveTripRequestId = item.ActiveTripRequestId?.Value,
+            ActiveTravelMode = item.ActiveTravelMode is { } activeMode ? (byte)activeMode : null,
+            PedestrianId = item.PedestrianId?.Value,
+            VehicleId = item.VehicleId?.Value,
+            Schedule = item.Schedule.Select(static window => new SaveDailyActivityWindowData
+            {
+                Activity = (byte)window.Activity,
+                StartMinuteOfDay = window.StartMinuteOfDay,
+                EndMinuteOfDay = window.EndMinuteOfDay,
+                DestinationBuildingId = window.Destination?.BuildingId?.Value,
+                DestinationPoiId = window.Destination?.PoiId?.Value,
+                Priority = (byte)window.Priority,
+            }).ToArray(),
+            Needs = item.Needs.Select(static need => new SavePersonNeedData
+            {
+                Kind = (byte)need.Kind,
+                Satisfaction = need.Satisfaction,
+                DecayPerHour = need.DecayPerHour,
+            }).ToArray(),
+        }).ToArray();
 
         return new SaveDataDocument
         {
@@ -264,6 +309,11 @@ public static class WorldSaveSerializer
                 PedestrianCrossings = pedestrianCrossings,
                 NextVehicleId = checkpoint.NextVehicleId,
                 Vehicles = vehicles,
+                NextHouseholdId = checkpoint.NextHouseholdId,
+                Households = households,
+                NextPersonId = checkpoint.NextPersonId,
+                Persons = persons,
+                NextTripRequestId = checkpoint.NextTripRequestId,
             },
         };
     }
@@ -271,9 +321,9 @@ public static class WorldSaveSerializer
     private static SimulationWorld RestoreDocument(SaveDataDocument document, WorldSaveLimits limits)
     {
         var format = Require(document.FormatVersion, "formatVersion");
-        if (format is not (SaveFormatVersion.BuildingPoi or SaveFormatVersion.RoadNetwork or SaveFormatVersion.Pedestrian or SaveFormatVersion.Vehicle))
+        if (format is not (SaveFormatVersion.BuildingPoi or SaveFormatVersion.RoadNetwork or SaveFormatVersion.Pedestrian or SaveFormatVersion.Vehicle or SaveFormatVersion.Population))
         {
-            throw new InvalidDataException($"Unsupported Save format version {format}. Expected {SaveFormatVersion.Current} or migratable versions {SaveFormatVersion.BuildingPoi}, {SaveFormatVersion.RoadNetwork}, and {SaveFormatVersion.Pedestrian}.");
+            throw new InvalidDataException($"Unsupported Save format version {format}. Expected {SaveFormatVersion.Current} or a supported migratable version.");
         }
 
         var simulation = document.Simulation ?? throw new InvalidDataException("Save Data is missing simulation state.");
@@ -283,6 +333,7 @@ public static class WorldSaveSerializer
         var hasRoadNetwork = format >= SaveFormatVersion.RoadNetwork;
         var hasPedestrians = format >= SaveFormatVersion.Pedestrian;
         var hasVehicles = format >= SaveFormatVersion.Vehicle;
+        var hasPopulation = format >= SaveFormatVersion.Population;
         var roadNodesData = hasRoadNetwork ? simulation.RoadNodes ?? throw new InvalidDataException("Save Data is missing RoadNode state.") : [];
         var roadSegmentsData = hasRoadNetwork ? simulation.RoadSegments ?? throw new InvalidDataException("Save Data is missing RoadSegment state.") : [];
         var lanesData = hasRoadNetwork ? simulation.Lanes ?? throw new InvalidDataException("Save Data is missing Lane state.") : [];
@@ -291,19 +342,13 @@ public static class WorldSaveSerializer
         var pedestrianData = hasPedestrians ? simulation.Pedestrians ?? throw new InvalidDataException("Save Data is missing Pedestrian state.") : [];
         var pedestrianCrossingData = hasPedestrians ? simulation.PedestrianCrossings ?? [] : [];
         var vehicleData = hasVehicles ? simulation.Vehicles ?? throw new InvalidDataException("Save Data is missing Vehicle state.") : [];
+        var householdData = hasPopulation ? simulation.Households ?? throw new InvalidDataException("Save Data is missing Household state.") : [];
+        var personData = hasPopulation ? simulation.Persons ?? throw new InvalidDataException("Save Data is missing Person state.") : [];
         ValidateMaterializedCounts(
-            savedAgents.Length,
-            savedBuildings.Length,
-            savedPois.Length,
-            roadNodesData.Length,
-            roadSegmentsData.Length,
-            lanesData.Length,
-            connectionsData.Length,
-            accessData.Length,
-            pedestrianData.Length,
-            pedestrianCrossingData.Length,
-            vehicleData.Length,
-            limits);
+            savedAgents.Length, savedBuildings.Length, savedPois.Length,
+            roadNodesData.Length, roadSegmentsData.Length, lanesData.Length, connectionsData.Length, accessData.Length,
+            pedestrianData.Length, pedestrianCrossingData.Length, vehicleData.Length,
+            householdData.Length, personData.Length, limits);
 
         var agents = new SimulationAgentCheckpoint[savedAgents.Length];
         for (var index = 0; index < agents.Length; index++)
@@ -407,8 +452,7 @@ public static class WorldSaveSerializer
             pedestrians[index] = new SimulationPedestrianCheckpoint(
                 new PedestrianId(Require(item.Id, $"pedestrians[{index}].id")),
                 new TripRequestId(Require(item.TripRequestId, $"pedestrians[{index}].tripRequestId")),
-                origin,
-                destination,
+                origin, destination,
                 (TravelMode)Require(item.Mode, $"pedestrians[{index}].mode"),
                 Require(item.WalkingSpeedMetersPerSecond, $"pedestrians[{index}].walkingSpeedMetersPerSecond"),
                 Require(item.LegIndex, $"pedestrians[{index}].legIndex"),
@@ -463,6 +507,63 @@ public static class WorldSaveSerializer
                 (VehicleMovementState)Require(item.State, $"vehicles[{index}].state"));
         }
 
+        var households = new SimulationHouseholdCheckpoint[householdData.Length];
+        for (var index = 0; index < households.Length; index++)
+        {
+            var item = householdData[index] ?? throw new InvalidDataException($"Household entry {index} is null.");
+            households[index] = new SimulationHouseholdCheckpoint(
+                new HouseholdId(Require(item.Id, $"households[{index}].id")),
+                RestoreEndpoint(item.ResidenceBuildingId, item.ResidencePoiId, $"households[{index}].residence"));
+        }
+
+        var persons = new SimulationPersonCheckpoint[personData.Length];
+        for (var index = 0; index < persons.Length; index++)
+        {
+            var item = personData[index] ?? throw new InvalidDataException($"Person entry {index} is null.");
+            var scheduleData = item.Schedule ?? throw new InvalidDataException($"Save Data is missing Person schedule at persons[{index}].schedule.");
+            var schedule = new DailyActivityWindow[scheduleData.Length];
+            for (var scheduleIndex = 0; scheduleIndex < schedule.Length; scheduleIndex++)
+            {
+                var window = scheduleData[scheduleIndex] ?? throw new InvalidDataException($"Person schedule entry {index}:{scheduleIndex} is null.");
+                schedule[scheduleIndex] = new DailyActivityWindow(
+                    (ActivityKind)Require(window.Activity, $"persons[{index}].schedule[{scheduleIndex}].activity"),
+                    Require(window.StartMinuteOfDay, $"persons[{index}].schedule[{scheduleIndex}].startMinuteOfDay"),
+                    Require(window.EndMinuteOfDay, $"persons[{index}].schedule[{scheduleIndex}].endMinuteOfDay"),
+                    RestoreOptionalEndpoint(window.DestinationBuildingId, window.DestinationPoiId, $"persons[{index}].schedule[{scheduleIndex}].destination"),
+                    (ActivityPriority)Require(window.Priority, $"persons[{index}].schedule[{scheduleIndex}].priority"));
+            }
+            var needData = item.Needs ?? throw new InvalidDataException($"Save Data is missing Person needs at persons[{index}].needs.");
+            var needs = new PersonNeed[needData.Length];
+            for (var needIndex = 0; needIndex < needs.Length; needIndex++)
+            {
+                var need = needData[needIndex] ?? throw new InvalidDataException($"Person need entry {index}:{needIndex} is null.");
+                needs[needIndex] = new PersonNeed(
+                    (NeedKind)Require(need.Kind, $"persons[{index}].needs[{needIndex}].kind"),
+                    Require(need.Satisfaction, $"persons[{index}].needs[{needIndex}].satisfaction"),
+                    Require(need.DecayPerHour, $"persons[{index}].needs[{needIndex}].decayPerHour"));
+            }
+            persons[index] = new SimulationPersonCheckpoint(
+                new PersonId(Require(item.Id, $"persons[{index}].id")),
+                new HouseholdId(Require(item.HouseholdId, $"persons[{index}].householdId")),
+                new PersonDemographics(
+                    Require(item.AgeYears, $"persons[{index}].ageYears"),
+                    Require(item.IsEmployed, $"persons[{index}].isEmployed"),
+                    Require(item.IsStudent, $"persons[{index}].isStudent"),
+                    Require(item.HasPrivateVehicle, $"persons[{index}].hasPrivateVehicle")),
+                RestoreEndpoint(item.ResidenceBuildingId, item.ResidencePoiId, $"persons[{index}].residence"),
+                RestoreEndpoint(item.CurrentBuildingId, item.CurrentPoiId, $"persons[{index}].currentLocation"),
+                (ActivityKind)Require(item.CurrentActivity, $"persons[{index}].currentActivity"),
+                (PersonTravelState)Require(item.TravelState, $"persons[{index}].travelState"),
+                RestoreOptionalEndpoint(item.DestinationBuildingId, item.DestinationPoiId, $"persons[{index}].destination"),
+                item.DestinationActivity is { } destinationActivity ? (ActivityKind)destinationActivity : null,
+                item.ActiveTripRequestId is { } tripId ? new TripRequestId(tripId) : null,
+                item.ActiveTravelMode is { } activeMode ? (TravelMode)activeMode : null,
+                item.PedestrianId is { } pedestrianId ? new PedestrianId(pedestrianId) : null,
+                item.VehicleId is { } vehicleId ? new VehicleId(vehicleId) : null,
+                schedule,
+                needs);
+        }
+
         var checkpoint = new SimulationCheckpoint(
             Require(simulation.TickRate, "simulation.tickRate"),
             Require(simulation.Seed, "simulation.seed"),
@@ -470,27 +571,19 @@ public static class WorldSaveSerializer
             Require(simulation.TickCount, "simulation.tickCount"),
             Require(simulation.ElapsedTicks, "simulation.elapsedTicks"),
             Require(simulation.RandomState, "simulation.randomState"),
-            Require(simulation.NextAgentId, "simulation.nextAgentId"),
-            agents,
-            Require(simulation.NextBuildingId, "simulation.nextBuildingId"),
-            buildings,
-            Require(simulation.NextPoiId, "simulation.nextPoiId"),
-            pois,
-            hasRoadNetwork ? Require(simulation.NextRoadNodeId, "simulation.nextRoadNodeId") : 1UL,
-            roadNodes,
-            hasRoadNetwork ? Require(simulation.NextRoadSegmentId, "simulation.nextRoadSegmentId") : 1UL,
-            roadSegments,
-            hasRoadNetwork ? Require(simulation.NextLaneId, "simulation.nextLaneId") : 1UL,
-            lanes,
-            hasRoadNetwork ? Require(simulation.NextLaneConnectionId, "simulation.nextLaneConnectionId") : 1UL,
-            connections,
-            hasRoadNetwork ? Require(simulation.NextRoadAccessPointId, "simulation.nextRoadAccessPointId") : 1UL,
-            accessPoints,
-            hasPedestrians ? Require(simulation.NextPedestrianId, "simulation.nextPedestrianId") : 1UL,
-            pedestrians,
-            pedestrianCrossings,
-            hasVehicles ? Require(simulation.NextVehicleId, "simulation.nextVehicleId") : 1UL,
-            vehicles);
+            Require(simulation.NextAgentId, "simulation.nextAgentId"), agents,
+            Require(simulation.NextBuildingId, "simulation.nextBuildingId"), buildings,
+            Require(simulation.NextPoiId, "simulation.nextPoiId"), pois,
+            hasRoadNetwork ? Require(simulation.NextRoadNodeId, "simulation.nextRoadNodeId") : 1UL, roadNodes,
+            hasRoadNetwork ? Require(simulation.NextRoadSegmentId, "simulation.nextRoadSegmentId") : 1UL, roadSegments,
+            hasRoadNetwork ? Require(simulation.NextLaneId, "simulation.nextLaneId") : 1UL, lanes,
+            hasRoadNetwork ? Require(simulation.NextLaneConnectionId, "simulation.nextLaneConnectionId") : 1UL, connections,
+            hasRoadNetwork ? Require(simulation.NextRoadAccessPointId, "simulation.nextRoadAccessPointId") : 1UL, accessPoints,
+            hasPedestrians ? Require(simulation.NextPedestrianId, "simulation.nextPedestrianId") : 1UL, pedestrians, pedestrianCrossings,
+            hasVehicles ? Require(simulation.NextVehicleId, "simulation.nextVehicleId") : 1UL, vehicles,
+            hasPopulation ? Require(simulation.NextHouseholdId, "simulation.nextHouseholdId") : 1UL, households,
+            hasPopulation ? Require(simulation.NextPersonId, "simulation.nextPersonId") : 1UL, persons,
+            hasPopulation ? Require(simulation.NextTripRequestId, "simulation.nextTripRequestId") : 1UL);
         return SimulationWorld.RestoreCheckpoint(checkpoint);
     }
 
@@ -500,19 +593,15 @@ public static class WorldSaveSerializer
         return buildingId is { } building ? TripEndpoint.ForBuilding(new BuildingId(building)) : TripEndpoint.ForPoi(new PoiId(poiId!.Value));
     }
 
+    private static TripEndpoint? RestoreOptionalEndpoint(ulong? buildingId, ulong? poiId, string fieldName)
+    {
+        if (buildingId is null && poiId is null) return null;
+        return RestoreEndpoint(buildingId, poiId, fieldName);
+    }
+
     private static void ValidateMaterializedCounts(
-        int agents,
-        int buildings,
-        int pois,
-        int nodes,
-        int segments,
-        int lanes,
-        int connections,
-        int accessPoints,
-        int pedestrians,
-        int pedestrianCrossings,
-        int vehicles,
-        WorldSaveLimits limits)
+        int agents, int buildings, int pois, int nodes, int segments, int lanes, int connections, int accessPoints,
+        int pedestrians, int pedestrianCrossings, int vehicles, int households, int persons, WorldSaveLimits limits)
     {
         ValidateCount(agents, limits.MaximumAgentCount, "Agents");
         ValidateCount(buildings, limits.MaximumBuildingCount, "Buildings");
@@ -525,6 +614,8 @@ public static class WorldSaveSerializer
         ValidateCount(pedestrians, limits.MaximumPedestrianCount, "Pedestrians");
         ValidateCount(pedestrianCrossings, limits.MaximumPedestrianCrossingCount, "PedestrianCrossings");
         ValidateCount(vehicles, limits.MaximumVehicleCount, "Vehicles");
+        ValidateCount(households, limits.MaximumHouseholdCount, "Households");
+        ValidateCount(persons, limits.MaximumPersonCount, "Persons");
     }
 
     private static void ValidateCount(int count, int maximum, string name)
@@ -549,6 +640,8 @@ public static class WorldSaveSerializer
             else if (reader.ValueTextEquals("pedestrians")) ValidateNamedArrayElementCount(ref reader, limits.MaximumPedestrianCount, "Pedestrian");
             else if (reader.ValueTextEquals("pedestrianCrossings")) ValidateNamedArrayElementCount(ref reader, limits.MaximumPedestrianCrossingCount, "PedestrianCrossing");
             else if (reader.ValueTextEquals("vehicles")) ValidateNamedArrayElementCount(ref reader, limits.MaximumVehicleCount, "Vehicle");
+            else if (reader.ValueTextEquals("households")) ValidateNamedArrayElementCount(ref reader, limits.MaximumHouseholdCount, "Household");
+            else if (reader.ValueTextEquals("persons")) ValidateNamedArrayElementCount(ref reader, limits.MaximumPersonCount, "Person");
         }
     }
 

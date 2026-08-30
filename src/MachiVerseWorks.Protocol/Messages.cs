@@ -20,6 +20,11 @@ public sealed record SubscribeVolumeMessage(double MinX, double MinY, double Min
     public MessageType Type => MessageType.SubscribeVolume;
 }
 
+public sealed record InspectPersonMessage(ulong PersonId) : IProtocolMessage
+{
+    public MessageType Type => MessageType.InspectPerson;
+}
+
 public sealed record AgentSpawnMessage(ulong AgentId, double X, double Y, double Z, double VelocityX, double VelocityY, double VelocityZ, ulong TickCount) : IProtocolMessage
 {
     public MessageType Type => MessageType.AgentSpawn;
@@ -44,6 +49,9 @@ public enum ProtocolPedestrianMovementState : byte { Walking = 0, WaitingForCros
 public enum ProtocolVehicleMovementState : byte { Driving = 0, WaitingForTraffic = 1, ChangingLane = 2, Arrived = 3 }
 public enum ProtocolIntersectionControlMode : byte { Unsignalized = 0, FixedSignal = 1 }
 public enum ProtocolSignalIndication : byte { Red = 0, Yellow = 1, Green = 2 }
+public enum ProtocolActivityKind : byte { Home = 0, Work = 1, Education = 2, Shopping = 3, Healthcare = 4, Recreation = 5, Errand = 6 }
+public enum ProtocolPersonTravelState : byte { AtActivity = 0, Walking = 1, Driving = 2 }
+public enum ProtocolTravelMode : byte { Any = 0, Foot = 1, Motor = 2 }
 
 public readonly record struct ProtocolRoadNode(ulong Id, ProtocolRoadNodeKind Kind, double X, double Y, double Z);
 public readonly record struct ProtocolRoadSegment(ulong Id, ProtocolRoadKind Kind, ulong StartNodeId, ulong EndNodeId);
@@ -164,4 +172,43 @@ public sealed record IntersectionControlSnapshotMessage(
     IReadOnlyList<ProtocolIntersectionMovementState> Movements) : IProtocolMessage
 {
     public MessageType Type => MessageType.IntersectionControlSnapshot;
+}
+
+public sealed record PopulationStatisticsMessage(
+    uint HouseholdCount,
+    uint PersonCount,
+    uint AtActivityCount,
+    uint WalkingCount,
+    uint DrivingCount,
+    uint HomeCount,
+    uint WorkCount,
+    uint EducationCount,
+    uint ShoppingCount,
+    uint HealthcareCount,
+    uint RecreationCount,
+    uint ErrandCount,
+    ulong TickCount) : IProtocolMessage
+{
+    public MessageType Type => MessageType.PopulationStatistics;
+}
+
+public sealed record PersonDebugMessage(
+    ulong PersonId,
+    ulong HouseholdId,
+    ulong ResidenceBuildingId,
+    ulong ResidencePoiId,
+    ulong CurrentBuildingId,
+    ulong CurrentPoiId,
+    ProtocolActivityKind CurrentActivity,
+    ProtocolPersonTravelState TravelState,
+    ulong DestinationBuildingId,
+    ulong DestinationPoiId,
+    ProtocolActivityKind? DestinationActivity,
+    ulong ActiveTripRequestId,
+    ProtocolTravelMode? ActiveTravelMode,
+    ulong PedestrianId,
+    ulong VehicleId,
+    ulong TickCount) : IProtocolMessage
+{
+    public MessageType Type => MessageType.PersonDebug;
 }
