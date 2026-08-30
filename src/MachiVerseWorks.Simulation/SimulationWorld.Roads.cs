@@ -115,11 +115,17 @@ public sealed partial class SimulationWorld
 
     public bool UpdateRoadAccessPoint(RoadAccessPointId id, RoadSegmentId segmentId, double segmentOffset, BuildingId? buildingId, PoiId? poiId, RoadAccessMode mode)
     {
-        ValidateAccessReferences(buildingId, poiId); InvalidatePedestrianNetwork(); return _roads.UpdateAccessPoint(id, segmentId, segmentOffset, buildingId, poiId, mode);
+        ValidateAccessReferences(buildingId, poiId);
+        if (_railway.ContainsRoadAccessPointReference(id) && (mode & RoadAccessMode.Foot) == 0)
+            throw new InvalidOperationException($"Road access point {id.Value} must remain walkable while a Platform access point references it.");
+        InvalidatePedestrianNetwork();
+        return _roads.UpdateAccessPoint(id, segmentId, segmentOffset, buildingId, poiId, mode);
     }
 
     public bool RemoveRoadAccessPoint(RoadAccessPointId id)
     {
+        if (_railway.ContainsRoadAccessPointReference(id))
+            throw new InvalidOperationException($"Road access point {id.Value} cannot be removed while a Platform access point references it.");
         InvalidatePedestrianNetwork();
         return _roads.RemoveAccessPoint(id);
     }
