@@ -14,27 +14,35 @@ public sealed partial class SimulationWorld
 
     public RoadNodeId CreateRoadNode(WorldPoint position, RoadNodeKind kind = RoadNodeKind.Endpoint)
     {
-        ValidatePoint(position); ValidateEnum(kind, nameof(kind)); return _roads.AddNode(position, kind);
+        ValidatePoint(position); ValidateEnum(kind, nameof(kind)); InvalidatePedestrianNetwork(); return _roads.AddNode(position, kind);
     }
 
     public bool UpdateRoadNode(RoadNodeId id, WorldPoint position, RoadNodeKind kind)
     {
-        ValidatePoint(position); ValidateEnum(kind, nameof(kind)); return _roads.UpdateNode(id, position, kind);
+        ValidatePoint(position); ValidateEnum(kind, nameof(kind)); InvalidatePedestrianNetwork(); return _roads.UpdateNode(id, position, kind);
     }
 
-    public bool RemoveRoadNode(RoadNodeId id) => _roads.RemoveNode(id);
+    public bool RemoveRoadNode(RoadNodeId id)
+    {
+        InvalidatePedestrianNetwork();
+        return _roads.RemoveNode(id);
+    }
 
     public RoadSegmentId CreateRoadSegment(RoadNodeId startNodeId, RoadNodeId endNodeId, RoadKind kind = RoadKind.Local)
     {
-        ValidateEnum(kind, nameof(kind)); return _roads.AddSegment(startNodeId, endNodeId, kind);
+        ValidateEnum(kind, nameof(kind)); InvalidatePedestrianNetwork(); return _roads.AddSegment(startNodeId, endNodeId, kind);
     }
 
     public bool UpdateRoadSegment(RoadSegmentId id, RoadNodeId startNodeId, RoadNodeId endNodeId, RoadKind kind)
     {
-        ValidateEnum(kind, nameof(kind)); return _roads.UpdateSegment(id, startNodeId, endNodeId, kind);
+        ValidateEnum(kind, nameof(kind)); InvalidatePedestrianNetwork(); return _roads.UpdateSegment(id, startNodeId, endNodeId, kind);
     }
 
-    public bool RemoveRoadSegment(RoadSegmentId id) => _roads.RemoveSegment(id);
+    public bool RemoveRoadSegment(RoadSegmentId id)
+    {
+        InvalidatePedestrianNetwork();
+        return _roads.RemoveSegment(id);
+    }
 
     public LaneId CreateLane(RoadSegmentId segmentId, LaneDirection direction, ushort order, double widthMeters = 3.5d, double speedLimitMetersPerSecond = 13.8888888889d) =>
         _roads.AddLane(segmentId, direction, order, widthMeters, speedLimitMetersPerSecond);
@@ -54,15 +62,19 @@ public sealed partial class SimulationWorld
 
     public RoadAccessPointId CreateRoadAccessPoint(RoadSegmentId segmentId, double segmentOffset, BuildingId? buildingId = null, PoiId? poiId = null, RoadAccessMode mode = RoadAccessMode.Motor)
     {
-        ValidateAccessReferences(buildingId, poiId); return _roads.AddAccessPoint(segmentId, segmentOffset, buildingId, poiId, mode);
+        ValidateAccessReferences(buildingId, poiId); InvalidatePedestrianNetwork(); return _roads.AddAccessPoint(segmentId, segmentOffset, buildingId, poiId, mode);
     }
 
     public bool UpdateRoadAccessPoint(RoadAccessPointId id, RoadSegmentId segmentId, double segmentOffset, BuildingId? buildingId, PoiId? poiId, RoadAccessMode mode)
     {
-        ValidateAccessReferences(buildingId, poiId); return _roads.UpdateAccessPoint(id, segmentId, segmentOffset, buildingId, poiId, mode);
+        ValidateAccessReferences(buildingId, poiId); InvalidatePedestrianNetwork(); return _roads.UpdateAccessPoint(id, segmentId, segmentOffset, buildingId, poiId, mode);
     }
 
-    public bool RemoveRoadAccessPoint(RoadAccessPointId id) => _roads.RemoveAccessPoint(id);
+    public bool RemoveRoadAccessPoint(RoadAccessPointId id)
+    {
+        InvalidatePedestrianNetwork();
+        return _roads.RemoveAccessPoint(id);
+    }
 
     public RoadNetworkSnapshot CreateRoadNetworkSnapshot() => _roads.CreateSnapshot();
     public RoadNetworkSnapshot CreateRoadNetworkSnapshot(WorldVolume volume)

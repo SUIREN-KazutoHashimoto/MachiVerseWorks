@@ -17,18 +17,27 @@ public static class WorldSaveSerializer
     };
 
     public static byte[] Serialize(SimulationWorld world) => Serialize(world, WorldSaveLimits.Default);
+
     public static byte[] Serialize(SimulationWorld world, WorldSaveLimits limits)
     {
-        using var buffer = SerializeToBuffer(world, limits); return buffer.ToArray();
+        using var buffer = SerializeToBuffer(world, limits);
+        return buffer.ToArray();
     }
+
     public static void Save(Stream destination, SimulationWorld world) => Save(destination, world, WorldSaveLimits.Default);
+
     public static void Save(Stream destination, SimulationWorld world, WorldSaveLimits limits)
     {
-        ArgumentNullException.ThrowIfNull(destination); ArgumentNullException.ThrowIfNull(world); ArgumentNullException.ThrowIfNull(limits);
+        ArgumentNullException.ThrowIfNull(destination);
+        ArgumentNullException.ThrowIfNull(world);
+        ArgumentNullException.ThrowIfNull(limits);
         if (!destination.CanWrite) throw new ArgumentException("Destination stream must be writable.", nameof(destination));
-        using var buffer = SerializeToBuffer(world, limits); buffer.WriteTo(destination);
+        using var buffer = SerializeToBuffer(world, limits);
+        buffer.WriteTo(destination);
     }
+
     public static SimulationWorld Deserialize(ReadOnlySpan<byte> utf8Json) => Deserialize(utf8Json, WorldSaveLimits.Default);
+
     public static SimulationWorld Deserialize(ReadOnlySpan<byte> utf8Json, WorldSaveLimits limits)
     {
         ArgumentNullException.ThrowIfNull(limits);
@@ -39,23 +48,30 @@ public static class WorldSaveSerializer
             var document = JsonSerializer.Deserialize<SaveDataDocument>(utf8Json, JsonOptions) ?? throw new InvalidDataException("Save Data document is empty.");
             return RestoreDocument(document, limits);
         }
-        catch (InvalidDataException) { throw; }
+        catch (InvalidDataException)
+        {
+            throw;
+        }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException or OverflowException)
         {
             throw new InvalidDataException("Save Data is malformed or contains invalid values.", exception);
         }
     }
+
     public static SimulationWorld Load(Stream source) => Load(source, WorldSaveLimits.Default);
+
     public static SimulationWorld Load(Stream source, WorldSaveLimits limits)
     {
-        ArgumentNullException.ThrowIfNull(source); ArgumentNullException.ThrowIfNull(limits);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(limits);
         if (!source.CanRead) throw new ArgumentException("Source stream must be readable.", nameof(source));
         if (source.CanSeek && source.Length - source.Position > limits.MaximumBytes) throw new InvalidDataException($"Save Data exceeds the configured {limits.MaximumBytes}-byte input limit.");
         using var buffer = new MemoryStream();
         var readBuffer = new byte[Math.Min(StreamReadBufferSize, limits.MaximumBytes)];
         while (true)
         {
-            var read = source.Read(readBuffer, 0, readBuffer.Length); if (read == 0) break;
+            var read = source.Read(readBuffer, 0, readBuffer.Length);
+            if (read == 0) break;
             if (buffer.Length > limits.MaximumBytes - read) throw new InvalidDataException($"Save Data exceeds the configured {limits.MaximumBytes}-byte input limit.");
             buffer.Write(readBuffer, 0, read);
         }
@@ -64,45 +80,161 @@ public static class WorldSaveSerializer
 
     private static BoundedSaveBuffer SerializeToBuffer(SimulationWorld world, WorldSaveLimits limits)
     {
-        ArgumentNullException.ThrowIfNull(world); ArgumentNullException.ThrowIfNull(limits);
-        var checkpoint = world.CreateCheckpoint(); ValidateCheckpointWithinLimits(checkpoint, limits);
+        ArgumentNullException.ThrowIfNull(world);
+        ArgumentNullException.ThrowIfNull(limits);
+        var checkpoint = world.CreateCheckpoint();
+        ValidateCheckpointWithinLimits(checkpoint, limits);
         var buffer = new BoundedSaveBuffer(limits.MaximumBytes);
-        try { JsonSerializer.Serialize(buffer, CreateDocument(checkpoint), JsonOptions); return buffer; }
-        catch { buffer.Dispose(); throw; }
+        try
+        {
+            JsonSerializer.Serialize(buffer, CreateDocument(checkpoint), JsonOptions);
+            return buffer;
+        }
+        catch
+        {
+            buffer.Dispose();
+            throw;
+        }
     }
 
-    private static void ValidateCheckpointWithinLimits(SimulationCheckpoint c, WorldSaveLimits l)
+    private static void ValidateCheckpointWithinLimits(SimulationCheckpoint checkpoint, WorldSaveLimits limits)
     {
-        ValidateCount(c.Agents.Count, l.MaximumAgentCount, "Agents");
-        ValidateCount(c.Buildings.Count, l.MaximumBuildingCount, "Buildings");
-        ValidateCount(c.Pois.Count, l.MaximumPoiCount, "POIs");
-        ValidateCount(c.RoadNodes.Count, l.MaximumRoadNodeCount, "RoadNodes");
-        ValidateCount(c.RoadSegments.Count, l.MaximumRoadSegmentCount, "RoadSegments");
-        ValidateCount(c.Lanes.Count, l.MaximumLaneCount, "Lanes");
-        ValidateCount(c.LaneConnections.Count, l.MaximumLaneConnectionCount, "LaneConnections");
-        ValidateCount(c.RoadAccessPoints.Count, l.MaximumRoadAccessPointCount, "RoadAccessPoints");
+        ValidateCount(checkpoint.Agents.Count, limits.MaximumAgentCount, "Agents");
+        ValidateCount(checkpoint.Buildings.Count, limits.MaximumBuildingCount, "Buildings");
+        ValidateCount(checkpoint.Pois.Count, limits.MaximumPoiCount, "POIs");
+        ValidateCount(checkpoint.RoadNodes.Count, limits.MaximumRoadNodeCount, "RoadNodes");
+        ValidateCount(checkpoint.RoadSegments.Count, limits.MaximumRoadSegmentCount, "RoadSegments");
+        ValidateCount(checkpoint.Lanes.Count, limits.MaximumLaneCount, "Lanes");
+        ValidateCount(checkpoint.LaneConnections.Count, limits.MaximumLaneConnectionCount, "LaneConnections");
+        ValidateCount(checkpoint.RoadAccessPoints.Count, limits.MaximumRoadAccessPointCount, "RoadAccessPoints");
+        ValidateCount(checkpoint.Pedestrians?.Count ?? 0, limits.MaximumPedestrianCount, "Pedestrians");
+        ValidateCount(checkpoint.PedestrianCrossings?.Count ?? 0, limits.MaximumPedestrianCrossingCount, "PedestrianCrossings");
     }
 
-    private static SaveDataDocument CreateDocument(SimulationCheckpoint c)
+    private static SaveDataDocument CreateDocument(SimulationCheckpoint checkpoint)
     {
-        var agents = c.Agents.Select(static a => new SaveAgentData { Id = a.Id.Value, X = a.Position.X, Y = a.Position.Y, Z = a.Position.Z, VelocityX = a.Velocity.X, VelocityY = a.Velocity.Y, VelocityZ = a.Velocity.Z, IsActive = a.IsActive }).ToArray();
-        var buildings = c.Buildings.Select(static b => new SaveBuildingData { Id = b.Id.Value, Kind = (byte)b.Kind, MinX = b.Bounds.MinX, MinY = b.Bounds.MinY, MinZ = b.Bounds.MinZ, MaxX = b.Bounds.MaxX, MaxY = b.Bounds.MaxY, MaxZ = b.Bounds.MaxZ }).ToArray();
-        var pois = c.Pois.Select(static p => new SavePoiData { Id = p.Id.Value, Kind = (byte)p.Kind, X = p.Position.X, Y = p.Position.Y, Z = p.Position.Z, BuildingId = p.BuildingId?.Value }).ToArray();
-        var roadNodes = c.RoadNodes.Select(static n => new SaveRoadNodeData { Id = n.Id.Value, Kind = (byte)n.Kind, X = n.Position.X, Y = n.Position.Y, Z = n.Position.Z }).ToArray();
-        var roadSegments = c.RoadSegments.Select(static s => new SaveRoadSegmentData { Id = s.Id.Value, Kind = (byte)s.Kind, StartNodeId = s.StartNodeId.Value, EndNodeId = s.EndNodeId.Value }).ToArray();
-        var lanes = c.Lanes.Select(static lane => new SaveLaneData { Id = lane.Id.Value, SegmentId = lane.SegmentId.Value, Direction = (byte)lane.Direction, Order = lane.Order, WidthMeters = lane.WidthMeters, SpeedLimitMetersPerSecond = lane.SpeedLimitMetersPerSecond }).ToArray();
-        var connections = c.LaneConnections.Select(static x => new SaveLaneConnectionData { Id = x.Id.Value, FromLaneId = x.FromLaneId.Value, ToLaneId = x.ToLaneId.Value, ViaNodeId = x.ViaNodeId.Value, Movement = (byte)x.Movement }).ToArray();
-        var access = c.RoadAccessPoints.Select(static a => new SaveRoadAccessPointData { Id = a.Id.Value, SegmentId = a.SegmentId.Value, SegmentOffset = a.SegmentOffset, BuildingId = a.BuildingId?.Value, PoiId = a.PoiId?.Value, Mode = (byte)a.Mode }).ToArray();
+        var agents = checkpoint.Agents.Select(static item => new SaveAgentData
+        {
+            Id = item.Id.Value,
+            X = item.Position.X,
+            Y = item.Position.Y,
+            Z = item.Position.Z,
+            VelocityX = item.Velocity.X,
+            VelocityY = item.Velocity.Y,
+            VelocityZ = item.Velocity.Z,
+            IsActive = item.IsActive,
+        }).ToArray();
+        var buildings = checkpoint.Buildings.Select(static item => new SaveBuildingData
+        {
+            Id = item.Id.Value,
+            Kind = (byte)item.Kind,
+            MinX = item.Bounds.MinX,
+            MinY = item.Bounds.MinY,
+            MinZ = item.Bounds.MinZ,
+            MaxX = item.Bounds.MaxX,
+            MaxY = item.Bounds.MaxY,
+            MaxZ = item.Bounds.MaxZ,
+        }).ToArray();
+        var pois = checkpoint.Pois.Select(static item => new SavePoiData
+        {
+            Id = item.Id.Value,
+            Kind = (byte)item.Kind,
+            X = item.Position.X,
+            Y = item.Position.Y,
+            Z = item.Position.Z,
+            BuildingId = item.BuildingId?.Value,
+        }).ToArray();
+        var roadNodes = checkpoint.RoadNodes.Select(static item => new SaveRoadNodeData
+        {
+            Id = item.Id.Value,
+            Kind = (byte)item.Kind,
+            X = item.Position.X,
+            Y = item.Position.Y,
+            Z = item.Position.Z,
+        }).ToArray();
+        var roadSegments = checkpoint.RoadSegments.Select(static item => new SaveRoadSegmentData
+        {
+            Id = item.Id.Value,
+            Kind = (byte)item.Kind,
+            StartNodeId = item.StartNodeId.Value,
+            EndNodeId = item.EndNodeId.Value,
+        }).ToArray();
+        var lanes = checkpoint.Lanes.Select(static item => new SaveLaneData
+        {
+            Id = item.Id.Value,
+            SegmentId = item.SegmentId.Value,
+            Direction = (byte)item.Direction,
+            Order = item.Order,
+            WidthMeters = item.WidthMeters,
+            SpeedLimitMetersPerSecond = item.SpeedLimitMetersPerSecond,
+        }).ToArray();
+        var connections = checkpoint.LaneConnections.Select(static item => new SaveLaneConnectionData
+        {
+            Id = item.Id.Value,
+            FromLaneId = item.FromLaneId.Value,
+            ToLaneId = item.ToLaneId.Value,
+            ViaNodeId = item.ViaNodeId.Value,
+            Movement = (byte)item.Movement,
+        }).ToArray();
+        var accessPoints = checkpoint.RoadAccessPoints.Select(static item => new SaveRoadAccessPointData
+        {
+            Id = item.Id.Value,
+            SegmentId = item.SegmentId.Value,
+            SegmentOffset = item.SegmentOffset,
+            BuildingId = item.BuildingId?.Value,
+            PoiId = item.PoiId?.Value,
+            Mode = (byte)item.Mode,
+        }).ToArray();
+        var pedestrians = (checkpoint.Pedestrians ?? []).Select(static item => new SavePedestrianData
+        {
+            Id = item.Id.Value,
+            TripRequestId = item.TripRequestId.Value,
+            OriginBuildingId = item.Origin.BuildingId?.Value,
+            OriginPoiId = item.Origin.PoiId?.Value,
+            DestinationBuildingId = item.Destination.BuildingId?.Value,
+            DestinationPoiId = item.Destination.PoiId?.Value,
+            Mode = (byte)item.Mode,
+            WalkingSpeedMetersPerSecond = item.WalkingSpeedMetersPerSecond,
+            LegIndex = item.LegIndex,
+            ProgressMeters = item.ProgressMeters,
+            State = (byte)item.State,
+        }).ToArray();
+        var pedestrianCrossings = (checkpoint.PedestrianCrossings ?? []).Select(static item => new SavePedestrianCrossingData
+        {
+            Id = item.Id.Value,
+            IsOpen = item.IsOpen,
+        }).ToArray();
+
         return new SaveDataDocument
         {
             FormatVersion = SaveFormatVersion.Current,
             Simulation = new SaveSimulationData
             {
-                TickRate = c.TickRate, Seed = c.Seed, SpatialCellSize = c.SpatialCellSize, TickCount = c.TickCount, ElapsedTicks = c.ElapsedTicks, RandomState = c.RandomState,
-                NextAgentId = c.NextAgentId, Agents = agents, NextBuildingId = c.NextBuildingId, Buildings = buildings, NextPoiId = c.NextPoiId, Pois = pois,
-                NextRoadNodeId = c.NextRoadNodeId, RoadNodes = roadNodes, NextRoadSegmentId = c.NextRoadSegmentId, RoadSegments = roadSegments,
-                NextLaneId = c.NextLaneId, Lanes = lanes, NextLaneConnectionId = c.NextLaneConnectionId, LaneConnections = connections,
-                NextRoadAccessPointId = c.NextRoadAccessPointId, RoadAccessPoints = access,
+                TickRate = checkpoint.TickRate,
+                Seed = checkpoint.Seed,
+                SpatialCellSize = checkpoint.SpatialCellSize,
+                TickCount = checkpoint.TickCount,
+                ElapsedTicks = checkpoint.ElapsedTicks,
+                RandomState = checkpoint.RandomState,
+                NextAgentId = checkpoint.NextAgentId,
+                Agents = agents,
+                NextBuildingId = checkpoint.NextBuildingId,
+                Buildings = buildings,
+                NextPoiId = checkpoint.NextPoiId,
+                Pois = pois,
+                NextRoadNodeId = checkpoint.NextRoadNodeId,
+                RoadNodes = roadNodes,
+                NextRoadSegmentId = checkpoint.NextRoadSegmentId,
+                RoadSegments = roadSegments,
+                NextLaneId = checkpoint.NextLaneId,
+                Lanes = lanes,
+                NextLaneConnectionId = checkpoint.NextLaneConnectionId,
+                LaneConnections = connections,
+                NextRoadAccessPointId = checkpoint.NextRoadAccessPointId,
+                RoadAccessPoints = accessPoints,
+                NextPedestrianId = checkpoint.NextPedestrianId,
+                Pedestrians = pedestrians,
+                PedestrianCrossings = pedestrianCrossings,
             },
         };
     }
@@ -110,63 +242,215 @@ public static class WorldSaveSerializer
     private static SimulationWorld RestoreDocument(SaveDataDocument document, WorldSaveLimits limits)
     {
         var format = Require(document.FormatVersion, "formatVersion");
-        if (format is not (SaveFormatVersion.BuildingPoi or SaveFormatVersion.RoadNetwork)) throw new InvalidDataException($"Unsupported Save format version {format}. Expected {SaveFormatVersion.Current} or migratable version {SaveFormatVersion.BuildingPoi}.");
-        var s = document.Simulation ?? throw new InvalidDataException("Save Data is missing simulation state.");
-        var savedAgents = s.Agents ?? throw new InvalidDataException("Save Data is missing Agent state.");
-        var savedBuildings = s.Buildings ?? throw new InvalidDataException("Save Data is missing Building state.");
-        var savedPois = s.Pois ?? throw new InvalidDataException("Save Data is missing POI state.");
-        var roadNodesData = format == SaveFormatVersion.RoadNetwork ? s.RoadNodes ?? throw new InvalidDataException("Save Data is missing RoadNode state.") : [];
-        var roadSegmentsData = format == SaveFormatVersion.RoadNetwork ? s.RoadSegments ?? throw new InvalidDataException("Save Data is missing RoadSegment state.") : [];
-        var lanesData = format == SaveFormatVersion.RoadNetwork ? s.Lanes ?? throw new InvalidDataException("Save Data is missing Lane state.") : [];
-        var connectionsData = format == SaveFormatVersion.RoadNetwork ? s.LaneConnections ?? throw new InvalidDataException("Save Data is missing LaneConnection state.") : [];
-        var accessData = format == SaveFormatVersion.RoadNetwork ? s.RoadAccessPoints ?? throw new InvalidDataException("Save Data is missing RoadAccessPoint state.") : [];
-        ValidateMaterializedCounts(savedAgents.Length, savedBuildings.Length, savedPois.Length, roadNodesData.Length, roadSegmentsData.Length, lanesData.Length, connectionsData.Length, accessData.Length, limits);
+        if (format is not (SaveFormatVersion.BuildingPoi or SaveFormatVersion.RoadNetwork or SaveFormatVersion.Pedestrian))
+        {
+            throw new InvalidDataException($"Unsupported Save format version {format}. Expected {SaveFormatVersion.Current} or migratable versions {SaveFormatVersion.BuildingPoi} and {SaveFormatVersion.RoadNetwork}.");
+        }
+
+        var simulation = document.Simulation ?? throw new InvalidDataException("Save Data is missing simulation state.");
+        var savedAgents = simulation.Agents ?? throw new InvalidDataException("Save Data is missing Agent state.");
+        var savedBuildings = simulation.Buildings ?? throw new InvalidDataException("Save Data is missing Building state.");
+        var savedPois = simulation.Pois ?? throw new InvalidDataException("Save Data is missing POI state.");
+        var hasRoadNetwork = format >= SaveFormatVersion.RoadNetwork;
+        var hasPedestrians = format >= SaveFormatVersion.Pedestrian;
+        var roadNodesData = hasRoadNetwork ? simulation.RoadNodes ?? throw new InvalidDataException("Save Data is missing RoadNode state.") : [];
+        var roadSegmentsData = hasRoadNetwork ? simulation.RoadSegments ?? throw new InvalidDataException("Save Data is missing RoadSegment state.") : [];
+        var lanesData = hasRoadNetwork ? simulation.Lanes ?? throw new InvalidDataException("Save Data is missing Lane state.") : [];
+        var connectionsData = hasRoadNetwork ? simulation.LaneConnections ?? throw new InvalidDataException("Save Data is missing LaneConnection state.") : [];
+        var accessData = hasRoadNetwork ? simulation.RoadAccessPoints ?? throw new InvalidDataException("Save Data is missing RoadAccessPoint state.") : [];
+        var pedestrianData = hasPedestrians ? simulation.Pedestrians ?? throw new InvalidDataException("Save Data is missing Pedestrian state.") : [];
+        var pedestrianCrossingData = hasPedestrians ? simulation.PedestrianCrossings ?? [] : [];
+        ValidateMaterializedCounts(
+            savedAgents.Length,
+            savedBuildings.Length,
+            savedPois.Length,
+            roadNodesData.Length,
+            roadSegmentsData.Length,
+            lanesData.Length,
+            connectionsData.Length,
+            accessData.Length,
+            pedestrianData.Length,
+            pedestrianCrossingData.Length,
+            limits);
 
         var agents = new SimulationAgentCheckpoint[savedAgents.Length];
-        for (var i = 0; i < agents.Length; i++)
+        for (var index = 0; index < agents.Length; index++)
         {
-            var a = savedAgents[i] ?? throw new InvalidDataException($"Agent entry {i} is null.");
-            agents[i] = new SimulationAgentCheckpoint(new AgentId(Require(a.Id, $"agents[{i}].id")), new WorldPoint(Require(a.X, $"agents[{i}].x"), Require(a.Y, $"agents[{i}].y"), Require(a.Z, $"agents[{i}].z")), new WorldVector(Require(a.VelocityX, $"agents[{i}].velocityX"), Require(a.VelocityY, $"agents[{i}].velocityY"), Require(a.VelocityZ, $"agents[{i}].velocityZ")), Require(a.IsActive, $"agents[{i}].isActive"));
+            var item = savedAgents[index] ?? throw new InvalidDataException($"Agent entry {index} is null.");
+            agents[index] = new SimulationAgentCheckpoint(
+                new AgentId(Require(item.Id, $"agents[{index}].id")),
+                new WorldPoint(Require(item.X, $"agents[{index}].x"), Require(item.Y, $"agents[{index}].y"), Require(item.Z, $"agents[{index}].z")),
+                new WorldVector(Require(item.VelocityX, $"agents[{index}].velocityX"), Require(item.VelocityY, $"agents[{index}].velocityY"), Require(item.VelocityZ, $"agents[{index}].velocityZ")),
+                Require(item.IsActive, $"agents[{index}].isActive"));
         }
+
         var buildings = new SimulationBuildingCheckpoint[savedBuildings.Length];
-        for (var i = 0; i < buildings.Length; i++)
+        for (var index = 0; index < buildings.Length; index++)
         {
-            var b = savedBuildings[i] ?? throw new InvalidDataException($"Building entry {i} is null.");
-            buildings[i] = new SimulationBuildingCheckpoint(new BuildingId(Require(b.Id, $"buildings[{i}].id")), (BuildingKind)Require(b.Kind, $"buildings[{i}].kind"), new WorldVolume(Require(b.MinX, $"buildings[{i}].minX"), Require(b.MinY, $"buildings[{i}].minY"), Require(b.MinZ, $"buildings[{i}].minZ"), Require(b.MaxX, $"buildings[{i}].maxX"), Require(b.MaxY, $"buildings[{i}].maxY"), Require(b.MaxZ, $"buildings[{i}].maxZ")));
+            var item = savedBuildings[index] ?? throw new InvalidDataException($"Building entry {index} is null.");
+            buildings[index] = new SimulationBuildingCheckpoint(
+                new BuildingId(Require(item.Id, $"buildings[{index}].id")),
+                (BuildingKind)Require(item.Kind, $"buildings[{index}].kind"),
+                new WorldVolume(
+                    Require(item.MinX, $"buildings[{index}].minX"), Require(item.MinY, $"buildings[{index}].minY"), Require(item.MinZ, $"buildings[{index}].minZ"),
+                    Require(item.MaxX, $"buildings[{index}].maxX"), Require(item.MaxY, $"buildings[{index}].maxY"), Require(item.MaxZ, $"buildings[{index}].maxZ")));
         }
+
         var pois = new SimulationPoiCheckpoint[savedPois.Length];
-        for (var i = 0; i < pois.Length; i++)
+        for (var index = 0; index < pois.Length; index++)
         {
-            var p = savedPois[i] ?? throw new InvalidDataException($"POI entry {i} is null.");
-            pois[i] = new SimulationPoiCheckpoint(new PoiId(Require(p.Id, $"pois[{i}].id")), (PoiKind)Require(p.Kind, $"pois[{i}].kind"), new WorldPoint(Require(p.X, $"pois[{i}].x"), Require(p.Y, $"pois[{i}].y"), Require(p.Z, $"pois[{i}].z")), p.BuildingId is { } buildingId ? new BuildingId(buildingId) : null);
+            var item = savedPois[index] ?? throw new InvalidDataException($"POI entry {index} is null.");
+            pois[index] = new SimulationPoiCheckpoint(
+                new PoiId(Require(item.Id, $"pois[{index}].id")),
+                (PoiKind)Require(item.Kind, $"pois[{index}].kind"),
+                new WorldPoint(Require(item.X, $"pois[{index}].x"), Require(item.Y, $"pois[{index}].y"), Require(item.Z, $"pois[{index}].z")),
+                item.BuildingId is { } buildingId ? new BuildingId(buildingId) : null);
         }
+
         var roadNodes = new SimulationRoadNodeCheckpoint[roadNodesData.Length];
-        for (var i = 0; i < roadNodes.Length; i++) { var n = roadNodesData[i] ?? throw new InvalidDataException($"RoadNode entry {i} is null."); roadNodes[i] = new SimulationRoadNodeCheckpoint(new RoadNodeId(Require(n.Id, $"roadNodes[{i}].id")), (RoadNodeKind)Require(n.Kind, $"roadNodes[{i}].kind"), new WorldPoint(Require(n.X, $"roadNodes[{i}].x"), Require(n.Y, $"roadNodes[{i}].y"), Require(n.Z, $"roadNodes[{i}].z"))); }
+        for (var index = 0; index < roadNodes.Length; index++)
+        {
+            var item = roadNodesData[index] ?? throw new InvalidDataException($"RoadNode entry {index} is null.");
+            roadNodes[index] = new SimulationRoadNodeCheckpoint(
+                new RoadNodeId(Require(item.Id, $"roadNodes[{index}].id")),
+                (RoadNodeKind)Require(item.Kind, $"roadNodes[{index}].kind"),
+                new WorldPoint(Require(item.X, $"roadNodes[{index}].x"), Require(item.Y, $"roadNodes[{index}].y"), Require(item.Z, $"roadNodes[{index}].z")));
+        }
+
         var roadSegments = new SimulationRoadSegmentCheckpoint[roadSegmentsData.Length];
-        for (var i = 0; i < roadSegments.Length; i++) { var x = roadSegmentsData[i] ?? throw new InvalidDataException($"RoadSegment entry {i} is null."); roadSegments[i] = new SimulationRoadSegmentCheckpoint(new RoadSegmentId(Require(x.Id, $"roadSegments[{i}].id")), (RoadKind)Require(x.Kind, $"roadSegments[{i}].kind"), new RoadNodeId(Require(x.StartNodeId, $"roadSegments[{i}].startNodeId")), new RoadNodeId(Require(x.EndNodeId, $"roadSegments[{i}].endNodeId"))); }
+        for (var index = 0; index < roadSegments.Length; index++)
+        {
+            var item = roadSegmentsData[index] ?? throw new InvalidDataException($"RoadSegment entry {index} is null.");
+            roadSegments[index] = new SimulationRoadSegmentCheckpoint(
+                new RoadSegmentId(Require(item.Id, $"roadSegments[{index}].id")),
+                (RoadKind)Require(item.Kind, $"roadSegments[{index}].kind"),
+                new RoadNodeId(Require(item.StartNodeId, $"roadSegments[{index}].startNodeId")),
+                new RoadNodeId(Require(item.EndNodeId, $"roadSegments[{index}].endNodeId")));
+        }
+
         var lanes = new SimulationLaneCheckpoint[lanesData.Length];
-        for (var i = 0; i < lanes.Length; i++) { var x = lanesData[i] ?? throw new InvalidDataException($"Lane entry {i} is null."); lanes[i] = new SimulationLaneCheckpoint(new LaneId(Require(x.Id, $"lanes[{i}].id")), new RoadSegmentId(Require(x.SegmentId, $"lanes[{i}].segmentId")), (LaneDirection)Require(x.Direction, $"lanes[{i}].direction"), Require(x.Order, $"lanes[{i}].order"), Require(x.WidthMeters, $"lanes[{i}].widthMeters"), Require(x.SpeedLimitMetersPerSecond, $"lanes[{i}].speedLimitMetersPerSecond")); }
+        for (var index = 0; index < lanes.Length; index++)
+        {
+            var item = lanesData[index] ?? throw new InvalidDataException($"Lane entry {index} is null.");
+            lanes[index] = new SimulationLaneCheckpoint(
+                new LaneId(Require(item.Id, $"lanes[{index}].id")),
+                new RoadSegmentId(Require(item.SegmentId, $"lanes[{index}].segmentId")),
+                (LaneDirection)Require(item.Direction, $"lanes[{index}].direction"),
+                Require(item.Order, $"lanes[{index}].order"),
+                Require(item.WidthMeters, $"lanes[{index}].widthMeters"),
+                Require(item.SpeedLimitMetersPerSecond, $"lanes[{index}].speedLimitMetersPerSecond"));
+        }
+
         var connections = new SimulationLaneConnectionCheckpoint[connectionsData.Length];
-        for (var i = 0; i < connections.Length; i++) { var x = connectionsData[i] ?? throw new InvalidDataException($"LaneConnection entry {i} is null."); connections[i] = new SimulationLaneConnectionCheckpoint(new LaneConnectionId(Require(x.Id, $"laneConnections[{i}].id")), new LaneId(Require(x.FromLaneId, $"laneConnections[{i}].fromLaneId")), new LaneId(Require(x.ToLaneId, $"laneConnections[{i}].toLaneId")), new RoadNodeId(Require(x.ViaNodeId, $"laneConnections[{i}].viaNodeId")), (TurnMovement)Require(x.Movement, $"laneConnections[{i}].movement")); }
-        var access = new SimulationRoadAccessPointCheckpoint[accessData.Length];
-        for (var i = 0; i < access.Length; i++) { var x = accessData[i] ?? throw new InvalidDataException($"RoadAccessPoint entry {i} is null."); access[i] = new SimulationRoadAccessPointCheckpoint(new RoadAccessPointId(Require(x.Id, $"roadAccessPoints[{i}].id")), new RoadSegmentId(Require(x.SegmentId, $"roadAccessPoints[{i}].segmentId")), Require(x.SegmentOffset, $"roadAccessPoints[{i}].segmentOffset"), x.BuildingId is { } buildingId ? new BuildingId(buildingId) : null, x.PoiId is { } poiId ? new PoiId(poiId) : null, (RoadAccessMode)Require(x.Mode, $"roadAccessPoints[{i}].mode")); }
+        for (var index = 0; index < connections.Length; index++)
+        {
+            var item = connectionsData[index] ?? throw new InvalidDataException($"LaneConnection entry {index} is null.");
+            connections[index] = new SimulationLaneConnectionCheckpoint(
+                new LaneConnectionId(Require(item.Id, $"laneConnections[{index}].id")),
+                new LaneId(Require(item.FromLaneId, $"laneConnections[{index}].fromLaneId")),
+                new LaneId(Require(item.ToLaneId, $"laneConnections[{index}].toLaneId")),
+                new RoadNodeId(Require(item.ViaNodeId, $"laneConnections[{index}].viaNodeId")),
+                (TurnMovement)Require(item.Movement, $"laneConnections[{index}].movement"));
+        }
+
+        var accessPoints = new SimulationRoadAccessPointCheckpoint[accessData.Length];
+        for (var index = 0; index < accessPoints.Length; index++)
+        {
+            var item = accessData[index] ?? throw new InvalidDataException($"RoadAccessPoint entry {index} is null.");
+            accessPoints[index] = new SimulationRoadAccessPointCheckpoint(
+                new RoadAccessPointId(Require(item.Id, $"roadAccessPoints[{index}].id")),
+                new RoadSegmentId(Require(item.SegmentId, $"roadAccessPoints[{index}].segmentId")),
+                Require(item.SegmentOffset, $"roadAccessPoints[{index}].segmentOffset"),
+                item.BuildingId is { } buildingId ? new BuildingId(buildingId) : null,
+                item.PoiId is { } poiId ? new PoiId(poiId) : null,
+                (RoadAccessMode)Require(item.Mode, $"roadAccessPoints[{index}].mode"));
+        }
+
+        var pedestrians = new SimulationPedestrianCheckpoint[pedestrianData.Length];
+        for (var index = 0; index < pedestrians.Length; index++)
+        {
+            var item = pedestrianData[index] ?? throw new InvalidDataException($"Pedestrian entry {index} is null.");
+            var origin = RestoreEndpoint(item.OriginBuildingId, item.OriginPoiId, $"pedestrians[{index}].origin");
+            var destination = RestoreEndpoint(item.DestinationBuildingId, item.DestinationPoiId, $"pedestrians[{index}].destination");
+            pedestrians[index] = new SimulationPedestrianCheckpoint(
+                new PedestrianId(Require(item.Id, $"pedestrians[{index}].id")),
+                new TripRequestId(Require(item.TripRequestId, $"pedestrians[{index}].tripRequestId")),
+                origin,
+                destination,
+                (TravelMode)Require(item.Mode, $"pedestrians[{index}].mode"),
+                Require(item.WalkingSpeedMetersPerSecond, $"pedestrians[{index}].walkingSpeedMetersPerSecond"),
+                Require(item.LegIndex, $"pedestrians[{index}].legIndex"),
+                Require(item.ProgressMeters, $"pedestrians[{index}].progressMeters"),
+                (PedestrianMovementState)Require(item.State, $"pedestrians[{index}].state"));
+        }
+
+        var pedestrianCrossings = new SimulationPedestrianCrossingCheckpoint[pedestrianCrossingData.Length];
+        for (var index = 0; index < pedestrianCrossings.Length; index++)
+        {
+            var item = pedestrianCrossingData[index] ?? throw new InvalidDataException($"PedestrianCrossing entry {index} is null.");
+            pedestrianCrossings[index] = new SimulationPedestrianCrossingCheckpoint(
+                new PedestrianCrossingId(Require(item.Id, $"pedestrianCrossings[{index}].id")),
+                Require(item.IsOpen, $"pedestrianCrossings[{index}].isOpen"));
+        }
 
         var checkpoint = new SimulationCheckpoint(
-            Require(s.TickRate, "simulation.tickRate"), Require(s.Seed, "simulation.seed"), Require(s.SpatialCellSize, "simulation.spatialCellSize"), Require(s.TickCount, "simulation.tickCount"), Require(s.ElapsedTicks, "simulation.elapsedTicks"), Require(s.RandomState, "simulation.randomState"),
-            Require(s.NextAgentId, "simulation.nextAgentId"), agents, Require(s.NextBuildingId, "simulation.nextBuildingId"), buildings, Require(s.NextPoiId, "simulation.nextPoiId"), pois,
-            format == SaveFormatVersion.RoadNetwork ? Require(s.NextRoadNodeId, "simulation.nextRoadNodeId") : 1UL, roadNodes,
-            format == SaveFormatVersion.RoadNetwork ? Require(s.NextRoadSegmentId, "simulation.nextRoadSegmentId") : 1UL, roadSegments,
-            format == SaveFormatVersion.RoadNetwork ? Require(s.NextLaneId, "simulation.nextLaneId") : 1UL, lanes,
-            format == SaveFormatVersion.RoadNetwork ? Require(s.NextLaneConnectionId, "simulation.nextLaneConnectionId") : 1UL, connections,
-            format == SaveFormatVersion.RoadNetwork ? Require(s.NextRoadAccessPointId, "simulation.nextRoadAccessPointId") : 1UL, access);
+            Require(simulation.TickRate, "simulation.tickRate"),
+            Require(simulation.Seed, "simulation.seed"),
+            Require(simulation.SpatialCellSize, "simulation.spatialCellSize"),
+            Require(simulation.TickCount, "simulation.tickCount"),
+            Require(simulation.ElapsedTicks, "simulation.elapsedTicks"),
+            Require(simulation.RandomState, "simulation.randomState"),
+            Require(simulation.NextAgentId, "simulation.nextAgentId"),
+            agents,
+            Require(simulation.NextBuildingId, "simulation.nextBuildingId"),
+            buildings,
+            Require(simulation.NextPoiId, "simulation.nextPoiId"),
+            pois,
+            hasRoadNetwork ? Require(simulation.NextRoadNodeId, "simulation.nextRoadNodeId") : 1UL,
+            roadNodes,
+            hasRoadNetwork ? Require(simulation.NextRoadSegmentId, "simulation.nextRoadSegmentId") : 1UL,
+            roadSegments,
+            hasRoadNetwork ? Require(simulation.NextLaneId, "simulation.nextLaneId") : 1UL,
+            lanes,
+            hasRoadNetwork ? Require(simulation.NextLaneConnectionId, "simulation.nextLaneConnectionId") : 1UL,
+            connections,
+            hasRoadNetwork ? Require(simulation.NextRoadAccessPointId, "simulation.nextRoadAccessPointId") : 1UL,
+            accessPoints,
+            hasPedestrians ? Require(simulation.NextPedestrianId, "simulation.nextPedestrianId") : 1UL,
+            pedestrians,
+            pedestrianCrossings);
         return SimulationWorld.RestoreCheckpoint(checkpoint);
     }
 
-    private static void ValidateMaterializedCounts(int agents, int buildings, int pois, int nodes, int segments, int lanes, int connections, int access, WorldSaveLimits l)
+    private static TripEndpoint RestoreEndpoint(ulong? buildingId, ulong? poiId, string fieldName)
     {
-        ValidateCount(agents, l.MaximumAgentCount, "Agents"); ValidateCount(buildings, l.MaximumBuildingCount, "Buildings"); ValidateCount(pois, l.MaximumPoiCount, "POIs");
-        ValidateCount(nodes, l.MaximumRoadNodeCount, "RoadNodes"); ValidateCount(segments, l.MaximumRoadSegmentCount, "RoadSegments"); ValidateCount(lanes, l.MaximumLaneCount, "Lanes");
-        ValidateCount(connections, l.MaximumLaneConnectionCount, "LaneConnections"); ValidateCount(access, l.MaximumRoadAccessPointCount, "RoadAccessPoints");
+        if ((buildingId is null) == (poiId is null)) throw new InvalidDataException($"Save Data field '{fieldName}' must reference exactly one Building or POI.");
+        return buildingId is { } building ? TripEndpoint.ForBuilding(new BuildingId(building)) : TripEndpoint.ForPoi(new PoiId(poiId!.Value));
+    }
+
+    private static void ValidateMaterializedCounts(
+        int agents,
+        int buildings,
+        int pois,
+        int nodes,
+        int segments,
+        int lanes,
+        int connections,
+        int accessPoints,
+        int pedestrians,
+        int pedestrianCrossings,
+        WorldSaveLimits limits)
+    {
+        ValidateCount(agents, limits.MaximumAgentCount, "Agents");
+        ValidateCount(buildings, limits.MaximumBuildingCount, "Buildings");
+        ValidateCount(pois, limits.MaximumPoiCount, "POIs");
+        ValidateCount(nodes, limits.MaximumRoadNodeCount, "RoadNodes");
+        ValidateCount(segments, limits.MaximumRoadSegmentCount, "RoadSegments");
+        ValidateCount(lanes, limits.MaximumLaneCount, "Lanes");
+        ValidateCount(connections, limits.MaximumLaneConnectionCount, "LaneConnections");
+        ValidateCount(accessPoints, limits.MaximumRoadAccessPointCount, "RoadAccessPoints");
+        ValidateCount(pedestrians, limits.MaximumPedestrianCount, "Pedestrians");
+        ValidateCount(pedestrianCrossings, limits.MaximumPedestrianCrossingCount, "PedestrianCrossings");
     }
 
     private static void ValidateCount(int count, int maximum, string name)
@@ -174,27 +458,30 @@ public static class WorldSaveSerializer
         if (count > maximum) throw new InvalidDataException($"Save Data contains {count} {name}, exceeding the configured {maximum}-{name} limit.");
     }
 
-    private static void ValidateCollectionCountsBeforeMaterialization(ReadOnlySpan<byte> json, WorldSaveLimits l)
+    private static void ValidateCollectionCountsBeforeMaterialization(ReadOnlySpan<byte> json, WorldSaveLimits limits)
     {
         var reader = new Utf8JsonReader(json, new JsonReaderOptions { CommentHandling = JsonCommentHandling.Disallow, MaxDepth = JsonOptions.MaxDepth });
         while (reader.Read())
         {
             if (reader.TokenType != JsonTokenType.PropertyName) continue;
-            if (reader.ValueTextEquals("agents")) ValidateNamedArrayElementCount(ref reader, l.MaximumAgentCount, "Agent");
-            else if (reader.ValueTextEquals("buildings")) ValidateNamedArrayElementCount(ref reader, l.MaximumBuildingCount, "Building");
-            else if (reader.ValueTextEquals("pois")) ValidateNamedArrayElementCount(ref reader, l.MaximumPoiCount, "POI");
-            else if (reader.ValueTextEquals("roadNodes")) ValidateNamedArrayElementCount(ref reader, l.MaximumRoadNodeCount, "RoadNode");
-            else if (reader.ValueTextEquals("roadSegments")) ValidateNamedArrayElementCount(ref reader, l.MaximumRoadSegmentCount, "RoadSegment");
-            else if (reader.ValueTextEquals("lanes")) ValidateNamedArrayElementCount(ref reader, l.MaximumLaneCount, "Lane");
-            else if (reader.ValueTextEquals("laneConnections")) ValidateNamedArrayElementCount(ref reader, l.MaximumLaneConnectionCount, "LaneConnection");
-            else if (reader.ValueTextEquals("roadAccessPoints")) ValidateNamedArrayElementCount(ref reader, l.MaximumRoadAccessPointCount, "RoadAccessPoint");
+            if (reader.ValueTextEquals("agents")) ValidateNamedArrayElementCount(ref reader, limits.MaximumAgentCount, "Agent");
+            else if (reader.ValueTextEquals("buildings")) ValidateNamedArrayElementCount(ref reader, limits.MaximumBuildingCount, "Building");
+            else if (reader.ValueTextEquals("pois")) ValidateNamedArrayElementCount(ref reader, limits.MaximumPoiCount, "POI");
+            else if (reader.ValueTextEquals("roadNodes")) ValidateNamedArrayElementCount(ref reader, limits.MaximumRoadNodeCount, "RoadNode");
+            else if (reader.ValueTextEquals("roadSegments")) ValidateNamedArrayElementCount(ref reader, limits.MaximumRoadSegmentCount, "RoadSegment");
+            else if (reader.ValueTextEquals("lanes")) ValidateNamedArrayElementCount(ref reader, limits.MaximumLaneCount, "Lane");
+            else if (reader.ValueTextEquals("laneConnections")) ValidateNamedArrayElementCount(ref reader, limits.MaximumLaneConnectionCount, "LaneConnection");
+            else if (reader.ValueTextEquals("roadAccessPoints")) ValidateNamedArrayElementCount(ref reader, limits.MaximumRoadAccessPointCount, "RoadAccessPoint");
+            else if (reader.ValueTextEquals("pedestrians")) ValidateNamedArrayElementCount(ref reader, limits.MaximumPedestrianCount, "Pedestrian");
+            else if (reader.ValueTextEquals("pedestrianCrossings")) ValidateNamedArrayElementCount(ref reader, limits.MaximumPedestrianCrossingCount, "PedestrianCrossing");
         }
     }
 
     private static void ValidateNamedArrayElementCount(ref Utf8JsonReader reader, int maximumCount, string entityName)
     {
         if (!reader.Read() || reader.TokenType != JsonTokenType.StartArray) return;
-        var arrayDepth = reader.CurrentDepth; var count = 0;
+        var arrayDepth = reader.CurrentDepth;
+        var count = 0;
         while (reader.Read())
         {
             if (reader.TokenType == JsonTokenType.EndArray && reader.CurrentDepth == arrayDepth) return;
@@ -212,14 +499,25 @@ public static class WorldSaveSerializer
         private byte[]? currentSegment;
         private int currentSegmentOffset;
         private int length;
+
         public BoundedSaveBuffer(int maximumBytes) => this.maximumBytes = maximumBytes;
-        public override bool CanRead => false; public override bool CanSeek => false; public override bool CanWrite => true; public override long Length => length;
+
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => length;
         public override long Position { get => length; set => throw new NotSupportedException(); }
         public override void Flush() { }
         public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
         public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) { ArgumentNullException.ThrowIfNull(buffer); Write(buffer.AsSpan(offset, count)); }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            ArgumentNullException.ThrowIfNull(buffer);
+            Write(buffer.AsSpan(offset, count));
+        }
+
         public override void Write(ReadOnlySpan<byte> buffer)
         {
             if (buffer.Length > maximumBytes - length) throw new InvalidDataException($"Save Data output exceeds the configured {maximumBytes}-byte limit.");
@@ -227,21 +525,51 @@ public static class WorldSaveSerializer
             {
                 if (currentSegment is null || currentSegmentOffset == currentSegment.Length)
                 {
-                    var segmentLength = Math.Min(StreamReadBufferSize, maximumBytes - length); currentSegment = new byte[segmentLength]; currentSegmentOffset = 0; segments.Add(currentSegment);
+                    var segmentLength = Math.Min(StreamReadBufferSize, maximumBytes - length);
+                    currentSegment = new byte[segmentLength];
+                    currentSegmentOffset = 0;
+                    segments.Add(currentSegment);
                 }
-                var copyLength = Math.Min(buffer.Length, currentSegment.Length - currentSegmentOffset); buffer[..copyLength].CopyTo(currentSegment.AsSpan(currentSegmentOffset, copyLength)); currentSegmentOffset += copyLength; length += copyLength; buffer = buffer[copyLength..];
+                var copyLength = Math.Min(buffer.Length, currentSegment.Length - currentSegmentOffset);
+                buffer[..copyLength].CopyTo(currentSegment.AsSpan(currentSegmentOffset, copyLength));
+                currentSegmentOffset += copyLength;
+                length += copyLength;
+                buffer = buffer[copyLength..];
             }
         }
-        public byte[] ToArray() { var result = new byte[length]; CopyTo(result); return result; }
+
+        public byte[] ToArray()
+        {
+            var result = new byte[length];
+            CopyTo(result);
+            return result;
+        }
+
         public void WriteTo(Stream destination)
         {
-            ArgumentNullException.ThrowIfNull(destination); var remaining = length;
-            foreach (var segment in segments) { var count = Math.Min(segment.Length, remaining); destination.Write(segment.AsSpan(0, count)); remaining -= count; if (remaining == 0) break; }
+            ArgumentNullException.ThrowIfNull(destination);
+            var remaining = length;
+            foreach (var segment in segments)
+            {
+                var count = Math.Min(segment.Length, remaining);
+                destination.Write(segment.AsSpan(0, count));
+                remaining -= count;
+                if (remaining == 0) break;
+            }
         }
+
         private void CopyTo(Span<byte> destination)
         {
-            var offset = 0; var remaining = length;
-            foreach (var segment in segments) { var count = Math.Min(segment.Length, remaining); segment.AsSpan(0, count).CopyTo(destination[offset..]); offset += count; remaining -= count; if (remaining == 0) break; }
+            var offset = 0;
+            var remaining = length;
+            foreach (var segment in segments)
+            {
+                var count = Math.Min(segment.Length, remaining);
+                segment.AsSpan(0, count).CopyTo(destination[offset..]);
+                offset += count;
+                remaining -= count;
+                if (remaining == 0) break;
+            }
         }
     }
 }

@@ -13,6 +13,7 @@ internal sealed class ClientConnection : IDisposable
     private readonly object _lifetimeGate = new();
     private readonly SemaphoreSlim _sendGate = new(1, 1);
     private HashSet<ulong> _knownAgentIds = [];
+    private HashSet<ulong> _knownPedestrianIds = [];
     private WorldVolume? _subscription;
     private long _subscriptionRevision;
     private int _activeSendCount;
@@ -54,18 +55,26 @@ internal sealed class ClientConnection : IDisposable
                 state = default;
                 return false;
             }
-            state = new ClientSubscriptionState(volume, _subscriptionRevision, new HashSet<ulong>(_knownAgentIds));
+            state = new ClientSubscriptionState(
+                volume,
+                _subscriptionRevision,
+                new HashSet<ulong>(_knownAgentIds),
+                new HashSet<ulong>(_knownPedestrianIds));
             return true;
         }
     }
 
-    public bool TryReplaceKnownAgentIds(long revision, HashSet<ulong> agentIds)
+    public bool TryReplaceKnownAgentIds(long revision, HashSet<ulong> agentIds) => TryReplaceKnownEntityIds(revision, agentIds, new HashSet<ulong>(_knownPedestrianIds));
+
+    public bool TryReplaceKnownEntityIds(long revision, HashSet<ulong> agentIds, HashSet<ulong> pedestrianIds)
     {
         ArgumentNullException.ThrowIfNull(agentIds);
+        ArgumentNullException.ThrowIfNull(pedestrianIds);
         lock (_stateGate)
         {
             var revisionMatches = _subscriptionRevision == revision;
             _knownAgentIds = agentIds;
+            _knownPedestrianIds = pedestrianIds;
             return revisionMatches;
         }
     }
@@ -141,7 +150,17 @@ internal sealed class ClientConnection : IDisposable
     }
 }
 
-internal readonly record struct ClientSubscriptionState(WorldVolume Volume, long Revision, HashSet<ulong> KnownAgentIds);
+internal readonly record struct ClientSubscriptionState(
+    WorldVolume Volume,
+    long Revision,
+    HashSet<ulong> KnownAgentIds,
+    HashSet<ulong> KnownPedestrianIds)
+{
+    public ClientSubscriptionState(WorldVolume volume, long revision, HashSet<ulong> knownAgentIds)
+        : this(volume, revision, knownAgentIds, [])
+    {
+    }
+}
 
 internal sealed class ClientConnectionRegistry
 {

@@ -18,6 +18,8 @@ MachiVerseWorks の技術アーキテクチャを管理します。
 
 - [`overview.md`](overview.md): 全体アーキテクチャ
 - [`simulation-core.md`](simulation-core.md): Simulation Core 最小 PoC の state ownership と hot path
+- [`road-network.md`](road-network.md): Road Network topology / spatial index / access boundary
+- [`pedestrian-simulation.md`](pedestrian-simulation.md): derived walking graph、routing、tick、crossing / occupancy、Server / Web boundary
 - [`protocol.md`](protocol.md): Server / Web Client 間 binary protocol の versioning と wire layout
 - [`headless-server.md`](headless-server.md): Headless Server の lifecycle、WebSocket、command queue、snapshot publish
 - [`web-client.md`](web-client.md): Web Clientのconnection、EntityStore、subscription、rendering

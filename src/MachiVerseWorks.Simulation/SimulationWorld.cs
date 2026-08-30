@@ -12,6 +12,7 @@ public sealed partial class SimulationWorld
     {
         Config = config ?? new SimulationConfig();
         _spatialIndex = new SpatialIndex(Config.SpatialCellSize);
+        _pedestrianSpatialIndex = new PedestrianSpatialIndex(Config.SpatialCellSize);
         _roads = new RoadNetworkStore(Config.SpatialCellSize);
         _random = new DeterministicRandom(Config.Seed);
         Time = default;
@@ -48,20 +49,33 @@ public sealed partial class SimulationWorld
     }
 
     public bool RemoveAgent(AgentId id) => _agents.Remove(id, _spatialIndex);
-    public void Step() { var nextTime = Time.Advance(Config.TickDuration); _agents.Step(Config.TickDurationSeconds, _spatialIndex); Time = nextTime; }
+
+    public void Step()
+    {
+        var nextTime = Time.Advance(Config.TickDuration);
+        _agents.Step(Config.TickDurationSeconds, _spatialIndex);
+        StepPedestrians(Config.TickDurationSeconds);
+        Time = nextTime;
+    }
+
     public bool TryGetAgentSnapshot(AgentId id, out AgentSnapshot snapshot) => _agents.TryGetSnapshot(id, Time.TickCount, out snapshot);
     public AgentSnapshot[] CreateSnapshot(WorldVolume volume) => _agents.CreateSnapshot(volume, _spatialIndex, Time.TickCount);
 
-    public SimulationCheckpoint CreateCheckpoint() => new(
-        Config.TickRate, Config.Seed, Config.SpatialCellSize, Time.TickCount, Time.Elapsed.Ticks, _random.State,
-        _agents.NextId, _agents.CreateCheckpoint(),
-        _buildings.NextId, _buildings.CreateCheckpoint(),
-        _pois.NextId, _pois.CreateCheckpoint(),
-        _roads.NextNodeId, _roads.CreateNodeCheckpoint(),
-        _roads.NextSegmentId, _roads.CreateSegmentCheckpoint(),
-        _roads.NextLaneId, _roads.CreateLaneCheckpoint(),
-        _roads.NextConnectionId, _roads.CreateConnectionCheckpoint(),
-        _roads.NextAccessPointId, _roads.CreateAccessPointCheckpoint());
+    public SimulationCheckpoint CreateCheckpoint()
+    {
+        EnsurePedestrianNetwork();
+        return new SimulationCheckpoint(
+            Config.TickRate, Config.Seed, Config.SpatialCellSize, Time.TickCount, Time.Elapsed.Ticks, _random.State,
+            _agents.NextId, _agents.CreateCheckpoint(),
+            _buildings.NextId, _buildings.CreateCheckpoint(),
+            _pois.NextId, _pois.CreateCheckpoint(),
+            _roads.NextNodeId, _roads.CreateNodeCheckpoint(),
+            _roads.NextSegmentId, _roads.CreateSegmentCheckpoint(),
+            _roads.NextLaneId, _roads.CreateLaneCheckpoint(),
+            _roads.NextConnectionId, _roads.CreateConnectionCheckpoint(),
+            _roads.NextAccessPointId, _roads.CreateAccessPointCheckpoint(),
+            _pedestrians.NextId, _pedestrians.CreateCheckpoint(), _pedestrianNetwork.CreateCrossingCheckpoint());
+    }
 
     public static SimulationWorld RestoreCheckpoint(SimulationCheckpoint checkpoint)
     {
@@ -83,6 +97,7 @@ public sealed partial class SimulationWorld
         var config = new SimulationConfig(checkpoint.TickRate, checkpoint.Seed, checkpoint.SpatialCellSize);
         ValidateUrbanObjectCheckpoint(checkpoint, config.SpatialCellSize);
         ValidateRoadNetworkCheckpoint(checkpoint, config.SpatialCellSize);
+        ValidatePedestrianCheckpoint(checkpoint);
         var restoredTime = new SimulationTime(checkpoint.TickCount, TimeSpan.FromTicks(checkpoint.ElapsedTicks));
         try { _ = restoredTime.Advance(config.TickDuration); }
         catch (OverflowException) { throw new ArgumentOutOfRangeException(nameof(checkpoint), "Simulation time must allow at least one additional tick."); }
@@ -90,7 +105,16 @@ public sealed partial class SimulationWorld
         if (checkpoint.ElapsedTicks != expectedElapsedTicks) throw new ArgumentException($"Elapsed time {checkpoint.ElapsedTicks} does not match tick count {checkpoint.TickCount} and tick rate {checkpoint.TickRate}.", nameof(checkpoint));
         var world = new SimulationWorld(config) { Time = restoredTime, _random = new DeterministicRandom(checkpoint.RandomState) };
         world._agents.Restore(checkpoint.Agents, checkpoint.NextAgentId, world._spatialIndex);
-        world.RestoreUrbanObjects(checkpoint); world._roads.Restore(checkpoint); return world;
+        world.RestoreUrbanObjects(checkpoint);
+        world._roads.Restore(checkpoint);
+        world.EnsurePedestrianNetwork();
+        world._pedestrianNetwork.RestoreCrossingPermissions(checkpoint.PedestrianCrossings ?? Array.Empty<SimulationPedestrianCrossingCheckpoint>());
+        world._pedestrians.Restore(
+            checkpoint.Pedestrians ?? Array.Empty<SimulationPedestrianCheckpoint>(),
+            checkpoint.NextPedestrianId,
+            world._pedestrianNetwork,
+            world._pedestrianSpatialIndex);
+        return world;
     }
 
     private double NextCoordinate(double minimum, double maximum) => minimum == maximum ? minimum : _random.NextDouble(minimum, maximum);

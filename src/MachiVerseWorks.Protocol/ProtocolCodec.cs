@@ -5,20 +5,38 @@ namespace MachiVerseWorks.Protocol;
 
 public static class ProtocolCodec
 {
-    private const int HelloPayloadLength = 0, HelloAckPayloadLength = 6, SubscribeVolumePayloadLength = 48, AgentStatePayloadLength = 64, AgentRemovePayloadLength = 16;
-    private const int RoadHeaderLength = 28, RoadNodeLength = 33, RoadSegmentLength = 25, LaneLength = 35, LaneConnectionLength = 33, RoadAccessPointLength = 41;
-    private const int MaximumErrorParameters = 16, MaximumErrorParameterKeyBytes = 64, MaximumErrorParameterValueBytes = 256;
+    private const int HelloPayloadLength = 0;
+    private const int HelloAckPayloadLength = 6;
+    private const int SubscribeVolumePayloadLength = 48;
+    private const int AgentStatePayloadLength = 64;
+    private const int AgentRemovePayloadLength = 16;
+    private const int PedestrianStatePayloadLength = 81;
+    private const int PedestrianRemovePayloadLength = 16;
+    private const int RoadHeaderLength = 28;
+    private const int RoadNodeLength = 33;
+    private const int RoadSegmentLength = 25;
+    private const int LaneLength = 35;
+    private const int LaneConnectionLength = 33;
+    private const int RoadAccessPointLength = 41;
+    private const int MaximumErrorParameters = 16;
+    private const int MaximumErrorParameterKeyBytes = 64;
+    private const int MaximumErrorParameterValueBytes = 256;
     private static readonly UTF8Encoding Utf8 = new(false, true);
 
     public static byte[] Serialize(IProtocolMessage message, ProtocolVersion? version = null)
     {
-        ArgumentNullException.ThrowIfNull(message); var selectedVersion = version ?? ProtocolVersion.Current;
-        if (message is RoadNetworkSnapshotMessage && !selectedVersion.SupportsRoadNetwork) throw new ArgumentException($"Road Network messages require Protocol 2.1 or newer, but {selectedVersion} was selected.", nameof(version));
+        ArgumentNullException.ThrowIfNull(message);
+        var selectedVersion = version ?? ProtocolVersion.Current;
+        if (message is RoadNetworkSnapshotMessage && !selectedVersion.SupportsRoadNetwork)
+            throw new ArgumentException($"Road Network messages require Protocol 2.1 or newer, but {selectedVersion} was selected.", nameof(version));
+        if (IsPedestrianMessage(message.Type) && !selectedVersion.SupportsPedestrians)
+            throw new ArgumentException($"Pedestrian messages require Protocol 2.2 or newer, but {selectedVersion} was selected.", nameof(version));
         var payloadLength = GetPayloadLength(message);
         if ((uint)payloadLength > ProtocolFrameHeader.MaxPayloadLength) throw new ArgumentException("Message payload exceeds the protocol payload limit.", nameof(message));
         var frame = new byte[ProtocolFrameHeader.Size + payloadLength];
         ProtocolFrameHeader.Write(frame, new ProtocolFrameHeader(selectedVersion, message.Type, (uint)payloadLength));
-        WritePayload(frame.AsSpan(ProtocolFrameHeader.Size), message); return frame;
+        WritePayload(frame.AsSpan(ProtocolFrameHeader.Size), message);
+        return frame;
     }
 
     public static bool TryDeserialize(ReadOnlySpan<byte> frame, out ProtocolEnvelope? envelope, out ProtocolDecodeError error)
@@ -26,134 +44,274 @@ public static class ProtocolCodec
         envelope = null;
         if (!ProtocolFrameHeader.TryRead(frame, out var header, out error)) return false;
         if (header.MessageType == MessageType.RoadNetworkSnapshot && !header.Version.SupportsRoadNetwork) { error = ProtocolDecodeError.InvalidPayload; return false; }
+        if (IsPedestrianMessage(header.MessageType) && !header.Version.SupportsPedestrians) { error = ProtocolDecodeError.InvalidPayload; return false; }
         if (!TryReadMessage(header.MessageType, frame[ProtocolFrameHeader.Size..], out var message, out error)) return false;
-        envelope = new ProtocolEnvelope(header.Version, message); error = ProtocolDecodeError.None; return true;
+        envelope = new ProtocolEnvelope(header.Version, message);
+        error = ProtocolDecodeError.None;
+        return true;
     }
+
+    private static bool IsPedestrianMessage(MessageType type) => type is MessageType.PedestrianSpawn or MessageType.PedestrianUpdate or MessageType.PedestrianRemove;
 
     private static int GetPayloadLength(IProtocolMessage message) => message switch
     {
-        HelloMessage => HelloPayloadLength, HelloAckMessage => HelloAckPayloadLength, SubscribeVolumeMessage => SubscribeVolumePayloadLength,
-        AgentSpawnMessage => AgentStatePayloadLength, AgentUpdateMessage => AgentStatePayloadLength, AgentRemoveMessage => AgentRemovePayloadLength,
-        RoadNetworkSnapshotMessage road => GetRoadPayloadLength(road), ProtocolErrorMessage error => GetErrorPayloadLength(error),
+        HelloMessage => HelloPayloadLength,
+        HelloAckMessage => HelloAckPayloadLength,
+        SubscribeVolumeMessage => SubscribeVolumePayloadLength,
+        AgentSpawnMessage => AgentStatePayloadLength,
+        AgentUpdateMessage => AgentStatePayloadLength,
+        AgentRemoveMessage => AgentRemovePayloadLength,
+        PedestrianSpawnMessage => PedestrianStatePayloadLength,
+        PedestrianUpdateMessage => PedestrianStatePayloadLength,
+        PedestrianRemoveMessage => PedestrianRemovePayloadLength,
+        RoadNetworkSnapshotMessage road => GetRoadPayloadLength(road),
+        ProtocolErrorMessage error => GetErrorPayloadLength(error),
         _ => throw new ArgumentException($"Unsupported protocol message implementation: {message.GetType().FullName}.", nameof(message)),
     };
 
-    private static int GetRoadPayloadLength(RoadNetworkSnapshotMessage m)
+    private static int GetRoadPayloadLength(RoadNetworkSnapshotMessage message)
     {
-        ArgumentNullException.ThrowIfNull(m.Nodes); ArgumentNullException.ThrowIfNull(m.Segments); ArgumentNullException.ThrowIfNull(m.Lanes); ArgumentNullException.ThrowIfNull(m.Connections); ArgumentNullException.ThrowIfNull(m.AccessPoints);
-        return checked(RoadHeaderLength + m.Nodes.Count * RoadNodeLength + m.Segments.Count * RoadSegmentLength + m.Lanes.Count * LaneLength + m.Connections.Count * LaneConnectionLength + m.AccessPoints.Count * RoadAccessPointLength);
+        ArgumentNullException.ThrowIfNull(message.Nodes);
+        ArgumentNullException.ThrowIfNull(message.Segments);
+        ArgumentNullException.ThrowIfNull(message.Lanes);
+        ArgumentNullException.ThrowIfNull(message.Connections);
+        ArgumentNullException.ThrowIfNull(message.AccessPoints);
+        return checked(RoadHeaderLength + message.Nodes.Count * RoadNodeLength + message.Segments.Count * RoadSegmentLength + message.Lanes.Count * LaneLength + message.Connections.Count * LaneConnectionLength + message.AccessPoints.Count * RoadAccessPointLength);
     }
 
-    private static int GetErrorPayloadLength(ProtocolErrorMessage m)
+    private static int GetErrorPayloadLength(ProtocolErrorMessage message)
     {
-        ArgumentNullException.ThrowIfNull(m.Parameters); if (m.Parameters.Count > MaximumErrorParameters) throw new ArgumentException($"Error messages support at most {MaximumErrorParameters} parameters.", nameof(m));
-        var length = 4; foreach (var p in m.Parameters) { ArgumentNullException.ThrowIfNull(p); ValidateErrorParameter(p); length = checked(length + 2 + Utf8.GetByteCount(p.Key) + 2 + Utf8.GetByteCount(p.Value)); } return length;
+        ArgumentNullException.ThrowIfNull(message.Parameters);
+        if (message.Parameters.Count > MaximumErrorParameters) throw new ArgumentException($"Error messages support at most {MaximumErrorParameters} parameters.", nameof(message));
+        var length = 4;
+        foreach (var parameter in message.Parameters)
+        {
+            ArgumentNullException.ThrowIfNull(parameter);
+            ValidateErrorParameter(parameter);
+            length = checked(length + 2 + Utf8.GetByteCount(parameter.Key) + 2 + Utf8.GetByteCount(parameter.Value));
+        }
+        return length;
     }
 
-    private static void ValidateErrorParameter(ProtocolErrorParameter p)
+    private static void ValidateErrorParameter(ProtocolErrorParameter parameter)
     {
-        ArgumentNullException.ThrowIfNull(p.Key); ArgumentNullException.ThrowIfNull(p.Value);
-        if (Utf8.GetByteCount(p.Key) > MaximumErrorParameterKeyBytes) throw new ArgumentException($"Error parameter keys must be at most {MaximumErrorParameterKeyBytes} UTF-8 bytes.", nameof(p));
-        if (Utf8.GetByteCount(p.Value) > MaximumErrorParameterValueBytes) throw new ArgumentException($"Error parameter values must be at most {MaximumErrorParameterValueBytes} UTF-8 bytes.", nameof(p));
+        ArgumentNullException.ThrowIfNull(parameter.Key);
+        ArgumentNullException.ThrowIfNull(parameter.Value);
+        if (Utf8.GetByteCount(parameter.Key) > MaximumErrorParameterKeyBytes) throw new ArgumentException($"Error parameter keys must be at most {MaximumErrorParameterKeyBytes} UTF-8 bytes.", nameof(parameter));
+        if (Utf8.GetByteCount(parameter.Value) > MaximumErrorParameterValueBytes) throw new ArgumentException($"Error parameter values must be at most {MaximumErrorParameterValueBytes} UTF-8 bytes.", nameof(parameter));
     }
 
     private static void WritePayload(Span<byte> payload, IProtocolMessage message)
     {
         switch (message)
         {
-            case HelloMessage: return;
-            case HelloAckMessage m: WriteUInt16(payload, m.ProtocolVersion.Major); WriteUInt16(payload[2..], m.ProtocolVersion.Minor); WriteUInt16(payload[4..], m.TickRate); return;
-            case SubscribeVolumeMessage m:
-                if (!IsFiniteVolume(m.MinX, m.MinY, m.MinZ, m.MaxX, m.MaxY, m.MaxZ)) throw new ArgumentOutOfRangeException(nameof(message), "Subscribe volume coordinates must be finite and ordered.");
-                WriteDouble(payload, m.MinX); WriteDouble(payload[8..], m.MinY); WriteDouble(payload[16..], m.MinZ); WriteDouble(payload[24..], m.MaxX); WriteDouble(payload[32..], m.MaxY); WriteDouble(payload[40..], m.MaxZ); return;
-            case AgentSpawnMessage m: WriteAgent(payload, m.AgentId, m.X, m.Y, m.Z, m.VelocityX, m.VelocityY, m.VelocityZ, m.TickCount); return;
-            case AgentUpdateMessage m: WriteAgent(payload, m.AgentId, m.X, m.Y, m.Z, m.VelocityX, m.VelocityY, m.VelocityZ, m.TickCount); return;
-            case AgentRemoveMessage m: WriteUInt64(payload, m.AgentId); WriteUInt64(payload[8..], m.TickCount); return;
-            case RoadNetworkSnapshotMessage m: WriteRoad(payload, m); return;
-            case ProtocolErrorMessage m: WriteError(payload, m); return;
-            default: throw new ArgumentException($"Unsupported protocol message implementation: {message.GetType().FullName}.", nameof(message));
+            case HelloMessage:
+                return;
+            case HelloAckMessage helloAck:
+                WriteUInt16(payload, helloAck.ProtocolVersion.Major);
+                WriteUInt16(payload[2..], helloAck.ProtocolVersion.Minor);
+                WriteUInt16(payload[4..], helloAck.TickRate);
+                return;
+            case SubscribeVolumeMessage subscribe:
+                if (!IsFiniteVolume(subscribe.MinX, subscribe.MinY, subscribe.MinZ, subscribe.MaxX, subscribe.MaxY, subscribe.MaxZ)) throw new ArgumentOutOfRangeException(nameof(message), "Subscribe volume coordinates must be finite and ordered.");
+                WriteDouble(payload, subscribe.MinX); WriteDouble(payload[8..], subscribe.MinY); WriteDouble(payload[16..], subscribe.MinZ); WriteDouble(payload[24..], subscribe.MaxX); WriteDouble(payload[32..], subscribe.MaxY); WriteDouble(payload[40..], subscribe.MaxZ);
+                return;
+            case AgentSpawnMessage agentSpawn:
+                WriteAgent(payload, agentSpawn.AgentId, agentSpawn.X, agentSpawn.Y, agentSpawn.Z, agentSpawn.VelocityX, agentSpawn.VelocityY, agentSpawn.VelocityZ, agentSpawn.TickCount);
+                return;
+            case AgentUpdateMessage agentUpdate:
+                WriteAgent(payload, agentUpdate.AgentId, agentUpdate.X, agentUpdate.Y, agentUpdate.Z, agentUpdate.VelocityX, agentUpdate.VelocityY, agentUpdate.VelocityZ, agentUpdate.TickCount);
+                return;
+            case AgentRemoveMessage agentRemove:
+                WriteUInt64(payload, agentRemove.AgentId); WriteUInt64(payload[8..], agentRemove.TickCount);
+                return;
+            case PedestrianSpawnMessage pedestrianSpawn:
+                WritePedestrian(payload, pedestrianSpawn.PedestrianId, pedestrianSpawn.TripRequestId, pedestrianSpawn.X, pedestrianSpawn.Y, pedestrianSpawn.Z, pedestrianSpawn.VelocityX, pedestrianSpawn.VelocityY, pedestrianSpawn.VelocityZ, pedestrianSpawn.WalkingSpeedMetersPerSecond, pedestrianSpawn.State, pedestrianSpawn.TickCount);
+                return;
+            case PedestrianUpdateMessage pedestrianUpdate:
+                WritePedestrian(payload, pedestrianUpdate.PedestrianId, pedestrianUpdate.TripRequestId, pedestrianUpdate.X, pedestrianUpdate.Y, pedestrianUpdate.Z, pedestrianUpdate.VelocityX, pedestrianUpdate.VelocityY, pedestrianUpdate.VelocityZ, pedestrianUpdate.WalkingSpeedMetersPerSecond, pedestrianUpdate.State, pedestrianUpdate.TickCount);
+                return;
+            case PedestrianRemoveMessage pedestrianRemove:
+                ValidateStableId(pedestrianRemove.PedestrianId, nameof(message));
+                WriteUInt64(payload, pedestrianRemove.PedestrianId); WriteUInt64(payload[8..], pedestrianRemove.TickCount);
+                return;
+            case RoadNetworkSnapshotMessage road:
+                WriteRoad(payload, road);
+                return;
+            case ProtocolErrorMessage protocolError:
+                WriteError(payload, protocolError);
+                return;
+            default:
+                throw new ArgumentException($"Unsupported protocol message implementation: {message.GetType().FullName}.", nameof(message));
         }
     }
 
-    private static void WriteAgent(Span<byte> p, ulong id, double x, double y, double z, double vx, double vy, double vz, ulong tick)
+    private static void WriteAgent(Span<byte> payload, ulong id, double x, double y, double z, double velocityX, double velocityY, double velocityZ, ulong tick)
     {
-        ValidateFinite(x, nameof(x)); ValidateFinite(y, nameof(y)); ValidateFinite(z, nameof(z)); ValidateFinite(vx, nameof(vx)); ValidateFinite(vy, nameof(vy)); ValidateFinite(vz, nameof(vz));
-        WriteUInt64(p, id); WriteDouble(p[8..], x); WriteDouble(p[16..], y); WriteDouble(p[24..], z); WriteDouble(p[32..], vx); WriteDouble(p[40..], vy); WriteDouble(p[48..], vz); WriteUInt64(p[56..], tick);
+        ValidateFinite(x, nameof(x)); ValidateFinite(y, nameof(y)); ValidateFinite(z, nameof(z)); ValidateFinite(velocityX, nameof(velocityX)); ValidateFinite(velocityY, nameof(velocityY)); ValidateFinite(velocityZ, nameof(velocityZ));
+        WriteUInt64(payload, id); WriteDouble(payload[8..], x); WriteDouble(payload[16..], y); WriteDouble(payload[24..], z); WriteDouble(payload[32..], velocityX); WriteDouble(payload[40..], velocityY); WriteDouble(payload[48..], velocityZ); WriteUInt64(payload[56..], tick);
     }
 
-    private static void WriteRoad(Span<byte> p, RoadNetworkSnapshotMessage m)
+    private static void WritePedestrian(Span<byte> payload, ulong id, ulong tripRequestId, double x, double y, double z, double velocityX, double velocityY, double velocityZ, double walkingSpeed, ProtocolPedestrianMovementState state, ulong tick)
     {
-        WriteUInt64(p, m.TickCount); WriteUInt32(p[8..], checked((uint)m.Nodes.Count)); WriteUInt32(p[12..], checked((uint)m.Segments.Count)); WriteUInt32(p[16..], checked((uint)m.Lanes.Count)); WriteUInt32(p[20..], checked((uint)m.Connections.Count)); WriteUInt32(p[24..], checked((uint)m.AccessPoints.Count));
-        var o = RoadHeaderLength;
-        foreach (var n in m.Nodes) { ValidateId(n.Id, nameof(m)); ValidateFinite(n.X, nameof(m)); ValidateFinite(n.Y, nameof(m)); ValidateFinite(n.Z, nameof(m)); ValidateEnum(n.Kind, nameof(m)); WriteUInt64(p[o..], n.Id); p[o + 8] = (byte)n.Kind; WriteDouble(p[(o + 9)..], n.X); WriteDouble(p[(o + 17)..], n.Y); WriteDouble(p[(o + 25)..], n.Z); o += RoadNodeLength; }
-        foreach (var s in m.Segments) { ValidateId(s.Id, nameof(m)); ValidateId(s.StartNodeId, nameof(m)); ValidateId(s.EndNodeId, nameof(m)); ValidateEnum(s.Kind, nameof(m)); WriteUInt64(p[o..], s.Id); p[o + 8] = (byte)s.Kind; WriteUInt64(p[(o + 9)..], s.StartNodeId); WriteUInt64(p[(o + 17)..], s.EndNodeId); o += RoadSegmentLength; }
-        foreach (var lane in m.Lanes) { ValidateId(lane.Id, nameof(m)); ValidateId(lane.SegmentId, nameof(m)); ValidateEnum(lane.Direction, nameof(m)); if (!double.IsFinite(lane.WidthMeters) || lane.WidthMeters <= 0 || !double.IsFinite(lane.SpeedLimitMetersPerSecond) || lane.SpeedLimitMetersPerSecond <= 0) throw new ArgumentOutOfRangeException(nameof(m)); WriteUInt64(p[o..], lane.Id); WriteUInt64(p[(o + 8)..], lane.SegmentId); p[o + 16] = (byte)lane.Direction; WriteUInt16(p[(o + 17)..], lane.Order); WriteDouble(p[(o + 19)..], lane.WidthMeters); WriteDouble(p[(o + 27)..], lane.SpeedLimitMetersPerSecond); o += LaneLength; }
-        foreach (var x in m.Connections) { ValidateId(x.Id, nameof(m)); ValidateId(x.FromLaneId, nameof(m)); ValidateId(x.ToLaneId, nameof(m)); ValidateId(x.ViaNodeId, nameof(m)); ValidateEnum(x.Movement, nameof(m)); WriteUInt64(p[o..], x.Id); WriteUInt64(p[(o + 8)..], x.FromLaneId); WriteUInt64(p[(o + 16)..], x.ToLaneId); WriteUInt64(p[(o + 24)..], x.ViaNodeId); p[o + 32] = (byte)x.Movement; o += LaneConnectionLength; }
-        foreach (var a in m.AccessPoints) { ValidateId(a.Id, nameof(m)); ValidateId(a.SegmentId, nameof(m)); if (!double.IsFinite(a.SegmentOffset) || a.SegmentOffset < 0 || a.SegmentOffset > 1 || (a.BuildingId == 0 && a.PoiId == 0) || a.Mode == ProtocolRoadAccessMode.None || (a.Mode & ~(ProtocolRoadAccessMode.Motor | ProtocolRoadAccessMode.Foot)) != 0) throw new ArgumentOutOfRangeException(nameof(m)); WriteUInt64(p[o..], a.Id); WriteUInt64(p[(o + 8)..], a.SegmentId); WriteDouble(p[(o + 16)..], a.SegmentOffset); WriteUInt64(p[(o + 24)..], a.BuildingId); WriteUInt64(p[(o + 32)..], a.PoiId); p[o + 40] = (byte)a.Mode; o += RoadAccessPointLength; }
+        ValidateStableId(id, nameof(id)); ValidateStableId(tripRequestId, nameof(tripRequestId));
+        ValidateFinite(x, nameof(x)); ValidateFinite(y, nameof(y)); ValidateFinite(z, nameof(z)); ValidateFinite(velocityX, nameof(velocityX)); ValidateFinite(velocityY, nameof(velocityY)); ValidateFinite(velocityZ, nameof(velocityZ));
+        if (!double.IsFinite(walkingSpeed) || walkingSpeed <= 0d) throw new ArgumentOutOfRangeException(nameof(walkingSpeed));
+        ValidateEnum(state, nameof(state));
+        WriteUInt64(payload, id); WriteUInt64(payload[8..], tripRequestId);
+        WriteDouble(payload[16..], x); WriteDouble(payload[24..], y); WriteDouble(payload[32..], z);
+        WriteDouble(payload[40..], velocityX); WriteDouble(payload[48..], velocityY); WriteDouble(payload[56..], velocityZ);
+        WriteDouble(payload[64..], walkingSpeed); payload[72] = (byte)state; WriteUInt64(payload[73..], tick);
     }
 
-    private static void WriteError(Span<byte> p, ProtocolErrorMessage m)
+    private static void WriteRoad(Span<byte> payload, RoadNetworkSnapshotMessage message)
     {
-        WriteUInt16(p, (ushort)m.Code); WriteUInt16(p[2..], checked((ushort)m.Parameters.Count)); var o = 4;
-        foreach (var parameter in m.Parameters) { o += WriteUtf8String(p[o..], parameter.Key); o += WriteUtf8String(p[o..], parameter.Value); }
+        WriteUInt64(payload, message.TickCount); WriteUInt32(payload[8..], checked((uint)message.Nodes.Count)); WriteUInt32(payload[12..], checked((uint)message.Segments.Count)); WriteUInt32(payload[16..], checked((uint)message.Lanes.Count)); WriteUInt32(payload[20..], checked((uint)message.Connections.Count)); WriteUInt32(payload[24..], checked((uint)message.AccessPoints.Count));
+        var offset = RoadHeaderLength;
+        foreach (var node in message.Nodes) { ValidateStableId(node.Id, nameof(message)); ValidateFinite(node.X, nameof(message)); ValidateFinite(node.Y, nameof(message)); ValidateFinite(node.Z, nameof(message)); ValidateEnum(node.Kind, nameof(message)); WriteUInt64(payload[offset..], node.Id); payload[offset + 8] = (byte)node.Kind; WriteDouble(payload[(offset + 9)..], node.X); WriteDouble(payload[(offset + 17)..], node.Y); WriteDouble(payload[(offset + 25)..], node.Z); offset += RoadNodeLength; }
+        foreach (var segment in message.Segments) { ValidateStableId(segment.Id, nameof(message)); ValidateStableId(segment.StartNodeId, nameof(message)); ValidateStableId(segment.EndNodeId, nameof(message)); ValidateEnum(segment.Kind, nameof(message)); WriteUInt64(payload[offset..], segment.Id); payload[offset + 8] = (byte)segment.Kind; WriteUInt64(payload[(offset + 9)..], segment.StartNodeId); WriteUInt64(payload[(offset + 17)..], segment.EndNodeId); offset += RoadSegmentLength; }
+        foreach (var lane in message.Lanes) { ValidateStableId(lane.Id, nameof(message)); ValidateStableId(lane.SegmentId, nameof(message)); ValidateEnum(lane.Direction, nameof(message)); if (!double.IsFinite(lane.WidthMeters) || lane.WidthMeters <= 0 || !double.IsFinite(lane.SpeedLimitMetersPerSecond) || lane.SpeedLimitMetersPerSecond <= 0) throw new ArgumentOutOfRangeException(nameof(message)); WriteUInt64(payload[offset..], lane.Id); WriteUInt64(payload[(offset + 8)..], lane.SegmentId); payload[offset + 16] = (byte)lane.Direction; WriteUInt16(payload[(offset + 17)..], lane.Order); WriteDouble(payload[(offset + 19)..], lane.WidthMeters); WriteDouble(payload[(offset + 27)..], lane.SpeedLimitMetersPerSecond); offset += LaneLength; }
+        foreach (var connection in message.Connections) { ValidateStableId(connection.Id, nameof(message)); ValidateStableId(connection.FromLaneId, nameof(message)); ValidateStableId(connection.ToLaneId, nameof(message)); ValidateStableId(connection.ViaNodeId, nameof(message)); ValidateEnum(connection.Movement, nameof(message)); WriteUInt64(payload[offset..], connection.Id); WriteUInt64(payload[(offset + 8)..], connection.FromLaneId); WriteUInt64(payload[(offset + 16)..], connection.ToLaneId); WriteUInt64(payload[(offset + 24)..], connection.ViaNodeId); payload[offset + 32] = (byte)connection.Movement; offset += LaneConnectionLength; }
+        foreach (var access in message.AccessPoints) { ValidateStableId(access.Id, nameof(message)); ValidateStableId(access.SegmentId, nameof(message)); if (!double.IsFinite(access.SegmentOffset) || access.SegmentOffset < 0 || access.SegmentOffset > 1 || (access.BuildingId == 0 && access.PoiId == 0) || access.Mode == ProtocolRoadAccessMode.None || (access.Mode & ~(ProtocolRoadAccessMode.Motor | ProtocolRoadAccessMode.Foot)) != 0) throw new ArgumentOutOfRangeException(nameof(message)); WriteUInt64(payload[offset..], access.Id); WriteUInt64(payload[(offset + 8)..], access.SegmentId); WriteDouble(payload[(offset + 16)..], access.SegmentOffset); WriteUInt64(payload[(offset + 24)..], access.BuildingId); WriteUInt64(payload[(offset + 32)..], access.PoiId); payload[offset + 40] = (byte)access.Mode; offset += RoadAccessPointLength; }
     }
-    private static int WriteUtf8String(Span<byte> d, string value) { var count = Utf8.GetByteCount(value); WriteUInt16(d, checked((ushort)count)); Utf8.GetBytes(value, d[2..]); return count + 2; }
 
-    private static bool TryReadMessage(MessageType type, ReadOnlySpan<byte> p, out IProtocolMessage message, out ProtocolDecodeError error)
+    private static void WriteError(Span<byte> payload, ProtocolErrorMessage message)
+    {
+        WriteUInt16(payload, (ushort)message.Code); WriteUInt16(payload[2..], checked((ushort)message.Parameters.Count)); var offset = 4;
+        foreach (var parameter in message.Parameters) { offset += WriteUtf8String(payload[offset..], parameter.Key); offset += WriteUtf8String(payload[offset..], parameter.Value); }
+    }
+
+    private static int WriteUtf8String(Span<byte> destination, string value)
+    {
+        var count = Utf8.GetByteCount(value); WriteUInt16(destination, checked((ushort)count)); Utf8.GetBytes(value, destination[2..]); return count + 2;
+    }
+
+    private static bool TryReadMessage(MessageType type, ReadOnlySpan<byte> payload, out IProtocolMessage message, out ProtocolDecodeError error)
     {
         switch (type)
         {
-            case MessageType.Hello: if (p.Length != 0) return InvalidPayload(out message, out error); message = new HelloMessage(); break;
-            case MessageType.HelloAck: if (p.Length != 6) return InvalidPayload(out message, out error); message = new HelloAckMessage(new ProtocolVersion(ReadUInt16(p), ReadUInt16(p[2..])), ReadUInt16(p[4..])); break;
+            case MessageType.Hello:
+                if (payload.Length != HelloPayloadLength) return InvalidPayload(out message, out error);
+                message = new HelloMessage(); break;
+            case MessageType.HelloAck:
+                if (payload.Length != HelloAckPayloadLength) return InvalidPayload(out message, out error);
+                message = new HelloAckMessage(new ProtocolVersion(ReadUInt16(payload), ReadUInt16(payload[2..])), ReadUInt16(payload[4..])); break;
             case MessageType.SubscribeVolume:
-                if (p.Length != 48) return InvalidPayload(out message, out error); var minX = ReadDouble(p); var minY = ReadDouble(p[8..]); var minZ = ReadDouble(p[16..]); var maxX = ReadDouble(p[24..]); var maxY = ReadDouble(p[32..]); var maxZ = ReadDouble(p[40..]); if (!IsFiniteVolume(minX, minY, minZ, maxX, maxY, maxZ)) return InvalidPayload(out message, out error); message = new SubscribeVolumeMessage(minX, minY, minZ, maxX, maxY, maxZ); break;
-            case MessageType.AgentSpawn: return TryReadAgent(p, static (id, x, y, z, vx, vy, vz, tick) => new AgentSpawnMessage(id, x, y, z, vx, vy, vz, tick), out message, out error);
-            case MessageType.AgentUpdate: return TryReadAgent(p, static (id, x, y, z, vx, vy, vz, tick) => new AgentUpdateMessage(id, x, y, z, vx, vy, vz, tick), out message, out error);
-            case MessageType.AgentRemove: if (p.Length != 16) return InvalidPayload(out message, out error); message = new AgentRemoveMessage(ReadUInt64(p), ReadUInt64(p[8..])); break;
-            case MessageType.RoadNetworkSnapshot: return TryReadRoad(p, out message, out error);
-            case MessageType.Error: return TryReadError(p, out message, out error);
-            default: message = null!; error = ProtocolDecodeError.UnknownMessageType; return false;
+            {
+                if (payload.Length != SubscribeVolumePayloadLength) return InvalidPayload(out message, out error);
+                var minX = ReadDouble(payload); var minY = ReadDouble(payload[8..]); var minZ = ReadDouble(payload[16..]); var maxX = ReadDouble(payload[24..]); var maxY = ReadDouble(payload[32..]); var maxZ = ReadDouble(payload[40..]);
+                if (!IsFiniteVolume(minX, minY, minZ, maxX, maxY, maxZ)) return InvalidPayload(out message, out error);
+                message = new SubscribeVolumeMessage(minX, minY, minZ, maxX, maxY, maxZ); break;
+            }
+            case MessageType.AgentSpawn:
+                return TryReadAgent(payload, static (id, x, y, z, vx, vy, vz, tick) => new AgentSpawnMessage(id, x, y, z, vx, vy, vz, tick), out message, out error);
+            case MessageType.AgentUpdate:
+                return TryReadAgent(payload, static (id, x, y, z, vx, vy, vz, tick) => new AgentUpdateMessage(id, x, y, z, vx, vy, vz, tick), out message, out error);
+            case MessageType.AgentRemove:
+                if (payload.Length != AgentRemovePayloadLength) return InvalidPayload(out message, out error);
+                message = new AgentRemoveMessage(ReadUInt64(payload), ReadUInt64(payload[8..])); break;
+            case MessageType.PedestrianSpawn:
+                return TryReadPedestrian(payload, true, out message, out error);
+            case MessageType.PedestrianUpdate:
+                return TryReadPedestrian(payload, false, out message, out error);
+            case MessageType.PedestrianRemove:
+                if (payload.Length != PedestrianRemovePayloadLength || ReadUInt64(payload) == 0) return InvalidPayload(out message, out error);
+                message = new PedestrianRemoveMessage(ReadUInt64(payload), ReadUInt64(payload[8..])); break;
+            case MessageType.RoadNetworkSnapshot:
+                return TryReadRoad(payload, out message, out error);
+            case MessageType.Error:
+                return TryReadError(payload, out message, out error);
+            default:
+                message = null!; error = ProtocolDecodeError.UnknownMessageType; return false;
         }
-        error = ProtocolDecodeError.None; return true;
+        error = ProtocolDecodeError.None;
+        return true;
     }
 
-    private static bool TryReadAgent(ReadOnlySpan<byte> p, Func<ulong, double, double, double, double, double, double, ulong, IProtocolMessage> factory, out IProtocolMessage message, out ProtocolDecodeError error)
+    private static bool TryReadAgent(ReadOnlySpan<byte> payload, Func<ulong, double, double, double, double, double, double, ulong, IProtocolMessage> factory, out IProtocolMessage message, out ProtocolDecodeError error)
     {
-        if (p.Length != AgentStatePayloadLength) return InvalidPayload(out message, out error); var id = ReadUInt64(p); var x = ReadDouble(p[8..]); var y = ReadDouble(p[16..]); var z = ReadDouble(p[24..]); var vx = ReadDouble(p[32..]); var vy = ReadDouble(p[40..]); var vz = ReadDouble(p[48..]); var tick = ReadUInt64(p[56..]);
-        if (!double.IsFinite(x) || !double.IsFinite(y) || !double.IsFinite(z) || !double.IsFinite(vx) || !double.IsFinite(vy) || !double.IsFinite(vz)) return InvalidPayload(out message, out error); message = factory(id, x, y, z, vx, vy, vz, tick); error = ProtocolDecodeError.None; return true;
+        if (payload.Length != AgentStatePayloadLength) return InvalidPayload(out message, out error);
+        var id = ReadUInt64(payload); var x = ReadDouble(payload[8..]); var y = ReadDouble(payload[16..]); var z = ReadDouble(payload[24..]); var velocityX = ReadDouble(payload[32..]); var velocityY = ReadDouble(payload[40..]); var velocityZ = ReadDouble(payload[48..]); var tick = ReadUInt64(payload[56..]);
+        if (!double.IsFinite(x) || !double.IsFinite(y) || !double.IsFinite(z) || !double.IsFinite(velocityX) || !double.IsFinite(velocityY) || !double.IsFinite(velocityZ)) return InvalidPayload(out message, out error);
+        message = factory(id, x, y, z, velocityX, velocityY, velocityZ, tick); error = ProtocolDecodeError.None; return true;
     }
 
-    private static bool TryReadRoad(ReadOnlySpan<byte> p, out IProtocolMessage message, out ProtocolDecodeError error)
+    private static bool TryReadPedestrian(ReadOnlySpan<byte> payload, bool spawn, out IProtocolMessage message, out ProtocolDecodeError error)
     {
-        if (p.Length < RoadHeaderLength) return InvalidPayload(out message, out error);
-        var tick = ReadUInt64(p); var nodeCount = ReadUInt32(p[8..]); var segmentCount = ReadUInt32(p[12..]); var laneCount = ReadUInt32(p[16..]); var connectionCount = ReadUInt32(p[20..]); var accessCount = ReadUInt32(p[24..]);
+        if (payload.Length != PedestrianStatePayloadLength) return InvalidPayload(out message, out error);
+        var id = ReadUInt64(payload); var tripRequestId = ReadUInt64(payload[8..]);
+        var x = ReadDouble(payload[16..]); var y = ReadDouble(payload[24..]); var z = ReadDouble(payload[32..]);
+        var velocityX = ReadDouble(payload[40..]); var velocityY = ReadDouble(payload[48..]); var velocityZ = ReadDouble(payload[56..]);
+        var walkingSpeed = ReadDouble(payload[64..]); var state = (ProtocolPedestrianMovementState)payload[72]; var tick = ReadUInt64(payload[73..]);
+        if (id == 0 || tripRequestId == 0 || !double.IsFinite(x) || !double.IsFinite(y) || !double.IsFinite(z) || !double.IsFinite(velocityX) || !double.IsFinite(velocityY) || !double.IsFinite(velocityZ) || !double.IsFinite(walkingSpeed) || walkingSpeed <= 0d || !Enum.IsDefined(state)) return InvalidPayload(out message, out error);
+        message = spawn
+            ? new PedestrianSpawnMessage(id, tripRequestId, x, y, z, velocityX, velocityY, velocityZ, walkingSpeed, state, tick)
+            : new PedestrianUpdateMessage(id, tripRequestId, x, y, z, velocityX, velocityY, velocityZ, walkingSpeed, state, tick);
+        error = ProtocolDecodeError.None;
+        return true;
+    }
+
+    private static bool TryReadRoad(ReadOnlySpan<byte> payload, out IProtocolMessage message, out ProtocolDecodeError error)
+    {
+        if (payload.Length < RoadHeaderLength) return InvalidPayload(out message, out error);
+        var tick = ReadUInt64(payload); var nodeCount = ReadUInt32(payload[8..]); var segmentCount = ReadUInt32(payload[12..]); var laneCount = ReadUInt32(payload[16..]); var connectionCount = ReadUInt32(payload[20..]); var accessCount = ReadUInt32(payload[24..]);
         long expected = RoadHeaderLength + (long)nodeCount * RoadNodeLength + (long)segmentCount * RoadSegmentLength + (long)laneCount * LaneLength + (long)connectionCount * LaneConnectionLength + (long)accessCount * RoadAccessPointLength;
-        if (expected != p.Length || nodeCount > int.MaxValue || segmentCount > int.MaxValue || laneCount > int.MaxValue || connectionCount > int.MaxValue || accessCount > int.MaxValue) return InvalidPayload(out message, out error);
-        var nodes = new ProtocolRoadNode[(int)nodeCount]; var segments = new ProtocolRoadSegment[(int)segmentCount]; var lanes = new ProtocolLane[(int)laneCount]; var connections = new ProtocolLaneConnection[(int)connectionCount]; var access = new ProtocolRoadAccessPoint[(int)accessCount]; var o = RoadHeaderLength;
-        for (var i = 0; i < nodes.Length; i++) { var id = ReadUInt64(p[o..]); var kind = (ProtocolRoadNodeKind)p[o + 8]; var x = ReadDouble(p[(o + 9)..]); var y = ReadDouble(p[(o + 17)..]); var z = ReadDouble(p[(o + 25)..]); if (id == 0 || !Enum.IsDefined(kind) || !double.IsFinite(x) || !double.IsFinite(y) || !double.IsFinite(z)) return InvalidPayload(out message, out error); nodes[i] = new(id, kind, x, y, z); o += RoadNodeLength; }
-        for (var i = 0; i < segments.Length; i++) { var id = ReadUInt64(p[o..]); var kind = (ProtocolRoadKind)p[o + 8]; var start = ReadUInt64(p[(o + 9)..]); var end = ReadUInt64(p[(o + 17)..]); if (id == 0 || start == 0 || end == 0 || start == end || !Enum.IsDefined(kind)) return InvalidPayload(out message, out error); segments[i] = new(id, kind, start, end); o += RoadSegmentLength; }
-        for (var i = 0; i < lanes.Length; i++) { var id = ReadUInt64(p[o..]); var segment = ReadUInt64(p[(o + 8)..]); var direction = (ProtocolLaneDirection)p[o + 16]; var order = ReadUInt16(p[(o + 17)..]); var width = ReadDouble(p[(o + 19)..]); var speed = ReadDouble(p[(o + 27)..]); if (id == 0 || segment == 0 || !Enum.IsDefined(direction) || !double.IsFinite(width) || width <= 0 || !double.IsFinite(speed) || speed <= 0) return InvalidPayload(out message, out error); lanes[i] = new(id, segment, direction, order, width, speed); o += LaneLength; }
-        for (var i = 0; i < connections.Length; i++) { var id = ReadUInt64(p[o..]); var from = ReadUInt64(p[(o + 8)..]); var to = ReadUInt64(p[(o + 16)..]); var via = ReadUInt64(p[(o + 24)..]); var movement = (ProtocolTurnMovement)p[o + 32]; if (id == 0 || from == 0 || to == 0 || via == 0 || from == to || !Enum.IsDefined(movement)) return InvalidPayload(out message, out error); connections[i] = new(id, from, to, via, movement); o += LaneConnectionLength; }
-        for (var i = 0; i < access.Length; i++) { var id = ReadUInt64(p[o..]); var segment = ReadUInt64(p[(o + 8)..]); var offset = ReadDouble(p[(o + 16)..]); var building = ReadUInt64(p[(o + 24)..]); var poi = ReadUInt64(p[(o + 32)..]); var mode = (ProtocolRoadAccessMode)p[o + 40]; if (id == 0 || segment == 0 || !double.IsFinite(offset) || offset < 0 || offset > 1 || (building == 0 && poi == 0) || mode == ProtocolRoadAccessMode.None || (mode & ~(ProtocolRoadAccessMode.Motor | ProtocolRoadAccessMode.Foot)) != 0) return InvalidPayload(out message, out error); access[i] = new(id, segment, offset, building, poi, mode); o += RoadAccessPointLength; }
-        message = new RoadNetworkSnapshotMessage(tick, nodes, segments, lanes, connections, access); error = ProtocolDecodeError.None; return true;
+        if (expected != payload.Length || nodeCount > int.MaxValue || segmentCount > int.MaxValue || laneCount > int.MaxValue || connectionCount > int.MaxValue || accessCount > int.MaxValue) return InvalidPayload(out message, out error);
+        var nodes = new ProtocolRoadNode[(int)nodeCount]; var segments = new ProtocolRoadSegment[(int)segmentCount]; var lanes = new ProtocolLane[(int)laneCount]; var connections = new ProtocolLaneConnection[(int)connectionCount]; var accessPoints = new ProtocolRoadAccessPoint[(int)accessCount]; var offset = RoadHeaderLength;
+        for (var index = 0; index < nodes.Length; index++) { var id = ReadUInt64(payload[offset..]); var kind = (ProtocolRoadNodeKind)payload[offset + 8]; var x = ReadDouble(payload[(offset + 9)..]); var y = ReadDouble(payload[(offset + 17)..]); var z = ReadDouble(payload[(offset + 25)..]); if (id == 0 || !Enum.IsDefined(kind) || !double.IsFinite(x) || !double.IsFinite(y) || !double.IsFinite(z)) return InvalidPayload(out message, out error); nodes[index] = new(id, kind, x, y, z); offset += RoadNodeLength; }
+        for (var index = 0; index < segments.Length; index++) { var id = ReadUInt64(payload[offset..]); var kind = (ProtocolRoadKind)payload[offset + 8]; var start = ReadUInt64(payload[(offset + 9)..]); var end = ReadUInt64(payload[(offset + 17)..]); if (id == 0 || start == 0 || end == 0 || start == end || !Enum.IsDefined(kind)) return InvalidPayload(out message, out error); segments[index] = new(id, kind, start, end); offset += RoadSegmentLength; }
+        for (var index = 0; index < lanes.Length; index++) { var id = ReadUInt64(payload[offset..]); var segment = ReadUInt64(payload[(offset + 8)..]); var direction = (ProtocolLaneDirection)payload[offset + 16]; var order = ReadUInt16(payload[(offset + 17)..]); var width = ReadDouble(payload[(offset + 19)..]); var speed = ReadDouble(payload[(offset + 27)..]); if (id == 0 || segment == 0 || !Enum.IsDefined(direction) || !double.IsFinite(width) || width <= 0 || !double.IsFinite(speed) || speed <= 0) return InvalidPayload(out message, out error); lanes[index] = new(id, segment, direction, order, width, speed); offset += LaneLength; }
+        for (var index = 0; index < connections.Length; index++) { var id = ReadUInt64(payload[offset..]); var from = ReadUInt64(payload[(offset + 8)..]); var to = ReadUInt64(payload[(offset + 16)..]); var via = ReadUInt64(payload[(offset + 24)..]); var movement = (ProtocolTurnMovement)payload[offset + 32]; if (id == 0 || from == 0 || to == 0 || via == 0 || from == to || !Enum.IsDefined(movement)) return InvalidPayload(out message, out error); connections[index] = new(id, from, to, via, movement); offset += LaneConnectionLength; }
+        for (var index = 0; index < accessPoints.Length; index++) { var id = ReadUInt64(payload[offset..]); var segment = ReadUInt64(payload[(offset + 8)..]); var segmentOffset = ReadDouble(payload[(offset + 16)..]); var building = ReadUInt64(payload[(offset + 24)..]); var poi = ReadUInt64(payload[(offset + 32)..]); var mode = (ProtocolRoadAccessMode)payload[offset + 40]; if (id == 0 || segment == 0 || !double.IsFinite(segmentOffset) || segmentOffset < 0 || segmentOffset > 1 || (building == 0 && poi == 0) || mode == ProtocolRoadAccessMode.None || (mode & ~(ProtocolRoadAccessMode.Motor | ProtocolRoadAccessMode.Foot)) != 0) return InvalidPayload(out message, out error); accessPoints[index] = new(id, segment, segmentOffset, building, poi, mode); offset += RoadAccessPointLength; }
+        message = new RoadNetworkSnapshotMessage(tick, nodes, segments, lanes, connections, accessPoints); error = ProtocolDecodeError.None; return true;
     }
 
-    private static bool TryReadError(ReadOnlySpan<byte> p, out IProtocolMessage message, out ProtocolDecodeError error)
+    private static bool TryReadError(ReadOnlySpan<byte> payload, out IProtocolMessage message, out ProtocolDecodeError error)
     {
-        if (p.Length < 4) return InvalidPayload(out message, out error); var code = (ProtocolErrorCode)ReadUInt16(p); var count = ReadUInt16(p[2..]); if (count > MaximumErrorParameters) return InvalidPayload(out message, out error); var parameters = new List<ProtocolErrorParameter>(count); var o = 4;
-        try { for (var i = 0; i < count; i++) { if (!TryReadUtf8String(p, ref o, MaximumErrorParameterKeyBytes, out var key) || !TryReadUtf8String(p, ref o, MaximumErrorParameterValueBytes, out var value)) return InvalidPayload(out message, out error); parameters.Add(new(key, value)); } }
-        catch (DecoderFallbackException) { return InvalidPayload(out message, out error); }
-        if (o != p.Length) return InvalidPayload(out message, out error); message = new ProtocolErrorMessage(code, parameters); error = ProtocolDecodeError.None; return true;
+        if (payload.Length < 4) return InvalidPayload(out message, out error);
+        var code = (ProtocolErrorCode)ReadUInt16(payload); var count = ReadUInt16(payload[2..]);
+        if (count > MaximumErrorParameters) return InvalidPayload(out message, out error);
+        var parameters = new List<ProtocolErrorParameter>(count); var offset = 4;
+        try
+        {
+            for (var index = 0; index < count; index++)
+            {
+                if (!TryReadUtf8String(payload, ref offset, MaximumErrorParameterKeyBytes, out var key) || !TryReadUtf8String(payload, ref offset, MaximumErrorParameterValueBytes, out var value)) return InvalidPayload(out message, out error);
+                parameters.Add(new ProtocolErrorParameter(key, value));
+            }
+        }
+        catch (DecoderFallbackException)
+        {
+            return InvalidPayload(out message, out error);
+        }
+        if (offset != payload.Length) return InvalidPayload(out message, out error);
+        message = new ProtocolErrorMessage(code, parameters); error = ProtocolDecodeError.None; return true;
     }
-    private static bool TryReadUtf8String(ReadOnlySpan<byte> p, ref int o, int max, out string value) { value = string.Empty; if (o > p.Length - 2) return false; var len = ReadUInt16(p[o..]); o += 2; if (len > max || o > p.Length - len) return false; value = Utf8.GetString(p.Slice(o, len)); o += len; return true; }
-    private static bool InvalidPayload(out IProtocolMessage message, out ProtocolDecodeError error) { message = null!; error = ProtocolDecodeError.InvalidPayload; return false; }
+
+    private static bool TryReadUtf8String(ReadOnlySpan<byte> payload, ref int offset, int maximum, out string value)
+    {
+        value = string.Empty;
+        if (offset > payload.Length - 2) return false;
+        var length = ReadUInt16(payload[offset..]); offset += 2;
+        if (length > maximum || offset > payload.Length - length) return false;
+        value = Utf8.GetString(payload.Slice(offset, length)); offset += length; return true;
+    }
+
+    private static bool InvalidPayload(out IProtocolMessage message, out ProtocolDecodeError error)
+    {
+        message = null!; error = ProtocolDecodeError.InvalidPayload; return false;
+    }
+
     private static bool IsFiniteVolume(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) => double.IsFinite(minX) && double.IsFinite(minY) && double.IsFinite(minZ) && double.IsFinite(maxX) && double.IsFinite(maxY) && double.IsFinite(maxZ) && maxX >= minX && maxY >= minY && maxZ >= minZ;
     private static void ValidateFinite(double value, string name) { if (!double.IsFinite(value)) throw new ArgumentOutOfRangeException(name, value, "Protocol coordinates and velocities must be finite."); }
-    private static void ValidateId(ulong value, string name) { if (value == 0) throw new ArgumentOutOfRangeException(name, "Protocol Road IDs must be greater than zero."); }
+    private static void ValidateStableId(ulong value, string name) { if (value == 0) throw new ArgumentOutOfRangeException(name, "Protocol stable IDs must be greater than zero."); }
     private static void ValidateEnum<T>(T value, string name) where T : struct, Enum { if (!Enum.IsDefined(value)) throw new ArgumentOutOfRangeException(name, value, $"{typeof(T).Name} is invalid."); }
-    private static void WriteUInt16(Span<byte> d, ushort v) => BinaryPrimitives.WriteUInt16LittleEndian(d, v); private static ushort ReadUInt16(ReadOnlySpan<byte> s) => BinaryPrimitives.ReadUInt16LittleEndian(s);
-    private static void WriteUInt32(Span<byte> d, uint v) => BinaryPrimitives.WriteUInt32LittleEndian(d, v); private static uint ReadUInt32(ReadOnlySpan<byte> s) => BinaryPrimitives.ReadUInt32LittleEndian(s);
-    private static void WriteUInt64(Span<byte> d, ulong v) => BinaryPrimitives.WriteUInt64LittleEndian(d, v); private static ulong ReadUInt64(ReadOnlySpan<byte> s) => BinaryPrimitives.ReadUInt64LittleEndian(s);
-    private static void WriteDouble(Span<byte> d, double v) { ValidateFinite(v, nameof(v)); BinaryPrimitives.WriteInt64LittleEndian(d, BitConverter.DoubleToInt64Bits(v)); }
-    private static double ReadDouble(ReadOnlySpan<byte> s) => BitConverter.Int64BitsToDouble(BinaryPrimitives.ReadInt64LittleEndian(s));
+    private static void WriteUInt16(Span<byte> destination, ushort value) => BinaryPrimitives.WriteUInt16LittleEndian(destination, value);
+    private static ushort ReadUInt16(ReadOnlySpan<byte> source) => BinaryPrimitives.ReadUInt16LittleEndian(source);
+    private static void WriteUInt32(Span<byte> destination, uint value) => BinaryPrimitives.WriteUInt32LittleEndian(destination, value);
+    private static uint ReadUInt32(ReadOnlySpan<byte> source) => BinaryPrimitives.ReadUInt32LittleEndian(source);
+    private static void WriteUInt64(Span<byte> destination, ulong value) => BinaryPrimitives.WriteUInt64LittleEndian(destination, value);
+    private static ulong ReadUInt64(ReadOnlySpan<byte> source) => BinaryPrimitives.ReadUInt64LittleEndian(source);
+    private static void WriteDouble(Span<byte> destination, double value) { ValidateFinite(value, nameof(value)); BinaryPrimitives.WriteInt64LittleEndian(destination, BitConverter.DoubleToInt64Bits(value)); }
+    private static double ReadDouble(ReadOnlySpan<byte> source) => BitConverter.Int64BitsToDouble(BinaryPrimitives.ReadInt64LittleEndian(source));
 }
