@@ -197,8 +197,11 @@ public sealed partial class SimulationWorld
         {
             if (segment.Id.Value == 0 || !segments.TryAdd(segment.Id, segment)) throw new ArgumentException($"Road segment ID {segment.Id.Value} is zero or duplicated.", nameof(checkpoint));
             ValidateEnum(segment.Kind, nameof(checkpoint));
-            if (segment.StartNodeId == segment.EndNodeId || !nodes.ContainsKey(segment.StartNodeId) || !nodes.ContainsKey(segment.EndNodeId)) throw new ArgumentException($"Road segment {segment.Id.Value} has invalid node references.", nameof(checkpoint));
-            if (nodes[segment.StartNodeId].Position == nodes[segment.EndNodeId].Position) throw new ArgumentException($"Road segment {segment.Id.Value} has zero-length geometry.", nameof(checkpoint));
+            if (segment.StartNodeId == segment.EndNodeId
+                || !nodes.TryGetValue(segment.StartNodeId, out var startNode)
+                || !nodes.TryGetValue(segment.EndNodeId, out var endNode))
+                throw new ArgumentException($"Road segment {segment.Id.Value} has invalid node references.", nameof(checkpoint));
+            if (startNode.Position == endNode.Position) throw new ArgumentException($"Road segment {segment.Id.Value} has zero-length geometry.", nameof(checkpoint));
             degree[segment.StartNodeId]++; degree[segment.EndNodeId]++;
         }
         foreach (var entry in degree) if (nodes[entry.Key].Kind == RoadNodeKind.Endpoint && entry.Value > 1) throw new ArgumentException($"Endpoint road node {entry.Key.Value} has degree {entry.Value}.", nameof(checkpoint));
