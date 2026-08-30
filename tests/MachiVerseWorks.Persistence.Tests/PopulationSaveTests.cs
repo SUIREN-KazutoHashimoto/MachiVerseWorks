@@ -41,7 +41,7 @@ public sealed class PopulationSaveTests
 
         var bytes = WorldSaveSerializer.Serialize(world);
         using var document = JsonDocument.Parse(bytes);
-        Assert.AreEqual(SaveFormatVersion.Population, document.RootElement.GetProperty("formatVersion").GetInt32());
+        Assert.AreEqual(SaveFormatVersion.Current, document.RootElement.GetProperty("formatVersion").GetInt32());
         var simulation = document.RootElement.GetProperty("simulation");
         Assert.AreEqual(1, simulation.GetProperty("households").GetArrayLength());
         Assert.AreEqual(1, simulation.GetProperty("persons").GetArrayLength());

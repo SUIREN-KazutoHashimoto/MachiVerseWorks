@@ -112,6 +112,14 @@ public static class WorldSaveSerializer
         ValidateCount(checkpoint.Vehicles?.Count ?? 0, limits.MaximumVehicleCount, "Vehicles");
         ValidateCount(checkpoint.Households?.Count ?? 0, limits.MaximumHouseholdCount, "Households");
         ValidateCount(checkpoint.Persons?.Count ?? 0, limits.MaximumPersonCount, "Persons");
+        ValidateCount(checkpoint.TrackNodes?.Count ?? 0, limits.MaximumRoadNodeCount, "TrackNodes");
+        ValidateCount(checkpoint.TrackSegments?.Count ?? 0, limits.MaximumRoadSegmentCount, "TrackSegments");
+        ValidateCount(checkpoint.TrackConnections?.Count ?? 0, limits.MaximumLaneConnectionCount, "TrackConnections");
+        ValidateCount(checkpoint.BlockSections?.Count ?? 0, limits.MaximumRoadSegmentCount, "BlockSections");
+        ValidateCount(checkpoint.Stations?.Count ?? 0, limits.MaximumBuildingCount, "Stations");
+        ValidateCount(checkpoint.Platforms?.Count ?? 0, limits.MaximumRoadAccessPointCount, "Platforms");
+        ValidateCount(checkpoint.PlatformAccessPoints?.Count ?? 0, limits.MaximumRoadAccessPointCount, "PlatformAccessPoints");
+        ValidateCount(checkpoint.Depots?.Count ?? 0, limits.MaximumBuildingCount, "Depots");
     }
 
     private static SaveDataDocument CreateDocument(SimulationCheckpoint checkpoint)
@@ -276,6 +284,66 @@ public static class WorldSaveSerializer
                 DecayPerHour = need.DecayPerHour,
             }).ToArray(),
         }).ToArray();
+        var trackNodes = (checkpoint.TrackNodes ?? []).Select(static item => new SaveTrackNodeData
+        {
+            Id = item.Id.Value,
+            Kind = (byte)item.Kind,
+            X = item.Position.X,
+            Y = item.Position.Y,
+            Z = item.Position.Z,
+        }).ToArray();
+        var trackSegments = (checkpoint.TrackSegments ?? []).Select(static item => new SaveTrackSegmentData
+        {
+            Id = item.Id.Value,
+            StartNodeId = item.StartNodeId.Value,
+            EndNodeId = item.EndNodeId.Value,
+            Direction = (byte)item.Direction,
+            GaugeMeters = item.GaugeMeters,
+            SpeedLimitMetersPerSecond = item.SpeedLimitMetersPerSecond,
+            Electrification = (byte)item.Electrification,
+            Usage = (byte)item.Usage,
+        }).ToArray();
+        var trackConnections = (checkpoint.TrackConnections ?? []).Select(static item => new SaveTrackConnectionData
+        {
+            Id = item.Id.Value,
+            FromSegmentId = item.FromSegmentId.Value,
+            ToSegmentId = item.ToSegmentId.Value,
+            ViaNodeId = item.ViaNodeId.Value,
+        }).ToArray();
+        var blockSections = (checkpoint.BlockSections ?? []).Select(static item => new SaveBlockSectionData
+        {
+            Id = item.Id.Value,
+            SegmentIds = item.SegmentIds.Select(static id => (ulong?)id.Value).ToArray(),
+        }).ToArray();
+        var stations = (checkpoint.Stations ?? []).Select(static item => new SaveStationData
+        {
+            Id = item.Id.Value,
+            MinX = item.Bounds.MinX, MinY = item.Bounds.MinY, MinZ = item.Bounds.MinZ,
+            MaxX = item.Bounds.MaxX, MaxY = item.Bounds.MaxY, MaxZ = item.Bounds.MaxZ,
+        }).ToArray();
+        var platforms = (checkpoint.Platforms ?? []).Select(static item => new SavePlatformData
+        {
+            Id = item.Id.Value,
+            StationId = item.StationId.Value,
+            TrackSegmentId = item.TrackSegmentId.Value,
+            StartSegmentOffset = item.StartSegmentOffset,
+            EndSegmentOffset = item.EndSegmentOffset,
+            MinX = item.Bounds.MinX, MinY = item.Bounds.MinY, MinZ = item.Bounds.MinZ,
+            MaxX = item.Bounds.MaxX, MaxY = item.Bounds.MaxY, MaxZ = item.Bounds.MaxZ,
+        }).ToArray();
+        var platformAccessPoints = (checkpoint.PlatformAccessPoints ?? []).Select(static item => new SavePlatformAccessPointData
+        {
+            Id = item.Id.Value,
+            PlatformId = item.PlatformId.Value,
+            RoadAccessPointId = item.RoadAccessPointId.Value,
+        }).ToArray();
+        var depots = (checkpoint.Depots ?? []).Select(static item => new SaveDepotData
+        {
+            Id = item.Id.Value,
+            MinX = item.Bounds.MinX, MinY = item.Bounds.MinY, MinZ = item.Bounds.MinZ,
+            MaxX = item.Bounds.MaxX, MaxY = item.Bounds.MaxY, MaxZ = item.Bounds.MaxZ,
+            TrackSegmentIds = item.TrackSegmentIds.Select(static id => (ulong?)id.Value).ToArray(),
+        }).ToArray();
 
         return new SaveDataDocument
         {
@@ -314,6 +382,22 @@ public static class WorldSaveSerializer
                 NextPersonId = checkpoint.NextPersonId,
                 Persons = persons,
                 NextTripRequestId = checkpoint.NextTripRequestId,
+                NextTrackNodeId = checkpoint.NextTrackNodeId,
+                TrackNodes = trackNodes,
+                NextTrackSegmentId = checkpoint.NextTrackSegmentId,
+                TrackSegments = trackSegments,
+                NextTrackConnectionId = checkpoint.NextTrackConnectionId,
+                TrackConnections = trackConnections,
+                NextBlockSectionId = checkpoint.NextBlockSectionId,
+                BlockSections = blockSections,
+                NextStationId = checkpoint.NextStationId,
+                Stations = stations,
+                NextPlatformId = checkpoint.NextPlatformId,
+                Platforms = platforms,
+                NextPlatformAccessPointId = checkpoint.NextPlatformAccessPointId,
+                PlatformAccessPoints = platformAccessPoints,
+                NextDepotId = checkpoint.NextDepotId,
+                Depots = depots,
             },
         };
     }
@@ -321,7 +405,7 @@ public static class WorldSaveSerializer
     private static SimulationWorld RestoreDocument(SaveDataDocument document, WorldSaveLimits limits)
     {
         var format = Require(document.FormatVersion, "formatVersion");
-        if (format is not (SaveFormatVersion.BuildingPoi or SaveFormatVersion.RoadNetwork or SaveFormatVersion.Pedestrian or SaveFormatVersion.Vehicle or SaveFormatVersion.Population))
+        if (format is not (SaveFormatVersion.BuildingPoi or SaveFormatVersion.RoadNetwork or SaveFormatVersion.Pedestrian or SaveFormatVersion.Vehicle or SaveFormatVersion.Population or SaveFormatVersion.RailwayInfrastructure))
         {
             throw new InvalidDataException($"Unsupported Save format version {format}. Expected {SaveFormatVersion.Current} or a supported migratable version.");
         }
@@ -334,6 +418,7 @@ public static class WorldSaveSerializer
         var hasPedestrians = format >= SaveFormatVersion.Pedestrian;
         var hasVehicles = format >= SaveFormatVersion.Vehicle;
         var hasPopulation = format >= SaveFormatVersion.Population;
+        var hasRailway = format >= SaveFormatVersion.RailwayInfrastructure;
         var roadNodesData = hasRoadNetwork ? simulation.RoadNodes ?? throw new InvalidDataException("Save Data is missing RoadNode state.") : [];
         var roadSegmentsData = hasRoadNetwork ? simulation.RoadSegments ?? throw new InvalidDataException("Save Data is missing RoadSegment state.") : [];
         var lanesData = hasRoadNetwork ? simulation.Lanes ?? throw new InvalidDataException("Save Data is missing Lane state.") : [];
@@ -344,11 +429,27 @@ public static class WorldSaveSerializer
         var vehicleData = hasVehicles ? simulation.Vehicles ?? throw new InvalidDataException("Save Data is missing Vehicle state.") : [];
         var householdData = hasPopulation ? simulation.Households ?? throw new InvalidDataException("Save Data is missing Household state.") : [];
         var personData = hasPopulation ? simulation.Persons ?? throw new InvalidDataException("Save Data is missing Person state.") : [];
+        var trackNodeData = hasRailway ? simulation.TrackNodes ?? throw new InvalidDataException("Save Data is missing TrackNode state.") : [];
+        var trackSegmentData = hasRailway ? simulation.TrackSegments ?? throw new InvalidDataException("Save Data is missing TrackSegment state.") : [];
+        var trackConnectionData = hasRailway ? simulation.TrackConnections ?? throw new InvalidDataException("Save Data is missing TrackConnection state.") : [];
+        var blockSectionData = hasRailway ? simulation.BlockSections ?? throw new InvalidDataException("Save Data is missing BlockSection state.") : [];
+        var stationData = hasRailway ? simulation.Stations ?? throw new InvalidDataException("Save Data is missing Station state.") : [];
+        var platformData = hasRailway ? simulation.Platforms ?? throw new InvalidDataException("Save Data is missing Platform state.") : [];
+        var platformAccessData = hasRailway ? simulation.PlatformAccessPoints ?? throw new InvalidDataException("Save Data is missing PlatformAccessPoint state.") : [];
+        var depotData = hasRailway ? simulation.Depots ?? throw new InvalidDataException("Save Data is missing Depot state.") : [];
         ValidateMaterializedCounts(
             savedAgents.Length, savedBuildings.Length, savedPois.Length,
             roadNodesData.Length, roadSegmentsData.Length, lanesData.Length, connectionsData.Length, accessData.Length,
             pedestrianData.Length, pedestrianCrossingData.Length, vehicleData.Length,
             householdData.Length, personData.Length, limits);
+        ValidateCount(trackNodeData.Length, limits.MaximumRoadNodeCount, "TrackNodes");
+        ValidateCount(trackSegmentData.Length, limits.MaximumRoadSegmentCount, "TrackSegments");
+        ValidateCount(trackConnectionData.Length, limits.MaximumLaneConnectionCount, "TrackConnections");
+        ValidateCount(blockSectionData.Length, limits.MaximumRoadSegmentCount, "BlockSections");
+        ValidateCount(stationData.Length, limits.MaximumBuildingCount, "Stations");
+        ValidateCount(platformData.Length, limits.MaximumRoadAccessPointCount, "Platforms");
+        ValidateCount(platformAccessData.Length, limits.MaximumRoadAccessPointCount, "PlatformAccessPoints");
+        ValidateCount(depotData.Length, limits.MaximumBuildingCount, "Depots");
 
         var agents = new SimulationAgentCheckpoint[savedAgents.Length];
         for (var index = 0; index < agents.Length; index++)
@@ -564,6 +665,88 @@ public static class WorldSaveSerializer
                 needs);
         }
 
+        var trackNodes = new SimulationTrackNodeCheckpoint[trackNodeData.Length];
+        for (var index = 0; index < trackNodes.Length; index++)
+        {
+            var item = trackNodeData[index] ?? throw new InvalidDataException($"TrackNode entry {index} is null.");
+            trackNodes[index] = new SimulationTrackNodeCheckpoint(
+                new TrackNodeId(Require(item.Id, $"trackNodes[{index}].id")),
+                (TrackNodeKind)Require(item.Kind, $"trackNodes[{index}].kind"),
+                new WorldPoint(Require(item.X, $"trackNodes[{index}].x"), Require(item.Y, $"trackNodes[{index}].y"), Require(item.Z, $"trackNodes[{index}].z")));
+        }
+        var trackSegments = new SimulationTrackSegmentCheckpoint[trackSegmentData.Length];
+        for (var index = 0; index < trackSegments.Length; index++)
+        {
+            var item = trackSegmentData[index] ?? throw new InvalidDataException($"TrackSegment entry {index} is null.");
+            trackSegments[index] = new SimulationTrackSegmentCheckpoint(
+                new TrackSegmentId(Require(item.Id, $"trackSegments[{index}].id")),
+                new TrackNodeId(Require(item.StartNodeId, $"trackSegments[{index}].startNodeId")),
+                new TrackNodeId(Require(item.EndNodeId, $"trackSegments[{index}].endNodeId")),
+                (TrackDirection)Require(item.Direction, $"trackSegments[{index}].direction"),
+                Require(item.GaugeMeters, $"trackSegments[{index}].gaugeMeters"),
+                Require(item.SpeedLimitMetersPerSecond, $"trackSegments[{index}].speedLimitMetersPerSecond"),
+                (TrackElectrification)Require(item.Electrification, $"trackSegments[{index}].electrification"),
+                (TrackUsage)Require(item.Usage, $"trackSegments[{index}].usage"));
+        }
+        var trackConnections = new SimulationTrackConnectionCheckpoint[trackConnectionData.Length];
+        for (var index = 0; index < trackConnections.Length; index++)
+        {
+            var item = trackConnectionData[index] ?? throw new InvalidDataException($"TrackConnection entry {index} is null.");
+            trackConnections[index] = new SimulationTrackConnectionCheckpoint(
+                new TrackConnectionId(Require(item.Id, $"trackConnections[{index}].id")),
+                new TrackSegmentId(Require(item.FromSegmentId, $"trackConnections[{index}].fromSegmentId")),
+                new TrackSegmentId(Require(item.ToSegmentId, $"trackConnections[{index}].toSegmentId")),
+                new TrackNodeId(Require(item.ViaNodeId, $"trackConnections[{index}].viaNodeId")));
+        }
+        var blockSections = new SimulationBlockSectionCheckpoint[blockSectionData.Length];
+        for (var index = 0; index < blockSections.Length; index++)
+        {
+            var item = blockSectionData[index] ?? throw new InvalidDataException($"BlockSection entry {index} is null.");
+            var segmentIdsData = item.SegmentIds ?? throw new InvalidDataException($"Save Data is missing BlockSection segment IDs at blockSections[{index}].segmentIds.");
+            var segmentIds = new TrackSegmentId[segmentIdsData.Length];
+            for (var segmentIndex = 0; segmentIndex < segmentIds.Length; segmentIndex++) segmentIds[segmentIndex] = new TrackSegmentId(Require(segmentIdsData[segmentIndex], $"blockSections[{index}].segmentIds[{segmentIndex}]"));
+            blockSections[index] = new SimulationBlockSectionCheckpoint(new BlockSectionId(Require(item.Id, $"blockSections[{index}].id")), segmentIds);
+        }
+        var stations = new SimulationStationCheckpoint[stationData.Length];
+        for (var index = 0; index < stations.Length; index++)
+        {
+            var item = stationData[index] ?? throw new InvalidDataException($"Station entry {index} is null.");
+            stations[index] = new SimulationStationCheckpoint(new StationId(Require(item.Id, $"stations[{index}].id")), RestoreBounds(item.MinX, item.MinY, item.MinZ, item.MaxX, item.MaxY, item.MaxZ, $"stations[{index}]"));
+        }
+        var platforms = new SimulationPlatformCheckpoint[platformData.Length];
+        for (var index = 0; index < platforms.Length; index++)
+        {
+            var item = platformData[index] ?? throw new InvalidDataException($"Platform entry {index} is null.");
+            platforms[index] = new SimulationPlatformCheckpoint(
+                new PlatformId(Require(item.Id, $"platforms[{index}].id")),
+                new StationId(Require(item.StationId, $"platforms[{index}].stationId")),
+                new TrackSegmentId(Require(item.TrackSegmentId, $"platforms[{index}].trackSegmentId")),
+                Require(item.StartSegmentOffset, $"platforms[{index}].startSegmentOffset"),
+                Require(item.EndSegmentOffset, $"platforms[{index}].endSegmentOffset"),
+                RestoreBounds(item.MinX, item.MinY, item.MinZ, item.MaxX, item.MaxY, item.MaxZ, $"platforms[{index}]"));
+        }
+        var platformAccessPoints = new SimulationPlatformAccessPointCheckpoint[platformAccessData.Length];
+        for (var index = 0; index < platformAccessPoints.Length; index++)
+        {
+            var item = platformAccessData[index] ?? throw new InvalidDataException($"PlatformAccessPoint entry {index} is null.");
+            platformAccessPoints[index] = new SimulationPlatformAccessPointCheckpoint(
+                new PlatformAccessPointId(Require(item.Id, $"platformAccessPoints[{index}].id")),
+                new PlatformId(Require(item.PlatformId, $"platformAccessPoints[{index}].platformId")),
+                new RoadAccessPointId(Require(item.RoadAccessPointId, $"platformAccessPoints[{index}].roadAccessPointId")));
+        }
+        var depots = new SimulationDepotCheckpoint[depotData.Length];
+        for (var index = 0; index < depots.Length; index++)
+        {
+            var item = depotData[index] ?? throw new InvalidDataException($"Depot entry {index} is null.");
+            var segmentIdsData = item.TrackSegmentIds ?? throw new InvalidDataException($"Save Data is missing Depot track segment IDs at depots[{index}].trackSegmentIds.");
+            var segmentIds = new TrackSegmentId[segmentIdsData.Length];
+            for (var segmentIndex = 0; segmentIndex < segmentIds.Length; segmentIndex++) segmentIds[segmentIndex] = new TrackSegmentId(Require(segmentIdsData[segmentIndex], $"depots[{index}].trackSegmentIds[{segmentIndex}]"));
+            depots[index] = new SimulationDepotCheckpoint(
+                new DepotId(Require(item.Id, $"depots[{index}].id")),
+                RestoreBounds(item.MinX, item.MinY, item.MinZ, item.MaxX, item.MaxY, item.MaxZ, $"depots[{index}]"),
+                segmentIds);
+        }
+
         var checkpoint = new SimulationCheckpoint(
             Require(simulation.TickRate, "simulation.tickRate"),
             Require(simulation.Seed, "simulation.seed"),
@@ -583,9 +766,20 @@ public static class WorldSaveSerializer
             hasVehicles ? Require(simulation.NextVehicleId, "simulation.nextVehicleId") : 1UL, vehicles,
             hasPopulation ? Require(simulation.NextHouseholdId, "simulation.nextHouseholdId") : 1UL, households,
             hasPopulation ? Require(simulation.NextPersonId, "simulation.nextPersonId") : 1UL, persons,
-            hasPopulation ? Require(simulation.NextTripRequestId, "simulation.nextTripRequestId") : 1UL);
+            hasPopulation ? Require(simulation.NextTripRequestId, "simulation.nextTripRequestId") : 1UL,
+            hasRailway ? Require(simulation.NextTrackNodeId, "simulation.nextTrackNodeId") : 1UL, trackNodes,
+            hasRailway ? Require(simulation.NextTrackSegmentId, "simulation.nextTrackSegmentId") : 1UL, trackSegments,
+            hasRailway ? Require(simulation.NextTrackConnectionId, "simulation.nextTrackConnectionId") : 1UL, trackConnections,
+            hasRailway ? Require(simulation.NextBlockSectionId, "simulation.nextBlockSectionId") : 1UL, blockSections,
+            hasRailway ? Require(simulation.NextStationId, "simulation.nextStationId") : 1UL, stations,
+            hasRailway ? Require(simulation.NextPlatformId, "simulation.nextPlatformId") : 1UL, platforms,
+            hasRailway ? Require(simulation.NextPlatformAccessPointId, "simulation.nextPlatformAccessPointId") : 1UL, platformAccessPoints,
+            hasRailway ? Require(simulation.NextDepotId, "simulation.nextDepotId") : 1UL, depots);
         return SimulationWorld.RestoreCheckpoint(checkpoint);
     }
+
+    private static WorldVolume RestoreBounds(double? minX, double? minY, double? minZ, double? maxX, double? maxY, double? maxZ, string fieldName) =>
+        new(Require(minX, $"{fieldName}.minX"), Require(minY, $"{fieldName}.minY"), Require(minZ, $"{fieldName}.minZ"), Require(maxX, $"{fieldName}.maxX"), Require(maxY, $"{fieldName}.maxY"), Require(maxZ, $"{fieldName}.maxZ"));
 
     private static TripEndpoint RestoreEndpoint(ulong? buildingId, ulong? poiId, string fieldName)
     {
@@ -642,6 +836,14 @@ public static class WorldSaveSerializer
             else if (reader.ValueTextEquals("vehicles")) ValidateNamedArrayElementCount(ref reader, limits.MaximumVehicleCount, "Vehicle");
             else if (reader.ValueTextEquals("households")) ValidateNamedArrayElementCount(ref reader, limits.MaximumHouseholdCount, "Household");
             else if (reader.ValueTextEquals("persons")) ValidateNamedArrayElementCount(ref reader, limits.MaximumPersonCount, "Person");
+            else if (reader.ValueTextEquals("trackNodes")) ValidateNamedArrayElementCount(ref reader, limits.MaximumRoadNodeCount, "TrackNode");
+            else if (reader.ValueTextEquals("trackSegments")) ValidateNamedArrayElementCount(ref reader, limits.MaximumRoadSegmentCount, "TrackSegment");
+            else if (reader.ValueTextEquals("trackConnections")) ValidateNamedArrayElementCount(ref reader, limits.MaximumLaneConnectionCount, "TrackConnection");
+            else if (reader.ValueTextEquals("blockSections")) ValidateNamedArrayElementCount(ref reader, limits.MaximumRoadSegmentCount, "BlockSection");
+            else if (reader.ValueTextEquals("stations")) ValidateNamedArrayElementCount(ref reader, limits.MaximumBuildingCount, "Station");
+            else if (reader.ValueTextEquals("platforms")) ValidateNamedArrayElementCount(ref reader, limits.MaximumRoadAccessPointCount, "Platform");
+            else if (reader.ValueTextEquals("platformAccessPoints")) ValidateNamedArrayElementCount(ref reader, limits.MaximumRoadAccessPointCount, "PlatformAccessPoint");
+            else if (reader.ValueTextEquals("depots")) ValidateNamedArrayElementCount(ref reader, limits.MaximumBuildingCount, "Depot");
         }
     }
 

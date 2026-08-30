@@ -1,0 +1,93 @@
+{
+  "formatVersion": 8,
+  "simulation": {
+    "tickRate": 30,
+    "seed": 17017,
+    "spatialCellSize": 64,
+    "tickCount": 0,
+    "elapsedTicks": 0,
+    "randomState": 17017,
+    "nextAgentId": 1,
+    "agents": [],
+    "nextBuildingId": 2,
+    "buildings": [
+      { "id": 1, "kind": 1, "minX": -8, "minY": -10, "minZ": 0, "maxX": 0, "maxY": -4, "maxZ": 4 }
+    ],
+    "nextPoiId": 1,
+    "pois": [],
+    "nextRoadNodeId": 3,
+    "roadNodes": [
+      { "id": 1, "kind": 0, "x": -40, "y": -6, "z": 0 },
+      { "id": 2, "kind": 0, "x": -2, "y": -6, "z": 0 }
+    ],
+    "nextRoadSegmentId": 2,
+    "roadSegments": [
+      { "id": 1, "kind": 0, "startNodeId": 1, "endNodeId": 2 }
+    ],
+    "nextLaneId": 1,
+    "lanes": [],
+    "nextLaneConnectionId": 1,
+    "laneConnections": [],
+    "nextRoadAccessPointId": 2,
+    "roadAccessPoints": [
+      { "id": 1, "segmentId": 1, "segmentOffset": 1.0, "buildingId": 1, "poiId": null, "mode": 2 }
+    ],
+    "nextPedestrianId": 1,
+    "pedestrians": [],
+    "pedestrianCrossings": [],
+    "nextVehicleId": 1,
+    "vehicles": [],
+    "nextHouseholdId": 1,
+    "households": [],
+    "nextPersonId": 1,
+    "persons": [],
+    "nextTripRequestId": 1,
+    "nextTrackNodeId": 11,
+    "trackNodes": [
+      { "id": 1, "kind": 0, "x": -60, "y": 0, "z": 0 },
+      { "id": 2, "kind": 0, "x": 60, "y": 0, "z": 0 },
+      { "id": 3, "kind": 0, "x": -60, "y": 5, "z": 0 },
+      { "id": 4, "kind": 0, "x": 60, "y": 5, "z": 0 },
+      { "id": 5, "kind": 0, "x": 20, "y": -30, "z": 8 },
+      { "id": 6, "kind": 0, "x": 20, "y": 30, "z": 8 },
+      { "id": 7, "kind": 0, "x": 20, "y": -30, "z": -8 },
+      { "id": 8, "kind": 0, "x": 20, "y": 30, "z": -8 },
+      { "id": 9, "kind": 0, "x": -10, "y": 18, "z": 0 },
+      { "id": 10, "kind": 0, "x": 10, "y": 18, "z": 0 }
+    ],
+    "nextTrackSegmentId": 6,
+    "trackSegments": [
+      { "id": 1, "startNodeId": 1, "endNodeId": 2, "direction": 0, "gaugeMeters": 1.067, "speedLimitMetersPerSecond": 25, "electrification": 1, "usage": 0 },
+      { "id": 2, "startNodeId": 3, "endNodeId": 4, "direction": 0, "gaugeMeters": 1.067, "speedLimitMetersPerSecond": 25, "electrification": 1, "usage": 0 },
+      { "id": 3, "startNodeId": 5, "endNodeId": 6, "direction": 0, "gaugeMeters": 1.067, "speedLimitMetersPerSecond": 18, "electrification": 1, "usage": 0 },
+      { "id": 4, "startNodeId": 7, "endNodeId": 8, "direction": 0, "gaugeMeters": 1.067, "speedLimitMetersPerSecond": 18, "electrification": 2, "usage": 0 },
+      { "id": 5, "startNodeId": 9, "endNodeId": 10, "direction": 0, "gaugeMeters": 1.067, "speedLimitMetersPerSecond": 8, "electrification": 1, "usage": 2 }
+    ],
+    "nextTrackConnectionId": 1,
+    "trackConnections": [],
+    "nextBlockSectionId": 6,
+    "blockSections": [
+      { "id": 1, "segmentIds": [1] },
+      { "id": 2, "segmentIds": [2] },
+      { "id": 3, "segmentIds": [3] },
+      { "id": 4, "segmentIds": [4] },
+      { "id": 5, "segmentIds": [5] }
+    ],
+    "nextStationId": 2,
+    "stations": [
+      { "id": 1, "minX": -8, "minY": -10, "minZ": -1, "maxX": 28, "maxY": 10, "maxZ": 6 }
+    ],
+    "nextPlatformId": 2,
+    "platforms": [
+      { "id": 1, "stationId": 1, "trackSegmentId": 1, "startSegmentOffset": 0.4, "endSegmentOffset": 0.7, "minX": -8, "minY": -3, "minZ": 0, "maxX": 15, "maxY": -1, "maxZ": 1.2 }
+    ],
+    "nextPlatformAccessPointId": 2,
+    "platformAccessPoints": [
+      { "id": 1, "platformId": 1, "roadAccessPointId": 1 }
+    ],
+    "nextDepotId": 2,
+    "depots": [
+      { "id": 1, "minX": -12, "minY": 12, "minZ": -1, "maxX": 14, "maxY": 22, "maxZ": 4, "trackSegmentIds": [5] }
+    ]
+  }
+}

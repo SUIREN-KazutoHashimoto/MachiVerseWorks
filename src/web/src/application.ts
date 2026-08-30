@@ -8,6 +8,7 @@ import { initializeLocalization, type LocaleParameters } from './localization.ts
 import { PedestrianStore } from './pedestrian-store.ts';
 import { PopulationMessageType, type PopulationProtocolMessage, type PopulationStatisticsMessage, type PersonDebugMessage } from './population-protocol.ts';
 import { MessageType, ProtocolErrorCode, type AgentStateMessage, type PedestrianStateMessage, type ProtocolErrorMessage, type ProtocolMessage, type WorldVolume } from './protocol.ts';
+import { RailwayInfrastructureLayer, RailwayMessageType, type RailwayProtocolMessage } from './railway-infrastructure.ts';
 import { ClientUi } from './ui.ts';
 import { TrafficMessageType, type TrafficProtocolMessage, type VehicleStateMessage } from './traffic-protocol.ts';
 import { IntersectionControlStore, VehicleStore } from './traffic-store.ts';
@@ -26,6 +27,7 @@ export class Application {
   private readonly ambient = new AmbientSystem(this.audio);
   private readonly performanceMetrics = import.meta.env.DEV ? new ClientPerformanceMetrics() : null;
   private readonly view: WorldView;
+  private readonly railway: RailwayInfrastructureLayer;
   private readonly ui: ClientUi;
   private readonly connection: MachiVerseConnection;
   private animationFrame = 0;
@@ -38,6 +40,7 @@ export class Application {
   public constructor(host: HTMLElement) {
     const performanceMetrics = this.performanceMetrics;
     this.view = new WorldView(host);
+    this.railway = new RailwayInfrastructureLayer(this.view.scene);
     this.ui = new ClientUi(host, this.localizer, performanceMetrics !== null);
     this.connection = new MachiVerseConnection(
       this.config.serverUrl,
@@ -52,6 +55,7 @@ export class Application {
           this.pedestrians.clear();
           this.vehicles.clear();
           this.intersections.clear();
+          this.railway.clear();
           this.view.clearRoadNetwork();
           this.ui.setAgentCount(0);
           this.ui.clearPopulation();
@@ -68,7 +72,7 @@ export class Application {
   }
 
   public start(): void { this.connection.connect(); this.animationFrame = window.requestAnimationFrame(this.animate); }
-  public dispose(): void { window.cancelAnimationFrame(this.animationFrame); window.removeEventListener('resize', this.handleResize); this.connection.disconnect(); this.audio.dispose(); this.view.dispose(); }
+  public dispose(): void { window.cancelAnimationFrame(this.animationFrame); window.removeEventListener('resize', this.handleResize); this.connection.disconnect(); this.audio.dispose(); this.railway.dispose(); this.view.dispose(); }
   private readonly handleResize = (): void => { this.view.resize(); };
 
   private readonly animate = (now: number): void => {
@@ -105,7 +109,7 @@ export class Application {
     this.lastPerformanceUiAt = now; this.ui.setPerformanceMetrics(metrics.snapshot());
   }
 
-  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage): void {
+  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage): void {
     switch (message.type) {
       case MessageType.AgentSpawn: this.applyAgentSpawn(message); return;
       case MessageType.AgentUpdate: this.applyAgentUpdate(message); return;
@@ -123,6 +127,7 @@ export class Application {
       case TrafficMessageType.IntersectionControlSnapshot: this.intersections.apply(message); return;
       case PopulationMessageType.PopulationStatistics: this.applyPopulationStatistics(message); return;
       case PopulationMessageType.PersonDebug: this.applyPersonDebug(message); return;
+      case RailwayMessageType.RailwayInfrastructureSnapshot: this.railway.apply(message); return;
       case MessageType.Hello:
       case MessageType.HelloAck:
       case MessageType.SubscribeVolume:

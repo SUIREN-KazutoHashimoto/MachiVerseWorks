@@ -26,6 +26,7 @@
 - [`intersection-signal-control.md`](intersection-signal-control.md): intersection movement / conflict、priority / yield、fixed signal、queue、downstream blocking仕様
 - [`population-daily-activity.md`](population-daily-activity.md): Household / Person、Need / Activity、daily schedule、Trip Request生成仕様
 - [`pedestrian-simulation.md`](pedestrian-simulation.md): Road Network派生walking graph、route、fixed-tick歩行、crossing / occupancy仕様
+- [`railway-infrastructure.md`](railway-infrastructure.md): Track / connection / block / Station / Platform / Depotと3D railway topology仕様
 - [`headless-server-poc.md`](headless-server-poc.md): Headless Server / 3D subscription基盤仕様
 - [`web-client-poc.md`](web-client-poc.md): Web Client + Audio Client Foundationの3D基盤仕様
 - [`save-data.md`](save-data.md): versioned Save Data、checkpoint state、validation仕様

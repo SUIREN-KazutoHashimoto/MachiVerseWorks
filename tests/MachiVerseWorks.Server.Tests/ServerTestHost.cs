@@ -93,9 +93,23 @@ internal sealed class ServerTestHost : IAsyncDisposable
         if (!ProtocolFrameHeader.TryRead(frame, out var header, out var headerError))
             throw new InvalidOperationException($"Server returned an invalid protocol frame: {headerError}.");
 
-        var decoded = header.MessageType is MessageType.PopulationStatistics or MessageType.PersonDebug
-            ? PopulationProtocolCodec.TryDeserialize(frame, out var envelope, out var error)
-            : ProtocolCodec.TryDeserialize(frame, out envelope, out error);
+        ProtocolEnvelope? envelope;
+        ProtocolDecodeError error;
+        bool decoded;
+        if (header.MessageType is MessageType.PopulationStatistics or MessageType.PersonDebug)
+        {
+            decoded = PopulationProtocolCodec.TryDeserialize(frame, out envelope, out error);
+        }
+        else if (header.MessageType == MessageType.RailwayInfrastructureSnapshot)
+        {
+            decoded = RailwayInfrastructureProtocolCodec.TryDeserialize(frame, out var railway, out error);
+            envelope = decoded ? new ProtocolEnvelope(header.Version, railway) : null;
+        }
+        else
+        {
+            decoded = ProtocolCodec.TryDeserialize(frame, out envelope, out error);
+        }
+
         if (!decoded || envelope is null) throw new InvalidOperationException($"Server returned an invalid protocol frame: {error}.");
         return envelope;
     }

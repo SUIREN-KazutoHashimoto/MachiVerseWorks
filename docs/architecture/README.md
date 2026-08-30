@@ -24,6 +24,7 @@ MachiVerseWorks の技術アーキテクチャを管理します。
 - [`intersection-signal-control.md`](intersection-signal-control.md): movement conflict、entry arbitration、fixed signal、publish / Web debug boundary
 - [`population-daily-activity.md`](population-daily-activity.md): Person / Household state ownership、daily planner、Trip dispatch、Save / Protocol / Web境界
 - [`pedestrian-simulation.md`](pedestrian-simulation.md): derived walking graph、routing、tick、crossing / occupancy、Server / Web boundary
+- [`railway-infrastructure.md`](railway-infrastructure.md): Railway authoritative topology、Save Format 8、Protocol 2.6、static publish、Web 3D boundary
 - [`protocol.md`](protocol.md): Server / Web Client 間 binary protocol の versioning と wire layout
 - [`headless-server.md`](headless-server.md): Headless Server の lifecycle、WebSocket、command queue、snapshot publish
 - [`web-client.md`](web-client.md): Web Clientのconnection、EntityStore、subscription、rendering

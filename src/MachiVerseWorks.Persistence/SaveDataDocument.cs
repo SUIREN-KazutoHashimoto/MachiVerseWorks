@@ -40,6 +40,22 @@ internal sealed class SaveSimulationData
     public ulong? NextPersonId { get; init; }
     public SavePersonData?[]? Persons { get; init; }
     public ulong? NextTripRequestId { get; init; }
+    public ulong? NextTrackNodeId { get; init; }
+    public SaveTrackNodeData?[]? TrackNodes { get; init; }
+    public ulong? NextTrackSegmentId { get; init; }
+    public SaveTrackSegmentData?[]? TrackSegments { get; init; }
+    public ulong? NextTrackConnectionId { get; init; }
+    public SaveTrackConnectionData?[]? TrackConnections { get; init; }
+    public ulong? NextBlockSectionId { get; init; }
+    public SaveBlockSectionData?[]? BlockSections { get; init; }
+    public ulong? NextStationId { get; init; }
+    public SaveStationData?[]? Stations { get; init; }
+    public ulong? NextPlatformId { get; init; }
+    public SavePlatformData?[]? Platforms { get; init; }
+    public ulong? NextPlatformAccessPointId { get; init; }
+    public SavePlatformAccessPointData?[]? PlatformAccessPoints { get; init; }
+    public ulong? NextDepotId { get; init; }
+    public SaveDepotData?[]? Depots { get; init; }
 }
 
 internal sealed class SaveAgentData
@@ -219,4 +235,84 @@ internal sealed class SavePersonNeedData
     public byte? Kind { get; init; }
     public double? Satisfaction { get; init; }
     public double? DecayPerHour { get; init; }
+}
+
+internal sealed class SaveTrackNodeData
+{
+    public ulong? Id { get; init; }
+    public byte? Kind { get; init; }
+    public double? X { get; init; }
+    public double? Y { get; init; }
+    public double? Z { get; init; }
+}
+
+internal sealed class SaveTrackSegmentData
+{
+    public ulong? Id { get; init; }
+    public ulong? StartNodeId { get; init; }
+    public ulong? EndNodeId { get; init; }
+    public byte? Direction { get; init; }
+    public double? GaugeMeters { get; init; }
+    public double? SpeedLimitMetersPerSecond { get; init; }
+    public byte? Electrification { get; init; }
+    public byte? Usage { get; init; }
+}
+
+internal sealed class SaveTrackConnectionData
+{
+    public ulong? Id { get; init; }
+    public ulong? FromSegmentId { get; init; }
+    public ulong? ToSegmentId { get; init; }
+    public ulong? ViaNodeId { get; init; }
+}
+
+internal sealed class SaveBlockSectionData
+{
+    public ulong? Id { get; init; }
+    public ulong?[]? SegmentIds { get; init; }
+}
+
+internal sealed class SaveStationData
+{
+    public ulong? Id { get; init; }
+    public double? MinX { get; init; }
+    public double? MinY { get; init; }
+    public double? MinZ { get; init; }
+    public double? MaxX { get; init; }
+    public double? MaxY { get; init; }
+    public double? MaxZ { get; init; }
+}
+
+internal sealed class SavePlatformData
+{
+    public ulong? Id { get; init; }
+    public ulong? StationId { get; init; }
+    public ulong? TrackSegmentId { get; init; }
+    public double? StartSegmentOffset { get; init; }
+    public double? EndSegmentOffset { get; init; }
+    public double? MinX { get; init; }
+    public double? MinY { get; init; }
+    public double? MinZ { get; init; }
+    public double? MaxX { get; init; }
+    public double? MaxY { get; init; }
+    public double? MaxZ { get; init; }
+}
+
+internal sealed class SavePlatformAccessPointData
+{
+    public ulong? Id { get; init; }
+    public ulong? PlatformId { get; init; }
+    public ulong? RoadAccessPointId { get; init; }
+}
+
+internal sealed class SaveDepotData
+{
+    public ulong? Id { get; init; }
+    public double? MinX { get; init; }
+    public double? MinY { get; init; }
+    public double? MinZ { get; init; }
+    public double? MaxX { get; init; }
+    public double? MaxY { get; init; }
+    public double? MaxZ { get; init; }
+    public ulong?[]? TrackSegmentIds { get; init; }
 }
