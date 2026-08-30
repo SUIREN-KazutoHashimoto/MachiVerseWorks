@@ -153,8 +153,19 @@ internal sealed class RoadRouter
                     continue;
                 }
 
-                if (settled.Contains(connection.ToLaneId)) continue;
                 var candidate = known + ToCost(request.CostMetric, nextLane.LengthMeters, nextLane.Snapshot.SpeedLimitMetersPerSecond);
+                if (settled.Contains(connection.ToLaneId))
+                {
+                    if (distances.TryGetValue(connection.ToLaneId, out var settledCost)
+                        && candidate == settledCost
+                        && IsPreferredPredecessor(current, connection.Id, previous, connection.ToLaneId)
+                        && !WouldCreatePredecessorCycle(current, connection.ToLaneId, previous))
+                    {
+                        previous[connection.ToLaneId] = new RoutePredecessor(current, connection.Id);
+                    }
+                    continue;
+                }
+
                 if (!distances.TryGetValue(connection.ToLaneId, out var old)
                     || candidate < old
                     || (candidate == old && IsPreferredPredecessor(current, connection.Id, previous, connection.ToLaneId)))
@@ -321,6 +332,20 @@ internal sealed class RoadRouter
         if (!previous.TryGetValue(next, out var old)) return true;
         var connectionComparison = connection.Value.CompareTo(old.ConnectionId.Value);
         return connectionComparison < 0 || (connectionComparison == 0 && current.Value < old.FromLaneId.Value);
+    }
+
+    private static bool WouldCreatePredecessorCycle(
+        LaneId current,
+        LaneId next,
+        Dictionary<LaneId, RoutePredecessor> previous)
+    {
+        var cursor = current;
+        while (true)
+        {
+            if (cursor == next) return true;
+            if (!previous.TryGetValue(cursor, out var step)) return false;
+            cursor = step.FromLaneId;
+        }
     }
 
     private static bool IsPreferredGoal(LaneId current, LaneConnectionId connection, RouteGoalPredecessor? old)

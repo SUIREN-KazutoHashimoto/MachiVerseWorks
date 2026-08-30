@@ -54,7 +54,9 @@ priority queueのpriorityは`(cost, LaneId)`とする。
 
 同一Laneへ同一costで到達する候補は、`LaneConnectionId`、predecessor `LaneId`の順で比較する。goal候補も同じ規則で比較する。
 
-zero-length segmentを含んでもsettled Laneを再更新しないため、zero-cost cycleでpredecessor chainが循環しない。
+通常の正cost edgeではsettled Laneの最短costは確定しているため再展開しない。一方、長さ0のLaneを通るzero-cost edgeでは、Laneがsettleした後に同一costかつより優先度の高いpredecessor候補が到着し得る。この場合はdistanceを変えずpredecessorだけを更新し、outgoing edgeの再展開は行わない。edge costはLane geometry / speedだけで決まりpredecessorに依存しないため、下流の最短costは変化しない。
+
+settled Laneへの同一cost predecessor更新では、predecessor chainが循環する候補を拒否する。これによりzero-cost cycleを含むtopologyでもRoute再構築は必ずoriginへ到達するacyclic chainを維持する。
 
 ## 6. Result materialization
 
@@ -72,18 +74,11 @@ zero-length segmentを含んでもsettled Laneを再更新しないため、zero
 
 ## 7. Cache
 
-`RoadRouter`内部にdictionary + linked-list LRUを持ち、entry数と保持routeサイズの二重上限を設ける。
-
-- 最大1,024 entries
-- cache全体で最大100,000 Lane steps
-- 100,000 Lane stepsを超える単一routeはcacheしない
-- insert / replace後にどちらかの上限を超える間、LRU末尾からevictする
+`RoadRouter`内部にcapacity 1,024のdictionary + linked-list LRUを持つ。
 
 cache hit時はendpoint resolveとDijkstraを行わず、既存immutable `RouteResult`を返す。
 
 cache keyはunconstrained requestのOrigin / Destination各XYZの`double` bit patternとcost metricである。Road topologyはkeyへ埋め込まず、mutation時の全cache invalidationをgeneration boundaryとする。
-
-Lane step総数にも上限を設けることで、large graphの長距離Routeを多数保持したときにentry上限だけでは抑えられない`RouteResult`メモリ増幅を防ぐ。
 
 constraint付きrouteをcacheしないため、closure set hashingやcollision handlingをhot pathへ持ち込まない。
 
@@ -106,7 +101,6 @@ checkpoint restoreは新しい`SimulationWorld`とdirtyな`RoadRouter`を生成�
 - endpoint resolverはrebuild済み配列を直接走査し、routeごとのsortを行わない。
 - search missはDictionary / HashSet / PriorityQueueをroute単位で確保する基準実装とする。
 - cache hitはgraph snapshot、endpoint scan、search container allocationを行わない。
-- large route cacheはLane step総数上限で長寿命保持量を制御する。
 
 Phase 12 benchmarkではsmall / medium / large graphについてsearch missとcache hitを別々に測定し、探索時間とallocationの基準値を残す。
 
