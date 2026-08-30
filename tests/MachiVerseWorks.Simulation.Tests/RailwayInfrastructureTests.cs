@@ -45,6 +45,26 @@ public sealed class RailwayInfrastructureTests
     }
 
     [TestMethod]
+    public void ReferencedRoadAccessPointCannotBeRemovedOrMadeNonWalkable()
+    {
+        var world = new SimulationWorld();
+        RailwayInfrastructureFixtures.SeedDeterministic(world);
+        var accessId = world.CreateRailwayInfrastructureSnapshot().PlatformAccessPoints.Single().RoadAccessPointId;
+        Assert.IsTrue(world.TryGetRoadAccessPointSnapshot(accessId, out var access));
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => world.UpdateRoadAccessPoint(
+            access.Id,
+            access.SegmentId,
+            access.SegmentOffset,
+            access.BuildingId,
+            access.PoiId,
+            RoadAccessMode.Motor));
+        Assert.ThrowsExactly<InvalidOperationException>(() => world.RemoveRoadAccessPoint(access.Id));
+        Assert.IsTrue(world.TryGetRoadAccessPointSnapshot(accessId, out var unchanged));
+        Assert.IsTrue((unchanged.Mode & RoadAccessMode.Foot) != 0);
+    }
+
+    [TestMethod]
     public void CheckpointRoundTripPreservesRailwayStateAndNextIds()
     {
         var world = new SimulationWorld();
