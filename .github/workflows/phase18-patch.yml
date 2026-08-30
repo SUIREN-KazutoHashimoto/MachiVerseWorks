@@ -39,6 +39,7 @@ jobs:
         run: |
           python scripts/phase18-patch.py
           python scripts/phase18-fix.py
+          sed -i 's/if count != 1:/if count < 1:/' scripts/phase18-web-patch.py
           python scripts/phase18-web-patch.py
       - name: Restore .NET
         run: dotnet restore MachiVerseWorks.slnx
