@@ -21,6 +21,11 @@ internal sealed class RailwayOperationsStore
     private readonly TrackConnectionSnapshot[] _connections;
     private readonly Dictionary<BlockSectionId, TrainId> _blockOwners = [];
     private readonly Dictionary<PlatformId, TrainId> _platformOwners = [];
+    private ulong _nextFormationId = 1;
+    private ulong _nextRouteId = 1;
+    private ulong _nextTimetableId = 1;
+    private ulong _nextServiceId = 1;
+    private ulong _nextTrainId = 1;
 
     public RailwayOperationsStore(RailwayInfrastructureSnapshot infrastructure)
     {
@@ -46,11 +51,11 @@ internal sealed class RailwayOperationsStore
         _connections = infrastructure.Connections.OrderBy(static connection => connection.Id.Value).ToArray();
     }
 
-    public ulong NextFormationId { get; private set; } = 1;
-    public ulong NextRouteId { get; private set; } = 1;
-    public ulong NextTimetableId { get; private set; } = 1;
-    public ulong NextServiceId { get; private set; } = 1;
-    public ulong NextTrainId { get; private set; } = 1;
+    public ulong NextFormationId => _nextFormationId;
+    public ulong NextRouteId => _nextRouteId;
+    public ulong NextTimetableId => _nextTimetableId;
+    public ulong NextServiceId => _nextServiceId;
+    public ulong NextTrainId => _nextTrainId;
     public int FormationCount => _formations.Count;
     public int RouteCount => _routes.Count;
     public int TimetableCount => _timetables.Count;
@@ -64,7 +69,7 @@ internal sealed class RailwayOperationsStore
         ValidatePositiveFinite(maximumAccelerationMetersPerSecondSquared, nameof(maximumAccelerationMetersPerSecondSquared));
         ValidatePositiveFinite(serviceDecelerationMetersPerSecondSquared, nameof(serviceDecelerationMetersPerSecondSquared));
         if (capacity <= 0) throw new ArgumentOutOfRangeException(nameof(capacity), capacity, "Capacity must be greater than zero.");
-        var id = new TrainFormationId(AllocateId(ref NextFormationId));
+        var id = new TrainFormationId(AllocateId(ref _nextFormationId));
         _formations.Add(id, new TrainFormationSnapshot(id, lengthMeters, maximumSpeedMetersPerSecond, maximumAccelerationMetersPerSecondSquared, serviceDecelerationMetersPerSecondSquared, capacity));
         return id;
     }
@@ -72,7 +77,7 @@ internal sealed class RailwayOperationsStore
     public RailwayRouteId CreateRoute(IReadOnlyList<TrackSegmentId> trackSegmentIds)
     {
         ArgumentNullException.ThrowIfNull(trackSegmentIds);
-        var id = new RailwayRouteId(AllocateId(ref NextRouteId));
+        var id = new RailwayRouteId(AllocateId(ref _nextRouteId));
         var route = BuildRoute(id, trackSegmentIds);
         _routes.Add(id, route);
         return id;
@@ -95,7 +100,7 @@ internal sealed class RailwayOperationsStore
             copiedStops[index] = stop;
             previousDeparture = stop.PlannedDepartureTick;
         }
-        var id = new TimetableId(AllocateId(ref NextTimetableId));
+        var id = new TimetableId(AllocateId(ref _nextTimetableId));
         _timetables.Add(id, new TimetableSnapshot(id, copiedStops));
         return id;
     }
@@ -121,7 +126,7 @@ internal sealed class RailwayOperationsStore
             previousDistance = stopDistance;
         }
 
-        var id = new RailwayServiceId(AllocateId(ref NextServiceId));
+        var id = new RailwayServiceId(AllocateId(ref _nextServiceId));
         _services.Add(id, new ServiceState(id, formationId, routeId, timetableId, originDepotId, destinationDepotId, plannedStartTick, stopRouteDistances));
         return id;
     }
@@ -133,7 +138,7 @@ internal sealed class RailwayOperationsStore
         var route = _routes[service.RouteId];
         var formation = _formations[service.FormationId];
         var first = route.Steps[0];
-        var id = new TrainId(AllocateId(ref NextTrainId));
+        var id = new TrainId(AllocateId(ref _nextTrainId));
         var train = new TrainState(id, formation.Id, service.Id, route.Id, first.Start, first.Forward, service.OriginDepotId);
         _trains.Add(id, train);
         _trainOrder.Add(train);
@@ -199,9 +204,14 @@ internal sealed class RailwayOperationsStore
             _trainOrder.Add(train);
             if (train.CurrentBlockId is { } block && !_blockOwners.TryAdd(block, train.Id)) throw new InvalidOperationException("Saved railway operations contain a block ownership conflict.");
             if (train.AssignedPlatformId is { } assigned && !_platformOwners.TryAdd(assigned, train.Id)) throw new InvalidOperationException("Saved railway operations contain a platform ownership conflict.");
+            if (train.AssignedPlatformId is { } assignedPlatform && _services.TryGetValue(train.ServiceId, out var assignedService) && assignedService.NextStopIndex < _timetables[assignedService.TimetableId].Stops.Count)
+            {
+                var stop = _timetables[assignedService.TimetableId].Stops[assignedService.NextStopIndex];
+                if (TryGetPlatformRouteDistance(_routes[train.RouteId], assignedPlatform, stop.StationId, out var assignedDistance)) assignedService.StopRouteDistances[assignedService.NextStopIndex] = assignedDistance;
+            }
         }
         _trainOrder.Sort(static (left, right) => left.Id.Value.CompareTo(right.Id.Value));
-        NextFormationId = nextFormationId; NextRouteId = nextRouteId; NextTimetableId = nextTimetableId; NextServiceId = nextServiceId; NextTrainId = nextTrainId;
+        _nextFormationId = nextFormationId; _nextRouteId = nextRouteId; _nextTimetableId = nextTimetableId; _nextServiceId = nextServiceId; _nextTrainId = nextTrainId;
     }
 
     private void StepTrain(TrainState train, double deltaSeconds, ulong tickCount)
@@ -322,7 +332,7 @@ internal sealed class RailwayOperationsStore
         }
     }
 
-    private void ArriveAtStop(TrainState train, ServiceState service, TimetableStopSnapshot stop, ulong tickCount)
+    private static void ArriveAtStop(TrainState train, ServiceState service, TimetableStopSnapshot stop, ulong tickCount)
     {
         var arrivalDelay = tickCount > stop.PlannedArrivalTick ? tickCount - stop.PlannedArrivalTick : 0;
         if (arrivalDelay > service.DelayTicks) service.DelayTicks = arrivalDelay;
@@ -429,7 +439,7 @@ internal sealed class RailwayOperationsStore
         var copiedIds = segmentIds.ToArray();
         var segments = new TrackSegmentSnapshot[copiedIds.Length];
         for (var index = 0; index < copiedIds.Length; index++)
-            if (!_segments.TryGetValue(copiedIds[index], out segments[index]!)) throw new ArgumentException($"Track segment {copiedIds[index].Value} does not exist.", nameof(segmentIds));
+            if (!_segments.TryGetValue(copiedIds[index], out segments[index])) throw new ArgumentException($"Track segment {copiedIds[index].Value} does not exist.", nameof(segmentIds));
 
         var entryNodes = new TrackNodeId?[segments.Length];
         var exitNodes = new TrackNodeId?[segments.Length];
@@ -477,7 +487,7 @@ internal sealed class RailwayOperationsStore
             if (length <= 0d) throw new ArgumentException("Route contains a zero-length track segment.", nameof(segmentIds));
             var forward = new WorldVector(dx / length, dy / length, dz / length);
             _segmentBlocks.TryGetValue(segment.Id, out var block);
-            var blockId = block.Value == 0 ? null : block;
+            BlockSectionId? blockId = block.Value == 0 ? null : block;
             steps[index] = new RouteStep(segment, start, end, forward, length, cumulative, cumulative + length, startNode == segment.StartNodeId, blockId);
             cumulative += length;
         }
@@ -495,7 +505,7 @@ internal sealed class RailwayOperationsStore
                 return true;
             }
         }
-        connection = default!;
+        connection = default;
         return false;
     }
 
