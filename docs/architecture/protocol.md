@@ -1,16 +1,18 @@
 # Protocol Binary Layout
 
-MachiVerseWorks の Server / Web Client 間で使用するbinary protocolを定義する。Protocolはapplication `VERSION`とは独立してversioningし、current protocol versionは **2.2** とする。
+MachiVerseWorks の Server / Web Client 間で使用するbinary protocolを定義する。Protocolはapplication `VERSION`とは独立してversioningし、current protocol versionは **2.4** とする。
 
 ## Version compatibility
 
-`ProtocolVersion`は`major.minor`。breaking changeはmajorを上げる。2.0で3D wire contractを必須化し、2.1でRoad Network snapshot、2.2でPedestrian snapshotを追加した。
+`ProtocolVersion`は`major.minor`。breaking changeはmajorを上げる。2.0で3D wire contractを必須化し、2.1でRoad Network snapshot、2.2でPedestrian snapshot、2.3でVehicle snapshot、2.4でIntersection / Signal snapshotを追加した。
 
 同一majorではServer current以下のminorをClientが要求した場合に受理できる。negotiation成立時のversionはClientがHello frame headerで要求したversionそのものとし、Server connection state、`HelloAck` payload、以後のframe headerで同一値を使用する。
 
 - Protocol 2.0: Agent / 3D volume
 - Protocol 2.1: `RoadNetworkSnapshot`
 - Protocol 2.2: `PedestrianSpawn` / `PedestrianUpdate` / `PedestrianRemove`
+- Protocol 2.3: `VehicleSpawn` / `VehicleUpdate` / `VehicleRemove`
+- Protocol 2.4: `IntersectionControlSnapshot`
 
 Serverはnegotiated minorより新しいmessageを送らない。Client要求minorがServer currentより新しい場合、またはmajorが異なる場合はnegotiationを拒否する。
 
@@ -43,9 +45,13 @@ flagsは現在0のみを許可する。headerで宣言されたpayload lengthと
 | 300 | `PedestrianSpawn` | Server → Client | 2.2 |
 | 301 | `PedestrianUpdate` | Server → Client | 2.2 |
 | 302 | `PedestrianRemove` | Server → Client | 2.2 |
+| 400 | `VehicleSpawn` | Server → Client | 2.3 |
+| 401 | `VehicleUpdate` | Server → Client | 2.3 |
+| 402 | `VehicleRemove` | Server → Client | 2.3 |
+| 500 | `IntersectionControlSnapshot` | Server → Client | 2.4 |
 | 900 | `Error` | Server → Client | 2.0 |
 
-`SubscribeArea`は存在しない。Agent / Road / Pedestrianはいずれも同じ3D `SubscribeVolume`をinterest management境界として使用する。
+`SubscribeArea`は存在しない。Agent / Road / Pedestrian / Vehicle / Intersectionはいずれも同じ3D `SubscribeVolume`をinterest management境界として使用する。
 
 ## SubscribeVolume
 
@@ -166,7 +172,7 @@ C# serializer、C# decoder、Web decoderは同じ構造条件を要求する。
 
 Road topologyは現状1つの`RoadNetworkSnapshot` frameとして送るため、計算payloadが1 MiBを超えるsnapshotは単一frameへserializeしない。Server publisherは送信前にpayload長を計算し、そのsubscriptionだけへ`InvalidRequest` / detail code `roadSnapshotTooLarge`を返す。他ClientのpublisherやSimulation tickをfaultさせない。
 
-将来1 MiBを超えるRoad topologyをそのまま転送する必要が生じた場合は、chunk sequence / generationをProtocol revisionとして追加する。現2.1/2.2 contractで暗黙分割は行わない。
+将来1 MiBを超えるRoad topologyをそのまま転送する必要が生じた場合は、chunk sequence / generationをProtocol revisionとして追加する。現2.x contractで暗黙分割は行わない。
 
 ## PedestrianSpawn / PedestrianUpdate
 
@@ -204,9 +210,89 @@ Payloadは16 bytes。
 | 0 | 8 | `uint64` | Pedestrian ID |
 | 8 | 8 | `uint64` | simulation tick count |
 
+## VehicleSpawn / VehicleUpdate
+
+Protocol 2.3以上で使用し、両messageは同じ105-byte payloadを持つ。
+
+| Offset | Size | Type | Field |
+| ---: | ---: | --- | --- |
+| 0 | 8 | `uint64` | Vehicle ID |
+| 8 | 8 | `uint64` | Lane ID |
+| 16 | 8 | `double` | position X |
+| 24 | 8 | `double` | position Y |
+| 32 | 8 | `double` | position Z |
+| 40 | 8 | `double` | forward X |
+| 48 | 8 | `double` | forward Y |
+| 56 | 8 | `double` | forward Z |
+| 64 | 8 | `double` | speed m/s |
+| 72 | 8 | `double` | length m |
+| 80 | 8 | `double` | width m |
+| 88 | 8 | `double` | height m |
+| 96 | 1 | `uint8` | Vehicle movement state |
+| 97 | 8 | `uint64` | simulation tick count |
+
+Vehicle ID / Lane IDは0不可、position / forward / speed / dimensionsはfinite、forwardはnon-zero、speedは0以上、dimensionsは0より大きい値を要求する。
+
+Movement state numeric value:
+
+- 0: `Driving`
+- 1: `WaitingForTraffic`
+- 2: `ChangingLane`
+- 3: `Arrived`
+
+## VehicleRemove
+
+Payloadは16 bytes。
+
+| Offset | Size | Type | Field |
+| ---: | ---: | --- | --- |
+| 0 | 8 | `uint64` | Vehicle ID |
+| 8 | 8 | `uint64` | simulation tick count |
+
+## IntersectionControlSnapshot
+
+Protocol 2.4以上で使用する。1 frameはsubscription volume内の1 intersection controllerを表す。Payloadは31-byte controller headerと、0個以上の63-byte movement stateを連結する。
+
+payload lengthは `31 + movementCount*63` と完全一致しなければならない。
+
+### Controller header — 31 bytes
+
+| Offset | Size | Type | Field |
+| ---: | ---: | --- | --- |
+| 0 | 8 | `uint64` | simulation tick count |
+| 8 | 8 | `uint64` | intersection RoadNode ID |
+| 16 | 1 | `uint8` | IntersectionControlMode |
+| 17 | 2 | `uint16` | phase index |
+| 19 | 8 | `uint64` | phase tick |
+| 27 | 4 | `uint32` | movement count |
+
+### Movement state — 63 bytes
+
+| Offset | Size | Type | Field |
+| ---: | ---: | --- | --- |
+| 0 | 8 | `uint64` | IntersectionMovement ID |
+| 8 | 8 | `uint64` | LaneConnection ID |
+| 16 | 8 | `uint64` | from Lane ID |
+| 24 | 8 | `uint64` | to Lane ID |
+| 32 | 1 | `uint8` | TurnMovement |
+| 33 | 8 | `double` | stop-line X |
+| 41 | 8 | `double` | stop-line Y |
+| 49 | 8 | `double` | stop-line Z |
+| 57 | 1 | `uint8` | SignalIndication |
+| 58 | 4 | `uint32` | queue length |
+| 62 | 1 | `uint8` | entry granted this tick, 0 or 1 |
+
+`IntersectionControlMode`は0=`Unsignalized`、1=`FixedSignal`。`SignalIndication`は0=`Red`、1=`Yellow`、2=`Green`。
+
+Intersection node / movement / connection / Lane IDは0不可。stop-line XYZはfinite。enum値とgrant flagを定義済み範囲に制限する。
+
+可変長の2.4 controller payloadは`IntersectionControlProtocolCodec`でencode/decodeする。Server `ClientConnection`はこのmessageだけ専用codecへdispatchし、それ以外のmessageは共通`ProtocolCodec`を使用する。
+
 ## Snapshot tick semantics
 
-1回のServer publish cycleでAgent、Pedestrian、Road、remove metadataに付く`simulation tick count`は、同じauthoritative capture時点を表す。Client別のvolume filterはcapture後のimmutable read modelに対して行い、filter中にSimulation tickが進んでも同一publish batchのtick metadataは混在しない。
+1回のServer publish cycleでAgent、Pedestrian、Vehicle、Intersection、Road、remove metadataに付く`simulation tick count`は、同じauthoritative capture時点を表す。Client別のvolume filterはcapture後のimmutable read modelに対して行い、filter中にSimulation tickが進んでも同一publish batchのtick metadataは混在しない。
+
+Intersection controllerはRoadNode位置でsubscription filterされる。Vehicleはpositionでfilterされ、既知Vehicle IDとの差分からspawn/update/removeを生成する。
 
 ## Error / decode failure
 
