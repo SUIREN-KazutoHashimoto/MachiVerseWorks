@@ -35,14 +35,17 @@ internal sealed class VehicleStore
         topology.ValidateRoute(route);
         if (nextId == ulong.MaxValue) throw new OverflowException("Vehicle ID capacity has been exhausted.");
         var routeSteps = route.ToArray();
-        var id = new VehicleId(nextId++);
-        var state = CreateState(id, routeSteps, dimensions, performance, 0, 0d, initialSpeedMetersPerSecond, VehicleMovementState.Driving, topology);
+        var id = new VehicleId(nextId);
+        var firstLane = topology.GetLane(routeSteps[0].LaneId);
+        var boundedInitialSpeed = Math.Min(initialSpeedMetersPerSecond, Math.Min(performance.MaximumSpeedMetersPerSecond, firstLane.Snapshot.SpeedLimitMetersPerSecond));
+        var state = CreateState(id, routeSteps, dimensions, performance, 0, 0d, boundedInitialSpeed, VehicleMovementState.Driving, topology);
         var laneProgress = topology.GetLaneTravelProgress(state.CurrentStep.LaneId, state.SegmentOffset);
         if (!occupancy.CanOccupy(state.CurrentStep.LaneId, laneProgress, dimensions.LengthMeters, performance.MinimumGapMeters))
             throw new InvalidOperationException("Vehicle spawn position does not have a safe Lane gap.");
         vehicles.Add(id, state);
         orderedIds.Add(id);
         occupancy.Add(id, state.CurrentStep.LaneId, laneProgress, dimensions.LengthMeters, state.SpeedMetersPerSecond);
+        nextId++;
         return id;
     }
 
@@ -50,6 +53,7 @@ internal sealed class VehicleStore
     {
         if (!vehicles.Remove(id)) return false;
         if (!occupancy.Remove(id)) throw new InvalidOperationException($"Vehicle {id.Value} was missing from Lane occupancy during removal.");
+        if (!orderedIds.Remove(id)) throw new InvalidOperationException($"Vehicle {id.Value} was missing from deterministic iteration order during removal.");
         return true;
     }
 
@@ -65,7 +69,8 @@ internal sealed class VehicleStore
         var result = new List<VehicleSnapshot>();
         foreach (var id in orderedIds)
         {
-            if (!vehicles.TryGetValue(id, out var vehicle) || !volume.Contains(vehicle.Position)) continue;
+            var vehicle = vehicles[id];
+            if (!volume.Contains(vehicle.Position)) continue;
             result.Add(ToSnapshot(vehicle, tickCount));
         }
         return result.ToArray();
@@ -73,25 +78,19 @@ internal sealed class VehicleStore
 
     public VehicleSnapshot[] CreateAllSnapshots(ulong tickCount)
     {
-        var result = new VehicleSnapshot[vehicles.Count];
-        var offset = 0;
-        foreach (var id in orderedIds)
-        {
-            if (!vehicles.TryGetValue(id, out var vehicle)) continue;
-            result[offset++] = ToSnapshot(vehicle, tickCount);
-        }
-        if (offset == result.Length) return result;
-        Array.Resize(ref result, offset);
+        var result = new VehicleSnapshot[orderedIds.Count];
+        for (var index = 0; index < orderedIds.Count; index++) result[index] = ToSnapshot(vehicles[orderedIds[index]], tickCount);
         return result;
     }
 
     public void Step(double deltaSeconds, RoadTrafficTopology topology)
     {
         ArgumentNullException.ThrowIfNull(topology);
+        if (!double.IsFinite(deltaSeconds) || deltaSeconds <= 0d) throw new ArgumentOutOfRangeException(nameof(deltaSeconds));
         if (vehicles.Count == 0) return;
         foreach (var id in orderedIds)
         {
-            if (!vehicles.TryGetValue(id, out var vehicle)) continue;
+            var vehicle = vehicles[id];
             if (!occupancy.Remove(id)) throw new InvalidOperationException($"Vehicle {id.Value} was missing from Lane occupancy before update.");
             StepVehicle(vehicle, deltaSeconds, topology, occupancy);
             ValidateState(vehicle, topology);
@@ -127,11 +126,11 @@ internal sealed class VehicleStore
 
     public IReadOnlyList<SimulationVehicleCheckpoint> CreateCheckpoint()
     {
-        var result = new List<SimulationVehicleCheckpoint>(vehicles.Count);
-        foreach (var id in orderedIds)
+        var result = new SimulationVehicleCheckpoint[orderedIds.Count];
+        for (var index = 0; index < orderedIds.Count; index++)
         {
-            if (!vehicles.TryGetValue(id, out var vehicle)) continue;
-            result.Add(new SimulationVehicleCheckpoint(
+            var vehicle = vehicles[orderedIds[index]];
+            result[index] = new SimulationVehicleCheckpoint(
                 vehicle.Id,
                 vehicle.Dimensions,
                 vehicle.Performance,
@@ -139,9 +138,9 @@ internal sealed class VehicleStore
                 vehicle.RouteStepIndex,
                 vehicle.RouteProgressMeters,
                 vehicle.SpeedMetersPerSecond,
-                vehicle.State));
+                vehicle.State);
         }
-        return result.ToArray();
+        return result;
     }
 
     public void Restore(IReadOnlyList<SimulationVehicleCheckpoint> checkpoints, ulong restoredNextId, RoadTrafficTopology topology)
@@ -179,7 +178,7 @@ internal sealed class VehicleStore
 
     private static void StepVehicle(VehicleState vehicle, double deltaSeconds, RoadTrafficTopology topology, LaneOccupancyIndex occupancyIndex)
     {
-        if (vehicle.State == VehicleMovementState.Arrived) { UpdatePose(vehicle, topology); return; }
+        if (vehicle.State == VehicleMovementState.Arrived) { vehicle.SpeedMetersPerSecond = 0d; UpdatePose(vehicle, topology); return; }
         vehicle.State = VehicleMovementState.Driving;
         var lane = topology.GetLane(vehicle.CurrentStep.LaneId);
         var targetSpeed = Math.Min(vehicle.Performance.MaximumSpeedMetersPerSecond, lane.Snapshot.SpeedLimitMetersPerSecond);
@@ -205,9 +204,19 @@ internal sealed class VehicleStore
         }
 
         var moved = AdvanceRoute(vehicle, requestedAdvance, topology, occupancyIndex);
-        vehicle.SpeedMetersPerSecond = moved > 1e-9 ? speed : 0d;
-        if (vehicle.State == VehicleMovementState.Arrived) vehicle.SpeedMetersPerSecond = 0d;
-        else if (moved <= 1e-9) vehicle.State = VehicleMovementState.WaitingForTraffic;
+        if (vehicle.State == VehicleMovementState.Arrived || vehicle.State == VehicleMovementState.WaitingForTraffic)
+        {
+            vehicle.SpeedMetersPerSecond = 0d;
+        }
+        else if (moved <= 1e-9)
+        {
+            vehicle.SpeedMetersPerSecond = 0d;
+            vehicle.State = VehicleMovementState.WaitingForTraffic;
+        }
+        else
+        {
+            vehicle.SpeedMetersPerSecond = Math.Min(speed, moved / deltaSeconds);
+        }
         UpdatePose(vehicle, topology);
     }
 
@@ -235,8 +244,7 @@ internal sealed class VehicleStore
             }
 
             var next = vehicle.RouteSteps[vehicle.RouteStepIndex + 1];
-            var targetOffset = next.StartSegmentOffset;
-            var targetLaneProgress = topology.GetLaneTravelProgress(next.LaneId, targetOffset);
+            var targetLaneProgress = topology.GetLaneTravelProgress(next.LaneId, next.StartSegmentOffset);
             if (!occupancyIndex.CanOccupy(next.LaneId, targetLaneProgress, vehicle.Dimensions.LengthMeters, vehicle.Performance.MinimumGapMeters))
             {
                 vehicle.State = VehicleMovementState.WaitingForTraffic;
@@ -277,8 +285,12 @@ internal sealed class VehicleStore
         if (!double.IsFinite(routeProgressMeters) || routeProgressMeters < 0d || routeProgressMeters > step.DistanceMeters + 1e-9) throw new ArgumentOutOfRangeException(nameof(routeProgressMeters));
         if (!double.IsFinite(speedMetersPerSecond) || speedMetersPerSecond < 0d) throw new ArgumentOutOfRangeException(nameof(speedMetersPerSecond));
         if (!Enum.IsDefined(state)) throw new ArgumentOutOfRangeException(nameof(state));
-        if (state == VehicleMovementState.Arrived && (routeStepIndex != routeSteps.Length - 1 || Math.Abs(routeProgressMeters - step.DistanceMeters) > 1e-8))
-            throw new ArgumentException("An arrived Vehicle must be at the end of its final Route step.");
+        if (state == VehicleMovementState.Arrived)
+        {
+            if (routeStepIndex != routeSteps.Length - 1 || Math.Abs(routeProgressMeters - step.DistanceMeters) > 1e-8)
+                throw new ArgumentException("An arrived Vehicle must be at the end of its final Route step.");
+            if (speedMetersPerSecond > 1e-9) throw new ArgumentException("An arrived Vehicle must have zero speed.");
+        }
         var vehicle = new VehicleState(id, routeSteps, dimensions, performance, routeStepIndex, routeProgressMeters, speedMetersPerSecond, state);
         UpdatePose(vehicle, topology);
         return vehicle;
@@ -291,7 +303,7 @@ internal sealed class VehicleStore
         vehicle.SegmentOffset = topology.GetSegmentOffset(step, vehicle.RouteProgressMeters);
         vehicle.Position = topology.GetPosition(step.LaneId, vehicle.SegmentOffset);
         vehicle.Forward = lane.Forward;
-        vehicle.Velocity = vehicle.State == VehicleMovementState.Arrived
+        vehicle.Velocity = vehicle.State == VehicleMovementState.Arrived || vehicle.SpeedMetersPerSecond <= 0d
             ? default
             : new WorldVector(lane.Forward.X * vehicle.SpeedMetersPerSecond, lane.Forward.Y * vehicle.SpeedMetersPerSecond, lane.Forward.Z * vehicle.SpeedMetersPerSecond);
     }
@@ -311,6 +323,8 @@ internal sealed class VehicleStore
         if (directionDelta < -1e-12) throw new InvalidOperationException($"Vehicle {vehicle.Id.Value} Route travels against Lane direction.");
         if (!double.IsFinite(vehicle.SpeedMetersPerSecond) || vehicle.SpeedMetersPerSecond < 0d)
             throw new InvalidOperationException($"Vehicle {vehicle.Id.Value} has an invalid speed.");
+        if (vehicle.State == VehicleMovementState.Arrived && vehicle.SpeedMetersPerSecond > 1e-9)
+            throw new InvalidOperationException($"Vehicle {vehicle.Id.Value} is arrived but still moving.");
     }
 
     private static void ValidateDimensions(VehicleDimensions dimensions)
