@@ -12,5 +12,8 @@ public enum MessageType : ushort
     PedestrianSpawn = 300,
     PedestrianUpdate = 301,
     PedestrianRemove = 302,
+    VehicleSpawn = 400,
+    VehicleUpdate = 401,
+    VehicleRemove = 402,
     Error = 900,
 }
