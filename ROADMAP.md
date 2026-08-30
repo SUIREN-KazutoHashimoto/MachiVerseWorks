@@ -2,8 +2,8 @@
 
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 13 — Road Traffic Simulation（closeout作業中）  
-> **次の実装タスク:** P13-001 — Vehicle entity・stable ID・寸法・性能値・状態遷移を仕様化する
+> **現在:** Phase 17 — Railway Infrastructure（次）  
+> **次の実装タスク:** P17-001 — Railway Infrastructureの軸・接続・track gauge・方向・高度契約を仕様化する
 
 ## 全体の現在地
 
@@ -20,13 +20,13 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 8 | 保存・復元基盤 | ✅ 完了 |
 | 9 | 3D Simulation Foundation | ✅ 完了 |
 | 10 | Urban World Foundation | ✅ 完了 |
-| 11 | Road Network Foundation | ✅ 完了・develop統合済み |
+| 11 | Road Network Foundation | ✅ 完了 |
 | 12 | Routing Foundation | ✅ 完了 |
-| 13 | Road Traffic Simulation | 🟦 develop統合済み・closeout作業中 |
-| 14 | Intersection & Signal Control | 🟦 develop統合済み・Phase 13 closeout待ち |
-| 15 | Population & Daily Activity | 🟦 develop統合済み・Phase 14 closeout待ち |
-| 16 | Pedestrian Simulation | 🟦 develop統合済み・Phase 15 closeout待ち |
-| 17 | Railway Infrastructure | ⏳ 待機 |
+| 13 | Road Traffic Simulation | ✅ 完了 |
+| 14 | Intersection & Signal Control | ✅ 完了 |
+| 15 | Population & Daily Activity | ✅ 完了 |
+| 16 | Pedestrian Simulation | ✅ 完了 |
+| 17 | Railway Infrastructure | ⏭️ 次 |
 | 18 | Railway Operations | ⏳ 待機 |
 | 19 | Multimodal Transit | ⏳ 待機 |
 | 20 | Industry / Jobs / Economy | ⏳ 待機 |
@@ -37,7 +37,7 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 25 | Distribution & Compatibility | ⏳ 待機 |
 | 26 | Extension Platform & Localization | ⏳ 待機 |
 
-Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴として [`docs/archive/roadmap-through-phase9-plan.md`](docs/archive/roadmap-through-phase9-plan.md) に保存しています。Phase 9〜12の完了証跡はGit履歴と各Phaseのspecification / architecture / development docsを正本として参照します。
+Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴として [`docs/archive/roadmap-through-phase9-plan.md`](docs/archive/roadmap-through-phase9-plan.md) に保存しています。Phase 13〜16の正式closeout時点のTask状態と検証証跡は [`docs/archive/roadmap-phase13-through-phase16-closeout.md`](docs/archive/roadmap-phase13-through-phase16-closeout.md) に保存しています。
 
 ## ROADMAP 運用ルール
 
@@ -82,9 +82,9 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 
 ---
 
-## Phase 9〜12 — 完了済みFoundation
+## Phase 9〜16 — 完了済みFoundation / Simulation Domains
 
-Phase 9〜12は正式closeout済み。現行ROADMAPでは完了履歴の詳細Taskを繰り返さず、実装・仕様・benchmarkの正本へ参照を集約する。
+Phase 9〜16は正式closeout済み。現行ROADMAPでは完了履歴の詳細Taskを繰り返さず、実装・仕様・benchmarkの正本へ参照を集約する。
 
 | Phase | 主な正本 / 証跡 |
 | --- | --- |
@@ -92,8 +92,18 @@ Phase 9〜12は正式closeout済み。現行ROADMAPでは完了履歴の詳細Ta
 | Phase 10 — Urban World Foundation | [`docs/specifications/building-poi.md`](docs/specifications/building-poi.md) |
 | Phase 11 — Road Network Foundation | [`docs/specifications/road-network.md`](docs/specifications/road-network.md)、[`docs/development/road-network-benchmark.md`](docs/development/road-network-benchmark.md)、PR #47 |
 | Phase 12 — Routing Foundation | [`docs/specifications/routing.md`](docs/specifications/routing.md)、[`docs/development/routing-benchmark.md`](docs/development/routing-benchmark.md) |
+| Phase 13 — Road Traffic Simulation | [`docs/specifications/road-traffic.md`](docs/specifications/road-traffic.md)、[`docs/architecture/road-traffic.md`](docs/architecture/road-traffic.md)、[`docs/development/road-traffic-benchmark.md`](docs/development/road-traffic-benchmark.md) |
+| Phase 14 — Intersection & Signal Control | [`docs/specifications/intersection-signal-control.md`](docs/specifications/intersection-signal-control.md)、[`docs/development/phase14-intersection-benchmark.md`](docs/development/phase14-intersection-benchmark.md) |
+| Phase 15 — Population & Daily Activity | [`docs/specifications/population-daily-activity.md`](docs/specifications/population-daily-activity.md)、[`docs/architecture/population-daily-activity.md`](docs/architecture/population-daily-activity.md)、[`docs/development/population-benchmark.md`](docs/development/population-benchmark.md) |
+| Phase 16 — Pedestrian Simulation | [`docs/specifications/pedestrian-simulation.md`](docs/specifications/pedestrian-simulation.md)、[`docs/architecture/pedestrian-simulation.md`](docs/architecture/pedestrian-simulation.md)、[`docs/development/pedestrian-benchmark.md`](docs/development/pedestrian-benchmark.md) |
 
-Phase 10から後続へ委譲した項目は現在も次のPhaseを正本とする。
+### Phase 13〜16 closeout
+
+Phase 13の未完了だったP13-001 / P13-015 / P13-016 / P13-017を完了し、依存順にPhase 14→15→16の正式closeout待ちを解消した。詳細Taskと検証runは [`docs/archive/roadmap-phase13-through-phase16-closeout.md`](docs/archive/roadmap-phase13-through-phase16-closeout.md) を正本とする。
+
+Phase 13 benchmarkでは1,000 / 10,000 / 100,000 Vehicleを同一runnerで計測した。100,000 Vehicleのfull tick平均は155.8082msで30Hz realtime budgetを超えるため、性能保証とはせず、今後の最適化・回帰検知baselineとして明示的に保持する。
+
+Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを正本とする。
 
 | 項目 | 正本となるPhase / 境界 |
 | --- | --- |
@@ -106,167 +116,9 @@ Phase 10から後続へ委譲した項目は現在も次のPhaseを正本とす�
 
 ---
 
-## Phase 13 — Road Traffic Simulation（develop統合済み・closeout作業中）
-
-> **状態: 🟦 develop統合済み・closeout作業中**  
-> **依存:** Phase 12  
-> **統合:** PR #66、merge commit `813d45dfc8c6e3c063b5e6923aed0622b0caa27f`  
-> Vehicleの正本state、Road/Lane上の固定tick移動、occupancy / car-following、Save / Protocol / Serverは実装済み。Phase 14でWeb ClientのVehicle instance描画も追加された。一方、Phase 13単独の仕様文書・複数Vehicle完走E2E・1,000 / 10,000 / 100,000 Vehicle benchmark・docs closeoutが未完了のため、Phase全体は正式closeoutしない。
-
-- ⬜ **P13-001** — Vehicle entity・stable ID・寸法・性能値・状態遷移を仕様化する
-- ✅ **P13-002** — Vehicle storeとspawn / despawn lifecycleをSimulationへ追加する
-- ✅ **P13-003** — VehicleへRouteと現在Lane / progressを割り当てる状態モデルを実装する
-- ✅ **P13-004** — Lane geometryに沿った3D位置・向き・速度更新を固定tickで実装する
-- ✅ **P13-005** — 前走Vehicleとの距離を考慮する最小car-following modelを実装する
-- ✅ **P13-006** — Lane occupancy indexを実装し、前後Vehicle検索を全件走査なしで行う
-- ✅ **P13-007** — Routeに必要なLane変更を安全に実行する最小lane-change ruleを実装する
-- ✅ **P13-008** — Lane終端で次Laneへ進むtransitionとRoute completionを実装する
-- ✅ **P13-009** — 衝突・逆走・Lane外progressなどのtraffic invariantを検証する
-- ✅ **P13-010** — Vehicle stateをcheckpoint / Save Dataへ含め、継続実行のdeterminismを確認する
-- ✅ **P13-011** — Vehicle spawn/update/removeをProtocolへ追加する
-- ✅ **P13-012** — Serverがsubscription volume内Vehicleだけを配信する
-- ✅ **P13-013** — Web ClientでVehicleをinstance描画し、Lane方向と補間を反映する
-- ✅ **P13-014** — traffic density / average speed / queue lengthの基礎metricsを計測可能にする
-- ⬜ **P13-015** — 複数VehicleがRouteを完走する実Server→Browser E2Eを追加する
-- ⬜ **P13-016** — 1,000 / 10,000 / 100,000 Vehicle級のtick・occupancy・snapshot benchmarkを記録する
-- ⬜ **P13-017** — Road Trafficのspecification / architecture / ROADMAPを同期する
-
-### Phase 13 implementation evidence / closeout gap
-
-- `VehicleId` / `VehicleDimensions` / `VehiclePerformance` / `VehicleMovementState` / `VehicleSnapshot`を導入し、Vehicleをstable ID付きのSimulation正本stateとして保持する。
-- `LaneOccupancyIndex`を使用し、前後Vehicle検索とtraffic progressionを全Vehicle全件比較へ依存させない。
-- Route/Lane progress、3D pose、car-following、lane transition、route completion、traffic invariant、traffic metricsをSimulationへ実装済み。
-- Vehicle stateはcheckpointとSave format 6へ保存され、Protocol 2.3のspawn/update/removeとServer subscription配信へ接続済み。
-- Phase 14実装でWeb ClientのVehicle instance描画・補間が追加されたため、P13-013は後続Phaseの統合によって完了した。
-- 現在のrepositoryにはPhase 13専用のRoad Traffic specification / architecture、`run-phase13-e2e.sh`相当の完走E2E、Vehicle 1,000 / 10,000 / 100,000 benchmarkが存在しないため、P13-001 / P13-015 / P13-016 / P13-017を残件とする。
-
-### Phase 13 完了条件
-
-- VehicleがRouteに沿ってLaneを移動し、前走車とLane occupancyを考慮して安全に進行できる。
-- Vehicle stateを保存復元し、ServerからBrowserへ配信・補間描画できる。
-- 大規模Vehicle数の基準性能が記録されている。**P13-016が未完了のため現在未達。**
-- Phase単独のspecification / architecture / E2E証跡をcloseoutできる。**P13-001 / P13-015 / P13-017が未完了。**
-
----
-
-## Phase 14 — Intersection & Signal Control（develop統合済み・Phase 13 closeout待ち）
-
-> **状態: 🟦 develop統合済み・Phase 13 closeout待ち**  
-> **依存:** Phase 13  
-> **統合:** PR #67、merge commit `36dbf8a380aaa3c2403aba73ac6d01a17447400b`  
-> Phase 14のTask実装・検証・docs同期は完了している。依存するPhase 13が正式closeout前のため、Phase 14全体は依存順に従ってcloseout待ちとする。
-
-- ✅ **P14-001** — intersection movementとconflict relationの正本契約を仕様化する
-- ✅ **P14-002** — Lane connectionから交差点movementを構築・検証する
-- ✅ **P14-003** — 交差点進入待ちqueueとstop line状態を実装する
-- ✅ **P14-004** — 無信号交差点の最小priority / yield ruleを実装する
-- ✅ **P14-005** — Signal / Phase / Movement permissionのデータモデルを実装する
-- ✅ **P14-006** — 固定cycleのsignal controllerを固定tickで実装する
-- ✅ **P14-007** — red / yellow / greenに応じたVehicle停止・進入判断を実装する
-- ✅ **P14-008** — downstream詰まり時にintersection内へ進入しないblocking ruleを実装する
-- ✅ **P14-009** — signal controller stateをcheckpoint / Save Dataへ含める
-- ✅ **P14-010** — Signal stateをProtocol / ServerからClientへ配信する
-- ✅ **P14-011** — Web Clientで信号現示・stop line・queueをdebug可視化する
-- ✅ **P14-012** — 複数交差点・右左折・高負荷queueのdeterministic regression testを追加する
-- ✅ **P14-013** — 信号付きRoad Trafficを実Server→Browserで検証するE2Eを追加する
-- ✅ **P14-014** — intersection throughput / queue処理のbenchmarkを記録する
-- ✅ **P14-015** — Intersection / Signalのspecification / architecture / ROADMAPを同期する
-
-### Phase 14 implementation evidence
-
-- Intersection movement / conflict、queue / stop line、無信号priority / yield、Signal / Phase / permission、fixed-cycle controllerをSimulation正本stateとして実装した。
-- red / yellow / green、downstream blocking、deterministic entry arbitrationをRoad Trafficへ接続した。
-- signal controller stateをcheckpoint / Save Dataへ含め、Protocol 2.4 / Server / Webへ配信する。
-- Web ClientはVehicle instancingに加えてsignal indication、stop line、queueをdebug表示する。
-- `phase14-intersection-control.yml`、`phase14-e2e.yml`、`phase14-benchmark.yml`でregression / 実Server→Browser E2E / benchmarkを独立検証できる。
-- [`docs/specifications/intersection-signal-control.md`](docs/specifications/intersection-signal-control.md)と対応architecture docsを正本として同期済み。
-
-### Phase 14 完了条件
-
-- Vehicleが交差点競合と信号現示を無視して侵入しない。
-- queue・signal stateを保存復元・配信・可視化できる。
-- 交差点処理の性能を独立benchmarkで追跡できる。
-- **Task自体は達成済みだが、Phase 13正式closeoutまでPhase 14の正式closeoutを保留する。**
-
----
-
-## Phase 15 — Population & Daily Activity（develop統合済み・Phase 14 closeout待ち）
-
-> **状態: 🟦 develop統合済み・Phase 14 closeout待ち**  
-> **依存:** Phase 10 / 14  
-> **統合:** PR #68、merge commit `36502ce493a63e7e7261df2480fdd20e7acb0427`  
-> Person / Household / Need / Activity / daily schedule / planner / Trip Request、Road Traffic・Pedestrianへのdispatch、arrival state machine、Save / statistics / Web debug / integration test / benchmark / docsは実装済み。Phase 14が依存closeout待ちのため、Phase 15全体も正式closeoutを保留する。
-
-- ✅ **P15-001** — Person / Household / residenceのstable IDと責務境界を仕様化する
-- ✅ **P15-002** — HouseholdとPersonの最小demographic stateを実装する
-- ✅ **P15-003** — PersonをBuilding / POIの居住・活動場所へ関連付ける契約を実装する
-- ✅ **P15-004** — Need / Activity種別と優先度・満足度の最小モデルを実装する
-- ✅ **P15-005** — 時刻に基づくdaily scheduleとactivity windowを実装する
-- ✅ **P15-006** — schedule / needsから次のactivity destinationを決定するplannerを実装する
-- ✅ **P15-007** — activity間移動を表すTrip Requestを移動手段から独立した契約として実装する
-- ✅ **P15-008** — 自家用Vehicleを利用可能なPersonのTrip RequestをRoad Trafficへ接続する
-- ✅ **P15-009** — 到着・activity開始・終了・次Trip生成までのstate machineを実装する
-- ✅ **P15-010** — Person / Household / schedule / activity stateをcheckpoint / Save Dataへ含める
-- ✅ **P15-011** — Populationの集計snapshot / statistics配信契約を追加する
-- ✅ **P15-012** — Web Clientで選択Personの居住地・目的地・現在activityをdebug表示する
-- ✅ **P15-013** — 1日分のscheduleから複数Tripが生成・完了するdeterministic integration testを追加する
-- ✅ **P15-014** — 1,000 / 10,000 / 100,000 Person級のplanner / tick / memory benchmarkを記録する
-- ✅ **P15-015** — Population / Daily Activityのspecification / architecture / ROADMAPを同期する
-
-### Phase 15 implementation evidence
-
-- `PopulationStore`とstable `HouseholdId` / `PersonId` / `TripRequestId`を導入し、Populationのauthoritative stateをSimulation Coreへ保持する。
-- daily schedule / Need / ActivityからTrip Requestを生成し、private Vehicleが利用可能ならRoad Trafficへ、Motor routeが成立しない場合を含む徒歩TripはPedestrianへdispatchする。
-- Walking / Driving entityの到着を観測してPersonのlocation / activityを更新し、次activity / Tripへ進むstate machineを実装した。
-- Population stateをcheckpoint / Save format 7へ保存し、statisticsと選択Person debug stateをServer / Webへ配信する。
-- deterministic integration testと1,000 / 10,000 / 100,000 Person benchmark runner / workflowを追加した。
-- [`docs/specifications/population-daily-activity.md`](docs/specifications/population-daily-activity.md)と[`docs/architecture/population-daily-activity.md`](docs/architecture/population-daily-activity.md)を正本として同期済み。
-- PopulationからFoot/Pedestrianへdispatchする接続により、Phase 16のP16-009も完了した。
-
-### Phase 15 完了条件
-
-- Personが住居と日常scheduleを持ち、Simulation時刻からTrip需要を生成できる。
-- Trip生成が特定の交通mode実装へ密結合していない。
-- Population stateを保存し、継続実行してもscheduleと活動状態が破綻しない。
-- **Task自体は達成済みだが、Phase 14正式closeoutまでPhase 15の正式closeoutを保留する。**
-
----
-
-## Phase 16 — Pedestrian Simulation（develop統合済み・Phase 15 closeout待ち）
-
-> **状態: 🟦 develop統合済み・Phase 15 closeout待ち**  
-> **依存:** Phase 12 / 15  
-> **統合:** PR #61、merge commit `8fd6f2ef866464cc6051111ef343de11948a1eaf`  
-> 徒歩network・Pedestrian entity・保存・Protocol/Server/Web・E2E/benchmarkは先行実装されdevelopへ統合済み。PR #68でPopulation由来Trip Requestとの接続も実装され、P16-009を含む全Taskは完了した。Phase 15が依存closeout待ちのため、Phase 16全体の正式closeoutのみ保留する。
-
-- ✅ **P16-001** — pedestrian network / sidewalk / crossingの正本契約を仕様化する
-- ✅ **P16-002** — Road Networkから歩行可能edgeとcrossingを構築する境界を実装する
-- ✅ **P16-003** — Building / POI access pointをpedestrian networkへ接続する
-- ✅ **P16-004** — 徒歩専用routingとRoute resultを実装する
-- ✅ **P16-005** — Pedestrian entity・stable ID・歩行速度・route progressを実装する
-- ✅ **P16-006** — sidewalk geometryに沿う3D歩行更新を固定tickで実装する
-- ✅ **P16-007** — crossing permission seamを実装し、横断可否で待機/再開できるようにする
-- ✅ **P16-008** — 最小の歩行occupancy制約を実装し、同一edge位置の競合を抑制する
-- ✅ **P16-009** — 徒歩TripをPopulationのTrip Requestへ接続する
-- ✅ **P16-010** — Pedestrian stateとcrossing permissionをcheckpoint / Save Dataへ含める
-- ✅ **P16-011** — PedestrianをProtocol / Serverでsubscription配信する
-- ✅ **P16-012** — Web ClientでPedestrianをinstance描画・補間する
-- ✅ **P16-013** — Building間徒歩Tripを実Server→Browserで検証するE2Eを追加する
-- ✅ **P16-014** — 1,000 / 10,000 Pedestrianのtick・routing・occupancy benchmarkを記録する
-- ✅ **P16-015** — Pedestrianのspecification / architecture / ROADMAPを同期する
-
-### Phase 16 完了条件
-
-- Populationが生成するTrip Requestから徒歩Tripを開始できる。
-- Building / POI間を徒歩Routeで移動し、crossing permissionとoccupancyを考慮できる。
-- Pedestrian stateを保存・subscription配信・Browser描画でき、多数Pedestrianで全件相互比較に依存しない。
-- **Task自体は達成済みだが、Phase 15正式closeoutまでPhase 16の正式closeoutを保留する。**
-
----
-
 ## Phase 17 — Railway Infrastructure
 
-> **状態: ⬜ 未着手**  
+> **状態: ⬜ 未着手（次）**  
 > **依存:** Phase 10 / 11 / 16  
 > 線路・分岐・block・駅・ホーム・車庫を、列車運行が利用できる3D railway topologyとして確立する。
 

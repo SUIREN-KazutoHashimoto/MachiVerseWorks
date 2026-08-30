@@ -22,6 +22,7 @@
 - [`building-poi.md`](building-poi.md): Building / POIのstable ID、3D state、参照整合性仕様
 - [`road-network.md`](road-network.md): Road / Lane / access topology仕様
 - [`routing.md`](routing.md): Road / Lane由来の3D routing、cost、constraint、determinism、cache仕様
+- [`road-traffic.md`](road-traffic.md): Vehicle state、Lane occupancy、car-following、Route progress、Save / publish仕様
 - [`intersection-signal-control.md`](intersection-signal-control.md): intersection movement / conflict、priority / yield、fixed signal、queue、downstream blocking仕様
 - [`population-daily-activity.md`](population-daily-activity.md): Household / Person、Need / Activity、daily schedule、Trip Request生成仕様
 - [`pedestrian-simulation.md`](pedestrian-simulation.md): Road Network派生walking graph、route、fixed-tick歩行、crossing / occupancy仕様
