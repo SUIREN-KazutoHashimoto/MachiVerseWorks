@@ -62,8 +62,8 @@ internal sealed class WebSocketSessionHandler(ClientConnectionRegistry connectio
                 await CloseSafelyAsync(connection.Socket, WebSocketCloseStatus.PolicyViolation, "Unsupported protocol version.", cancellationToken);
                 return false;
             }
-            connection.CompleteHandshake(negotiatedVersion);
             await connection.SendAsync(new HelloAckMessage(negotiatedVersion, checked((ushort)simulation.TickRate)), negotiatedVersion, cancellationToken);
+            connection.CompleteHandshake(negotiatedVersion);
             return true;
         }
 
