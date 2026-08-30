@@ -158,7 +158,7 @@ public sealed partial class SimulationWorld
             checkpoint.NextPersonId,
             checkpoint.NextTripRequestId);
         world._multimodalTransit.Restore(checkpoint.MultimodalTransit);
-        world.ValidateMultimodalTransitCheckpointReferences(checkpoint);
+        ValidateMultimodalTransitCheckpointReferences(checkpoint);
         return world;
     }
 
