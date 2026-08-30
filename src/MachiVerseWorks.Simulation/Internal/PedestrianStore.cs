@@ -69,12 +69,12 @@ internal sealed class PedestrianStore
         {
             if (pedestrian.State == PedestrianMovementState.Arrived || pedestrian.Route.Legs.Count == 0) continue;
             var oldKey = GetOccupancyKey(pedestrian.CurrentLeg, pedestrian.ProgressMeters);
-            if (occupancy.TryGetValue(oldKey, out var owner) && owner == pedestrian.Id) occupancy.Remove(oldKey);
+            if (occupancy.TryGetValue(oldKey, out var oldOwner) && oldOwner == pedestrian.Id) occupancy.Remove(oldKey);
             StepPedestrian(pedestrian, deltaSeconds, network, occupancy);
             if (pedestrian.State != PedestrianMovementState.Arrived)
             {
                 var newKey = GetOccupancyKey(pedestrian.CurrentLeg, pedestrian.ProgressMeters);
-                if (!occupancy.TryGetValue(newKey, out var owner) || owner == pedestrian.Id || owner.Value > pedestrian.Id.Value) occupancy[newKey] = pedestrian.Id;
+                if (!occupancy.TryGetValue(newKey, out var newOwner) || newOwner == pedestrian.Id || newOwner.Value > pedestrian.Id.Value) occupancy[newKey] = pedestrian.Id;
             }
         }
     }
