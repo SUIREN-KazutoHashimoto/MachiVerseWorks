@@ -1,13 +1,11 @@
-name: Phase 18 Integration Patch
+name: Phase 18 Finalize
 
 on:
   push:
     branches:
       - feature/phase18-railway-operations
     paths:
-      - scripts/phase18-patch.py
-      - scripts/phase18-fix.py
-      - scripts/phase18-web-patch.py
+      - scripts/phase18-finalize.py
       - .github/workflows/phase18-patch.yml
   workflow_dispatch:
 
@@ -15,32 +13,33 @@ permissions:
   contents: write
 
 concurrency:
-  group: phase18-integration-patch
+  group: phase18-finalize
   cancel-in-progress: true
 
 jobs:
-  patch:
+  finalize:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
+      - name: Checkout
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-dotnet@v6
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
-      - uses: actions/setup-node@v7
+      - name: Setup Node
+        uses: actions/setup-node@v7
         with:
           node-version-file: src/web/.node-version
           cache: npm
           cache-dependency-path: src/web/package-lock.json
-      - name: Apply patch
-        run: |
-          python scripts/phase18-patch.py
-          python scripts/phase18-fix.py
-          sed -i 's/if count != 1:/if count < 1:/' scripts/phase18-web-patch.py
-          python scripts/phase18-web-patch.py
+      - name: Apply Phase 18 closeout
+        run: python scripts/phase18-finalize.py
+      - name: Check whitespace
+        run: git diff --check
       - name: Restore .NET
         run: dotnet restore MachiVerseWorks.slnx
       - name: Build .NET
@@ -53,16 +52,12 @@ jobs:
           npm --prefix src/web run lint
           npm --prefix src/web test
           npm --prefix src/web run build
-      - name: Commit integrated changes
+      - name: Commit closeout
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --quiet; then
-            echo 'No generated changes.'
-            exit 0
-          fi
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
-          git commit -m 'feat: integrate phase 18 railway operations'
+          git commit -m 'docs: close out phase 18 railway operations'
           git push origin HEAD:feature/phase18-railway-operations
