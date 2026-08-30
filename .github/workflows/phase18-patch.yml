@@ -6,6 +6,7 @@ on:
       - feature/phase18-railway-operations
     paths:
       - scripts/phase18-patch.py
+      - scripts/phase18-fix.py
       - .github/workflows/phase18-patch.yml
   workflow_dispatch:
 
@@ -34,7 +35,9 @@ jobs:
           cache: npm
           cache-dependency-path: src/web/package-lock.json
       - name: Apply patch
-        run: python scripts/phase18-patch.py
+        run: |
+          python scripts/phase18-patch.py
+          python scripts/phase18-fix.py
       - name: Restore .NET
         run: dotnet restore MachiVerseWorks.slnx
       - name: Build .NET
