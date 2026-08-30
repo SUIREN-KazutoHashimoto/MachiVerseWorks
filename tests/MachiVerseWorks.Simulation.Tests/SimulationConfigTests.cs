@@ -29,5 +29,16 @@ public sealed class SimulationConfigTests
     public void InvalidTickRateIsRejected()
     {
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new SimulationConfig(tickRate: 0));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new SimulationConfig(tickRate: SimulationConfig.MaximumTickRate + 1));
+    }
+
+    [TestMethod]
+    public void MaximumTickRateStillAdvancesElapsedTimeEveryTick()
+    {
+        var world = new SimulationWorld(new SimulationConfig(tickRate: SimulationConfig.MaximumTickRate));
+
+        world.Step();
+
+        Assert.AreEqual(1L, world.Time.Elapsed.Ticks);
     }
 }

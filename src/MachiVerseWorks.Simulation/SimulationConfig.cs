@@ -3,6 +3,7 @@ namespace MachiVerseWorks.Simulation;
 public sealed class SimulationConfig
 {
     public const int DefaultTickRate = 30;
+    public const int MaximumTickRate = (int)TimeSpan.TicksPerSecond;
     public const double DefaultSpatialCellSize = 64d;
 
     public SimulationConfig(
@@ -10,9 +11,12 @@ public sealed class SimulationConfig
         ulong seed = 1,
         double spatialCellSize = DefaultSpatialCellSize)
     {
-        if (tickRate <= 0)
+        if (tickRate is <= 0 or > MaximumTickRate)
         {
-            throw new ArgumentOutOfRangeException(nameof(tickRate), tickRate, "Tick rate must be greater than zero.");
+            throw new ArgumentOutOfRangeException(
+                nameof(tickRate),
+                tickRate,
+                $"Tick rate must be between 1 and {MaximumTickRate}.");
         }
 
         if (!double.IsFinite(spatialCellSize) || spatialCellSize <= 0d)
@@ -36,5 +40,5 @@ public sealed class SimulationConfig
 
     public double TickDurationSeconds => 1d / TickRate;
 
-    public TimeSpan TickDuration => TimeSpan.FromSeconds(TickDurationSeconds);
+    public TimeSpan TickDuration => TimeSpan.FromTicks(SimulationTime.CalculateElapsedTicks(1, TickRate));
 }
