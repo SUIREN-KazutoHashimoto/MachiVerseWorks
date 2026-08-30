@@ -33,6 +33,8 @@ internal sealed class SaveSimulationData
     public ulong? NextPedestrianId { get; init; }
     public SavePedestrianData?[]? Pedestrians { get; init; }
     public SavePedestrianCrossingData?[]? PedestrianCrossings { get; init; }
+    public ulong? NextVehicleId { get; init; }
+    public SaveVehicleData?[]? Vehicles { get; init; }
 }
 
 internal sealed class SaveAgentData
@@ -134,4 +136,33 @@ internal sealed class SavePedestrianCrossingData
 {
     public ulong? Id { get; init; }
     public bool? IsOpen { get; init; }
+}
+
+internal sealed class SaveVehicleData
+{
+    public ulong? Id { get; init; }
+    public double? LengthMeters { get; init; }
+    public double? WidthMeters { get; init; }
+    public double? HeightMeters { get; init; }
+    public double? MaximumSpeedMetersPerSecond { get; init; }
+    public double? MaximumAccelerationMetersPerSecondSquared { get; init; }
+    public double? ComfortableDecelerationMetersPerSecondSquared { get; init; }
+    public double? MinimumGapMeters { get; init; }
+    public double? TimeHeadwaySeconds { get; init; }
+    public SaveVehicleRouteStepData?[]? RouteSteps { get; init; }
+    public int? RouteStepIndex { get; init; }
+    public double? RouteProgressMeters { get; init; }
+    public double? SpeedMetersPerSecond { get; init; }
+    public byte? State { get; init; }
+}
+
+internal sealed class SaveVehicleRouteStepData
+{
+    public ulong? LaneId { get; init; }
+    public ulong? SegmentId { get; init; }
+    public double? StartSegmentOffset { get; init; }
+    public double? EndSegmentOffset { get; init; }
+    public double? DistanceMeters { get; init; }
+    public double? EstimatedTravelTimeSeconds { get; init; }
+    public required ulong? ExitConnectionId { get; init; }
 }
