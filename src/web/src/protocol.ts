@@ -1,7 +1,14 @@
 export const PROTOCOL_MAGIC = 0x5057564d;
 export const PROTOCOL_HEADER_SIZE = 16;
 export const PROTOCOL_MAX_PAYLOAD_LENGTH = 1_048_576;
-export const CURRENT_PROTOCOL_VERSION = Object.freeze({ major: 2, minor: 0 });
+export const CURRENT_PROTOCOL_VERSION = Object.freeze({ major: 2, minor: 1 });
+
+const ROAD_HEADER_LENGTH = 28;
+const ROAD_NODE_LENGTH = 33;
+const ROAD_SEGMENT_LENGTH = 25;
+const LANE_LENGTH = 35;
+const LANE_CONNECTION_LENGTH = 33;
+const ROAD_ACCESS_POINT_LENGTH = 41;
 
 export enum MessageType {
   Hello = 1,
@@ -10,6 +17,7 @@ export enum MessageType {
   AgentSpawn = 100,
   AgentUpdate = 101,
   AgentRemove = 102,
+  RoadNetworkSnapshot = 200,
   Error = 900,
 }
 
@@ -22,6 +30,12 @@ export enum ProtocolErrorCode {
   InternalServerError = 1000,
 }
 
+export enum RoadNodeKind { Endpoint = 0, Intersection = 1 }
+export enum RoadKind { Local = 0, Collector = 1, Arterial = 2, Highway = 3, Service = 4 }
+export enum LaneDirection { Forward = 0, Reverse = 1 }
+export enum TurnMovement { Unspecified = 0, Straight = 1, Left = 2, Right = 3, UTurn = 4 }
+export enum RoadAccessMode { None = 0, Motor = 1, Foot = 2 }
+
 export interface ProtocolVersion { readonly major: number; readonly minor: number; }
 export interface WorldVolume { readonly minX: number; readonly minY: number; readonly minZ: number; readonly maxX: number; readonly maxY: number; readonly maxZ: number; }
 export interface ProtocolErrorParameter { readonly key: string; readonly value: string; }
@@ -31,7 +45,13 @@ export interface SubscribeVolumeMessage extends WorldVolume { readonly type: Mes
 export interface AgentStateMessage { readonly type: MessageType.AgentSpawn | MessageType.AgentUpdate; readonly agentId: bigint; readonly x: number; readonly y: number; readonly z: number; readonly velocityX: number; readonly velocityY: number; readonly velocityZ: number; readonly tickCount: bigint; }
 export interface AgentRemoveMessage { readonly type: MessageType.AgentRemove; readonly agentId: bigint; readonly tickCount: bigint; }
 export interface ProtocolErrorMessage { readonly type: MessageType.Error; readonly code: ProtocolErrorCode; readonly parameters: readonly ProtocolErrorParameter[]; }
-export type ProtocolMessage = HelloMessage | HelloAckMessage | SubscribeVolumeMessage | AgentStateMessage | AgentRemoveMessage | ProtocolErrorMessage;
+export interface RoadNode { readonly id: bigint; readonly kind: RoadNodeKind; readonly x: number; readonly y: number; readonly z: number; }
+export interface RoadSegment { readonly id: bigint; readonly kind: RoadKind; readonly startNodeId: bigint; readonly endNodeId: bigint; }
+export interface Lane { readonly id: bigint; readonly segmentId: bigint; readonly direction: LaneDirection; readonly order: number; readonly widthMeters: number; readonly speedLimitMetersPerSecond: number; }
+export interface LaneConnection { readonly id: bigint; readonly fromLaneId: bigint; readonly toLaneId: bigint; readonly viaNodeId: bigint; readonly movement: TurnMovement; }
+export interface RoadAccessPoint { readonly id: bigint; readonly segmentId: bigint; readonly segmentOffset: number; readonly buildingId: bigint | null; readonly poiId: bigint | null; readonly mode: RoadAccessMode; }
+export interface RoadNetworkSnapshotMessage { readonly type: MessageType.RoadNetworkSnapshot; readonly tickCount: bigint; readonly nodes: readonly RoadNode[]; readonly segments: readonly RoadSegment[]; readonly lanes: readonly Lane[]; readonly connections: readonly LaneConnection[]; readonly accessPoints: readonly RoadAccessPoint[]; }
+export type ProtocolMessage = HelloMessage | HelloAckMessage | SubscribeVolumeMessage | AgentStateMessage | AgentRemoveMessage | RoadNetworkSnapshotMessage | ProtocolErrorMessage;
 export interface ProtocolEnvelope { readonly version: ProtocolVersion; readonly message: ProtocolMessage; }
 
 export class ProtocolDecodeFailure extends Error {
@@ -65,6 +85,9 @@ export function decodeFrame(frame: ArrayBuffer): ProtocolEnvelope {
   if (PROTOCOL_HEADER_SIZE + payloadLength !== frame.byteLength) throw new ProtocolDecodeFailure('Protocol frame length does not match its payload length.');
   const version = Object.freeze({ major: view.getUint16(4, true), minor: view.getUint16(6, true) });
   const messageType = view.getUint16(8, true) as MessageType;
+  if (messageType === MessageType.RoadNetworkSnapshot && (version.major !== 2 || version.minor < 1)) {
+    throw new ProtocolDecodeFailure('Road Network snapshots require Protocol 2.1 or newer.');
+  }
   return { version, message: decodeMessage(view, messageType, PROTOCOL_HEADER_SIZE, payloadLength) };
 }
 
@@ -105,6 +128,8 @@ function decodeMessage(view: DataView, messageType: MessageType, offset: number,
     case MessageType.AgentRemove:
       assertPayloadLength(payloadLength, 16, messageType);
       return { type: MessageType.AgentRemove, agentId: view.getBigUint64(offset, true), tickCount: view.getBigUint64(offset + 8, true) };
+    case MessageType.RoadNetworkSnapshot:
+      return decodeRoadNetwork(view, offset, payloadLength);
     case MessageType.Error:
       return decodeProtocolError(view, offset, payloadLength);
     default:
@@ -117,6 +142,111 @@ function decodeAgentState(view: DataView, type: MessageType.AgentSpawn | Message
   const message: AgentStateMessage = { type, agentId: view.getBigUint64(offset, true), x: view.getFloat64(offset + 8, true), y: view.getFloat64(offset + 16, true), z: view.getFloat64(offset + 24, true), velocityX: view.getFloat64(offset + 32, true), velocityY: view.getFloat64(offset + 40, true), velocityZ: view.getFloat64(offset + 48, true), tickCount: view.getBigUint64(offset + 56, true) };
   if (!Number.isFinite(message.x) || !Number.isFinite(message.y) || !Number.isFinite(message.z) || !Number.isFinite(message.velocityX) || !Number.isFinite(message.velocityY) || !Number.isFinite(message.velocityZ)) throw new ProtocolDecodeFailure('Agent state contains a non-finite value.');
   return message;
+}
+
+function decodeRoadNetwork(view: DataView, offset: number, payloadLength: number): RoadNetworkSnapshotMessage {
+  if (payloadLength < ROAD_HEADER_LENGTH) throw new ProtocolDecodeFailure('Road Network payload is too short.');
+  const tickCount = view.getBigUint64(offset, true);
+  const nodeCount = view.getUint32(offset + 8, true);
+  const segmentCount = view.getUint32(offset + 12, true);
+  const laneCount = view.getUint32(offset + 16, true);
+  const connectionCount = view.getUint32(offset + 20, true);
+  const accessPointCount = view.getUint32(offset + 24, true);
+  const expectedLength = ROAD_HEADER_LENGTH
+    + nodeCount * ROAD_NODE_LENGTH
+    + segmentCount * ROAD_SEGMENT_LENGTH
+    + laneCount * LANE_LENGTH
+    + connectionCount * LANE_CONNECTION_LENGTH
+    + accessPointCount * ROAD_ACCESS_POINT_LENGTH;
+  if (expectedLength !== payloadLength) throw new ProtocolDecodeFailure('Road Network payload counts do not match its length.');
+
+  let cursor = offset + ROAD_HEADER_LENGTH;
+  const nodes: RoadNode[] = [];
+  for (let index = 0; index < nodeCount; index += 1) {
+    const id = view.getBigUint64(cursor, true);
+    const kind = view.getUint8(cursor + 8) as RoadNodeKind;
+    const x = view.getFloat64(cursor + 9, true);
+    const y = view.getFloat64(cursor + 17, true);
+    const z = view.getFloat64(cursor + 25, true);
+    assertRoadId(id, 'RoadNode');
+    if (!isRoadNodeKind(kind) || !Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) throw new ProtocolDecodeFailure('RoadNode payload is invalid.');
+    nodes.push({ id, kind, x, y, z });
+    cursor += ROAD_NODE_LENGTH;
+  }
+
+  const segments: RoadSegment[] = [];
+  for (let index = 0; index < segmentCount; index += 1) {
+    const id = view.getBigUint64(cursor, true);
+    const kind = view.getUint8(cursor + 8) as RoadKind;
+    const startNodeId = view.getBigUint64(cursor + 9, true);
+    const endNodeId = view.getBigUint64(cursor + 17, true);
+    assertRoadId(id, 'RoadSegment'); assertRoadId(startNodeId, 'RoadSegment start node'); assertRoadId(endNodeId, 'RoadSegment end node');
+    if (!isRoadKind(kind) || startNodeId === endNodeId) throw new ProtocolDecodeFailure('RoadSegment payload is invalid.');
+    segments.push({ id, kind, startNodeId, endNodeId });
+    cursor += ROAD_SEGMENT_LENGTH;
+  }
+
+  const lanes: Lane[] = [];
+  for (let index = 0; index < laneCount; index += 1) {
+    const id = view.getBigUint64(cursor, true);
+    const segmentId = view.getBigUint64(cursor + 8, true);
+    const direction = view.getUint8(cursor + 16) as LaneDirection;
+    const order = view.getUint16(cursor + 17, true);
+    const widthMeters = view.getFloat64(cursor + 19, true);
+    const speedLimitMetersPerSecond = view.getFloat64(cursor + 27, true);
+    assertRoadId(id, 'Lane'); assertRoadId(segmentId, 'Lane segment');
+    if (!isLaneDirection(direction) || !Number.isFinite(widthMeters) || widthMeters <= 0 || !Number.isFinite(speedLimitMetersPerSecond) || speedLimitMetersPerSecond <= 0) throw new ProtocolDecodeFailure('Lane payload is invalid.');
+    lanes.push({ id, segmentId, direction, order, widthMeters, speedLimitMetersPerSecond });
+    cursor += LANE_LENGTH;
+  }
+
+  const connections: LaneConnection[] = [];
+  for (let index = 0; index < connectionCount; index += 1) {
+    const id = view.getBigUint64(cursor, true);
+    const fromLaneId = view.getBigUint64(cursor + 8, true);
+    const toLaneId = view.getBigUint64(cursor + 16, true);
+    const viaNodeId = view.getBigUint64(cursor + 24, true);
+    const movement = view.getUint8(cursor + 32) as TurnMovement;
+    assertRoadId(id, 'LaneConnection'); assertRoadId(fromLaneId, 'LaneConnection from lane'); assertRoadId(toLaneId, 'LaneConnection to lane'); assertRoadId(viaNodeId, 'LaneConnection via node');
+    if (fromLaneId === toLaneId || !isTurnMovement(movement)) throw new ProtocolDecodeFailure('LaneConnection payload is invalid.');
+    connections.push({ id, fromLaneId, toLaneId, viaNodeId, movement });
+    cursor += LANE_CONNECTION_LENGTH;
+  }
+
+  const accessPoints: RoadAccessPoint[] = [];
+  for (let index = 0; index < accessPointCount; index += 1) {
+    const id = view.getBigUint64(cursor, true);
+    const segmentId = view.getBigUint64(cursor + 8, true);
+    const segmentOffset = view.getFloat64(cursor + 16, true);
+    const rawBuildingId = view.getBigUint64(cursor + 24, true);
+    const rawPoiId = view.getBigUint64(cursor + 32, true);
+    const mode = view.getUint8(cursor + 40) as RoadAccessMode;
+    assertRoadId(id, 'RoadAccessPoint'); assertRoadId(segmentId, 'RoadAccessPoint segment');
+    if (!Number.isFinite(segmentOffset) || segmentOffset < 0 || segmentOffset > 1 || (rawBuildingId === 0n && rawPoiId === 0n) || !isRoadAccessMode(mode)) throw new ProtocolDecodeFailure('RoadAccessPoint payload is invalid.');
+    accessPoints.push({ id, segmentId, segmentOffset, buildingId: rawBuildingId === 0n ? null : rawBuildingId, poiId: rawPoiId === 0n ? null : rawPoiId, mode });
+    cursor += ROAD_ACCESS_POINT_LENGTH;
+  }
+
+  validateRoadNetworkReferences(nodes, segments, lanes, connections, accessPoints);
+  return { type: MessageType.RoadNetworkSnapshot, tickCount, nodes, segments, lanes, connections, accessPoints };
+}
+
+function validateRoadNetworkReferences(nodes: readonly RoadNode[], segments: readonly RoadSegment[], lanes: readonly Lane[], connections: readonly LaneConnection[], accessPoints: readonly RoadAccessPoint[]): void {
+  const nodeIds = uniqueIds(nodes, 'RoadNode');
+  const segmentIds = uniqueIds(segments, 'RoadSegment');
+  const laneIds = uniqueIds(lanes, 'Lane');
+  uniqueIds(connections, 'LaneConnection');
+  uniqueIds(accessPoints, 'RoadAccessPoint');
+  for (const segment of segments) if (!nodeIds.has(segment.startNodeId) || !nodeIds.has(segment.endNodeId)) throw new ProtocolDecodeFailure('RoadSegment references a missing RoadNode.');
+  for (const lane of lanes) if (!segmentIds.has(lane.segmentId)) throw new ProtocolDecodeFailure('Lane references a missing RoadSegment.');
+  for (const connection of connections) if (!laneIds.has(connection.fromLaneId) || !laneIds.has(connection.toLaneId) || !nodeIds.has(connection.viaNodeId)) throw new ProtocolDecodeFailure('LaneConnection contains a dangling reference.');
+  for (const accessPoint of accessPoints) if (!segmentIds.has(accessPoint.segmentId)) throw new ProtocolDecodeFailure('RoadAccessPoint references a missing RoadSegment.');
+}
+
+function uniqueIds<T extends { readonly id: bigint }>(items: readonly T[], label: string): Set<bigint> {
+  const ids = new Set<bigint>();
+  for (const item of items) if (ids.has(item.id)) throw new ProtocolDecodeFailure(`${label} IDs are duplicated.`); else ids.add(item.id);
+  return ids;
 }
 
 function decodeProtocolError(view: DataView, offset: number, payloadLength: number): ProtocolErrorMessage {
@@ -157,3 +287,10 @@ function validateUInt16(value: number, label: string): void {
 function assertPayloadLength(actual: number, expected: number, type: MessageType): void {
   if (actual !== expected) throw new ProtocolDecodeFailure(`Protocol message ${String(type)} has payload length ${String(actual)}; expected ${String(expected)}.`);
 }
+
+function assertRoadId(value: bigint, label: string): void { if (value === 0n) throw new ProtocolDecodeFailure(`${label} ID must be greater than zero.`); }
+function isRoadNodeKind(value: number): value is RoadNodeKind { return value >= RoadNodeKind.Endpoint && value <= RoadNodeKind.Intersection; }
+function isRoadKind(value: number): value is RoadKind { return value >= RoadKind.Local && value <= RoadKind.Service; }
+function isLaneDirection(value: number): value is LaneDirection { return value === LaneDirection.Forward || value === LaneDirection.Reverse; }
+function isTurnMovement(value: number): value is TurnMovement { return value >= TurnMovement.Unspecified && value <= TurnMovement.UTurn; }
+function isRoadAccessMode(value: number): value is RoadAccessMode { return value >= RoadAccessMode.Motor && value <= (RoadAccessMode.Motor | RoadAccessMode.Foot); }

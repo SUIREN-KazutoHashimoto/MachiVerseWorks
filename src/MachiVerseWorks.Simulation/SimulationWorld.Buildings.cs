@@ -32,6 +32,12 @@ public sealed partial class SimulationWorld
                 $"Building {id.Value} cannot be removed while one or more POIs reference it.");
         }
 
+        if (_roads.ContainsBuildingReference(id))
+        {
+            throw new InvalidOperationException(
+                $"Building {id.Value} cannot be removed while one or more road access points reference it.");
+        }
+
         return _buildings.Remove(id);
     }
 
@@ -77,6 +83,17 @@ public sealed partial class SimulationWorld
 
     public bool RemovePoi(PoiId id)
     {
+        if (!_pois.TryGetSnapshot(id, out _))
+        {
+            return false;
+        }
+
+        if (_roads.ContainsPoiReference(id))
+        {
+            throw new InvalidOperationException(
+                $"POI {id.Value} cannot be removed while one or more road access points reference it.");
+        }
+
         return _pois.Remove(id);
     }
 

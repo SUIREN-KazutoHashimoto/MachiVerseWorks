@@ -110,26 +110,18 @@ public sealed class BuildingPoiTests
     [TestMethod]
     public void RestoreRejectsPoiReferencingMissingBuilding()
     {
-        var checkpoint = new SimulationCheckpoint(
-            TickRate: 30,
-            Seed: 1,
-            SpatialCellSize: 64d,
-            TickCount: 0,
-            ElapsedTicks: 0,
-            RandomState: 1,
-            NextAgentId: 1,
-            Agents: Array.Empty<SimulationAgentCheckpoint>(),
-            NextBuildingId: 1,
-            Buildings: Array.Empty<SimulationBuildingCheckpoint>(),
-            NextPoiId: 2,
-            Pois:
+        var checkpoint = new SimulationWorld().CreateCheckpoint() with
+        {
+            NextPoiId = 2,
+            Pois =
             [
                 new SimulationPoiCheckpoint(
                     new PoiId(1),
                     PoiKind.Generic,
                     new WorldPoint(0d, 0d, 0d),
                     new BuildingId(99)),
-            ]);
+            ],
+        };
 
         Assert.ThrowsExactly<ArgumentException>(() => SimulationWorld.RestoreCheckpoint(checkpoint));
     }

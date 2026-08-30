@@ -8,5 +8,6 @@ public enum MessageType : ushort
     AgentSpawn = 100,
     AgentUpdate = 101,
     AgentRemove = 102,
+    RoadNetworkSnapshot = 200,
     Error = 900,
 }

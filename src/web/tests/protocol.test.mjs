@@ -2,65 +2,38 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as protocol from '../src/protocol.ts';
 
-const {
-  CURRENT_PROTOCOL_VERSION,
-  MessageType,
-  PROTOCOL_HEADER_SIZE,
-  PROTOCOL_MAGIC,
-  decodeFrame,
-  encodeHello,
-  encodeSubscribeVolume,
-} = protocol;
+const { CURRENT_PROTOCOL_VERSION, MessageType, PROTOCOL_HEADER_SIZE, PROTOCOL_MAGIC, decodeFrame, encodeHello, encodeSubscribeVolume } = protocol;
 
-test('Hello frame matches Protocol 2.0 header contract', () => {
-  const frame = encodeHello();
-  const view = new DataView(frame);
-  assert.equal(frame.byteLength, PROTOCOL_HEADER_SIZE);
-  assert.equal(CURRENT_PROTOCOL_VERSION.major, 2);
-  assert.equal(CURRENT_PROTOCOL_VERSION.minor, 0);
-  assert.equal(view.getUint32(0, true), PROTOCOL_MAGIC);
-  assert.equal(view.getUint16(8, true), MessageType.Hello);
+test('Hello frame matches Protocol 2.1 header contract', () => {
+  const frame = encodeHello(); const view = new DataView(frame);
+  assert.equal(frame.byteLength, PROTOCOL_HEADER_SIZE); assert.equal(CURRENT_PROTOCOL_VERSION.major, 2); assert.equal(CURRENT_PROTOCOL_VERSION.minor, 1);
+  assert.equal(view.getUint32(0, true), PROTOCOL_MAGIC); assert.equal(view.getUint16(8, true), MessageType.Hello);
 });
 
 test('SubscribeVolume round-trips a native 3D volume through the client codec', () => {
   const volume = { minX: -100, minY: -50, minZ: -20, maxX: 200, maxY: 150, maxZ: 80 };
-  const envelope = decodeFrame(encodeSubscribeVolume(volume));
-  assert.equal(envelope.message.type, MessageType.SubscribeVolume);
-  assert.deepEqual(envelope.message, { type: MessageType.SubscribeVolume, ...volume });
+  const envelope = decodeFrame(encodeSubscribeVolume(volume)); assert.equal(envelope.message.type, MessageType.SubscribeVolume); assert.deepEqual(envelope.message, { type: MessageType.SubscribeVolume, ...volume });
 });
 
-test('legacy 2D subscription API is not exported', () => {
-  assert.equal('encodeSubscribeArea' in protocol, false);
-  assert.equal('SubscribeArea' in MessageType, false);
-});
+test('legacy 2D subscription API is not exported', () => { assert.equal('encodeSubscribeArea' in protocol, false); assert.equal('SubscribeArea' in MessageType, false); });
 
-test('Agent update decoder reads the Protocol 2.0 3D payload layout', () => {
-  const frame = new ArrayBuffer(PROTOCOL_HEADER_SIZE + 64);
-  const view = new DataView(frame);
-  view.setUint32(0, PROTOCOL_MAGIC, true);
-  view.setUint16(4, CURRENT_PROTOCOL_VERSION.major, true);
-  view.setUint16(6, CURRENT_PROTOCOL_VERSION.minor, true);
-  view.setUint16(8, MessageType.AgentUpdate, true);
-  view.setUint16(10, 0, true);
-  view.setUint32(12, 64, true);
-  view.setBigUint64(16, 42n, true);
-  view.setFloat64(24, 12.5, true);
-  view.setFloat64(32, -8.25, true);
-  view.setFloat64(40, 75.5, true);
-  view.setFloat64(48, 1.5, true);
-  view.setFloat64(56, -2, true);
-  view.setFloat64(64, 3.25, true);
-  view.setBigUint64(72, 99n, true);
+test('Agent update decoder reads the Protocol 2.1 3D payload layout', () => {
+  const frame = new ArrayBuffer(PROTOCOL_HEADER_SIZE + 64); const view = new DataView(frame);
+  view.setUint32(0, PROTOCOL_MAGIC, true); view.setUint16(4, 2, true); view.setUint16(6, 1, true); view.setUint16(8, MessageType.AgentUpdate, true); view.setUint16(10, 0, true); view.setUint32(12, 64, true);
+  view.setBigUint64(16, 42n, true); view.setFloat64(24, 12.5, true); view.setFloat64(32, -8.25, true); view.setFloat64(40, 75.5, true); view.setFloat64(48, 1.5, true); view.setFloat64(56, -2, true); view.setFloat64(64, 3.25, true); view.setBigUint64(72, 99n, true);
   const envelope = decodeFrame(frame);
-  assert.deepEqual(envelope.message, {
-    type: MessageType.AgentUpdate,
-    agentId: 42n,
-    x: 12.5,
-    y: -8.25,
-    z: 75.5,
-    velocityX: 1.5,
-    velocityY: -2,
-    velocityZ: 3.25,
-    tickCount: 99n,
-  });
+  assert.deepEqual(envelope.message, { type: MessageType.AgentUpdate, agentId: 42n, x: 12.5, y: -8.25, z: 75.5, velocityX: 1.5, velocityY: -2, velocityZ: 3.25, tickCount: 99n });
+});
+
+test('Road Network decoder preserves 3D grade separation and explicit references', () => {
+  const payloadLength = 28 + (4 * 33) + (2 * 25) + (2 * 35) + 33 + 41;
+  const frame = new ArrayBuffer(PROTOCOL_HEADER_SIZE + payloadLength); const view = new DataView(frame);
+  view.setUint32(0, PROTOCOL_MAGIC, true); view.setUint16(4, 2, true); view.setUint16(6, 1, true); view.setUint16(8, MessageType.RoadNetworkSnapshot, true); view.setUint32(12, payloadLength, true);
+  let offset = PROTOCOL_HEADER_SIZE; view.setBigUint64(offset, 7n, true); view.setUint32(offset + 8, 4, true); view.setUint32(offset + 12, 2, true); view.setUint32(offset + 16, 2, true); view.setUint32(offset + 20, 1, true); view.setUint32(offset + 24, 1, true); offset += 28;
+  for (const node of [[1n, 0, -10, 0, 0], [2n, 1, 0, 0, 0], [3n, 0, 10, 0, 0], [4n, 0, 0, 10, 20]]) { view.setBigUint64(offset, node[0], true); view.setUint8(offset + 8, node[1]); view.setFloat64(offset + 9, node[2], true); view.setFloat64(offset + 17, node[3], true); view.setFloat64(offset + 25, node[4], true); offset += 33; }
+  for (const segment of [[1n, 2, 1n, 2n], [2n, 0, 2n, 3n]]) { view.setBigUint64(offset, segment[0], true); view.setUint8(offset + 8, segment[1]); view.setBigUint64(offset + 9, segment[2], true); view.setBigUint64(offset + 17, segment[3], true); offset += 25; }
+  for (const lane of [[1n, 1n], [2n, 2n]]) { view.setBigUint64(offset, lane[0], true); view.setBigUint64(offset + 8, lane[1], true); view.setUint8(offset + 16, 0); view.setUint16(offset + 17, 0, true); view.setFloat64(offset + 19, 3.5, true); view.setFloat64(offset + 27, 15, true); offset += 35; }
+  view.setBigUint64(offset, 1n, true); view.setBigUint64(offset + 8, 1n, true); view.setBigUint64(offset + 16, 2n, true); view.setBigUint64(offset + 24, 2n, true); view.setUint8(offset + 32, 1); offset += 33;
+  view.setBigUint64(offset, 1n, true); view.setBigUint64(offset + 8, 1n, true); view.setFloat64(offset + 16, 0.5, true); view.setBigUint64(offset + 24, 9n, true); view.setBigUint64(offset + 32, 0n, true); view.setUint8(offset + 40, 1);
+  const message = decodeFrame(frame).message; assert.equal(message.type, MessageType.RoadNetworkSnapshot); assert.equal(message.nodes[3].z, 20); assert.equal(message.connections[0].viaNodeId, 2n); assert.equal(message.accessPoints[0].buildingId, 9n); assert.equal(message.accessPoints[0].poiId, null);
 });

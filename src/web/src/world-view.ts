@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 
 import type { EntityStore } from './entity-store.ts';
-import type { WorldVolume } from './protocol.ts';
+import { RoadNetworkStore } from './road-network-store.ts';
+import { LaneDirection, RoadNodeKind, type RoadNetworkSnapshotMessage, type WorldVolume } from './protocol.ts';
 
 const CAMERA_HEIGHT = 500;
 const CAMERA_TILT_DISTANCE = 250;
@@ -23,6 +24,8 @@ export class WorldView {
   public readonly renderer = new THREE.WebGLRenderer({ antialias: true });
 
   private readonly agentRenderer: AgentRenderer;
+  private readonly roadStore = new RoadNetworkStore();
+  private readonly roadRenderer: RoadNetworkRenderer;
   private aspect = 1;
   private dragPointerId: number | null = null;
   private lastPointerX = 0;
@@ -41,6 +44,7 @@ export class WorldView {
     const grid = new THREE.GridHelper(2_000, 40, 0x334155, 0x1e293b);
     this.scene.add(grid);
 
+    this.roadRenderer = new RoadNetworkRenderer(this.scene);
     this.agentRenderer = new AgentRenderer(this.scene);
     this.installControls();
     this.resize();
@@ -58,24 +62,23 @@ export class WorldView {
     this.renderer.setSize(width, height, false);
   }
 
+  public applyRoadNetwork(snapshot: RoadNetworkSnapshotMessage): void { this.roadStore.replace(snapshot); }
+  public clearRoadNetwork(): void { this.roadStore.clear(); }
+
   public render(store: EntityStore, now: number): void {
+    this.roadRenderer.update(this.roadStore);
     this.agentRenderer.update(store, now);
     this.renderer.render(this.scene, this.camera);
   }
 
-  public getSubscriptionVolume(): WorldVolume {
-    return computeOrthographicSubscriptionVolume(this.camera, SUBSCRIPTION_PADDING);
-  }
+  public getSubscriptionVolume(): WorldVolume { return computeOrthographicSubscriptionVolume(this.camera, SUBSCRIPTION_PADDING); }
 
   public getListenerPosition(): WorldPosition {
-    return {
-      x: this.camera.position.x,
-      y: this.camera.position.z,
-      z: this.camera.position.y,
-    };
+    return { x: this.camera.position.x, y: this.camera.position.z, z: this.camera.position.y };
   }
 
   public dispose(): void {
+    this.roadRenderer.dispose();
     this.agentRenderer.dispose();
     this.renderer.dispose();
   }
@@ -83,9 +86,7 @@ export class WorldView {
   private installControls(): void {
     const canvas = this.renderer.domElement;
     canvas.addEventListener('pointerdown', (event) => {
-      if (event.button !== 0) {
-        return;
-      }
+      if (event.button !== 0) return;
       this.dragPointerId = event.pointerId;
       this.lastPointerX = event.clientX;
       this.lastPointerY = event.clientY;
@@ -93,10 +94,7 @@ export class WorldView {
     });
 
     canvas.addEventListener('pointermove', (event) => {
-      if (event.pointerId !== this.dragPointerId) {
-        return;
-      }
-
+      if (event.pointerId !== this.dragPointerId) return;
       const width = Math.max(canvas.clientWidth, 1);
       const height = Math.max(canvas.clientHeight, 1);
       const worldWidth = (this.camera.right - this.camera.left) / this.camera.zoom;
@@ -109,14 +107,9 @@ export class WorldView {
       this.camera.position.z -= (deltaY / height) * worldHeight;
     });
 
-    const releasePointer = (event: PointerEvent): void => {
-      if (event.pointerId === this.dragPointerId) {
-        this.dragPointerId = null;
-      }
-    };
+    const releasePointer = (event: PointerEvent): void => { if (event.pointerId === this.dragPointerId) this.dragPointerId = null; };
     canvas.addEventListener('pointerup', releasePointer);
     canvas.addEventListener('pointercancel', releasePointer);
-
     canvas.addEventListener('wheel', (event) => {
       event.preventDefault();
       const scale = Math.exp(-event.deltaY * 0.001);
@@ -126,62 +119,92 @@ export class WorldView {
   }
 }
 
-export function computeOrthographicSubscriptionVolume(
-  camera: THREE.OrthographicCamera,
-  padding = 1,
-): WorldVolume {
-  if (!Number.isFinite(padding) || padding < 1) {
-    throw new RangeError('Subscription padding must be finite and at least 1.');
-  }
-
-  camera.updateProjectionMatrix();
-  camera.updateMatrixWorld(true);
-
+export function computeOrthographicSubscriptionVolume(camera: THREE.OrthographicCamera, padding = 1): WorldVolume {
+  if (!Number.isFinite(padding) || padding < 1) throw new RangeError('Subscription padding must be finite and at least 1.');
+  camera.updateProjectionMatrix(); camera.updateMatrixWorld(true);
   const corner = new THREE.Vector3();
-  let minX = Number.POSITIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let minZ = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-  let maxZ = Number.NEGATIVE_INFINITY;
-
-  for (const normalizedZ of [-1, 1]) {
-    for (const normalizedY of [-1, 1]) {
-      for (const normalizedX of [-1, 1]) {
-        corner.set(normalizedX, normalizedY, normalizedZ).unproject(camera);
-        const simulationX = corner.x;
-        const simulationY = corner.z;
-        const simulationZ = corner.y;
-        minX = Math.min(minX, simulationX);
-        minY = Math.min(minY, simulationY);
-        minZ = Math.min(minZ, simulationZ);
-        maxX = Math.max(maxX, simulationX);
-        maxY = Math.max(maxY, simulationY);
-        maxZ = Math.max(maxZ, simulationZ);
-      }
-    }
+  let minX = Number.POSITIVE_INFINITY, minY = Number.POSITIVE_INFINITY, minZ = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY, maxY = Number.NEGATIVE_INFINITY, maxZ = Number.NEGATIVE_INFINITY;
+  for (const normalizedZ of [-1, 1]) for (const normalizedY of [-1, 1]) for (const normalizedX of [-1, 1]) {
+    corner.set(normalizedX, normalizedY, normalizedZ).unproject(camera);
+    const simulationX = corner.x, simulationY = corner.z, simulationZ = corner.y;
+    minX = Math.min(minX, simulationX); minY = Math.min(minY, simulationY); minZ = Math.min(minZ, simulationZ);
+    maxX = Math.max(maxX, simulationX); maxY = Math.max(maxY, simulationY); maxZ = Math.max(maxZ, simulationZ);
   }
-
   const paddingX = (maxX - minX) * (padding - 1) * 0.5;
   const paddingY = (maxY - minY) * (padding - 1) * 0.5;
   const paddingZ = (maxZ - minZ) * (padding - 1) * 0.5;
-  return {
-    minX: minX - paddingX,
-    minY: minY - paddingY,
-    minZ: minZ - paddingZ,
-    maxX: maxX + paddingX,
-    maxY: maxY + paddingY,
-    maxZ: maxZ + paddingZ,
-  };
+  return { minX: minX - paddingX, minY: minY - paddingY, minZ: minZ - paddingZ, maxX: maxX + paddingX, maxY: maxY + paddingY, maxZ: maxZ + paddingZ };
 }
 
-export function simulationToThreePosition(
-  x: number,
-  y: number,
-  z: number,
-  target = new THREE.Vector3(),
-): THREE.Vector3 {
-  return target.set(x, z, y);
+export function simulationToThreePosition(x: number, y: number, z: number, target = new THREE.Vector3()): THREE.Vector3 { return target.set(x, z, y); }
+
+class RoadNetworkRenderer {
+  private readonly roadMaterial = new THREE.LineBasicMaterial({ color: 0x94a3b8 });
+  private readonly laneMaterial = new THREE.LineBasicMaterial({ color: 0xf8fafc });
+  private readonly intersectionMaterial = new THREE.PointsMaterial({ color: 0xf59e0b, size: 9, sizeAttenuation: false });
+  private readonly roadLines = new THREE.LineSegments(new THREE.BufferGeometry(), this.roadMaterial);
+  private readonly laneLines = new THREE.LineSegments(new THREE.BufferGeometry(), this.laneMaterial);
+  private readonly intersections = new THREE.Points(new THREE.BufferGeometry(), this.intersectionMaterial);
+  private renderedRevision = -1;
+
+  public constructor(private readonly scene: THREE.Scene) {
+    this.roadLines.name = 'road-segments';
+    this.laneLines.name = 'road-lanes';
+    this.intersections.name = 'road-intersections';
+    this.roadLines.frustumCulled = false;
+    this.laneLines.frustumCulled = false;
+    this.intersections.frustumCulled = false;
+    this.scene.add(this.roadLines, this.laneLines, this.intersections);
+  }
+
+  public update(store: RoadNetworkStore): void {
+    if (store.revision === this.renderedRevision) return;
+    this.renderedRevision = store.revision;
+    const snapshot = store.snapshot;
+    if (snapshot === null) {
+      replacePositions(this.roadLines.geometry, []);
+      replacePositions(this.laneLines.geometry, []);
+      replacePositions(this.intersections.geometry, []);
+      return;
+    }
+
+    const roadPositions: number[] = [];
+    for (const segment of snapshot.segments) {
+      const start = store.getNode(segment.startNodeId), end = store.getNode(segment.endNodeId);
+      if (start === undefined || end === undefined) continue;
+      appendSimulationPosition(roadPositions, start.x, start.y, start.z);
+      appendSimulationPosition(roadPositions, end.x, end.y, end.z);
+    }
+
+    const lanePositions: number[] = [];
+    for (const lane of snapshot.lanes) {
+      const segment = store.getSegment(lane.segmentId);
+      if (segment === undefined) continue;
+      const start = store.getNode(segment.startNodeId), end = store.getNode(segment.endNodeId);
+      if (start === undefined || end === undefined) continue;
+      const dx = end.x - start.x, dy = end.y - start.y;
+      const horizontalLength = Math.hypot(dx, dy);
+      const directionSide = lane.direction === LaneDirection.Forward ? 1 : -1;
+      const offset = directionSide * (lane.order + 0.5) * lane.widthMeters;
+      const offsetX = horizontalLength > 0 ? (-dy / horizontalLength) * offset : 0;
+      const offsetY = horizontalLength > 0 ? (dx / horizontalLength) * offset : 0;
+      appendSimulationPosition(lanePositions, start.x + offsetX, start.y + offsetY, start.z);
+      appendSimulationPosition(lanePositions, end.x + offsetX, end.y + offsetY, end.z);
+    }
+
+    const intersectionPositions: number[] = [];
+    for (const node of snapshot.nodes) if (node.kind === RoadNodeKind.Intersection) appendSimulationPosition(intersectionPositions, node.x, node.y, node.z);
+    replacePositions(this.roadLines.geometry, roadPositions);
+    replacePositions(this.laneLines.geometry, lanePositions);
+    replacePositions(this.intersections.geometry, intersectionPositions);
+  }
+
+  public dispose(): void {
+    this.scene.remove(this.roadLines, this.laneLines, this.intersections);
+    this.roadLines.geometry.dispose(); this.laneLines.geometry.dispose(); this.intersections.geometry.dispose();
+    this.roadMaterial.dispose(); this.laneMaterial.dispose(); this.intersectionMaterial.dispose();
+  }
 }
 
 class AgentRenderer {
@@ -192,61 +215,26 @@ class AgentRenderer {
   private readonly matrix = new THREE.Matrix4();
   private positions = new Float32Array(this.capacity * 3);
 
-  public constructor(private readonly scene: THREE.Scene) {
-    this.mesh = this.createMesh(this.capacity);
-    this.scene.add(this.mesh);
-  }
-
+  public constructor(private readonly scene: THREE.Scene) { this.mesh = this.createMesh(this.capacity); this.scene.add(this.mesh); }
   public update(store: EntityStore, now: number): void {
     this.ensureCapacity(store.size);
     const count = store.writeSampledPositions(now, this.positions);
     for (let index = 0; index < count; index += 1) {
       const positionOffset = index * 3;
-      this.matrix.makeTranslation(
-        this.positions[positionOffset],
-        this.positions[positionOffset + 2] + AGENT_HALF_SIZE,
-        this.positions[positionOffset + 1],
-      );
+      this.matrix.makeTranslation(this.positions[positionOffset], this.positions[positionOffset + 2] + AGENT_HALF_SIZE, this.positions[positionOffset + 1]);
       this.mesh.setMatrixAt(index, this.matrix);
     }
-    this.mesh.count = count;
-    this.mesh.instanceMatrix.needsUpdate = true;
+    this.mesh.count = count; this.mesh.instanceMatrix.needsUpdate = true;
   }
-
-  public dispose(): void {
-    this.scene.remove(this.mesh);
-    this.mesh.dispose();
-    this.geometry.dispose();
-    this.material.dispose();
-  }
-
+  public dispose(): void { this.scene.remove(this.mesh); this.mesh.dispose(); this.geometry.dispose(); this.material.dispose(); }
   private ensureCapacity(required: number): void {
-    if (required <= this.capacity) {
-      return;
-    }
-
-    let nextCapacity = this.capacity;
-    while (nextCapacity < required) {
-      nextCapacity *= 2;
-    }
-
-    const previousMesh = this.mesh;
-    this.capacity = nextCapacity;
-    this.positions = new Float32Array(nextCapacity * 3);
-    this.mesh = this.createMesh(nextCapacity);
-    this.scene.remove(previousMesh);
-    previousMesh.dispose();
-    this.scene.add(this.mesh);
+    if (required <= this.capacity) return;
+    let nextCapacity = this.capacity; while (nextCapacity < required) nextCapacity *= 2;
+    const previousMesh = this.mesh; this.capacity = nextCapacity; this.positions = new Float32Array(nextCapacity * 3); this.mesh = this.createMesh(nextCapacity); this.scene.remove(previousMesh); previousMesh.dispose(); this.scene.add(this.mesh);
   }
-
-  private createMesh(capacity: number): THREE.InstancedMesh {
-    const mesh = new THREE.InstancedMesh(this.geometry, this.material, capacity);
-    mesh.count = 0;
-    mesh.frustumCulled = false;
-    return mesh;
-  }
+  private createMesh(capacity: number): THREE.InstancedMesh { const mesh = new THREE.InstancedMesh(this.geometry, this.material, capacity); mesh.count = 0; mesh.frustumCulled = false; return mesh; }
 }
 
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, value));
-}
+function appendSimulationPosition(target: number[], x: number, y: number, z: number): void { target.push(x, z, y); }
+function replacePositions(geometry: THREE.BufferGeometry, values: readonly number[]): void { geometry.setAttribute('position', new THREE.Float32BufferAttribute(values, 3)); geometry.computeBoundingSphere(); }
+function clamp(value: number, minimum: number, maximum: number): number { return Math.min(maximum, Math.max(minimum, value)); }

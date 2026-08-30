@@ -5,13 +5,7 @@ import { loadClientConfig } from './config.ts';
 import { MachiVerseConnection } from './connection.ts';
 import { EntityStore } from './entity-store.ts';
 import { initializeLocalization, type LocaleParameters } from './localization.ts';
-import {
-  MessageType,
-  type AgentStateMessage,
-  type ProtocolErrorMessage,
-  type ProtocolMessage,
-  type WorldVolume,
-} from './protocol.ts';
+import { MessageType, type AgentStateMessage, type ProtocolErrorMessage, type ProtocolMessage, type WorldVolume } from './protocol.ts';
 import { ClientUi } from './ui.ts';
 import { WorldView } from './world-view.ts';
 
@@ -44,11 +38,9 @@ export class Application {
         onMessage: (message) => this.handleProtocolMessage(message),
         onProtocolError: (message) => this.handleProtocolError(message),
         onClientError: (error) => this.ui.showError(this.localizer.t('error.client', { detail: error.message })),
-        onDisconnected: () => { this.store.clear(); this.ui.setAgentCount(0); this.ui.setProtocol(null); },
+        onDisconnected: () => { this.store.clear(); this.view.clearRoadNetwork(); this.ui.setAgentCount(0); this.ui.setProtocol(null); },
         onHelloAck: (version) => { this.ui.clearError(); this.ui.setProtocol(version); },
-        ...(performanceMetrics === null ? {} : {
-          onFrameDecoded: (metrics: { readonly frameBytes: number; readonly decodeTimeMs: number }) => performanceMetrics.recordDecode(metrics.frameBytes, metrics.decodeTimeMs),
-        }),
+        ...(performanceMetrics === null ? {} : { onFrameDecoded: (metrics: { readonly frameBytes: number; readonly decodeTimeMs: number }) => performanceMetrics.recordDecode(metrics.frameBytes, metrics.decodeTimeMs) }),
       },
     );
     this.audio.onStateChanged((state) => this.ui.setAudioState(state));
@@ -82,8 +74,7 @@ export class Application {
 
   private updateAudio(now: number): void {
     if (this.audioSyncPending || now - this.lastAudioSyncAt < 200) return;
-    this.lastAudioSyncAt = now;
-    this.audioSyncPending = true;
+    this.lastAudioSyncAt = now; this.audioSyncPending = true;
     const listener = this.view.getListenerPosition();
     void Promise.all([this.audio.syncSpatialVoices(listener), this.ambient.update(listener)])
       .catch((error: unknown) => { const detail = error instanceof Error ? error.message : String(error); this.ui.showError(this.localizer.t('error.client', { detail })); })
@@ -92,8 +83,7 @@ export class Application {
 
   private updatePerformanceUi(now: number, metrics: ClientPerformanceMetrics): void {
     if (now - this.lastPerformanceUiAt < 500) return;
-    this.lastPerformanceUiAt = now;
-    this.ui.setPerformanceMetrics(metrics.snapshot());
+    this.lastPerformanceUiAt = now; this.ui.setPerformanceMetrics(metrics.snapshot());
   }
 
   private handleProtocolMessage(message: ProtocolMessage): void {
@@ -101,11 +91,10 @@ export class Application {
       case MessageType.AgentSpawn: this.applyAgentSpawn(message); return;
       case MessageType.AgentUpdate: this.applyAgentUpdate(message); return;
       case MessageType.AgentRemove: {
-        const removed = this.store.remove(message.agentId);
-        this.audio.removeEntity(message.agentId);
-        if (removed) this.ui.setAgentCount(this.store.size);
-        return;
+        const removed = this.store.remove(message.agentId); this.audio.removeEntity(message.agentId);
+        if (removed) this.ui.setAgentCount(this.store.size); return;
       }
+      case MessageType.RoadNetworkSnapshot: this.view.applyRoadNetwork(message); return;
       case MessageType.Hello:
       case MessageType.HelloAck:
       case MessageType.SubscribeVolume:
@@ -115,31 +104,14 @@ export class Application {
   }
 
   private applyAgentSpawn(message: AgentStateMessage): void {
-    const previousSize = this.store.size;
-    this.store.spawn(message);
-    this.updateEntityAudioPosition(message);
+    const previousSize = this.store.size; this.store.spawn(message); this.updateEntityAudioPosition(message);
     if (this.store.size !== previousSize) this.ui.setAgentCount(this.store.size);
   }
-
-  private applyAgentUpdate(message: AgentStateMessage): void {
-    if (!this.store.update(message)) {
-      this.store.spawn(message);
-      this.ui.setAgentCount(this.store.size);
-    }
-    this.updateEntityAudioPosition(message);
-  }
-
-  private updateEntityAudioPosition(message: AgentStateMessage): void {
-    if (!this.audio.hasEntityEmitters(message.agentId)) return;
-    this.audio.updateEntityPosition(message.agentId, { x: message.x, y: message.y, z: message.z });
-  }
-
+  private applyAgentUpdate(message: AgentStateMessage): void { if (!this.store.update(message)) { this.store.spawn(message); this.ui.setAgentCount(this.store.size); } this.updateEntityAudioPosition(message); }
+  private updateEntityAudioPosition(message: AgentStateMessage): void { if (this.audio.hasEntityEmitters(message.agentId)) this.audio.updateEntityPosition(message.agentId, { x: message.x, y: message.y, z: message.z }); }
   private handleProtocolError(message: ProtocolErrorMessage): void {
-    const parameters: Record<string, string> = {};
-    for (const parameter of message.parameters) parameters[parameter.key] = parameter.value;
-    parameters.code = String(message.code);
-    const key = `error.protocol.${String(message.code)}`;
-    const localized = this.localizer.t(key, parameters as LocaleParameters);
+    const parameters: Record<string, string> = {}; for (const parameter of message.parameters) parameters[parameter.key] = parameter.value; parameters.code = String(message.code);
+    const key = `error.protocol.${String(message.code)}`; const localized = this.localizer.t(key, parameters as LocaleParameters);
     this.ui.showError(localized === key ? this.localizer.t('error.protocol.unknown', { code: message.code }) : localized);
   }
 }
