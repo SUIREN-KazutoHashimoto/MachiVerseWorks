@@ -11,6 +11,7 @@ public sealed class WorldSaveLimits
     public const int DefaultMaximumLaneCount = 2_000_000;
     public const int DefaultMaximumLaneConnectionCount = 4_000_000;
     public const int DefaultMaximumRoadAccessPointCount = 1_000_000;
+    public const int DefaultMaximumPedestrianCount = 1_000_000;
 
     public WorldSaveLimits(
         int maximumBytes = DefaultMaximumBytes,
@@ -21,7 +22,8 @@ public sealed class WorldSaveLimits
         int maximumRoadSegmentCount = DefaultMaximumRoadSegmentCount,
         int maximumLaneCount = DefaultMaximumLaneCount,
         int maximumLaneConnectionCount = DefaultMaximumLaneConnectionCount,
-        int maximumRoadAccessPointCount = DefaultMaximumRoadAccessPointCount)
+        int maximumRoadAccessPointCount = DefaultMaximumRoadAccessPointCount,
+        int maximumPedestrianCount = DefaultMaximumPedestrianCount)
     {
         MaximumBytes = RequirePositive(maximumBytes, nameof(maximumBytes), "Maximum Save Data bytes");
         MaximumAgentCount = RequirePositive(maximumAgentCount, nameof(maximumAgentCount), "Maximum Agent count");
@@ -32,6 +34,7 @@ public sealed class WorldSaveLimits
         MaximumLaneCount = RequirePositive(maximumLaneCount, nameof(maximumLaneCount), "Maximum Lane count");
         MaximumLaneConnectionCount = RequirePositive(maximumLaneConnectionCount, nameof(maximumLaneConnectionCount), "Maximum LaneConnection count");
         MaximumRoadAccessPointCount = RequirePositive(maximumRoadAccessPointCount, nameof(maximumRoadAccessPointCount), "Maximum RoadAccessPoint count");
+        MaximumPedestrianCount = RequirePositive(maximumPedestrianCount, nameof(maximumPedestrianCount), "Maximum Pedestrian count");
     }
 
     public static WorldSaveLimits Default { get; } = new();
@@ -44,6 +47,7 @@ public sealed class WorldSaveLimits
     public int MaximumLaneCount { get; }
     public int MaximumLaneConnectionCount { get; }
     public int MaximumRoadAccessPointCount { get; }
+    public int MaximumPedestrianCount { get; }
 
     private static int RequirePositive(int value, string parameterName, string label)
     {
