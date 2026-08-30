@@ -7,6 +7,7 @@ on:
       - 'feature/**'
     paths:
       - 'src/MachiVerseWorks.Simulation/**'
+      - 'src/MachiVerseWorks.Persistence/**'
       - 'src/MachiVerseWorks.Protocol/**'
       - 'src/MachiVerseWorks.Server/**'
       - 'src/web/**'
@@ -18,6 +19,7 @@ on:
       - develop
     paths:
       - 'src/MachiVerseWorks.Simulation/**'
+      - 'src/MachiVerseWorks.Persistence/**'
       - 'src/MachiVerseWorks.Protocol/**'
       - 'src/MachiVerseWorks.Server/**'
       - 'src/web/**'
@@ -56,9 +58,19 @@ jobs:
           status=$?
           cat .artifacts/phase14-intersection-control/build.log
           if [ "$status" -eq 0 ]; then
-            dotnet test tests/MachiVerseWorks.Simulation.Tests/MachiVerseWorks.Simulation.Tests.csproj --configuration Release --no-build --no-restore --filter FullyQualifiedName~IntersectionControlTests > .artifacts/phase14-intersection-control/test.log 2>&1
+            dotnet test tests/MachiVerseWorks.Simulation.Tests/MachiVerseWorks.Simulation.Tests.csproj --configuration Release --no-build --no-restore --filter FullyQualifiedName~IntersectionControl > .artifacts/phase14-intersection-control/simulation-test.log 2>&1
             status=$?
-            cat .artifacts/phase14-intersection-control/test.log
+            cat .artifacts/phase14-intersection-control/simulation-test.log
+          fi
+          if [ "$status" -eq 0 ]; then
+            dotnet test tests/MachiVerseWorks.Persistence.Tests/MachiVerseWorks.Persistence.Tests.csproj --configuration Release --no-build --no-restore --filter FullyQualifiedName~IntersectionControlSaveTests > .artifacts/phase14-intersection-control/persistence-test.log 2>&1
+            status=$?
+            cat .artifacts/phase14-intersection-control/persistence-test.log
+          fi
+          if [ "$status" -eq 0 ]; then
+            dotnet test tests/MachiVerseWorks.Protocol.Tests/MachiVerseWorks.Protocol.Tests.csproj --configuration Release --no-build --no-restore --filter FullyQualifiedName~IntersectionControlProtocolTests > .artifacts/phase14-intersection-control/protocol-test.log 2>&1
+            status=$?
+            cat .artifacts/phase14-intersection-control/protocol-test.log
           fi
           exit "$status"
       - name: Upload validation artifacts
