@@ -8,6 +8,8 @@ import { initializeLocalization, type LocaleParameters } from './localization.ts
 import { PedestrianStore } from './pedestrian-store.ts';
 import { MessageType, ProtocolErrorCode, type AgentStateMessage, type PedestrianStateMessage, type ProtocolErrorMessage, type ProtocolMessage, type WorldVolume } from './protocol.ts';
 import { ClientUi } from './ui.ts';
+import { TrafficMessageType, type TrafficProtocolMessage, type VehicleStateMessage } from './traffic-protocol.ts';
+import { IntersectionControlStore, VehicleStore } from './traffic-store.ts';
 import { WorldView } from './world-view.ts';
 
 const SUBSCRIPTION_TOO_LARGE_DETAIL_CODE = 'subscriptionVolumeTooLarge';
@@ -17,6 +19,8 @@ export class Application {
   private readonly config = loadClientConfig();
   private readonly store = new EntityStore();
   private readonly pedestrians = new PedestrianStore();
+  private readonly vehicles = new VehicleStore();
+  private readonly intersections = new IntersectionControlStore();
   private readonly audio = new AudioEngine();
   private readonly ambient = new AmbientSystem(this.audio);
   private readonly performanceMetrics = import.meta.env.DEV ? new ClientPerformanceMetrics() : null;
@@ -42,7 +46,15 @@ export class Application {
         onMessage: (message) => this.handleProtocolMessage(message),
         onProtocolError: (message) => this.handleProtocolError(message),
         onClientError: (error) => this.ui.showError(this.localizer.t('error.client', { detail: error.message })),
-        onDisconnected: () => { this.store.clear(); this.pedestrians.clear(); this.view.clearRoadNetwork(); this.ui.setAgentCount(0); this.ui.setProtocol(null); },
+        onDisconnected: () => {
+          this.store.clear();
+          this.pedestrians.clear();
+          this.vehicles.clear();
+          this.intersections.clear();
+          this.view.clearRoadNetwork();
+          this.ui.setAgentCount(0);
+          this.ui.setProtocol(null);
+        },
         onHelloAck: (version) => { this.ui.clearError(); this.ui.setProtocol(version); },
         ...(performanceMetrics === null ? {} : { onFrameDecoded: (metrics: { readonly frameBytes: number; readonly decodeTimeMs: number }) => performanceMetrics.recordDecode(metrics.frameBytes, metrics.decodeTimeMs) }),
       },
@@ -60,7 +72,7 @@ export class Application {
     const performanceMetrics = this.performanceMetrics;
     if (performanceMetrics !== null) performanceMetrics.recordAnimationFrame(now);
     this.updateSubscription(now);
-    this.view.render(this.store, now, this.pedestrians);
+    this.view.render(this.store, now, this.pedestrians, this.vehicles, this.intersections);
     this.audio.syncListenerFromCamera(this.view.camera);
     this.updateAudio(now);
     if (performanceMetrics !== null) this.updatePerformanceUi(now, performanceMetrics);
@@ -90,7 +102,7 @@ export class Application {
     this.lastPerformanceUiAt = now; this.ui.setPerformanceMetrics(metrics.snapshot());
   }
 
-  private handleProtocolMessage(message: ProtocolMessage): void {
+  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage): void {
     switch (message.type) {
       case MessageType.AgentSpawn: this.applyAgentSpawn(message); return;
       case MessageType.AgentUpdate: this.applyAgentUpdate(message); return;
@@ -102,6 +114,10 @@ export class Application {
       case MessageType.PedestrianUpdate: this.applyPedestrianUpdate(message); return;
       case MessageType.PedestrianRemove: this.pedestrians.remove(message.pedestrianId); return;
       case MessageType.RoadNetworkSnapshot: this.view.applyRoadNetwork(message); return;
+      case TrafficMessageType.VehicleSpawn: this.applyVehicleSpawn(message); return;
+      case TrafficMessageType.VehicleUpdate: this.applyVehicleUpdate(message); return;
+      case TrafficMessageType.VehicleRemove: this.vehicles.remove(message.vehicleId); return;
+      case TrafficMessageType.IntersectionControlSnapshot: this.intersections.apply(message); return;
       case MessageType.Hello:
       case MessageType.HelloAck:
       case MessageType.SubscribeVolume:
@@ -122,6 +138,8 @@ export class Application {
 
   private applyPedestrianSpawn(message: PedestrianStateMessage): void { this.pedestrians.spawn(message); }
   private applyPedestrianUpdate(message: PedestrianStateMessage): void { if (!this.pedestrians.update(message)) this.pedestrians.spawn(message); }
+  private applyVehicleSpawn(message: VehicleStateMessage): void { this.vehicles.spawn(message); }
+  private applyVehicleUpdate(message: VehicleStateMessage): void { if (!this.vehicles.update(message)) this.vehicles.spawn(message); }
   private updateEntityAudioPosition(message: AgentStateMessage): void { if (this.audio.hasEntityEmitters(message.agentId)) this.audio.updateEntityPosition(message.agentId, { x: message.x, y: message.y, z: message.z }); }
 
   private handleProtocolError(message: ProtocolErrorMessage): void {

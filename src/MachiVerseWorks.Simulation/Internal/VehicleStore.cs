@@ -83,16 +83,25 @@ internal sealed class VehicleStore
         return result;
     }
 
-    public void Step(double deltaSeconds, RoadTrafficTopology topology)
+    public void Step(
+        double deltaSeconds,
+        ulong tickCount,
+        RoadTrafficTopology topology,
+        IntersectionControlStore intersectionControl)
     {
         ArgumentNullException.ThrowIfNull(topology);
+        ArgumentNullException.ThrowIfNull(intersectionControl);
         if (!double.IsFinite(deltaSeconds) || deltaSeconds <= 0d) throw new ArgumentOutOfRangeException(nameof(deltaSeconds));
+
+        var intents = CollectIntersectionIntents(deltaSeconds, topology);
+        intersectionControl.PrepareTick(tickCount, intents);
         if (vehicles.Count == 0) return;
+
         foreach (var id in orderedIds)
         {
             var vehicle = vehicles[id];
             if (!occupancy.Remove(id)) throw new InvalidOperationException($"Vehicle {id.Value} was missing from Lane occupancy before update.");
-            StepVehicle(vehicle, deltaSeconds, topology, occupancy);
+            StepVehicle(vehicle, deltaSeconds, topology, occupancy, intersectionControl);
             ValidateState(vehicle, topology);
             var laneProgress = topology.GetLaneTravelProgress(vehicle.CurrentStep.LaneId, vehicle.SegmentOffset);
             if (!occupancy.CanOccupy(vehicle.CurrentStep.LaneId, laneProgress, vehicle.Dimensions.LengthMeters, 0d))
@@ -176,10 +185,38 @@ internal sealed class VehicleStore
         nextId = restoredNextId;
     }
 
-    private static void StepVehicle(VehicleState vehicle, double deltaSeconds, RoadTrafficTopology topology, LaneOccupancyIndex occupancyIndex)
+    private List<IntersectionEntryIntent> CollectIntersectionIntents(double deltaSeconds, RoadTrafficTopology topology)
     {
-        if (vehicle.State == VehicleMovementState.Arrived) { vehicle.SpeedMetersPerSecond = 0d; UpdatePose(vehicle, topology); return; }
-        vehicle.State = VehicleMovementState.Driving;
+        var result = new List<IntersectionEntryIntent>();
+        foreach (var id in orderedIds)
+        {
+            var vehicle = vehicles[id];
+            if (vehicle.State == VehicleMovementState.Arrived || vehicle.RouteStepIndex >= vehicle.RouteSteps.Length - 1) continue;
+            var step = vehicle.CurrentStep;
+            if (step.ExitConnectionId is not { } connectionId) continue;
+
+            var requestedAdvance = CalculateRequestedAdvance(vehicle, deltaSeconds, topology, occupancy);
+            var remaining = Math.Max(0d, step.DistanceMeters - vehicle.RouteProgressMeters);
+            if (requestedAdvance + 1e-9 < remaining) continue;
+
+            var next = vehicle.RouteSteps[vehicle.RouteStepIndex + 1];
+            var targetLaneProgress = topology.GetLaneTravelProgress(next.LaneId, next.StartSegmentOffset);
+            var downstreamAvailable = occupancy.CanOccupy(
+                next.LaneId,
+                targetLaneProgress,
+                vehicle.Dimensions.LengthMeters,
+                vehicle.Performance.MinimumGapMeters);
+            result.Add(new IntersectionEntryIntent(vehicle.Id, connectionId, downstreamAvailable));
+        }
+        return result;
+    }
+
+    private static double CalculateRequestedAdvance(
+        VehicleState vehicle,
+        double deltaSeconds,
+        RoadTrafficTopology topology,
+        LaneOccupancyIndex occupancyIndex)
+    {
         var lane = topology.GetLane(vehicle.CurrentStep.LaneId);
         var targetSpeed = Math.Min(vehicle.Performance.MaximumSpeedMetersPerSecond, lane.Snapshot.SpeedLimitMetersPerSecond);
         var laneProgress = topology.GetLaneTravelProgress(vehicle.CurrentStep.LaneId, vehicle.SegmentOffset);
@@ -191,10 +228,21 @@ internal sealed class VehicleStore
             targetSpeed = Math.Min(targetSpeed, leader.SpeedMetersPerSecond + freeGap / vehicle.Performance.TimeHeadwaySeconds);
             maximumAdvance = freeGap;
         }
-
         var speed = ApproachSpeed(vehicle.SpeedMetersPerSecond, targetSpeed, vehicle.Performance, deltaSeconds);
         var requestedAdvance = Math.Max(0d, speed * deltaSeconds);
-        if (double.IsFinite(maximumAdvance)) requestedAdvance = Math.Min(requestedAdvance, maximumAdvance);
+        return double.IsFinite(maximumAdvance) ? Math.Min(requestedAdvance, maximumAdvance) : requestedAdvance;
+    }
+
+    private static void StepVehicle(
+        VehicleState vehicle,
+        double deltaSeconds,
+        RoadTrafficTopology topology,
+        LaneOccupancyIndex occupancyIndex,
+        IntersectionControlStore intersectionControl)
+    {
+        if (vehicle.State == VehicleMovementState.Arrived) { vehicle.SpeedMetersPerSecond = 0d; UpdatePose(vehicle, topology); return; }
+        vehicle.State = VehicleMovementState.Driving;
+        var requestedAdvance = CalculateRequestedAdvance(vehicle, deltaSeconds, topology, occupancyIndex);
         if (requestedAdvance <= 1e-9)
         {
             vehicle.SpeedMetersPerSecond = 0d;
@@ -203,7 +251,10 @@ internal sealed class VehicleStore
             return;
         }
 
-        var moved = AdvanceRoute(vehicle, requestedAdvance, topology, occupancyIndex);
+        var lane = topology.GetLane(vehicle.CurrentStep.LaneId);
+        var targetSpeed = Math.Min(vehicle.Performance.MaximumSpeedMetersPerSecond, lane.Snapshot.SpeedLimitMetersPerSecond);
+        var speed = ApproachSpeed(vehicle.SpeedMetersPerSecond, targetSpeed, vehicle.Performance, deltaSeconds);
+        var moved = AdvanceRoute(vehicle, requestedAdvance, topology, occupancyIndex, intersectionControl);
         if (vehicle.State == VehicleMovementState.Arrived || vehicle.State == VehicleMovementState.WaitingForTraffic)
         {
             vehicle.SpeedMetersPerSecond = 0d;
@@ -220,7 +271,12 @@ internal sealed class VehicleStore
         UpdatePose(vehicle, topology);
     }
 
-    private static double AdvanceRoute(VehicleState vehicle, double distanceMeters, RoadTrafficTopology topology, LaneOccupancyIndex occupancyIndex)
+    private static double AdvanceRoute(
+        VehicleState vehicle,
+        double distanceMeters,
+        RoadTrafficTopology topology,
+        LaneOccupancyIndex occupancyIndex,
+        IntersectionControlStore intersectionControl)
     {
         var original = distanceMeters;
         var guard = vehicle.RouteSteps.Length + 1;
@@ -252,6 +308,14 @@ internal sealed class VehicleStore
             }
 
             var laneChanged = step.SegmentId == next.SegmentId && step.LaneId != next.LaneId;
+            if (!laneChanged
+                && step.ExitConnectionId is { } connectionId
+                && !intersectionControl.IsEntryGranted(vehicle.Id, connectionId))
+            {
+                vehicle.State = VehicleMovementState.WaitingForTraffic;
+                break;
+            }
+
             vehicle.RouteStepIndex++;
             vehicle.RouteProgressMeters = 0d;
             vehicle.State = laneChanged ? VehicleMovementState.ChangingLane : VehicleMovementState.Driving;

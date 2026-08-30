@@ -15,5 +15,6 @@ public enum MessageType : ushort
     VehicleSpawn = 400,
     VehicleUpdate = 401,
     VehicleRemove = 402,
+    IntersectionControlSnapshot = 500,
     Error = 900,
 }

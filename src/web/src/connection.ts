@@ -1,5 +1,4 @@
 import {
-  CURRENT_PROTOCOL_VERSION,
   MessageType,
   ProtocolDecodeFailure,
   type ProtocolErrorMessage,
@@ -10,10 +9,16 @@ import {
   encodeHello,
   encodeSubscribeVolume,
 } from './protocol.ts';
+import {
+  WEB_PROTOCOL_VERSION,
+  decodeTrafficFrame,
+  isTrafficFrame,
+  type TrafficProtocolMessage,
+} from './traffic-protocol.ts';
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'handshaking' | 'connected' | 'reconnecting';
 export interface FrameDecodeMetrics { readonly frameBytes: number; readonly decodeTimeMs: number; }
-export interface ConnectionCallbacks { readonly onStateChanged: (state: ConnectionState) => void; readonly onMessage: (message: ProtocolMessage) => void; readonly onProtocolError: (message: ProtocolErrorMessage) => void; readonly onClientError: (error: Error) => void; readonly onDisconnected: () => void; readonly onHelloAck: (version: ProtocolVersion, tickRate: number) => void; readonly onFrameDecoded?: (metrics: FrameDecodeMetrics) => void; }
+export interface ConnectionCallbacks { readonly onStateChanged: (state: ConnectionState) => void; readonly onMessage: (message: ProtocolMessage | TrafficProtocolMessage) => void; readonly onProtocolError: (message: ProtocolErrorMessage) => void; readonly onClientError: (error: Error) => void; readonly onDisconnected: () => void; readonly onHelloAck: (version: ProtocolVersion, tickRate: number) => void; readonly onFrameDecoded?: (metrics: FrameDecodeMetrics) => void; }
 export interface ReconnectOptions { readonly minimumDelayMs: number; readonly maximumDelayMs: number; }
 
 export class MachiVerseConnection {
@@ -48,7 +53,7 @@ export class MachiVerseConnection {
     const socket = new WebSocket(this.serverUrl);
     socket.binaryType = 'arraybuffer';
     this.socket = socket;
-    socket.addEventListener('open', () => { if (this.socket !== socket) return; this.setState('handshaking'); socket.send(encodeHello()); });
+    socket.addEventListener('open', () => { if (this.socket !== socket) return; this.setState('handshaking'); socket.send(encodeHello(WEB_PROTOCOL_VERSION)); });
     socket.addEventListener('message', (event) => { void this.handleMessage(socket, event.data); });
     socket.addEventListener('error', () => { if (this.socket === socket) this.callbacks.onClientError(new Error('WebSocket transport error.')); });
     socket.addEventListener('close', () => {
@@ -66,10 +71,10 @@ export class MachiVerseConnection {
       const buffer = await toArrayBuffer(data);
       const onFrameDecoded = this.callbacks.onFrameDecoded;
       const decodeStartedAt = onFrameDecoded === undefined ? 0 : performance.now();
-      const envelope = decodeFrame(buffer);
-      if (onFrameDecoded !== undefined) onFrameDecoded({ frameBytes: buffer.byteLength, decodeTimeMs: Math.max(0, performance.now() - decodeStartedAt) });
 
       if (this.state === 'handshaking') {
+        const envelope = decodeFrame(buffer);
+        if (onFrameDecoded !== undefined) onFrameDecoded({ frameBytes: buffer.byteLength, decodeTimeMs: Math.max(0, performance.now() - decodeStartedAt) });
         if (envelope.message.type === MessageType.Error) {
           this.callbacks.onProtocolError(envelope.message);
           return;
@@ -84,8 +89,10 @@ export class MachiVerseConnection {
         return;
       }
 
+      const envelope = isTrafficFrame(buffer) ? decodeTrafficFrame(buffer) : decodeFrame(buffer);
+      if (onFrameDecoded !== undefined) onFrameDecoded({ frameBytes: buffer.byteLength, decodeTimeMs: Math.max(0, performance.now() - decodeStartedAt) });
       if (this.state !== 'connected') {
-        if (envelope.message.type === MessageType.Error) this.callbacks.onProtocolError(envelope.message);
+        if (!isTrafficFrame(buffer) && envelope.message.type === MessageType.Error) this.callbacks.onProtocolError(envelope.message as ProtocolErrorMessage);
         return;
       }
 
@@ -93,8 +100,8 @@ export class MachiVerseConnection {
       if (negotiatedVersion === null || !protocolVersionsEqual(envelope.version, negotiatedVersion)) {
         throw new ProtocolDecodeFailure('Server frame version changed after protocol negotiation.');
       }
-      if (envelope.message.type === MessageType.Error) {
-        this.callbacks.onProtocolError(envelope.message);
+      if (!isTrafficFrame(buffer) && envelope.message.type === MessageType.Error) {
+        this.callbacks.onProtocolError(envelope.message as ProtocolErrorMessage);
         return;
       }
       this.callbacks.onMessage(envelope.message);
@@ -128,7 +135,7 @@ export class MachiVerseConnection {
 export function resolveNegotiatedProtocolVersion(
   frameVersion: ProtocolVersion,
   acknowledgedVersion: ProtocolVersion,
-  supportedVersion: ProtocolVersion = CURRENT_PROTOCOL_VERSION,
+  supportedVersion: ProtocolVersion = WEB_PROTOCOL_VERSION,
 ): ProtocolVersion {
   if (!protocolVersionsEqual(frameVersion, acknowledgedVersion)) {
     throw new ProtocolDecodeFailure('HelloAck frame version and payload version do not match.');

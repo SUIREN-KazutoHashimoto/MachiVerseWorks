@@ -5,6 +5,7 @@ namespace MachiVerseWorks.Simulation;
 public sealed partial class SimulationWorld
 {
     private readonly RoadTrafficTopology _roadTrafficTopology = new();
+    private readonly IntersectionControlStore _intersectionControl = new();
     private readonly VehicleStore _vehicles = new();
 
     public int VehicleCount => _vehicles.Count;
@@ -48,23 +49,30 @@ public sealed partial class SimulationWorld
         return _vehicles.CreateSnapshot(volume, Time.TickCount);
     }
 
+    public IntersectionControlSnapshot CreateIntersectionControlSnapshot()
+    {
+        EnsureRoadTrafficTopology();
+        return _intersectionControl.CreateSnapshot(Time.TickCount);
+    }
+
     public TrafficMetrics CreateTrafficMetrics()
     {
         EnsureRoadTrafficTopology();
         return _vehicles.CreateMetrics(_roadTrafficTopology);
     }
 
-    private void StepVehicles(double deltaSeconds)
+    private void StepVehicles(double deltaSeconds, ulong tickCount)
     {
-        if (_vehicles.Count == 0) return;
         EnsureRoadTrafficTopology();
-        _vehicles.Step(deltaSeconds, _roadTrafficTopology);
+        _vehicles.Step(deltaSeconds, tickCount, _roadTrafficTopology, _intersectionControl);
     }
 
     private void EnsureRoadTrafficTopology()
     {
         if (!_roadTrafficTopology.NeedsTopology) return;
-        _roadTrafficTopology.Rebuild(_roads.CreateSnapshot());
+        var snapshot = _roads.CreateSnapshot();
+        _roadTrafficTopology.Rebuild(snapshot);
+        _intersectionControl.Rebuild(snapshot, _roadTrafficTopology, Config.TickRate);
     }
 
     private static void ValidateVehicleCheckpoint(SimulationCheckpoint checkpoint)

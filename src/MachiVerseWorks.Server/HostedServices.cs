@@ -176,6 +176,12 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
             var pedestrianPlan = connection.NegotiatedVersion.SupportsPedestrians
                 ? PedestrianSnapshotMessagePlanner.Create(snapshot.Pedestrians, subscription.KnownPedestrianIds, snapshot.TickCount)
                 : new PedestrianSnapshotMessagePlan([], []);
+            var vehiclePlan = connection.NegotiatedVersion.SupportsVehicles
+                ? VehicleSnapshotMessagePlanner.Create(snapshot.Vehicles, subscription.KnownVehicleIds, snapshot.TickCount)
+                : new VehicleSnapshotMessagePlan([], []);
+            var intersectionMessages = connection.NegotiatedVersion.SupportsIntersectionControl
+                ? snapshot.Intersections.Select(IntersectionControlMessageMapper.Create).ToArray()
+                : [];
 
             IProtocolMessage? roadMessage = null;
             var roadStateHandled = false;
@@ -190,7 +196,11 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
             long bytes = 0;
             double encodeTimeMs = 0;
             double sendTimeMs = 0;
-            var messageCount = agentPlan.Messages.Count + pedestrianPlan.Messages.Count + (roadMessage is null ? 0 : 1);
+            var messageCount = agentPlan.Messages.Count
+                + pedestrianPlan.Messages.Count
+                + vehiclePlan.Messages.Count
+                + intersectionMessages.Length
+                + (roadMessage is null ? 0 : 1);
             using var sendCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             foreach (var message in agentPlan.Messages)
             {
@@ -204,6 +214,18 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
                 var sent = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation.Token);
                 bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs;
             }
+            foreach (var message in vehiclePlan.Messages)
+            {
+                sendCancellation.CancelAfter(ClientSendTimeout);
+                var sent = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation.Token);
+                bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs;
+            }
+            foreach (var message in intersectionMessages)
+            {
+                sendCancellation.CancelAfter(ClientSendTimeout);
+                var sent = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation.Token);
+                bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs;
+            }
             if (roadMessage is not null)
             {
                 sendCancellation.CancelAfter(ClientSendTimeout);
@@ -211,10 +233,14 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
                 bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs;
             }
 
-            connection.TryReplaceKnownEntityIds(subscription.Revision, agentPlan.CurrentAgentIds, pedestrianPlan.CurrentPedestrianIds);
+            connection.TryReplaceKnownEntityIds(
+                subscription.Revision,
+                agentPlan.CurrentAgentIds,
+                pedestrianPlan.CurrentPedestrianIds,
+                vehiclePlan.CurrentVehicleIds);
             if (roadStateHandled) connection.TryMarkRoadSnapshotDelivered(subscription.Revision, publishSnapshot.RoadNetwork.Revision);
-            metrics.RecordSnapshotDelivery(snapshot.Agents.Length, messageCount, bytes, encodeTimeMs, sendTimeMs);
-            ServerLog.SnapshotDeliveryMetrics(logger, connection.Id, snapshot.Agents.Length, messageCount, bytes, encodeTimeMs, sendTimeMs);
+            metrics.RecordSnapshotDelivery(snapshot.Agents.Length + snapshot.Vehicles.Length, messageCount, bytes, encodeTimeMs, sendTimeMs);
+            ServerLog.SnapshotDeliveryMetrics(logger, connection.Id, snapshot.Agents.Length + snapshot.Vehicles.Length, messageCount, bytes, encodeTimeMs, sendTimeMs);
         }
         catch (Exception exception) when (SnapshotDeliveryFailurePolicy.IsExpectedClientFailure(exception))
         {

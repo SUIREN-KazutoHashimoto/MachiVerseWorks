@@ -4,6 +4,8 @@ import type { EntityStore } from './entity-store.ts';
 import type { PedestrianStore } from './pedestrian-store.ts';
 import { RoadNetworkStore } from './road-network-store.ts';
 import { LaneDirection, RoadNodeKind, type Lane, type RoadNetworkSnapshotMessage, type WorldVolume } from './protocol.ts';
+import { IntersectionControlStore, VehicleStore } from './traffic-store.ts';
+import { SignalIndication } from './traffic-protocol.ts';
 
 const CAMERA_HEIGHT = 500;
 const CAMERA_TILT_DISTANCE = 250;
@@ -28,6 +30,8 @@ export class WorldView {
 
   private readonly agentRenderer: AgentRenderer;
   private readonly pedestrianRenderer: PedestrianRenderer;
+  private readonly vehicleRenderer: VehicleRenderer;
+  private readonly intersectionRenderer: IntersectionControlRenderer;
   private readonly roadStore = new RoadNetworkStore();
   private readonly roadRenderer: RoadNetworkRenderer;
   private aspect = 1;
@@ -51,6 +55,8 @@ export class WorldView {
     this.roadRenderer = new RoadNetworkRenderer(this.scene);
     this.agentRenderer = new AgentRenderer(this.scene);
     this.pedestrianRenderer = new PedestrianRenderer(this.scene);
+    this.vehicleRenderer = new VehicleRenderer(this.scene);
+    this.intersectionRenderer = new IntersectionControlRenderer(this.scene);
     this.installControls();
     this.resize();
   }
@@ -70,10 +76,20 @@ export class WorldView {
   public applyRoadNetwork(snapshot: RoadNetworkSnapshotMessage): void { this.roadStore.replace(snapshot); }
   public clearRoadNetwork(): void { this.roadStore.clear(); }
 
-  public render(store: EntityStore, now: number, pedestrians: PedestrianStore | null = null): void {
+  public render(
+    store: EntityStore,
+    now: number,
+    pedestrians: PedestrianStore | null = null,
+    vehicles: VehicleStore | null = null,
+    intersections: IntersectionControlStore | null = null,
+  ): void {
     this.roadRenderer.update(this.roadStore);
     this.agentRenderer.update(store, now);
     this.pedestrianRenderer.update(pedestrians, now);
+    const vehicleCount = this.vehicleRenderer.update(vehicles, now);
+    const intersectionCount = this.intersectionRenderer.update(intersections, now);
+    this.renderer.domElement.dataset.vehicleCount = String(vehicleCount);
+    this.renderer.domElement.dataset.intersectionControlCount = String(intersectionCount);
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -94,6 +110,8 @@ export class WorldView {
     this.roadRenderer.dispose();
     this.agentRenderer.dispose();
     this.pedestrianRenderer.dispose();
+    this.vehicleRenderer.dispose();
+    this.intersectionRenderer.dispose();
     this.renderer.dispose();
   }
 
@@ -297,6 +315,107 @@ class PedestrianRenderer {
     const previousMesh = this.mesh; this.capacity = nextCapacity; this.positions = new Float32Array(nextCapacity * 3); this.mesh = this.createMesh(nextCapacity); this.scene.remove(previousMesh); previousMesh.dispose(); this.scene.add(this.mesh);
   }
   private createMesh(capacity: number): THREE.InstancedMesh { const mesh = new THREE.InstancedMesh(this.geometry, this.material, capacity); mesh.name = 'pedestrians'; mesh.count = 0; mesh.frustumCulled = false; return mesh; }
+}
+
+class VehicleRenderer {
+  private readonly geometry = new THREE.BoxGeometry(1, 1, 1);
+  private readonly material = new THREE.MeshBasicMaterial({ color: 0x60a5fa });
+  private mesh: THREE.InstancedMesh;
+  private capacity = 256;
+  private positions = new Float32Array(this.capacity * 3);
+  private scales = new Float32Array(this.capacity * 3);
+  private yaws = new Float32Array(this.capacity);
+  private readonly position = new THREE.Vector3();
+  private readonly scale = new THREE.Vector3();
+  private readonly rotation = new THREE.Quaternion();
+  private readonly matrix = new THREE.Matrix4();
+  private readonly axis = new THREE.Vector3(0, 1, 0);
+
+  public constructor(private readonly scene: THREE.Scene) { this.mesh = this.createMesh(this.capacity); this.scene.add(this.mesh); }
+
+  public update(store: VehicleStore | null, now: number): number {
+    if (store === null) { this.mesh.count = 0; this.mesh.instanceMatrix.needsUpdate = true; return 0; }
+    this.ensureCapacity(store.size);
+    const count = store.writeSampledTransforms(now, this.positions, this.scales, this.yaws);
+    for (let index = 0; index < count; index += 1) {
+      const offset = index * 3;
+      this.position.set(this.positions[offset], this.positions[offset + 2] + this.scales[offset + 1] * 0.5, this.positions[offset + 1]);
+      this.scale.set(this.scales[offset], this.scales[offset + 1], this.scales[offset + 2]);
+      this.rotation.setFromAxisAngle(this.axis, this.yaws[index] ?? 0);
+      this.matrix.compose(this.position, this.rotation, this.scale);
+      this.mesh.setMatrixAt(index, this.matrix);
+    }
+    this.mesh.count = count; this.mesh.instanceMatrix.needsUpdate = true;
+    return count;
+  }
+
+  public dispose(): void { this.scene.remove(this.mesh); this.mesh.dispose(); this.geometry.dispose(); this.material.dispose(); }
+
+  private ensureCapacity(required: number): void {
+    if (required <= this.capacity) return;
+    let nextCapacity = this.capacity; while (nextCapacity < required) nextCapacity *= 2;
+    const previousMesh = this.mesh;
+    this.capacity = nextCapacity;
+    this.positions = new Float32Array(nextCapacity * 3);
+    this.scales = new Float32Array(nextCapacity * 3);
+    this.yaws = new Float32Array(nextCapacity);
+    this.mesh = this.createMesh(nextCapacity);
+    this.scene.remove(previousMesh); previousMesh.dispose(); this.scene.add(this.mesh);
+  }
+
+  private createMesh(capacity: number): THREE.InstancedMesh { const mesh = new THREE.InstancedMesh(this.geometry, this.material, capacity); mesh.name = 'vehicles'; mesh.count = 0; mesh.frustumCulled = false; return mesh; }
+}
+
+class IntersectionControlRenderer {
+  private readonly stopMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 4, sizeAttenuation: false });
+  private readonly redMaterial = new THREE.PointsMaterial({ color: 0xef4444, size: 10, sizeAttenuation: false });
+  private readonly yellowMaterial = new THREE.PointsMaterial({ color: 0xfacc15, size: 10, sizeAttenuation: false });
+  private readonly greenMaterial = new THREE.PointsMaterial({ color: 0x22c55e, size: 10, sizeAttenuation: false });
+  private readonly queueMaterial = new THREE.LineBasicMaterial({ color: 0x38bdf8 });
+  private readonly stopLines = new THREE.Points(new THREE.BufferGeometry(), this.stopMaterial);
+  private readonly red = new THREE.Points(new THREE.BufferGeometry(), this.redMaterial);
+  private readonly yellow = new THREE.Points(new THREE.BufferGeometry(), this.yellowMaterial);
+  private readonly green = new THREE.Points(new THREE.BufferGeometry(), this.greenMaterial);
+  private readonly queues = new THREE.LineSegments(new THREE.BufferGeometry(), this.queueMaterial);
+
+  public constructor(private readonly scene: THREE.Scene) {
+    this.stopLines.name = 'traffic-stop-lines';
+    this.red.name = 'traffic-signal-red';
+    this.yellow.name = 'traffic-signal-yellow';
+    this.green.name = 'traffic-signal-green';
+    this.queues.name = 'traffic-queues';
+    for (const item of [this.stopLines, this.red, this.yellow, this.green, this.queues]) item.frustumCulled = false;
+    this.scene.add(this.stopLines, this.red, this.yellow, this.green, this.queues);
+  }
+
+  public update(store: IntersectionControlStore | null, now: number): number {
+    const stopPositions: number[] = [], redPositions: number[] = [], yellowPositions: number[] = [], greenPositions: number[] = [], queuePositions: number[] = [];
+    let controllerCount = 0;
+    if (store !== null) for (const controller of store.active(now)) {
+      controllerCount += 1;
+      for (const movement of controller.movements) {
+        appendSimulationPosition(stopPositions, movement.stopLineX, movement.stopLineY, movement.stopLineZ);
+        const target = movement.indication === SignalIndication.Red ? redPositions : movement.indication === SignalIndication.Yellow ? yellowPositions : greenPositions;
+        appendSimulationPosition(target, movement.stopLineX, movement.stopLineY, movement.stopLineZ + 1);
+        if (movement.queueLength > 0) {
+          appendSimulationPosition(queuePositions, movement.stopLineX, movement.stopLineY, movement.stopLineZ);
+          appendSimulationPosition(queuePositions, movement.stopLineX, movement.stopLineY, movement.stopLineZ + Math.min(movement.queueLength, 10) * 2);
+        }
+      }
+    }
+    replacePositions(this.stopLines.geometry, stopPositions);
+    replacePositions(this.red.geometry, redPositions);
+    replacePositions(this.yellow.geometry, yellowPositions);
+    replacePositions(this.green.geometry, greenPositions);
+    replacePositions(this.queues.geometry, queuePositions);
+    return controllerCount;
+  }
+
+  public dispose(): void {
+    this.scene.remove(this.stopLines, this.red, this.yellow, this.green, this.queues);
+    for (const item of [this.stopLines, this.red, this.yellow, this.green, this.queues]) item.geometry.dispose();
+    this.stopMaterial.dispose(); this.redMaterial.dispose(); this.yellowMaterial.dispose(); this.greenMaterial.dispose(); this.queueMaterial.dispose();
+  }
 }
 
 function appendSimulationPosition(target: number[], x: number, y: number, z: number): void { target.push(x, z, y); }

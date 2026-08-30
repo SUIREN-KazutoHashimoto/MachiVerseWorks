@@ -54,7 +54,7 @@ public sealed partial class SimulationWorld
     {
         var nextTime = Time.Advance(Config.TickRate);
         _agents.Step(Config.TickDurationSeconds, _spatialIndex);
-        StepVehicles(Config.TickDurationSeconds);
+        StepVehicles(Config.TickDurationSeconds, nextTime.TickCount);
         StepPedestrians(Config.TickDurationSeconds);
         Time = nextTime;
     }

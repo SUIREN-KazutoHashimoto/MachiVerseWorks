@@ -4,9 +4,9 @@ import * as protocol from '../src/protocol.ts';
 
 const { CURRENT_PROTOCOL_VERSION, MessageType, PedestrianMovementState, PROTOCOL_HEADER_SIZE, PROTOCOL_MAGIC, decodeFrame, encodeHello, encodeSubscribeVolume } = protocol;
 
-test('Hello frame matches Protocol 2.2 header contract', () => {
+test('Hello frame matches current Protocol 2.4 header contract', () => {
   const frame = encodeHello(); const view = new DataView(frame);
-  assert.equal(frame.byteLength, PROTOCOL_HEADER_SIZE); assert.equal(CURRENT_PROTOCOL_VERSION.major, 2); assert.equal(CURRENT_PROTOCOL_VERSION.minor, 2);
+  assert.equal(frame.byteLength, PROTOCOL_HEADER_SIZE); assert.equal(CURRENT_PROTOCOL_VERSION.major, 2); assert.equal(CURRENT_PROTOCOL_VERSION.minor, 4);
   assert.equal(view.getUint32(0, true), PROTOCOL_MAGIC); assert.equal(view.getUint16(8, true), MessageType.Hello);
 });
 

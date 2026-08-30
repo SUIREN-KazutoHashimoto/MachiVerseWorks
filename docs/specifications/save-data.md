@@ -11,15 +11,16 @@ MachiVerseWorks のauthoritativeな`SimulationWorld`を停止点から同じ状�
 
 ## Save format version
 
-current formatは `formatVersion = 5` とする。Save format versionはルート`VERSION`とProtocol versionから独立する。
+current formatは `formatVersion = 6` とする。Save format versionはルート`VERSION`とProtocol versionから独立する。
 
 migration対象:
 
 - Format 3: Agent + Building / POI。Road Networkは空として復元する。
 - Format 4: Format 3 + Road Network。Pedestrian stateは空として復元する。
-- Format 5: Format 4 + Pedestrian state。
+- Format 5: Format 4 + Pedestrian state。Vehicle stateは空として復元する。
+- Format 6: Format 5 + Vehicle state。
 
-Format 2以前、および5より新しい未知versionは拒否する。
+Format 2以前、および6より新しい未知versionは拒否する。
 
 ## 共通Simulation state
 
@@ -36,6 +37,8 @@ Format 2以前、および5より新しい未知versionは拒否する。
 - `nextLaneConnectionId`, `laneConnections`
 - `nextRoadAccessPointId`, `roadAccessPoints`
 - `nextPedestrianId`, `pedestrians`
+- `pedestrianCrossings`
+- `nextVehicleId`, `vehicles`
 
 Agent / Building / POI / Roadのfield意味は各仕様を参照する。表示文字列ではなくraw numeric valueとstable IDを保存する。
 
@@ -57,27 +60,57 @@ Walking graphそのものやroute leg配列は保存しない。Road Networkか�
 
 `Arrived`状態も明示削除されるまで保存する。これによりPedestrian stable IDとTrip完了stateをload後も保持できる。
 
+## Format 6 Vehicle state
+
+各Vehicleは次を保持する。
+
+- `id`
+- dimensions: length / width / height
+- performance: maximum speed / acceleration / comfortable deceleration / minimum gap / time headway
+- Route step配列: Lane ID、RoadSegment ID、start/end segment offset、distance、estimated travel time、exit LaneConnection ID
+- `routeStepIndex`
+- `routeProgressMeters`
+- `speedMetersPerSecond`
+- `state`: `VehicleMovementState` numeric value
+
+Vehicleのworld position / forward vectorは独立して保存しない。Road/Lane topologyとRoute progressから復元時に再計算する。Lane occupancy indexも保存せず、Vehicle checkpointをstable ID順に復元しながら再構築する。
+
+## Phase 14 Signal controller state
+
+Phase 14の固定cycle Signalには、Save Dataへ追加すべき独立mutable stateがない。
+
+- movement / conflict / phase topologyは保存済みRoadNode / Lane / LaneConnectionから決定的に派生する。
+- current phase / phase tickは保存済み`tickCount`と`tickRate`から決定的に派生する。
+- current-tick queue / entry grantは次tickで再計算されるephemeral observationであり、継続状態として保存しない。
+
+このためPhase 14ではSave formatを7へ上げず、Format 6のauthoritative入力からcontrollerを再構築する。`IntersectionControlSaveTests`がsave → load前後で同一tickのcontroller mode / phase / indicationを比較する。
+
+将来adaptive signalがdetector履歴、manual offset、preemption、学習状態などの独立mutable stateを持つ場合は、その時点で明示Save fieldとformat versionを追加する。
+
 ## Restore順序
 
-Format 5は次の順で復元する。
+Format 6は次の順で復元する。
 
 1. JSON / resource limit / required field検証
 2. Simulation config / time / random state検証
 3. Agent / Building / POI検証
 4. Road topology / access参照検証
 5. Pedestrian ID / Trip endpoint / speed / progress / state検証
-6. Road Network復元
-7. derived Pedestrian Network再構築
-8. walking route再計算
-9. 保存されたroute progressを適用
+6. Vehicle ID / dimensions / performance / Route / progress / state検証
+7. Road Network復元
+8. derived Road Traffic topologyとIntersection Control topology再構築
+9. Vehicle stateとLane occupancy index復元
+10. derived Pedestrian Network再構築
+11. walking route再計算
+12. 保存されたPedestrian route progress / crossing permissionを適用
 
 いずれかが不正な場合は部分Worldを返さない。
 
 ## 時間とdeterminism
 
-`elapsedTicks`は`tickCount × SimulationConfig.TickDuration.Ticks`と一致しなければならない。`randomState`はseedではなく保存時点のdeterministic random generator状態を保持する。
+`elapsedTicks`は`tickCount`とSimulation TickRateから得られるdeterministic elapsed timeと一致しなければならない。`randomState`はseedではなく保存時点のdeterministic random generator状態を保持する。
 
-Pedestrianのcheckpoint復元後も、同じRoad Network / Trip / crossing permission入力のもとでは同じfixed-tick continuationを得る。
+Vehicle / Pedestrianのcheckpoint復元後も、同じRoad Network / Route / Trip / crossing permission入力のもとでは同じfixed-tick continuationを得る。固定cycle Signalのphaseも同じ`tickCount`から復元される。
 
 ## Resource limits
 
@@ -93,6 +126,8 @@ Pedestrianのcheckpoint復元後も、同じRoad Network / Trip / crossing permi
 - LaneConnection: 4,000,000
 - RoadAccessPoint: 1,000,000
 - Pedestrian: 1,000,000
+- PedestrianCrossing: 1,000,000
+- Vehicle: 1,000,000
 
 同じlimit contractをserialize / deserializeへ適用する。collection件数は`Utf8JsonReader`でDTO materialization前にも検証し、巨大配列を先に確保しない。
 
@@ -107,9 +142,11 @@ Pedestrianのcheckpoint復元後も、同じRoad Network / Trip / crossing permi
 - Audio Client state
 - Server connection / WebSocket state
 - derived Pedestrian Network graph
+- derived Road Traffic topology / Lane occupancy index
+- derived Intersection movement / conflict / fixed-cycle phase state
 - benchmark / diagnostics
 
-Crossing permissionはPhase 16ではSignal / intersection controlから供給されるruntime入力境界として扱い、Pedestrian自身のroute progressとは分離する。
+Crossing permissionはPedestrian自身のroute progressとは分離して保存する。Signal / intersection controlとの連携を拡張する場合も、Pedestrian route stateとcontroller stateの正本を混在させない。
 
 ## 拒否条件
 
@@ -126,3 +163,5 @@ Crossing permissionはPhase 16ではSignal / intersection controlから供給さ
 - dangling Building / POI / Road reference
 - Pedestrian endpointがBuilding/POIを同時またはどちらも参照する状態
 - Pedestrian route progressが再構築routeと整合しない状態
+- Vehicle Routeがmissing Lane / Segment / LaneConnectionを参照する状態
+- Vehicle progress / state / speedがRouteまたはLane occupancy invariantと整合しない状態
