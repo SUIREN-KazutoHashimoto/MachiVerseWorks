@@ -88,7 +88,7 @@ internal static class PublishedReadModelLatencyRunner
 
     private static void QueryAll(SimulationPublishSnapshot snapshot, WorldVolume[] volumes)
     {
-        Parallel.For(0, volumes.Length, index => _ = snapshot.Query(volumes[index]));
+        Parallel.For(0, volumes.Length, index => _ = snapshot.QueryEntities(volumes[index]));
     }
 
     private static double Percentile(double[] sortedSamples, double percentile)

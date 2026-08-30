@@ -27,15 +27,26 @@ internal sealed class SimulationPublishSnapshot
     public double SpatialCellSize { get; }
     public RoadNetworkReadModel RoadNetwork { get; }
 
+    public EntityPublishSnapshot QueryEntities(WorldVolume volume) => new(
+        TickCount,
+        _agents.Query(volume),
+        _pedestrians.Query(volume));
+
     public SubscriptionPublishSnapshot Query(WorldVolume volume)
     {
+        var entities = QueryEntities(volume);
         return new SubscriptionPublishSnapshot(
-            TickCount,
-            _agents.Query(volume),
-            _pedestrians.Query(volume),
+            entities.TickCount,
+            entities.Agents,
+            entities.Pedestrians,
             RoadNetwork.Query(volume));
     }
 }
+
+internal sealed record EntityPublishSnapshot(
+    ulong TickCount,
+    AgentSnapshot[] Agents,
+    PedestrianSnapshot[] Pedestrians);
 
 internal sealed record SubscriptionPublishSnapshot(
     ulong TickCount,

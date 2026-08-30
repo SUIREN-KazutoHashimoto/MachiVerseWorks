@@ -99,8 +99,14 @@ public sealed partial class SimulationWorld
         ValidateRoadNetworkCheckpoint(checkpoint, config.SpatialCellSize);
         ValidatePedestrianCheckpoint(checkpoint);
         var expectedElapsedTicks = CalculateExpectedElapsedTicks(checkpoint.TickCount, config.TickRate);
-        if (checkpoint.ElapsedTicks != expectedElapsedTicks) throw new ArgumentException($"Elapsed time {checkpoint.ElapsedTicks} does not match tick count {checkpoint.TickCount} and tick rate {checkpoint.TickRate}.", nameof(checkpoint));
-        var restoredTime = new SimulationTime(checkpoint.TickCount, TimeSpan.FromTicks(checkpoint.ElapsedTicks));
+        if (checkpoint.ElapsedTicks != expectedElapsedTicks
+            && (!TryCalculateLegacyElapsedTicks(checkpoint.TickCount, config.TickRate, out var legacyElapsedTicks)
+                || checkpoint.ElapsedTicks != legacyElapsedTicks))
+        {
+            throw new ArgumentException($"Elapsed time {checkpoint.ElapsedTicks} does not match tick count {checkpoint.TickCount} and tick rate {checkpoint.TickRate}.", nameof(checkpoint));
+        }
+
+        var restoredTime = new SimulationTime(checkpoint.TickCount, TimeSpan.FromTicks(expectedElapsedTicks));
         try { _ = restoredTime.Advance(config.TickRate); }
         catch (OverflowException) { throw new ArgumentOutOfRangeException(nameof(checkpoint), "Simulation time must allow at least one additional tick."); }
         var world = new SimulationWorld(config) { Time = restoredTime, _random = new DeterministicRandom(checkpoint.RandomState) };
@@ -130,6 +136,20 @@ public sealed partial class SimulationWorld
         {
             throw new ArgumentOutOfRangeException(nameof(tickCount), tickCount, "Tick count cannot be represented by the configured elapsed-time range.");
         }
+    }
+
+    private static bool TryCalculateLegacyElapsedTicks(ulong tickCount, int tickRate, out long elapsedTicks)
+    {
+        var legacyTickDurationTicks = TimeSpan.FromSeconds(1d / tickRate).Ticks;
+        var total = (UInt128)tickCount * (ulong)legacyTickDurationTicks;
+        if (total > long.MaxValue)
+        {
+            elapsedTicks = 0;
+            return false;
+        }
+
+        elapsedTicks = (long)total;
+        return true;
     }
 
     private static void ValidatePoint(WorldPoint point)

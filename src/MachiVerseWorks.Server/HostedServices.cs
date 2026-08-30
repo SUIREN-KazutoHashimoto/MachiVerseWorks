@@ -115,8 +115,17 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
                 _deliveryScheduler.ThrowIfFaulted();
                 var pending = CapturePendingDeliveries();
                 if (pending.Length == 0) continue;
-                var publishSnapshot = simulation.CapturePublishSnapshot();
-                SchedulePublish(publishSnapshot, pending, stoppingToken);
+
+                try
+                {
+                    var publishSnapshot = simulation.CapturePublishSnapshot();
+                    SchedulePublish(publishSnapshot, pending, stoppingToken);
+                }
+                catch
+                {
+                    ReleaseReservations(pending);
+                    throw;
+                }
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -136,6 +145,7 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
         foreach (var connection in candidates)
         {
             if (!connection.HandshakeCompleted || connection.Socket.State != WebSocketState.Open || !connection.TryCaptureSubscription(out var subscription)) continue;
+            if (!_deliveryScheduler.TryReserve(connection.Id)) continue;
             pending.Add(new PendingSnapshotDelivery(connection, subscription));
         }
         return pending.ToArray();
@@ -145,10 +155,15 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
     {
         foreach (var delivery in pending)
         {
-            _deliveryScheduler.TrySchedule(
+            _deliveryScheduler.StartReserved(
                 delivery.Connection.Id,
                 () => PublishConnectionAsync(delivery.Connection, delivery.Subscription, publishSnapshot, cancellationToken));
         }
+    }
+
+    private void ReleaseReservations(PendingSnapshotDelivery[] pending)
+    {
+        foreach (var delivery in pending) _deliveryScheduler.ReleaseReservation(delivery.Connection.Id);
     }
 
     private async Task PublishConnectionAsync(ClientConnection connection, ClientSubscriptionState subscription, SimulationPublishSnapshot publishSnapshot, CancellationToken cancellationToken)
@@ -156,7 +171,7 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
         try
         {
             await Task.Yield();
-            var snapshot = publishSnapshot.Query(subscription.Volume);
+            var snapshot = publishSnapshot.QueryEntities(subscription.Volume);
             var agentPlan = SnapshotMessagePlanner.Create(snapshot.Agents, subscription.KnownAgentIds, snapshot.TickCount);
             var pedestrianPlan = connection.NegotiatedVersion.SupportsPedestrians
                 ? PedestrianSnapshotMessagePlanner.Create(snapshot.Pedestrians, subscription.KnownPedestrianIds, snapshot.TickCount)
@@ -167,7 +182,8 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
             if (connection.NegotiatedVersion.SupportsRoadNetwork
                 && connection.NeedsRoadSnapshot(subscription.Revision, publishSnapshot.RoadNetwork.Revision))
             {
-                roadMessage = RoadSnapshotMessagePlanner.Create(snapshot.RoadNetwork, snapshot.TickCount);
+                var roadSnapshot = publishSnapshot.RoadNetwork.Query(subscription.Volume);
+                roadMessage = RoadSnapshotMessagePlanner.Create(roadSnapshot, snapshot.TickCount);
                 roadStateHandled = true;
             }
 

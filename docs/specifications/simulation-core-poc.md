@@ -16,6 +16,7 @@ Phase 2で成立させた最小Simulation Coreを基礎とし、Phase 9以降は
 - `SimulationTime.Elapsed`は各tickで丸めたdurationを加算せず、`TickCount * TimeSpan.TicksPerSecond / TickRate`から毎回導出する。`TimeSpan`へ変換する際の端数はその時点で整数tickへ切り捨てるため、30Hz / 60Hzのように1 tickが割り切れないrateでも端数誤差を毎tick累積しない。
 - `SimulationConfig.MaximumTickRate`は`TimeSpan.TicksPerSecond`とし、1 tick未満に丸められてElapsedだけ停止する設定を禁止する。
 - checkpoint / Save復元では保存された`TickCount`、`Elapsed`、`TickRate`の整合性を検証し、復元後も同じ時間モデルを継続する。
+- 時間モデル変更前にformat 5以前で保存されたSaveについては、`TickCount * TimeSpan.FromSeconds(1 / TickRate).Ticks`と完全一致する旧累積丸め値も互換入力として受理する。復元時に新しいderived elapsedへ正規化し、次回保存からcanonical値を書き出す。任意の不一致elapsedを許容するfallbackにはしない。
 
 この契約により、同じ`TickCount`でAgent積分が表す経過秒数とSimulation clockの意味を分離しない。
 
@@ -59,7 +60,9 @@ Client配信用の最小snapshotは次を持つ。
 
 Snapshotは値としてコピーし、Simulation内部のmutable stateへの参照を外部へ渡さない。
 
-指定`WorldVolume`のsnapshotはSpatial Indexで候補を絞った後、実座標を`WorldVolume.Contains`で判定する。Serverのmulti-client配信ではauthoritative Worldから1回のatomic publish snapshotを作成し、そのdetached read modelを各Clientのvolumeへfilterする。Client数に応じてSimulation mutation lock内のqueryを繰り返さない。
+指定`WorldVolume`のsnapshotはSpatial Indexで候補を絞った後、実座標を`WorldVolume.Contains`で判定する。Serverのmulti-client配信ではauthoritative Worldから1回のatomic publish snapshotを作成し、そのdetached read modelを各Clientのvolumeへfilterする。Client数に応じてSimulation mutation lock内のqueryを繰り返さない。配信枠を予約できたClientが1件以上ある周期だけWorld captureを行い、既にslow deliveryがin-flightのClientしかいない周期では全Worldコピーを生成しない。
+
+Road topologyは静的revisionが変わった、またはsubscriptionが変わったClientにだけfilter/materializeする。定常Agent / Pedestrian更新周期やProtocol 2.0 ClientのためにRoad全件走査を繰り返さない。
 
 ## 現時点で扱わないもの
 

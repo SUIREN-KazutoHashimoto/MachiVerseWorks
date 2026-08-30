@@ -44,7 +44,7 @@ public class PublishedReadModelBenchmarks
     public int QueryPublishedStateForConcurrentClients()
     {
         var counts = new int[ClientCount];
-        Parallel.For(0, ClientCount, index => counts[index] = _snapshot.Query(_volumes[index]).Agents.Length);
+        Parallel.For(0, ClientCount, index => counts[index] = _snapshot.QueryEntities(_volumes[index]).Agents.Length);
         var total = 0;
         for (var index = 0; index < counts.Length; index++) total += counts[index];
         return total;
