@@ -8,6 +8,7 @@ internal sealed class SimulationRuntime
     private readonly object _gate = new();
     private readonly SimulationWorld _world;
     private bool _pedestrianFixturePending;
+    private bool _roadTrafficFixturePending;
     private bool _trafficFixturePending;
     private RoadNetworkReadModel? _roadReadModel;
 
@@ -39,6 +40,7 @@ internal sealed class SimulationRuntime
         }
 
         _pedestrianFixturePending = bool.TryParse(configuration["Simulation:PedestrianFixture"], out var pedestrianFixture) && pedestrianFixture;
+        _roadTrafficFixturePending = bool.TryParse(configuration["Simulation:RoadTrafficFixture"], out var roadTrafficFixture) && roadTrafficFixture;
         _trafficFixturePending = bool.TryParse(configuration["Simulation:TrafficFixture"], out var trafficFixture) && trafficFixture;
     }
 
@@ -129,6 +131,12 @@ internal sealed class SimulationRuntime
             _pedestrianFixturePending = false;
             _roadReadModel = null;
         }
+        if (_roadTrafficFixturePending)
+        {
+            SeedRoadTrafficFixture(_world);
+            _roadTrafficFixturePending = false;
+            _roadReadModel = null;
+        }
         if (_trafficFixturePending)
         {
             SeedTrafficFixture(_world);
@@ -151,6 +159,28 @@ internal sealed class SimulationRuntime
         world.CreatePedestrian(
             new TripRequest(new TripRequestId(1), TripEndpoint.ForBuilding(originBuilding), TripEndpoint.ForBuilding(destinationBuilding), TravelMode.Foot),
             walkingSpeedMetersPerSecond: 4d);
+    }
+
+    private static void SeedRoadTrafficFixture(SimulationWorld world)
+    {
+        const double startX = -30d;
+        const double endX = 30d;
+        const double distanceMeters = endX - startX;
+        const double speedLimit = 10d;
+
+        for (var index = 0; index < 3; index++)
+        {
+            var y = (index - 1) * 12d;
+            var start = world.CreateRoadNode(new WorldPoint(startX, y, 0d));
+            var end = world.CreateRoadNode(new WorldPoint(endX, y, 0d));
+            var segment = world.CreateRoadSegment(start, end, RoadKind.Local);
+            var lane = world.CreateLane(segment, LaneDirection.Forward, 0, speedLimitMetersPerSecond: speedLimit);
+            world.CreateVehicle(
+            [
+                new RouteLaneStep(lane, segment, 0d, 1d, distanceMeters, distanceMeters / speedLimit, null),
+            ],
+            initialSpeedMetersPerSecond: 8d);
+        }
     }
 
     private static void SeedTrafficFixture(SimulationWorld world)

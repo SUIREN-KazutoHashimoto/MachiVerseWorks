@@ -1,0 +1,56 @@
+name: Phase 13 Road Traffic Benchmark
+
+on:
+  push:
+    branches:
+      - develop
+      - 'feature/**'
+      - 'perf/**'
+      - 'docs/**'
+    paths:
+      - 'src/MachiVerseWorks.Simulation/**'
+      - 'benchmarks/**'
+      - '.github/workflows/phase13-benchmark.yml'
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'src/MachiVerseWorks.Simulation/**'
+      - 'benchmarks/**'
+      - '.github/workflows/phase13-benchmark.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase13-road-traffic-benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: vehicles-1k-10k-100k
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore MachiVerseWorks.slnx
+      - name: Run Road Traffic benchmark
+        run: |
+          set -o pipefail
+          mkdir -p .artifacts/phase13-benchmark
+          dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-restore -- --road-traffic --warmup 5 --ticks 20 | tee .artifacts/phase13-benchmark/results.csv
+      - name: Upload benchmark artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: phase13-road-traffic-benchmark
+          path: .artifacts/phase13-benchmark
+          if-no-files-found: error
+          retention-days: 14

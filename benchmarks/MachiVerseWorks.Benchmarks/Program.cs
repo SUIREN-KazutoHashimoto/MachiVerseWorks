@@ -7,6 +7,17 @@ if (args.Contains("--read-model-latency", StringComparer.Ordinal))
     return;
 }
 
+if (args.Contains("--road-traffic", StringComparer.Ordinal))
+{
+    var benchmarkArgs = args.Where(static argument => argument != "--road-traffic").ToArray();
+    var options = BenchmarkOptions.Parse(benchmarkArgs);
+    var results = RoadTrafficBenchmarkRunner.Run(options);
+
+    Console.WriteLine("vehicles,lanes,iterations,tick_average_ms,tick_p95_ms,tick_p99_ms,tick_allocated_bytes,occupancy_average_ms,occupancy_p95_ms,occupancy_p99_ms,snapshot_average_ms,snapshot_p95_ms,snapshot_p99_ms,snapshot_allocated_bytes,managed_bytes");
+    foreach (var result in results) Console.WriteLine(result.ToCsv());
+    return;
+}
+
 if (args.Contains("--population", StringComparer.Ordinal))
 {
     var benchmarkArgs = args.Where(static argument => argument != "--population").ToArray();
