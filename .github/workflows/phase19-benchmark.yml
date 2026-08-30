@@ -1,0 +1,50 @@
+name: Phase 19 Multimodal Transit Benchmark
+
+on:
+  push:
+    branches: [develop, 'feature/**', 'perf/**']
+    paths:
+      - 'src/MachiVerseWorks.Simulation/**'
+      - 'benchmarks/**'
+      - '.github/workflows/phase19-benchmark.yml'
+  pull_request:
+    branches: [develop]
+    paths:
+      - 'src/MachiVerseWorks.Simulation/**'
+      - 'benchmarks/**'
+      - '.github/workflows/phase19-benchmark.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase19-benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: journey-transfer-dispatch
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore MachiVerseWorks.slnx
+      - name: Run multimodal transit benchmarks
+        env:
+          MACHIVERSE_BENCHMARK_ARTIFACTS: ${{ github.workspace }}/.artifacts/phase19-benchmark
+        run: dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-restore -- --filter '*MultimodalTransitBenchmarks*' --job short
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: phase19-multimodal-transit-benchmark
+          path: .artifacts/phase19-benchmark
+          if-no-files-found: warn
+          retention-days: 14

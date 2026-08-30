@@ -154,6 +154,11 @@ public sealed partial class SimulationWorld
                 arrived = TryGetVehicleSnapshot(vehicleId, out var vehicle) && vehicle.State == VehicleMovementState.Arrived;
                 if (arrived) RemoveVehicle(vehicleId);
             }
+            else if (person.TravelState == PersonTravelState.Transit && person.ActiveTripRequestId is { } transitTripId)
+            {
+                if (_multimodalTransit.TryGetPassengerForTrip(transitTripId, out var passenger)) arrived = passenger.State == PassengerState.Arrived;
+                else if (_multimodalTransit.TryGetTaxiRequestForTrip(transitTripId, out var taxi)) arrived = taxi.State == TaxiRequestState.Completed;
+            }
 
             if (!arrived) continue;
             person.CurrentLocation = person.Destination!.Value;
@@ -191,11 +196,19 @@ public sealed partial class SimulationWorld
 
     private void TryStartPopulationTrip(PersonState person, ActivityKind destinationActivity, TripEndpoint destination)
     {
-        if (person.Demographics.HasPrivateVehicle && TryStartMotorTrip(person, destinationActivity, destination)) return;
-        TryStartWalkingTrip(person, destinationActivity, destination);
+        var tripId = _population.AllocateTripRequestId();
+        var request = new TripRequest(tripId, person.CurrentLocation, destination, TravelMode.Any);
+        ModeChoiceDecision decision;
+        try { decision = ChooseMode(request, person.Demographics.HasPrivateVehicle); }
+        catch (InvalidOperationException) { TryStartWalkingTrip(person, destinationActivity, destination, tripId); return; }
+
+        if (decision.Mode == TransitMode.Motor && TryStartMotorTrip(person, destinationActivity, destination, tripId)) return;
+        if (decision.Mode == TransitMode.Taxi && TryStartTaxiTrip(person, destinationActivity, destination, tripId)) return;
+        if (decision.Mode is TransitMode.Bus or TransitMode.Railway && TryStartTransitTrip(person, destinationActivity, destination, tripId, decision.JourneyId)) return;
+        TryStartWalkingTrip(person, destinationActivity, destination, tripId);
     }
 
-    private bool TryStartMotorTrip(PersonState person, ActivityKind destinationActivity, TripEndpoint destination)
+    private bool TryStartMotorTrip(PersonState person, ActivityKind destinationActivity, TripEndpoint destination, TripRequestId tripId)
     {
         if (!TryResolveRoadAccessPosition(person.CurrentLocation, RoadAccessMode.Motor, out var originPosition)
             || !TryResolveRoadAccessPosition(destination, RoadAccessMode.Motor, out var destinationPosition)) return false;
@@ -210,16 +223,14 @@ public sealed partial class SimulationWorld
         }
         if (route.Steps.Count == 0) return false;
 
-        var tripId = _population.AllocateTripRequestId();
         var vehicleId = CreateVehicle(route);
         BeginTrip(person, destinationActivity, destination, tripId, TravelMode.Motor);
         person.VehicleId = vehicleId;
         return true;
     }
 
-    private bool TryStartWalkingTrip(PersonState person, ActivityKind destinationActivity, TripEndpoint destination)
+    private bool TryStartWalkingTrip(PersonState person, ActivityKind destinationActivity, TripEndpoint destination, TripRequestId tripId)
     {
-        var tripId = _population.AllocateTripRequestId();
         var request = new TripRequest(tripId, person.CurrentLocation, destination, TravelMode.Foot);
         PedestrianId pedestrianId;
         try
@@ -235,6 +246,25 @@ public sealed partial class SimulationWorld
         return true;
     }
 
+    private bool TryStartTransitTrip(PersonState person, ActivityKind destinationActivity, TripEndpoint destination, TripRequestId tripId, JourneyId? plannedJourneyId)
+    {
+        JourneyId journeyId;
+        try { journeyId = plannedJourneyId ?? PlanMultimodalJourney(new TripRequest(tripId, person.CurrentLocation, destination)); }
+        catch (InvalidOperationException) { return false; }
+        CreatePassenger(tripId, journeyId);
+        BeginTrip(person, destinationActivity, destination, tripId, TravelMode.Transit);
+        return true;
+    }
+
+    private bool TryStartTaxiTrip(PersonState person, ActivityKind destinationActivity, TripEndpoint destination, TripRequestId tripId)
+    {
+        if (!TryResolveRoadAccessPosition(person.CurrentLocation, RoadAccessMode.Motor, out var pickup)
+            || !TryResolveRoadAccessPosition(destination, RoadAccessMode.Motor, out var dropOff)) return false;
+        CreateTaxiRequest(tripId, pickup, dropOff);
+        BeginTrip(person, destinationActivity, destination, tripId, TravelMode.Transit);
+        return true;
+    }
+
     private static void BeginTrip(
         PersonState person,
         ActivityKind destinationActivity,
@@ -246,7 +276,7 @@ public sealed partial class SimulationWorld
         person.DestinationActivity = destinationActivity;
         person.ActiveTripRequestId = tripRequestId;
         person.ActiveTravelMode = mode;
-        person.TravelState = mode == TravelMode.Motor ? PersonTravelState.Driving : PersonTravelState.Walking;
+        person.TravelState = mode switch { TravelMode.Motor => PersonTravelState.Driving, TravelMode.Transit => PersonTravelState.Transit, _ => PersonTravelState.Walking };
     }
 
     private bool TryResolveRoadAccessPosition(TripEndpoint endpoint, RoadAccessMode mode, out WorldPoint position)

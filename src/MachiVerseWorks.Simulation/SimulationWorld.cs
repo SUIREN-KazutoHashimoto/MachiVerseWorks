@@ -59,6 +59,7 @@ public sealed partial class SimulationWorld
         StepVehicles(Config.TickDurationSeconds, nextTime.TickCount);
         StepRailwayOperations(Config.TickDurationSeconds, nextTime.TickCount);
         StepPedestrians(Config.TickDurationSeconds);
+        StepMultimodalTransit(nextTime.TickCount);
         CompletePopulationTrips();
         Time = nextTime;
     }
@@ -96,7 +97,8 @@ public sealed partial class SimulationWorld
             RailwayOperations.NextRouteId, railwayOperations.Routes,
             RailwayOperations.NextTimetableId, railwayOperations.Timetables,
             RailwayOperations.NextServiceId, railwayOperations.Services,
-            RailwayOperations.NextTrainId, railwayOperations.Trains);
+            RailwayOperations.NextTrainId, railwayOperations.Trains,
+            _multimodalTransit.CreateCheckpoint(Time.TickCount));
     }
 
     public static SimulationWorld RestoreCheckpoint(SimulationCheckpoint checkpoint)
@@ -155,6 +157,8 @@ public sealed partial class SimulationWorld
             checkpoint.Persons ?? Array.Empty<SimulationPersonCheckpoint>(),
             checkpoint.NextPersonId,
             checkpoint.NextTripRequestId);
+        world._multimodalTransit.Restore(checkpoint.MultimodalTransit);
+        ValidateMultimodalTransitCheckpointReferences(checkpoint);
         return world;
     }
 

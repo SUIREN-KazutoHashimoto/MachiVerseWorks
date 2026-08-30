@@ -30,6 +30,7 @@ public enum TravelMode : byte
     Any = 0,
     Foot = 1,
     Motor = 2,
+    Transit = 3,
 }
 
 public enum PedestrianNodeKind : byte

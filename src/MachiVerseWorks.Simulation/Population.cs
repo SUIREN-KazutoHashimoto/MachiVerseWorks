@@ -45,6 +45,7 @@ public enum PersonTravelState : byte
     AtActivity = 0,
     Walking = 1,
     Driving = 2,
+    Transit = 3,
 }
 
 public readonly record struct PersonDemographics(

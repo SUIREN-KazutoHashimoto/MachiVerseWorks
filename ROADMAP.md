@@ -2,8 +2,8 @@
 
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 19 — Multimodal Transit（次）
-> **次の実装タスク:** P19-001 — Transit Stop / Line / Service pattern / Trip legの共通契約を仕様化する
+> **現在:** Phase 19 — Multimodal Transit（実装完了 / develop統合待ち）
+> **次の実装タスク:** Phase 19 PRのdevelop統合後、Phase 20へ進む
 
 ## 全体の現在地
 
@@ -28,7 +28,7 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 16 | Pedestrian Simulation | ✅ 完了 |
 | 17 | Railway Infrastructure | ✅ 完了 |
 | 18 | Railway Operations | ✅ 完了 |
-| 19 | Multimodal Transit | ⏭️ 次 |
+| 19 | Multimodal Transit | 🔄 実装完了 / develop統合待ち |
 | 20 | Industry / Jobs / Economy | ⏳ 待機 |
 | 21 | Logistics / Freight | ⏳ 待機 |
 | 22 | Power Infrastructure | ⏳ 待機 |
@@ -120,8 +120,8 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ## Phase 17 — Railway Infrastructure
 
-> **状態: ✅ 完了**  
-> **依存:** Phase 10 / 11 / 16  
+> **状態: ✅ 完了**
+> **依存:** Phase 10 / 11 / 16
 > 線路・分岐・block・駅・ホーム・車庫を、列車運行が利用できる3D railway topologyとして確立する。
 
 - ✅ **P17-001** — Railway Infrastructureの軸・接続・track gauge・方向・高度契約を仕様化する
@@ -152,7 +152,7 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 ## Phase 18 — Railway Operations
 
 > **状態: ✅ 完了**
-> **依存:** Phase 17  
+> **依存:** Phase 17
 > Train・service・timetable・station stop・block separationを実装し、再現可能な鉄道運行を成立させる。
 
 - ✅ **P18-001** — Train / Formation / Service / Timetableの責務とstable ID契約を仕様化する
@@ -188,26 +188,26 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ## Phase 19 — Multimodal Transit
 
-> **状態: ⬜ 未着手**  
-> **依存:** Phase 14 / 16 / 18  
+> **状態: 🔄 実装完了 / develop統合待ち**
+> **依存:** Phase 14 / 16 / 18
 > 徒歩・自動車・Bus・Taxi・Railwayを共通Tripとして組み合わせ、公共交通を含む移動を成立させる。
 
-- ⬜ **P19-001** — Transit Stop / Line / Service pattern / Trip legの共通契約を仕様化する
-- ⬜ **P19-002** — Bus stopとRoad Laneの接続モデルを実装する
-- ⬜ **P19-003** — Bus service / stop sequence / timetableの最小モデルを実装する
-- ⬜ **P19-004** — Bus VehicleをRoad Trafficへ接続し、停留所停車・dwellを実装する
-- ⬜ **P19-005** — Taxi Vehicle / request / pickup / drop-offの状態モデルを実装する
-- ⬜ **P19-006** — Taxi requestをVehicleへ割り当てる最小dispatch policyを実装する
-- ⬜ **P19-007** — 徒歩・Bus・Railwayを組み合わせるmultimodal journey graphを構築する
-- ⬜ **P19-008** — transfer timeとaccess/egress walkingを含むjourney planningを実装する
-- ⬜ **P19-009** — Population Trip Requestから利用可能modeを選ぶ最小mode-choice policyを実装する
-- ⬜ **P19-010** — waiting / boarding / riding / transfer / alightingのPassenger state machineを実装する
-- ⬜ **P19-011** — Multimodal transit stateをcheckpoint / Save Dataへ含める
-- ⬜ **P19-012** — Transit line / realtime vehicle / arrival estimateをProtocol / Serverで配信する
-- ⬜ **P19-013** — Web Clientでroute・stop・vehicle・arrival情報をdebug表示する
-- ⬜ **P19-014** — 徒歩→鉄道→徒歩、Bus、Taxiを含むTripを実Server→Browserで検証するE2Eを追加する
-- ⬜ **P19-015** — journey planning / transfer / dispatchのbenchmarkを記録する
-- ⬜ **P19-016** — Multimodal Transitのspecification / architecture / ROADMAPを同期する
+- ✅ **P19-001** — Transit Stop / Line / Service pattern / Trip legの共通契約を仕様化する
+- ✅ **P19-002** — Bus stopとRoad Laneの接続モデルを実装する
+- ✅ **P19-003** — Bus service / stop sequence / timetableの最小モデルを実装する
+- ✅ **P19-004** — Bus VehicleをRoad Trafficへ接続し、停留所停車・dwellを実装する
+- ✅ **P19-005** — Taxi Vehicle / request / pickup / drop-offの状態モデルを実装する
+- ✅ **P19-006** — Taxi requestをVehicleへ割り当てる最小dispatch policyを実装する
+- ✅ **P19-007** — 徒歩・Bus・Railwayを組み合わせるmultimodal journey graphを構築する
+- ✅ **P19-008** — transfer timeとaccess/egress walkingを含むjourney planningを実装する
+- ✅ **P19-009** — Population Trip Requestから利用可能modeを選ぶ最小mode-choice policyを実装する
+- ✅ **P19-010** — waiting / boarding / riding / transfer / alightingのPassenger state machineを実装する
+- ✅ **P19-011** — Multimodal transit stateをcheckpoint / Save Dataへ含める
+- ✅ **P19-012** — Transit line / realtime vehicle / arrival estimateをProtocol / Serverで配信する
+- ✅ **P19-013** — Web Clientでroute・stop・vehicle・arrival情報をdebug表示する
+- ✅ **P19-014** — 徒歩→鉄道→徒歩、Bus、Taxiを含むTripを実Server→Browserで検証するE2Eを追加する
+- ✅ **P19-015** — journey planning / transfer / dispatchのbenchmarkを記録する
+- ✅ **P19-016** — Multimodal Transitのspecification / architecture / ROADMAPを同期する
 
 ### Phase 19 完了条件
 
@@ -215,12 +215,20 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 - BusとTaxiが既存Road Trafficを再利用し、鉄道も共通Journeyへ統合される。
 - transferを含むTripを保存復元して継続できる。
 
+### Phase 19 closeout evidence
+
+- Simulation / Save: BusとTaxiはRoad Trafficを再利用し、Railway Serviceを共通Journeyへ投影する。transfer中Passengerのcheckpoint / Save Format 10 continuationを検証する。
+- Protocol / Web: Protocol 2.8 message 720でLine / Stop / Pattern / realtime Bus・Taxi / arrival estimateを配信し、Transit Debugへ表示する。
+- E2E: `Phase 19 Multimodal Transit E2E`はfixture起動時にWalk→Railway→Walk Journeyを検証し、実Server→WebSocket→headless browserでBus / Taxi / RailwayとRoad-backed vehicle movementを確認する。
+- Benchmark: `Phase 19 Multimodal Transit Benchmark`でjourney planning / nearest Taxi dispatch / transfer checkpoint continuationをShortRun計測する。初回run値は[`docs/development/multimodal-transit-benchmark.md`](docs/development/multimodal-transit-benchmark.md)を正本とする。
+- develop統合前のためPhase全体の正式closeoutは未実施。PRがCI greenで統合された後にPhase 19を「✅ 完了」へ切り替える。
+
 ---
 
 ## Phase 20 — Industry / Jobs / Economy
 
-> **状態: ⬜ 未着手**  
-> **依存:** Phase 15 / 19  
+> **状態: ⬜ 未着手**
+> **依存:** Phase 15 / 19
 > 企業・職場・雇用・所得・生産・消費の最小循環を作り、都市活動へ経済的な理由を与える。
 
 - ⬜ **P20-001** — Company / Establishment / Job / Economic Actorの責務とstable IDを仕様化する
@@ -250,8 +258,8 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ## Phase 21 — Logistics / Freight
 
-> **状態: ⬜ 未着手**  
-> **依存:** Phase 13 / 20  
+> **状態: ⬜ 未着手**
+> **依存:** Phase 13 / 20
 > 生産・在庫・注文・Shipment・Freight Vehicleを接続し、都市内物流をSimulationする。
 
 - ⬜ **P21-001** — Commodity / Inventory / Order / Shipmentの正本契約を仕様化する
@@ -280,8 +288,8 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ## Phase 22 — Power Infrastructure
 
-> **状態: ⬜ 未着手**  
-> **依存:** Phase 10 / 20  
+> **状態: ⬜ 未着手**
+> **依存:** Phase 10 / 20
 > 発電・送配電・需要を都市Entityと接続し、電力供給状態をSimulationへ導入する。
 
 - ⬜ **P22-001** — Generator / Substation / PowerLine / Loadの正本契約を仕様化する
@@ -309,8 +317,8 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ## Phase 23 — Urban Growth & City Generation
 
-> **状態: ⬜ 未着手**  
-> **依存:** Phase 10〜22の主要都市モデル  
+> **状態: ⬜ 未着手**
+> **依存:** Phase 10〜22の主要都市モデル
 > Parcel / Zoning / Land Useとdeterministic city generationを導入し、都市を手作業fixtureだけでなく生成・成長させられるようにする。Phase 10から委譲されたParcel / land-useの正本はこのPhaseで導入する。
 
 - ⬜ **P23-001** — Parcel境界・Zone種別・土地利用・占有/development stateの正本契約を仕様化する
@@ -340,8 +348,8 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ## Phase 24 — City Management UI
 
-> **状態: ⬜ 未着手**  
-> **依存:** Phase 23  
+> **状態: ⬜ 未着手**
+> **依存:** Phase 23
 > Browserから都市状態を調査・編集・管理するためのserver-authoritative UIとcommand境界を整える。
 
 - ⬜ **P24-001** — Build / Edit commandの認可・validation・ack/error契約を仕様化する
@@ -372,8 +380,8 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ## Phase 25 — Distribution & Compatibility
 
-> **状態: ⬜ 未着手**  
-> **依存:** Phase 24  
+> **状態: ⬜ 未着手**
+> **依存:** Phase 24
 > Save migrationと配布物を整備し、開発環境外でもversion付き成果物として起動・更新・復元できる状態にする。
 
 ### Save互換性
@@ -409,8 +417,8 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ## Phase 26 — Extension Platform & Localization
 
-> **状態: ⬜ 未着手**  
-> **依存:** Phase 25  
+> **状態: ⬜ 未着手**
+> **依存:** Phase 25
 > 正本Simulationと互換性境界を壊さず、外部拡張と追加localeを導入できる公開拡張基盤を作る。
 
 ### Extension Platform

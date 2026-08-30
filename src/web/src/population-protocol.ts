@@ -19,8 +19,8 @@ export enum PopulationMessageType {
 }
 
 export enum ActivityKind { Home = 0, Work = 1, Education = 2, Shopping = 3, Healthcare = 4, Recreation = 5, Errand = 6 }
-export enum PersonTravelState { AtActivity = 0, Walking = 1, Driving = 2 }
-export enum TravelMode { Any = 0, Foot = 1, Motor = 2 }
+export enum PersonTravelState { AtActivity = 0, Walking = 1, Driving = 2, Transit = 3 }
+export enum TravelMode { Any = 0, Foot = 1, Motor = 2, Transit = 3 }
 
 export interface PopulationStatisticsMessage {
   readonly type: PopulationMessageType.PopulationStatistics;
@@ -179,6 +179,6 @@ function validEndpoint(buildingId: bigint | null, poiId: bigint | null, allowEmp
   return (buildingId === null) !== (poiId === null);
 }
 function isActivityKind(value: ActivityKind): boolean { return value >= ActivityKind.Home && value <= ActivityKind.Errand; }
-function isTravelState(value: PersonTravelState): boolean { return value >= PersonTravelState.AtActivity && value <= PersonTravelState.Driving; }
-function isTravelMode(value: TravelMode): boolean { return value >= TravelMode.Any && value <= TravelMode.Motor; }
+function isTravelState(value: PersonTravelState): boolean { return value >= PersonTravelState.AtActivity && value <= PersonTravelState.Transit; }
+function isTravelMode(value: TravelMode): boolean { return value >= TravelMode.Any && value <= TravelMode.Transit; }
 function assertPayloadLength(actual: number, expected: number): void { if (actual !== expected) throw new ProtocolDecodeFailure(`Population payload length must be ${String(expected)} bytes.`); }

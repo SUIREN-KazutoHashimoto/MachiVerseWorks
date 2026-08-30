@@ -121,6 +121,7 @@ public static partial class WorldSaveSerializer
         ValidateCount(checkpoint.PlatformAccessPoints?.Count ?? 0, limits.MaximumRoadAccessPointCount, "PlatformAccessPoints");
         ValidateCount(checkpoint.Depots?.Count ?? 0, limits.MaximumBuildingCount, "Depots");
         ValidateRailwayOperationsCheckpointWithinLimits(checkpoint, limits);
+        ValidateMultimodalTransitCheckpointWithinLimits(checkpoint.MultimodalTransit, limits);
     }
 
     private static SaveDataDocument CreateDocument(SimulationCheckpoint checkpoint)
@@ -400,6 +401,7 @@ public static partial class WorldSaveSerializer
                 NextDepotId = checkpoint.NextDepotId,
                 Depots = depots,
                 RailwayOperations = CreateRailwayOperationsData(checkpoint),
+                MultimodalTransit = checkpoint.MultimodalTransit,
             },
         };
     }
@@ -407,7 +409,7 @@ public static partial class WorldSaveSerializer
     private static SimulationWorld RestoreDocument(SaveDataDocument document, WorldSaveLimits limits)
     {
         var format = Require(document.FormatVersion, "formatVersion");
-        if (format is not (SaveFormatVersion.BuildingPoi or SaveFormatVersion.RoadNetwork or SaveFormatVersion.Pedestrian or SaveFormatVersion.Vehicle or SaveFormatVersion.Population or SaveFormatVersion.RailwayInfrastructure or SaveFormatVersion.RailwayOperations))
+        if (format is not (SaveFormatVersion.BuildingPoi or SaveFormatVersion.RoadNetwork or SaveFormatVersion.Pedestrian or SaveFormatVersion.Vehicle or SaveFormatVersion.Population or SaveFormatVersion.RailwayInfrastructure or SaveFormatVersion.RailwayOperations or SaveFormatVersion.MultimodalTransit))
         {
             throw new InvalidDataException($"Unsupported Save format version {format}. Expected {SaveFormatVersion.Current} or a supported migratable version.");
         }
@@ -422,6 +424,7 @@ public static partial class WorldSaveSerializer
         var hasPopulation = format >= SaveFormatVersion.Population;
         var hasRailway = format >= SaveFormatVersion.RailwayInfrastructure;
         var hasRailwayOperations = format >= SaveFormatVersion.RailwayOperations;
+        var hasMultimodalTransit = format >= SaveFormatVersion.MultimodalTransit;
         var roadNodesData = hasRoadNetwork ? simulation.RoadNodes ?? throw new InvalidDataException("Save Data is missing RoadNode state.") : [];
         var roadSegmentsData = hasRoadNetwork ? simulation.RoadSegments ?? throw new InvalidDataException("Save Data is missing RoadSegment state.") : [];
         var lanesData = hasRoadNetwork ? simulation.Lanes ?? throw new InvalidDataException("Save Data is missing Lane state.") : [];
@@ -441,6 +444,7 @@ public static partial class WorldSaveSerializer
         var platformAccessData = hasRailway ? simulation.PlatformAccessPoints ?? throw new InvalidDataException("Save Data is missing PlatformAccessPoint state.") : [];
         var depotData = hasRailway ? simulation.Depots ?? throw new InvalidDataException("Save Data is missing Depot state.") : [];
         var railwayOperationsData = hasRailwayOperations ? simulation.RailwayOperations ?? throw new InvalidDataException("Save Data is missing RailwayOperations state.") : null;
+        var multimodalTransitData = hasMultimodalTransit ? simulation.MultimodalTransit ?? throw new InvalidDataException("Save Data is missing Multimodal Transit state.") : null;
         ValidateMaterializedCounts(
             savedAgents.Length, savedBuildings.Length, savedPois.Length,
             roadNodesData.Length, roadSegmentsData.Length, lanesData.Length, connectionsData.Length, accessData.Length,
@@ -455,6 +459,7 @@ public static partial class WorldSaveSerializer
         ValidateCount(platformAccessData.Length, limits.MaximumRoadAccessPointCount, "PlatformAccessPoints");
         ValidateCount(depotData.Length, limits.MaximumBuildingCount, "Depots");
         ValidateRailwayOperationsDataCounts(railwayOperationsData, hasRailwayOperations, limits);
+        ValidateMultimodalTransitCheckpointWithinLimits(multimodalTransitData, limits);
 
         var agents = new SimulationAgentCheckpoint[savedAgents.Length];
         for (var index = 0; index < agents.Length; index++)
@@ -786,7 +791,8 @@ public static partial class WorldSaveSerializer
             railwayOperations.NextRouteId, railwayOperations.Routes,
             railwayOperations.NextTimetableId, railwayOperations.Timetables,
             railwayOperations.NextServiceId, railwayOperations.Services,
-            railwayOperations.NextTrainId, railwayOperations.Trains);
+            railwayOperations.NextTrainId, railwayOperations.Trains,
+            multimodalTransitData);
         return SimulationWorld.RestoreCheckpoint(checkpoint);
     }
 
@@ -857,6 +863,7 @@ public static partial class WorldSaveSerializer
             else if (reader.ValueTextEquals("platformAccessPoints")) ValidateNamedArrayElementCount(ref reader, limits.MaximumRoadAccessPointCount, "PlatformAccessPoint");
             else if (reader.ValueTextEquals("depots")) ValidateNamedArrayElementCount(ref reader, limits.MaximumBuildingCount, "Depot");
             else if (reader.ValueTextEquals("railwayOperations")) ValidateRailwayOperationsArrayCounts(ref reader, limits);
+            else if (reader.ValueTextEquals("multimodalTransit")) ValidateMultimodalTransitArrayCounts(ref reader, limits);
         }
     }
 

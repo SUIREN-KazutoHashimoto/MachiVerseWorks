@@ -12,6 +12,9 @@ MachiVerseWorks の Server / Web Client 間で使用するbinary protocolを定�
 - Protocol 2.3: `VehicleSpawn` / `VehicleUpdate` / `VehicleRemove`
 - Protocol 2.4: `IntersectionControlSnapshot`
 - Protocol 2.5: `InspectPerson` / `PopulationStatistics` / `PersonDebug`
+- Protocol 2.6: `RailwayInfrastructureSnapshot`
+- Protocol 2.7: `RailwayOperationsSnapshot`
+- Protocol 2.8: `MultimodalTransitSnapshot`
 
 同一majorではServer current以下のminorをClientが要求した場合に受理できる。negotiation成立時のversionはClientがHello frame headerで要求したversionそのものとし、Server connection state、`HelloAck` payload、以後のframe headerで同一値を使用する。
 
@@ -316,6 +319,14 @@ Protocol 2.5以上。Payloadは固定100 bytes。optional IDは0、optional enum
 
 Person / Household IDは0不可。residenceとcurrent endpointはBuilding / POIのどちらか一方を必須とし、destinationだけは両方0を許す。enumは定義済みnumeric valueのみ許可する。
 
+## MultimodalTransitSnapshot
+
+Protocol 2.8以上、message type 720。Payloadは28-byte collection headerの後にLine / Stop / Pattern(+可変Stop列) / realtime Vehicle / Arrival Estimateを連結する。
+
+collection headerは`tickCount:uint64`と5個の`uint32` count。固定要素長はLine 9 bytes、Stop 57 bytes、Pattern header 28 bytes、Pattern Stop 24 bytes、Vehicle 70 bytes、Arrival Estimate 32 bytes。optional stable IDは0をnull sentinelとする。Bus StopはLane、Railway StopはStation（任意Platform）、Railway PatternはRailway Serviceを参照する。Bus/Taxi realtime Vehicleは3D position/stateを持ち、Bus arrivalはStop / Line / Vehicleの全参照が同一frame内に存在することを要求する。
+
+Protocol 2.7以下へmessage 720は送信しない。
+
 ## Snapshot tick semantics
 
 1回のServer publish cycleでAgent、Pedestrian、Vehicle、Intersection、Roadのtick metadataは同じauthoritative capture時点を表す。Client別volume filterはcapture後のimmutable read modelに対して行う。
@@ -328,6 +339,9 @@ Population publisherもSimulation lock経由でauthoritative tickに対応する
 
 - Intersection: `IntersectionControlProtocolCodec`
 - Population: `PopulationProtocolCodec`
+- Railway Infrastructure: `RailwayInfrastructureProtocolCodec`
+- Railway Operations: `RailwayOperationsProtocolCodec`
+- Multimodal Transit: `MultimodalTransitProtocolCodec`
 
 Serverはcommon headerのmessage typeを読み、専用codec対象だけを対応codecへdispatchする。Web ClientもTraffic / Population frameを判別し、対応decoderへ渡す。
 

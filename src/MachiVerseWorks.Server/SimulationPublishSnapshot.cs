@@ -42,7 +42,8 @@ internal sealed class SimulationPublishSnapshot
         RoadNetworkReadModel roadNetwork,
         RailwayInfrastructureReadModel railwayInfrastructure,
         TrainSnapshot[]? trains = null,
-        RailwayOperationsSnapshot? railwayOperations = null)
+        RailwayOperationsSnapshot? railwayOperations = null,
+        MultimodalTransitSnapshot? multimodalTransit = null)
     {
         TickCount = tickCount;
         SpatialCellSize = spatialCellSize;
@@ -54,6 +55,7 @@ internal sealed class SimulationPublishSnapshot
         RailwayInfrastructure = railwayInfrastructure ?? throw new ArgumentNullException(nameof(railwayInfrastructure));
         trains ??= [];
         RailwayOperations = railwayOperations ?? EmptyRailwayOperations();
+        MultimodalTransit = multimodalTransit ?? EmptyMultimodalTransit();
         _agents = new PublishedEntitySpatialIndex<AgentSnapshot>(agents, spatialCellSize, static item => item.Position);
         _pedestrians = new PublishedEntitySpatialIndex<PedestrianSnapshot>(pedestrians, spatialCellSize, static item => item.Position);
         _vehicles = new PublishedEntitySpatialIndex<VehicleSnapshot>(vehicles, spatialCellSize, static item => item.Position);
@@ -66,6 +68,7 @@ internal sealed class SimulationPublishSnapshot
     public RoadNetworkReadModel RoadNetwork { get; }
     public RailwayInfrastructureReadModel RailwayInfrastructure { get; }
     public RailwayOperationsSnapshot RailwayOperations { get; }
+    public MultimodalTransitSnapshot MultimodalTransit { get; }
 
     public EntityPublishSnapshot QueryEntities(WorldVolume volume) => new(TickCount, _agents.Query(volume), _pedestrians.Query(volume), _vehicles.Query(volume), _intersections.Query(volume), _trains.Query(volume));
 
@@ -77,6 +80,7 @@ internal sealed class SimulationPublishSnapshot
 
     private static RailwayInfrastructureSnapshot EmptyRailway() => new([], [], [], [], [], [], [], []);
     private static RailwayOperationsSnapshot EmptyRailwayOperations() => new([], [], [], [], []);
+    private static MultimodalTransitSnapshot EmptyMultimodalTransit() => new([], [], [], [], [], [], [], []);
 }
 
 internal sealed record EntityPublishSnapshot(ulong TickCount, AgentSnapshot[] Agents, PedestrianSnapshot[] Pedestrians, VehicleSnapshot[] Vehicles, IntersectionControllerSnapshot[] Intersections, TrainSnapshot[] Trains);
