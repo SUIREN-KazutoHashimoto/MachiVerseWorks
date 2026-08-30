@@ -5,7 +5,8 @@ import { loadClientConfig } from './config.ts';
 import { MachiVerseConnection } from './connection.ts';
 import { EntityStore } from './entity-store.ts';
 import { initializeLocalization, type LocaleParameters } from './localization.ts';
-import { MessageType, type AgentStateMessage, type ProtocolErrorMessage, type ProtocolMessage, type WorldVolume } from './protocol.ts';
+import { PedestrianStore } from './pedestrian-store.ts';
+import { MessageType, type AgentStateMessage, type PedestrianStateMessage, type ProtocolErrorMessage, type ProtocolMessage, type WorldVolume } from './protocol.ts';
 import { ClientUi } from './ui.ts';
 import { WorldView } from './world-view.ts';
 
@@ -13,6 +14,7 @@ export class Application {
   private readonly localizer = initializeLocalization();
   private readonly config = loadClientConfig();
   private readonly store = new EntityStore();
+  private readonly pedestrians = new PedestrianStore();
   private readonly audio = new AudioEngine();
   private readonly ambient = new AmbientSystem(this.audio);
   private readonly performanceMetrics = import.meta.env.DEV ? new ClientPerformanceMetrics() : null;
@@ -38,7 +40,7 @@ export class Application {
         onMessage: (message) => this.handleProtocolMessage(message),
         onProtocolError: (message) => this.handleProtocolError(message),
         onClientError: (error) => this.ui.showError(this.localizer.t('error.client', { detail: error.message })),
-        onDisconnected: () => { this.store.clear(); this.view.clearRoadNetwork(); this.ui.setAgentCount(0); this.ui.setProtocol(null); },
+        onDisconnected: () => { this.store.clear(); this.pedestrians.clear(); this.view.clearRoadNetwork(); this.ui.setAgentCount(0); this.ui.setProtocol(null); },
         onHelloAck: (version) => { this.ui.clearError(); this.ui.setProtocol(version); },
         ...(performanceMetrics === null ? {} : { onFrameDecoded: (metrics: { readonly frameBytes: number; readonly decodeTimeMs: number }) => performanceMetrics.recordDecode(metrics.frameBytes, metrics.decodeTimeMs) }),
       },
@@ -56,7 +58,7 @@ export class Application {
     const performanceMetrics = this.performanceMetrics;
     if (performanceMetrics !== null) performanceMetrics.recordAnimationFrame(now);
     this.updateSubscription(now);
-    this.view.render(this.store, now);
+    this.view.render(this.store, now, this.pedestrians);
     this.audio.syncListenerFromCamera(this.view.camera);
     this.updateAudio(now);
     if (performanceMetrics !== null) this.updatePerformanceUi(now, performanceMetrics);
@@ -94,6 +96,9 @@ export class Application {
         const removed = this.store.remove(message.agentId); this.audio.removeEntity(message.agentId);
         if (removed) this.ui.setAgentCount(this.store.size); return;
       }
+      case MessageType.PedestrianSpawn: this.applyPedestrianSpawn(message); return;
+      case MessageType.PedestrianUpdate: this.applyPedestrianUpdate(message); return;
+      case MessageType.PedestrianRemove: this.pedestrians.remove(message.pedestrianId); return;
       case MessageType.RoadNetworkSnapshot: this.view.applyRoadNetwork(message); return;
       case MessageType.Hello:
       case MessageType.HelloAck:
@@ -107,8 +112,16 @@ export class Application {
     const previousSize = this.store.size; this.store.spawn(message); this.updateEntityAudioPosition(message);
     if (this.store.size !== previousSize) this.ui.setAgentCount(this.store.size);
   }
-  private applyAgentUpdate(message: AgentStateMessage): void { if (!this.store.update(message)) { this.store.spawn(message); this.ui.setAgentCount(this.store.size); } this.updateEntityAudioPosition(message); }
+
+  private applyAgentUpdate(message: AgentStateMessage): void {
+    if (!this.store.update(message)) { this.store.spawn(message); this.ui.setAgentCount(this.store.size); }
+    this.updateEntityAudioPosition(message);
+  }
+
+  private applyPedestrianSpawn(message: PedestrianStateMessage): void { this.pedestrians.spawn(message); }
+  private applyPedestrianUpdate(message: PedestrianStateMessage): void { if (!this.pedestrians.update(message)) this.pedestrians.spawn(message); }
   private updateEntityAudioPosition(message: AgentStateMessage): void { if (this.audio.hasEntityEmitters(message.agentId)) this.audio.updateEntityPosition(message.agentId, { x: message.x, y: message.y, z: message.z }); }
+
   private handleProtocolError(message: ProtocolErrorMessage): void {
     const parameters: Record<string, string> = {}; for (const parameter of message.parameters) parameters[parameter.key] = parameter.value; parameters.code = String(message.code);
     const key = `error.protocol.${String(message.code)}`; const localized = this.localizer.t(key, parameters as LocaleParameters);
