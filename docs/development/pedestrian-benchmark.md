@@ -27,7 +27,7 @@ dotnet restore MachiVerseWorks.slnx
 dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-restore -- --filter '*PedestrianBenchmarks*' --job short
 ```
 
-CIでは`.github/workflows/phase16-benchmark.yml`が同じfilterを実行し、BenchmarkDotNet artifactを14日間保存する。
+CIでは`.github/workflows/benchmarks.yml`の`pedestrians-1k-10k` jobが同じfilterを実行し、`benchmark-pedestrian` artifactを14日間保存する。
 
 ## 判定
 

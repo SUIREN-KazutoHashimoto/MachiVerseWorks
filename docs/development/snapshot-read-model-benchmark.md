@@ -16,7 +16,7 @@ dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Bench
   --filter '*PublishedReadModelBenchmarks*' --job short
 ```
 
-PRでは`Snapshot Read Model Benchmark` workflowが同じ10 / 100 Client条件を実行し、BenchmarkDotNetのmarkdown / csv / json artifactを14日保存します。
+PRでは`.github/workflows/benchmarks.yml`の`snapshot-readmodel` jobが同じ10 / 100 Client条件を実行し、`benchmark-snapshot-readmodel` artifactとしてBenchmarkDotNetのmarkdown / csv / jsonを14日保存します。
 
 ## 判定
 

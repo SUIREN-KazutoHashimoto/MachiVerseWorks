@@ -8,6 +8,9 @@ on:
       - 'src/**'
       - 'scripts/**'
       - 'tests/fixtures/**'
+      - 'Directory.Build.props'
+      - 'Directory.Packages.props'
+      - 'MachiVerseWorks.slnx'
       - 'global.json'
       - '.github/workflows/e2e.yml'
   pull_request:
@@ -17,6 +20,9 @@ on:
       - 'src/**'
       - 'scripts/**'
       - 'tests/fixtures/**'
+      - 'Directory.Build.props'
+      - 'Directory.Packages.props'
+      - 'MachiVerseWorks.slnx'
       - 'global.json'
       - '.github/workflows/e2e.yml'
   workflow_dispatch:

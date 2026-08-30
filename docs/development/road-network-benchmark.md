@@ -18,7 +18,7 @@ dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Bench
   --filter '*RoadNetworkBenchmarks*' --job short
 ```
 
-GitHub Actionsの`Phase 11 Road Network Benchmark`は同じsuiteを10,000 / 100,000 Segmentで実行し、Markdown / JSON / CSV measurementをartifactとして保存する。後続Routing / Traffic実装では同じbenchmarkを再実行して退行を比較する。
+GitHub Actionsの`.github/workflows/benchmarks.yml`は`road-network-10k-100k` jobで同じsuiteを10,000 / 100,000 Segmentに対して実行し、`benchmark-road-network` artifactとしてMarkdown / JSON / CSV measurementを保存する。後続Routing / Traffic実装では同じbenchmarkを再実行して退行を比較する。
 
 ## Phase 11基準値
 

@@ -31,7 +31,7 @@ Browserの完了待ちはChrome DevTools ProtocolをNode.jsから実時間で監
 - `server-*.log`: 各Agent数のServer log
 - `vite.log` / `chrome.log`: Web/Browser側の診断log
 
-GitHub Actions の `Phase 6 E2E` workflow でも同じスクリプトを実行するため、ローカルとCIで検証手順を分けません。
+GitHub Actionsでは`.github/workflows/e2e.yml`の`core-server-browser` jobが同じスクリプトを実行し、`e2e-core-poc` artifactとして保存するため、ローカルとCIで検証手順を分けません。
 
 ## Server 計測
 
