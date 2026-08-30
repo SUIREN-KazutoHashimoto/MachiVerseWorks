@@ -7,6 +7,7 @@ internal sealed class SimulationRuntime
 {
     private readonly object _gate = new();
     private readonly SimulationWorld _world;
+    private bool _pedestrianFixturePending;
 
     public SimulationRuntime(ServerOptions options, IConfiguration configuration)
     {
@@ -35,10 +36,7 @@ internal sealed class SimulationRuntime
                     options.SpawnMaxZ));
         }
 
-        if (bool.TryParse(configuration["Simulation:PedestrianFixture"], out var pedestrianFixture) && pedestrianFixture)
-        {
-            SeedPedestrianFixture(_world);
-        }
+        _pedestrianFixturePending = bool.TryParse(configuration["Simulation:PedestrianFixture"], out var pedestrianFixture) && pedestrianFixture;
     }
 
     public int TickRate => _world.Config.TickRate;
@@ -49,7 +47,19 @@ internal sealed class SimulationRuntime
     public int RoadSegmentCount { get { lock (_gate) return _world.RoadSegmentCount; } }
     public void Step() { lock (_gate) _world.Step(); }
     public AgentSnapshot[] CreateSnapshot(WorldVolume volume) { lock (_gate) return _world.CreateSnapshot(volume); }
-    public PedestrianSnapshot[] CreatePedestrianSnapshot(WorldVolume volume) { lock (_gate) return _world.CreatePedestrianSnapshot(volume); }
+    public PedestrianSnapshot[] CreatePedestrianSnapshot(WorldVolume volume)
+    {
+        lock (_gate)
+        {
+            if (_pedestrianFixturePending)
+            {
+                SeedPedestrianFixture(_world);
+                _pedestrianFixturePending = false;
+            }
+
+            return _world.CreatePedestrianSnapshot(volume);
+        }
+    }
     public RoadNetworkSnapshot CreateRoadNetworkSnapshot(WorldVolume volume) { lock (_gate) return _world.CreateRoadNetworkSnapshot(volume); }
 
     private static void SeedPedestrianFixture(SimulationWorld world)
