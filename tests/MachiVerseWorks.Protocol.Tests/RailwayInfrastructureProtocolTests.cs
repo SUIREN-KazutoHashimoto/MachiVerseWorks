@@ -37,6 +37,27 @@ public sealed class RailwayInfrastructureProtocolTests
     }
 
     [TestMethod]
+    public void OversizedSnapshotSplitsIntoSerializableChunks()
+    {
+        var nodes = Enumerable.Range(1, 40_000)
+            .Select(static id => new ProtocolTrackNode((ulong)id, 0, id, 0d, 0d))
+            .ToArray();
+        var message = new RailwayInfrastructureSnapshotMessage(77, true, nodes, [], [], [], [], [], [], []);
+
+        var chunks = RailwayInfrastructureProtocolChunker.Split(message);
+
+        Assert.IsGreaterThan(1, chunks.Count);
+        Assert.IsTrue(chunks[0].IsFullSnapshot);
+        Assert.IsTrue(chunks.Skip(1).All(static chunk => !chunk.IsFullSnapshot));
+        Assert.AreEqual(nodes.Length, chunks.Sum(static chunk => chunk.Nodes.Count));
+        foreach (var chunk in chunks)
+        {
+            var frame = RailwayInfrastructureProtocolCodec.Serialize(chunk, ProtocolVersion.Current);
+            Assert.IsLessThanOrEqualTo(ProtocolFrameHeader.Size + (long)ProtocolFrameHeader.MaxPayloadLength, frame.LongLength);
+        }
+    }
+
+    [TestMethod]
     public void ProtocolTwentyFiveRejectsRailwaySnapshots()
     {
         var message = new RailwayInfrastructureSnapshotMessage(1, true, [], [], [], [], [], [], [], []);
