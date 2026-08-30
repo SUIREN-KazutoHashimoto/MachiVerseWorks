@@ -59,6 +59,7 @@ public sealed partial class SimulationWorld
         StepVehicles(Config.TickDurationSeconds, nextTime.TickCount);
         StepRailwayOperations(Config.TickDurationSeconds, nextTime.TickCount);
         StepPedestrians(Config.TickDurationSeconds);
+        StepMultimodalTransit(nextTime.TickCount);
         CompletePopulationTrips();
         Time = nextTime;
     }
