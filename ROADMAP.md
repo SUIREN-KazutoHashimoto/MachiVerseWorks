@@ -2,8 +2,8 @@
 
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 12 — Routing Foundation（次）
-> **次の実装タスク:** P12-001 — Route request / result / routing costの責務とstable ID参照契約を仕様化する
+> **現在:** Phase 13 — Road Traffic Simulation（次）
+> **次の実装タスク:** P13-001 — Vehicle entity・stable ID・寸法・性能値・状態遷移を仕様化する
 
 ## 全体の現在地
 
@@ -21,11 +21,11 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 9 | 3D Simulation Foundation | ✅ 完了 |
 | 10 | Urban World Foundation | ✅ 完了 |
 | 11 | Road Network Foundation | ✅ 完了・develop統合済み |
-| 12 | Routing Foundation | ⏭️ 次 |
-| 13 | Road Traffic Simulation | ⏳ 待機 |
+| 12 | Routing Foundation | ✅ 完了 |
+| 13 | Road Traffic Simulation | ⏭️ 次 |
 | 14 | Intersection & Signal Control | ⏳ 待機 |
 | 15 | Population & Daily Activity | ⏳ 待機 |
-| 16 | Pedestrian Simulation | 🟦 develop統合済み・依存closeout待ち |
+| 16 | Pedestrian Simulation | 🟦 develop統合済み・Phase 15 closeout待ち |
 | 17 | Railway Infrastructure | ⏳ 待機 |
 | 18 | Railway Operations | ⏳ 待機 |
 | 19 | Multimodal Transit | ⏳ 待機 |
@@ -201,26 +201,37 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 
 ---
 
-## Phase 12 — Routing Foundation
+## Phase 12 — Routing Foundation（完了）
 
-> **状態: ⬜ 未着手（次）**  
+> **状態: ✅ 完了**  
 > **依存:** Phase 11  
-> Road / Lane topology上で決定的な経路探索を行い、後続交通modeが共有できるRoute契約を作る。
+> Road / Lane topology上で決定的な経路探索を行い、後続交通modeが共有できるRoute契約を確立した。
 
-- ⬜ **P12-001** — Route request / result / routing costの責務とstable ID参照契約を仕様化する
-- ⬜ **P12-002** — Road/Lane topologyからrouting graphを構築する
-- ⬜ **P12-003** — 起点・終点を最寄り有効Laneへresolveする処理を実装する
-- ⬜ **P12-004** — 最短距離を基準にした決定的なpathfindingを実装する
-- ⬜ **P12-005** — turn restriction / one-way / closed laneをrouting制約へ反映する
-- ⬜ **P12-006** — 速度上限を使った推定所要時間costを追加する
-- ⬜ **P12-007** — 同一入力でstableなRouteを返すdeterministic tie-break ruleを実装する
-- ⬜ **P12-008** — RouteをLane sequenceとsegment progressとして表すimmutable resultを実装する
-- ⬜ **P12-009** — Route cacheのkey・容量・eviction方針を定義して実装する
-- ⬜ **P12-010** — Road topology変更時に影響Route cacheを安全にinvalidateする
-- ⬜ **P12-011** — 地下・高架・立体交差を含む3D接続制約をroutingへ反映する
-- ⬜ **P12-012** — 到達不能・孤立graph・高架/地下誤接続を含むrouting regression testを追加する
-- ⬜ **P12-013** — 小/中/大規模graphで探索時間・allocation・cache hitのbenchmarkを記録する
-- ⬜ **P12-014** — Routingのspecification / architecture / ROADMAPを同期する
+- ✅ **P12-001** — Route request / result / routing costの責務とstable ID参照契約を仕様化する
+- ✅ **P12-002** — Road/Lane topologyからrouting graphを構築する
+- ✅ **P12-003** — 起点・終点を最寄り有効Laneへresolveする処理を実装する
+- ✅ **P12-004** — 最短距離を基準にした決定的なpathfindingを実装する
+- ✅ **P12-005** — turn restriction / one-way / closed laneをrouting制約へ反映する
+- ✅ **P12-006** — 速度上限を使った推定所要時間costを追加する
+- ✅ **P12-007** — 同一入力でstableなRouteを返すdeterministic tie-break ruleを実装する
+- ✅ **P12-008** — RouteをLane sequenceとsegment progressとして表すimmutable resultを実装する
+- ✅ **P12-009** — Route cacheのkey・容量・eviction方針を定義して実装する
+- ✅ **P12-010** — Road topology変更時に影響Route cacheを安全にinvalidateする
+- ✅ **P12-011** — 地下・高架・立体交差を含む3D接続制約をroutingへ反映する
+- ✅ **P12-012** — 到達不能・孤立graph・高架/地下誤接続を含むrouting regression testを追加する
+- ✅ **P12-013** — 小/中/大規模graphで探索時間・allocation・cache hitのbenchmarkを記録する
+- ✅ **P12-014** — Routingのspecification / architecture / ROADMAPを同期する
+
+### Phase 12 closeout evidence
+
+- `RouteRequest` / `RouteResult` / `RouteLaneStep` / `RouteConstraints`をSimulation Coreの共有契約として実装し、Road Networkのstable `LaneId` / `LaneConnectionId`を直接参照する。
+- Road/Lane snapshotからdirected routing graphを派生し、明示`LaneConnection`だけを遷移として使用するため、geometry上の平面交差から暗黙接続を生成しない。
+- 起点・終点はRoadSegment centerlineへ3D射影して最寄りopen Laneへresolveし、one-way、closed Lane、closed LaneConnectionを探索時に遵守する。
+- Dijkstra探索の同cost候補はstable ID順でtie-breakし、距離costと速度上限ベース推定所要時間costを提供する。
+- unconstrained routeは最大1,024 entriesかつ保持Lane step総数100,000のweighted LRU cacheへ保存し、RoadNode / RoadSegment / Lane / LaneConnectionの成功したmutationでgraphとcacheをinvalidateする。
+- one-way逆走、閉鎖Lane/Connection、同cost経路、3D高度resolve、立体交差誤接続、topology mutation、LRU evictionをrouting regression testで固定した。
+- GitHub Actions CI run `33290004846`でrepository / .NET / Webの全jobが成功した。
+- Phase 12 benchmark run `33290004788`で100 / 10,000 / 100,000 Laneを計測し、100,000 Lane cache missは平均15.363ms・43,953,980B/op、cache hitは平均40.41ns・0B/opだった。詳細は[`docs/development/routing-benchmark.md`](docs/development/routing-benchmark.md)を正本とする。
 
 ### Phase 12 完了条件
 
@@ -232,7 +243,7 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 
 ## Phase 13 — Road Traffic Simulation
 
-> **状態: ⬜ 未着手**  
+> **状態: ⬜ 未着手（次）**  
 > **依存:** Phase 12  
 > VehicleがRouteに従ってLane上を移動し、交通密度と前走車の影響を受ける最小道路交通Simulationを作る。
 
@@ -324,10 +335,10 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
 
 ## Phase 16 — Pedestrian Simulation
 
-> **状態: 🟦 develop統合済み・Phase 12 / 15 closeout待ち**  
+> **状態: 🟦 develop統合済み・Phase 15 closeout待ち**  
 > **依存:** Phase 12 / 15  
 > **統合:** PR #61、merge commit `8fd6f2ef866464cc6051111ef343de11948a1eaf`  
-> 徒歩network・Pedestrian entity・保存・Protocol/Server/Web・E2E/benchmarkは先行実装されdevelopへ統合済み。Population由来Trip Requestとの接続はPhase 15が未実装のためP16-009を未完了で残し、Phase 16全体は正式closeoutしない。
+> 徒歩network・Pedestrian entity・保存・Protocol/Server/Web・E2E/benchmarkは先行実装されdevelopへ統合済み。Phase 12 Routing Foundationは完了した。Population由来Trip Requestとの接続はPhase 15が未実装のためP16-009を未完了で残し、Phase 16全体は正式closeoutしない。
 
 - ✅ **P16-001** — pedestrian network / sidewalk / crossingの正本契約を仕様化する
 - ✅ **P16-002** — Road Networkから歩行可能edgeとcrossingを構築する境界を実装する

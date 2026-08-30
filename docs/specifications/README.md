@@ -21,6 +21,7 @@
 - [`simulation-core-poc.md`](simulation-core-poc.md): 現行Simulation Core基盤仕様
 - [`building-poi.md`](building-poi.md): Building / POIのstable ID、3D state、参照整合性仕様
 - [`road-network.md`](road-network.md): Road / Lane / access topology仕様
+- [`routing.md`](routing.md): Road / Lane由来の3D routing、cost、constraint、determinism、cache仕様
 - [`pedestrian-simulation.md`](pedestrian-simulation.md): Road Network派生walking graph、route、fixed-tick歩行、crossing / occupancy仕様
 - [`headless-server-poc.md`](headless-server-poc.md): Headless Server / 3D subscription基盤仕様
 - [`web-client-poc.md`](web-client-poc.md): Web Client + Audio Client Foundationの3D基盤仕様
