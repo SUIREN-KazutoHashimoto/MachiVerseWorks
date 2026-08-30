@@ -36,8 +36,7 @@ jobs:
           patch -p1 < /tmp/phase19.patch
 
           sed -i 's/[[:blank:]]\+$//' ROADMAP.md
-          rm -f .github/workflows/phase19-source-artifact.yml
-          rm -f .github/workflows/phase19-apply.yml
+          git checkout HEAD -- .github/workflows
           printf '0.20.2\n' > VERSION
 
           git config user.name "github-actions[bot]"
