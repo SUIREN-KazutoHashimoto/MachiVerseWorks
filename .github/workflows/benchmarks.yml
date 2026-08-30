@@ -1,0 +1,259 @@
+name: Benchmarks
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - 'src/**'
+      - 'benchmarks/**'
+      - 'scripts/run-phase9-regression-benchmark.sh'
+      - 'Directory.Build.props'
+      - 'Directory.Packages.props'
+      - 'global.json'
+      - '.github/workflows/benchmarks.yml'
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'src/**'
+      - 'benchmarks/**'
+      - 'scripts/run-phase9-regression-benchmark.sh'
+      - 'Directory.Build.props'
+      - 'Directory.Packages.props'
+      - 'global.json'
+      - '.github/workflows/benchmarks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: benchmarks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmarkdotnet:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: road-network
+            name: road-network-10k-100k
+            filter: '*RoadNetworkBenchmarks*'
+            timeout: 20
+          - id: routing
+            name: routing-small-medium-large
+            filter: '*RoutingBenchmarks*'
+            timeout: 30
+          - id: intersection-control
+            name: queued-intersections
+            filter: '*IntersectionControlBenchmarks*'
+            timeout: 30
+          - id: pedestrian
+            name: pedestrians-1k-10k
+            filter: '*PedestrianBenchmarks*'
+            timeout: 20
+          - id: railway-infrastructure
+            name: railway-10k-100k
+            filter: '*RailwayInfrastructureBenchmarks*'
+            timeout: 20
+          - id: railway-operations
+            name: railway-operations-100-1000
+            filter: '*RailwayOperationsBenchmarks*'
+            timeout: 20
+          - id: multimodal-transit
+            name: journey-transfer-dispatch
+            filter: '*MultimodalTransitBenchmarks*'
+            timeout: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore MachiVerseWorks.slnx
+      - name: Run benchmark
+        env:
+          MACHIVERSE_BENCHMARK_ARTIFACTS: ${{ github.workspace }}/.artifacts/benchmarks/${{ matrix.id }}
+        run: dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-restore -- --filter "${{ matrix.filter }}" --job short
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-${{ matrix.id }}
+          path: .artifacts/benchmarks/${{ matrix.id }}
+          if-no-files-found: warn
+          retention-days: 14
+
+  scenario:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: road-traffic
+            name: vehicles-1k-10k-100k
+            args: --road-traffic --warmup 5 --ticks 20
+          - id: population
+            name: population-1k-10k-100k
+            args: --population --warmup 10 --ticks 50
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore MachiVerseWorks.slnx
+      - name: Run scenario benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ".artifacts/benchmarks/${{ matrix.id }}"
+          dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-restore -- ${{ matrix.args }} \
+            | tee ".artifacts/benchmarks/${{ matrix.id }}/results.csv"
+      - name: Upload benchmark artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-${{ matrix.id }}
+          path: .artifacts/benchmarks/${{ matrix.id }}
+          if-no-files-found: error
+          retention-days: 14
+
+  smoke:
+    name: benchmarkdotnet-smoke
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore MachiVerseWorks.slnx
+      - name: Build benchmarks
+        run: dotnet build benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-restore
+      - name: Run BenchmarkDotNet smoke
+        env:
+          MACHIVERSE_BENCHMARK_ARTIFACTS: ${{ github.workspace }}/.artifacts/benchmarks/smoke
+        run: dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-build -- --job Dry --filter '*'
+      - name: Verify benchmark exports
+        shell: bash
+        run: |
+          set -euo pipefail
+          results=".artifacts/benchmarks/smoke/results"
+          test -d "$results"
+          find "$results" -type f -name '*.md' -print -quit | grep -q .
+          find "$results" -type f -name '*.json' -print -quit | grep -q .
+          find "$results" -type f -name '*.csv' -print -quit | grep -q .
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-smoke
+          path: .artifacts/benchmarks/smoke
+          if-no-files-found: error
+          retention-days: 14
+
+  snapshot-readmodel:
+    name: snapshot-readmodel
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore MachiVerseWorks.slnx
+      - name: Build benchmark project
+        run: dotnet build benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-restore
+      - name: Measure read-model latency
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/benchmarks/snapshot-readmodel
+          dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-build -- --read-model-latency \
+            | tee .artifacts/benchmarks/snapshot-readmodel/latency.csv
+      - name: Run allocation benchmark
+        env:
+          MACHIVERSE_BENCHMARK_ARTIFACTS: ${{ github.workspace }}/.artifacts/benchmarks/snapshot-readmodel
+        run: dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-build -- --filter '*PublishedReadModelBenchmarks*' --job short
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-snapshot-readmodel
+          path: .artifacts/benchmarks/snapshot-readmodel
+          if-no-files-found: error
+          retention-days: 14
+
+  regression:
+    name: phase9-2d-to-3d-regression
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout with history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Run regression benchmark
+        env:
+          MACHIVERSE_PHASE9_REGRESSION_ARTIFACTS: ${{ github.workspace }}/.artifacts/benchmarks/phase9-regression
+        run: bash scripts/run-phase9-regression-benchmark.sh
+      - name: Upload regression artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-phase9-regression
+          path: .artifacts/benchmarks/phase9-regression
+          if-no-files-found: error
+          retention-days: 14
+
+  legacy-tick:
+    name: legacy-tick
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Show environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          uname -a
+          lscpu
+          free -h
+          dotnet --info
+      - name: Restore
+        run: dotnet restore MachiVerseWorks.slnx
+      - name: Build benchmark
+        run: dotnet build benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-restore
+      - name: Run tick benchmark
+        run: dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-build -- --warmup 60 --ticks 200

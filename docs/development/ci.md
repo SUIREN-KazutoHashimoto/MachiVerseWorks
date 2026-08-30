@@ -66,7 +66,28 @@ CI baseline:
 
 `dist/` が生成された場合は短期間の Actions artifact として保存します。
 
-## 2. CodeQL
+## 2. Benchmarks
+
+`.github/workflows/benchmarks.yml` は性能回帰の正規入口です。Phaseごとにworkflowを増やさず、機能名をmatrixへ追加します。
+
+- `benchmarkdotnet`: Road Network、Routing、Intersection Control、Pedestrian、Railway Infrastructure、Railway Operations、Multimodal Transit
+- `scenario`: Road Traffic、Population
+- `benchmarkdotnet-smoke`: BenchmarkDotNet全suiteのDry実行
+- `snapshot-readmodel`: publish read model latency / allocation
+- `phase9-2d-to-3d-regression`: 2D→3D比較を同一runnerで実行
+- `legacy-tick`: 初期Simulation tick baselineの手動再実行
+
+PRと`develop`へのmerge後に実行し、feature branchへのpush単独では起動しません。これにより同じ変更に対するpush / pull_requestの二重計測を避けます。
+
+## 3. End-to-end
+
+`.github/workflows/e2e.yml` はServer / Protocol / Web Clientを接続するE2Eの正規入口です。Phase 6 / 11 / 13 / 14 / 16 / 17 / 18 / 19の既存スクリプトをmatrixから呼び出します。
+
+`src/**`、`scripts/**`、E2E fixture、共通.NET build設定、solution、`global.json`の変更で起動します。PRと`develop`へのmerge後に実行し、feature branchへのpush単独では起動しません。
+
+新しいE2Eは原則として新規workflowを作らず、このmatrixへ機能名・script・artifactを追加します。
+
+## 4. CodeQL
 
 CodeQL は GitHub Code Security の **Default setup** を正本として使用します。
 
@@ -74,7 +95,7 @@ Repository内にAdvanced setup用の `.github/workflows/codeql.yml` は置きま
 
 将来、custom query、特殊なbuild手順、独自matrixなどDefault setupで表現できない要件が生じた場合のみAdvanced setupへの移行を再検討します。
 
-## 3. Dependency Review
+## 5. Dependency Review
 
 `.github/workflows/dependency-review.yml` は Pull Request で新規・更新依存関係を確認します。
 
@@ -82,7 +103,7 @@ Repository内にAdvanced setup用の `.github/workflows/codeql.yml` は置きま
 
 ライセンス allow / deny policy は実際の NuGet / npm dependency が導入されてから、`THIRD_PARTY_NOTICES.txt` の運用と合わせて定義します。
 
-## 4. Dependabot
+## 6. Dependabot
 
 `.github/dependabot.yml` では、まず GitHub Actions 自身の更新だけを週次で確認します。
 
@@ -90,7 +111,7 @@ NuGet と npm の Dependabot 設定は、実際の package manifest が追加さ
 
 GitHub Code Security 側では Dependabot alerts / malware alerts / security updates を有効化しています。
 
-## 5. Release / Deploy
+## 7. Release / Deploy
 
 Release workflow はまだ作成しません。
 
@@ -104,7 +125,7 @@ MachiVerseWorks は旧ブラウザ単体版と異なり、将来的に次の配�
 
 配布単位、対応 OS、Web Client hosting、GitHub Release asset の形式が決まる前に release workflow を固定すると後から壊しやすいため、最初の実行可能 PoC と配布方針が確定した時点で追加します。
 
-## 6. Branch protection
+## 8. Branch protection
 
 `main` と `develop` は `docs/development/repository-settings.md` の基準で保護します。
 

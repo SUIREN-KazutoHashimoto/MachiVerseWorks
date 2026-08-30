@@ -45,9 +45,9 @@ dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Bench
 - Full JSON result
 - raw CSV measurements
 
-GitHub Actionsの `Phase 7 benchmark` workflowは `.artifacts/phase7-benchmarks` を14日間のActions artifactとして保存します。shared runnerの絶対時間は環境変動が大きいため、workflowは厳しい性能thresholdを設けず、BenchmarkDotNet基盤が正常に動くことだけをgatingします。
+GitHub Actionsでは`.github/workflows/benchmarks.yml`を性能検証の正規入口とします。`benchmarkdotnet-smoke` jobは`.artifacts/benchmarks/smoke`を`benchmark-smoke`として14日間保存し、shared runnerの絶対時間へ厳しいthresholdを設けず、BenchmarkDotNet基盤が正常に動くことをgatingします。
 
-Phase 9の2D→3D比較は `.github/workflows/phase9-regression-benchmark.yml` と `scripts/run-phase9-regression-benchmark.sh` を使用します。同一runner内で3D化直前commitと現在commitを別worktreeとして連続測定し、`.artifacts/phase9-regression/` を14日間保存します。
+Phase 9の2D→3D比較も同じ`Benchmarks` workflowの`phase9-2d-to-3d-regression` jobから`scripts/run-phase9-regression-benchmark.sh`を実行します。同一runner内で3D化直前commitと現在commitを別worktreeとして連続測定し、`.artifacts/benchmarks/phase9-regression/`を`benchmark-phase9-regression`として14日間保存します。
 
 ## 3. Phase 9 3D benchmark scenarios
 
@@ -133,7 +133,7 @@ Spatial cell keyも `(X,Y)` から `(X,Y,Z)` へ増えるため、cell dictionar
 ### Snapshot
 
 | Agent | 2D mean | 3D mean | 差 | Allocation |
-| ---: | ---: | ---: | ---: | ---: |
+| ---: | ---: | ---: | ---: |
 | 1,000 | 1.648 μs | 1.646 μs | -0.1% | 296 B → 296 B |
 | 10,000 | 16.246 μs | 16.281 μs | +0.2% | 6,344 B → 6,344 B |
 | 100,000 | 48.304 μs | 48.843 μs | +1.1% | 51,600 B → 51,600 B |

@@ -53,4 +53,4 @@ GitHub Actions `Phase 18 Railway Operations Benchmark` run `33318887363`、head 
 
 ## Automation
 
-`.github/workflows/phase18-benchmark.yml`がSimulationまたはbenchmark変更時に`*RailwayOperationsBenchmarks*`をShortRunで実行し、BenchmarkDotNet artifactを14日保持する。`.github/workflows/phase18-e2e.yml`はServer→Browserの1運行周期を検証し、E2E artifactを7日保持する。
+`.github/workflows/benchmarks.yml`の`railway-operations-100-1000` jobが`*RailwayOperationsBenchmarks*`をShortRunで実行し、`benchmark-railway-operations` artifactを14日保持する。`.github/workflows/e2e.yml`の`railway-operations-server-browser` jobはServer→Browserの1運行周期を検証し、`e2e-railway-operations` artifactを7日保持する。

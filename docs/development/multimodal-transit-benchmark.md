@@ -22,4 +22,4 @@ PR #132の`Phase 19 Multimodal Transit Benchmark` ShortRun結果を初回baselin
 
 ## Automation
 
-`.github/workflows/phase19-benchmark.yml`がSimulationまたはbenchmark変更時に`*MultimodalTransitBenchmarks*`をShortRunで実行し、BenchmarkDotNet artifactを14日保持する。
+`.github/workflows/benchmarks.yml`の`journey-transfer-dispatch` jobが`*MultimodalTransitBenchmarks*`をShortRunで実行し、`benchmark-multimodal-transit` artifactを14日保持する。

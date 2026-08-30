@@ -119,8 +119,8 @@ The canvas exposes diagnostic `data-vehicle-count` and `data-intersection-contro
 
 ## Verification automation
 
-- `.github/workflows/phase14-intersection-control.yml`: build + deterministic Simulation regression.
-- `.github/workflows/phase14-e2e.yml`: actual Server/WebSocket/Browser/Three.js signal-traffic path.
-- `.github/workflows/phase14-benchmark.yml`: queued-intersection tick and controller-snapshot BenchmarkDotNet runs.
+- `.github/workflows/ci.yml`: solution全体のbuild/testでdeterministic Simulation regressionを含めて検証する。
+- `.github/workflows/e2e.yml`: `signal-traffic-server-browser` jobで実Server/WebSocket/Browser/Three.js経路を検証し、`e2e-signal-traffic` artifactを保存する。
+- `.github/workflows/benchmarks.yml`: `queued-intersections` jobでqueued-intersection tickとcontroller-snapshotを計測し、`benchmark-intersection-control` artifactを保存する。
 
-The generic CI and pre-existing E2E/benchmark workflows continue to run as regression gates for shared Simulation, Server, Protocol, and Web boundaries.
+Phase専用workflowは置かず、共有境界のcorrectnessは`CI`、統合動作は`End-to-end`、性能回帰は`Benchmarks`へ集約する。

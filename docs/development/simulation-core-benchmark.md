@@ -46,7 +46,7 @@ allocation/tick は Agent 数とともに増加していますが、100,000 Agen
 
 ## 再実行
 
-GitHub Actions の `Simulation benchmark` workflow を手動実行するか、ローカルで次を実行します。
+GitHub Actionsの`.github/workflows/benchmarks.yml`を手動実行すると`legacy-tick` jobで同じtick harnessを再実行できます。ローカルでは次を実行します。
 
 ```bash
 dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release -- --warmup 60 --ticks 200

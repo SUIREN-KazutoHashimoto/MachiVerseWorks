@@ -43,7 +43,7 @@ dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Bench
   --filter '*RoutingBenchmarks*' --job short
 ```
 
-GitHub Actionsでは`.github/workflows/phase12-routing-benchmark.yml`を正規入口とし、BenchmarkDotNet artifactを`phase12-routing-benchmark`として保存する。
+GitHub Actionsでは`.github/workflows/benchmarks.yml`の`routing-small-medium-large` jobを正規入口とし、BenchmarkDotNet artifactを`benchmark-routing`として保存する。
 
 ## Phase 12 baseline
 
@@ -78,6 +78,6 @@ Route cacheは最大1,024 entriesに加え、保持するLane step総数を100,0
 - small / medium / largeの全6 benchmarkが成功した。
 - 100,000 Lane graphでcache miss探索時間とallocationを実測した。
 - cache hitは100,000 LaneでもO(1)相当のlookup pathを維持した。
-- benchmark artifactはrun `33290004788`の`phase12-routing-benchmark`として保存した。
+- 初回benchmark artifactはrun `33290004788`の`phase12-routing-benchmark`として保存した。現行CIでは`benchmark-routing`を使用する。
 
 以上をPhase 12の初回routing性能baselineとする。

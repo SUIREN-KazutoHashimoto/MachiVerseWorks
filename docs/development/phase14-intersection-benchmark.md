@@ -52,4 +52,4 @@ GitHub Actions `Phase 14 Intersection Benchmark` run `33296276808`、head commit
 
 ## Automation
 
-`.github/workflows/phase14-benchmark.yml` がSimulationまたはbenchmark変更時に `*IntersectionControlBenchmarks*` をShortRunで実行し、BenchmarkDotNet artifactを14日保持する。
+`.github/workflows/benchmarks.yml`の`queued-intersections` jobが`*IntersectionControlBenchmarks*`をShortRunで実行し、`benchmark-intersection-control` artifactを14日保持する。

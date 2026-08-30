@@ -53,7 +53,7 @@ Phase 17 validation is split by responsibility:
 - E2E: a Format 8 Save is loaded by the Server and verified in a real browser through Protocol 2.6.
 - Benchmark: 10k/100k TrackSegment spatial snapshot, full snapshot, and connectivity validation.
 
-The benchmark is isolated in `phase17-benchmark.yml` so regressions are observable without coupling benchmark duration to every unit-test job.
+性能回帰は`.github/workflows/benchmarks.yml`の`railway-10k-100k` jobへ集約し、`benchmark-railway-infrastructure` artifactとして保存する。E2Eは`.github/workflows/e2e.yml`の`save-server-browser-railway` jobで継続検証する。
 
 ## Phase 18 extension points
 

@@ -49,4 +49,4 @@ GitHub-hosted runner は hardware 共有条件が変化し得るため、単一 
 
 ## Automation
 
-`.github/workflows/phase13-benchmark.yml` が Road Traffic / benchmark 変更時に runner を実行し、CSV artifact を14日保持する。
+`.github/workflows/benchmarks.yml`の`vehicles-1k-10k-100k` jobがRoad Traffic runnerを実行し、`benchmark-road-traffic` CSV artifactを14日保持する。
