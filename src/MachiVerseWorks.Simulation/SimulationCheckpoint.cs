@@ -32,7 +32,23 @@ public sealed record SimulationCheckpoint(
     IReadOnlyList<SimulationHouseholdCheckpoint>? Households = null,
     ulong NextPersonId = 1,
     IReadOnlyList<SimulationPersonCheckpoint>? Persons = null,
-    ulong NextTripRequestId = 1);
+    ulong NextTripRequestId = 1,
+    ulong NextTrackNodeId = 1,
+    IReadOnlyList<SimulationTrackNodeCheckpoint>? TrackNodes = null,
+    ulong NextTrackSegmentId = 1,
+    IReadOnlyList<SimulationTrackSegmentCheckpoint>? TrackSegments = null,
+    ulong NextTrackConnectionId = 1,
+    IReadOnlyList<SimulationTrackConnectionCheckpoint>? TrackConnections = null,
+    ulong NextBlockSectionId = 1,
+    IReadOnlyList<SimulationBlockSectionCheckpoint>? BlockSections = null,
+    ulong NextStationId = 1,
+    IReadOnlyList<SimulationStationCheckpoint>? Stations = null,
+    ulong NextPlatformId = 1,
+    IReadOnlyList<SimulationPlatformCheckpoint>? Platforms = null,
+    ulong NextPlatformAccessPointId = 1,
+    IReadOnlyList<SimulationPlatformAccessPointCheckpoint>? PlatformAccessPoints = null,
+    ulong NextDepotId = 1,
+    IReadOnlyList<SimulationDepotCheckpoint>? Depots = null);
 
 public readonly record struct SimulationAgentCheckpoint(AgentId Id, WorldPoint Position, WorldVector Velocity, bool IsActive);
 public readonly record struct SimulationBuildingCheckpoint(BuildingId Id, BuildingKind Kind, WorldVolume Bounds);
@@ -79,3 +95,26 @@ public readonly record struct SimulationPersonCheckpoint(
     VehicleId? VehicleId,
     IReadOnlyList<DailyActivityWindow> Schedule,
     IReadOnlyList<PersonNeed> Needs);
+
+public readonly record struct SimulationTrackNodeCheckpoint(TrackNodeId Id, TrackNodeKind Kind, WorldPoint Position);
+public readonly record struct SimulationTrackSegmentCheckpoint(
+    TrackSegmentId Id,
+    TrackNodeId StartNodeId,
+    TrackNodeId EndNodeId,
+    TrackDirection Direction,
+    double GaugeMeters,
+    double SpeedLimitMetersPerSecond,
+    TrackElectrification Electrification,
+    TrackUsage Usage);
+public readonly record struct SimulationTrackConnectionCheckpoint(TrackConnectionId Id, TrackSegmentId FromSegmentId, TrackSegmentId ToSegmentId, TrackNodeId ViaNodeId);
+public sealed record SimulationBlockSectionCheckpoint(BlockSectionId Id, IReadOnlyList<TrackSegmentId> SegmentIds);
+public readonly record struct SimulationStationCheckpoint(StationId Id, WorldVolume Bounds);
+public readonly record struct SimulationPlatformCheckpoint(
+    PlatformId Id,
+    StationId StationId,
+    TrackSegmentId TrackSegmentId,
+    double StartSegmentOffset,
+    double EndSegmentOffset,
+    WorldVolume Bounds);
+public readonly record struct SimulationPlatformAccessPointCheckpoint(PlatformAccessPointId Id, PlatformId PlatformId, RoadAccessPointId RoadAccessPointId);
+public sealed record SimulationDepotCheckpoint(DepotId Id, WorldVolume Bounds, IReadOnlyList<TrackSegmentId> TrackSegmentIds);

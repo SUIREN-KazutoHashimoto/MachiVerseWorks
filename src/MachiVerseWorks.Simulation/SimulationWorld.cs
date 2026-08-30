@@ -14,6 +14,7 @@ public sealed partial class SimulationWorld
         _spatialIndex = new SpatialIndex(Config.SpatialCellSize);
         _pedestrianSpatialIndex = new PedestrianSpatialIndex(Config.SpatialCellSize);
         _roads = new RoadNetworkStore(Config.SpatialCellSize);
+        _railway = new RailwayInfrastructureStore();
         _random = new DeterministicRandom(Config.Seed);
         Time = default;
     }
@@ -80,7 +81,15 @@ public sealed partial class SimulationWorld
             _pedestrians.NextId, _pedestrians.CreateCheckpoint(), _pedestrianNetwork.CreateCrossingCheckpoint(),
             _vehicles.NextId, _vehicles.CreateCheckpoint(),
             _population.NextHouseholdId, _population.CreateHouseholdCheckpoint(),
-            _population.NextPersonId, _population.CreatePersonCheckpoint(), _population.NextTripRequestId);
+            _population.NextPersonId, _population.CreatePersonCheckpoint(), _population.NextTripRequestId,
+            _railway.NextNodeId, _railway.CreateNodeCheckpoint(),
+            _railway.NextSegmentId, _railway.CreateSegmentCheckpoint(),
+            _railway.NextConnectionId, _railway.CreateConnectionCheckpoint(),
+            _railway.NextBlockId, _railway.CreateBlockCheckpoint(),
+            _railway.NextStationId, _railway.CreateStationCheckpoint(),
+            _railway.NextPlatformId, _railway.CreatePlatformCheckpoint(),
+            _railway.NextPlatformAccessPointId, _railway.CreatePlatformAccessPointCheckpoint(),
+            _railway.NextDepotId, _railway.CreateDepotCheckpoint());
     }
 
     public static SimulationWorld RestoreCheckpoint(SimulationCheckpoint checkpoint)
@@ -106,6 +115,7 @@ public sealed partial class SimulationWorld
         ValidatePedestrianCheckpoint(checkpoint);
         ValidateVehicleCheckpoint(checkpoint);
         ValidatePopulationCheckpoint(checkpoint);
+        ValidateRailwayCheckpoint(checkpoint, config.SpatialCellSize);
         var expectedElapsedTicks = CalculateExpectedElapsedTicks(checkpoint.TickCount, config.TickRate);
         if (checkpoint.ElapsedTicks != expectedElapsedTicks
             && (!TryCalculateLegacyElapsedTicks(checkpoint.TickCount, config.TickRate, out var legacyElapsedTicks)
@@ -121,6 +131,7 @@ public sealed partial class SimulationWorld
         world._agents.Restore(checkpoint.Agents, checkpoint.NextAgentId, world._spatialIndex);
         world.RestoreUrbanObjects(checkpoint);
         world._roads.Restore(checkpoint);
+        world._railway.Restore(checkpoint);
         world.EnsureRoadTrafficTopology();
         world._vehicles.Restore(checkpoint.Vehicles ?? Array.Empty<SimulationVehicleCheckpoint>(), checkpoint.NextVehicleId, world._roadTrafficTopology);
         world.EnsurePedestrianNetwork();
