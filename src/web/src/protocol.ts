@@ -1,7 +1,7 @@
 export const PROTOCOL_MAGIC = 0x5057564d;
 export const PROTOCOL_HEADER_SIZE = 16;
 export const PROTOCOL_MAX_PAYLOAD_LENGTH = 1_048_576;
-export const CURRENT_PROTOCOL_VERSION = Object.freeze({ major: 2, minor: 2 });
+export const CURRENT_PROTOCOL_VERSION = Object.freeze({ major: 2, minor: 4 });
 
 const ROAD_HEADER_LENGTH = 28;
 const ROAD_NODE_LENGTH = 33;
@@ -225,65 +225,55 @@ function decodeRoadNetwork(view: DataView, offset: number, payloadLength: number
   const connections: LaneConnection[] = [];
   for (let index = 0; index < connectionCount; index += 1) {
     const id = view.getBigUint64(cursor, true); const fromLaneId = view.getBigUint64(cursor + 8, true); const toLaneId = view.getBigUint64(cursor + 16, true); const viaNodeId = view.getBigUint64(cursor + 24, true); const movement = view.getUint8(cursor + 32) as TurnMovement;
-    assertStableId(id, 'LaneConnection'); assertStableId(fromLaneId, 'LaneConnection from lane'); assertStableId(toLaneId, 'LaneConnection to lane'); assertStableId(viaNodeId, 'LaneConnection via node');
-    if (fromLaneId === toLaneId || !isTurnMovement(movement)) throw new ProtocolDecodeFailure('LaneConnection payload is invalid.');
+    assertStableId(id, 'LaneConnection'); assertStableId(fromLaneId, 'LaneConnection from Lane'); assertStableId(toLaneId, 'LaneConnection to Lane'); assertStableId(viaNodeId, 'LaneConnection via node');
+    if (!isTurnMovement(movement) || fromLaneId === toLaneId) throw new ProtocolDecodeFailure('LaneConnection payload is invalid.');
     connections.push({ id, fromLaneId, toLaneId, viaNodeId, movement }); cursor += LANE_CONNECTION_LENGTH;
   }
 
   const accessPoints: RoadAccessPoint[] = [];
   for (let index = 0; index < accessPointCount; index += 1) {
-    const id = view.getBigUint64(cursor, true); const segmentId = view.getBigUint64(cursor + 8, true); const segmentOffset = view.getFloat64(cursor + 16, true); const rawBuildingId = view.getBigUint64(cursor + 24, true); const rawPoiId = view.getBigUint64(cursor + 32, true); const mode = view.getUint8(cursor + 40) as RoadAccessMode;
+    const id = view.getBigUint64(cursor, true); const segmentId = view.getBigUint64(cursor + 8, true); const segmentOffset = view.getFloat64(cursor + 16, true); const buildingIdValue = view.getBigUint64(cursor + 24, true); const poiIdValue = view.getBigUint64(cursor + 32, true); const mode = view.getUint8(cursor + 40) as RoadAccessMode;
     assertStableId(id, 'RoadAccessPoint'); assertStableId(segmentId, 'RoadAccessPoint segment');
-    if (!Number.isFinite(segmentOffset) || segmentOffset < 0 || segmentOffset > 1 || (rawBuildingId === 0n && rawPoiId === 0n) || !isRoadAccessMode(mode)) throw new ProtocolDecodeFailure('RoadAccessPoint payload is invalid.');
-    accessPoints.push({ id, segmentId, segmentOffset, buildingId: rawBuildingId === 0n ? null : rawBuildingId, poiId: rawPoiId === 0n ? null : rawPoiId, mode }); cursor += ROAD_ACCESS_POINT_LENGTH;
+    if (!Number.isFinite(segmentOffset) || segmentOffset < 0 || segmentOffset > 1 || (buildingIdValue === 0n && poiIdValue === 0n) || !isRoadAccessMode(mode)) throw new ProtocolDecodeFailure('RoadAccessPoint payload is invalid.');
+    accessPoints.push({ id, segmentId, segmentOffset, buildingId: buildingIdValue === 0n ? null : buildingIdValue, poiId: poiIdValue === 0n ? null : poiIdValue, mode }); cursor += ROAD_ACCESS_POINT_LENGTH;
   }
 
-  validateRoadNetworkReferences(nodes, segments, lanes, connections, accessPoints);
+  validateRoadReferences(nodes, segments, lanes, connections, accessPoints);
   return { type: MessageType.RoadNetworkSnapshot, tickCount, nodes, segments, lanes, connections, accessPoints };
 }
 
-function validateRoadNetworkReferences(nodes: readonly RoadNode[], segments: readonly RoadSegment[], lanes: readonly Lane[], connections: readonly LaneConnection[], accessPoints: readonly RoadAccessPoint[]): void {
-  const nodeIds = uniqueIds(nodes, 'RoadNode'); const segmentIds = uniqueIds(segments, 'RoadSegment'); const laneIds = uniqueIds(lanes, 'Lane'); uniqueIds(connections, 'LaneConnection'); uniqueIds(accessPoints, 'RoadAccessPoint');
-  for (const segment of segments) if (!nodeIds.has(segment.startNodeId) || !nodeIds.has(segment.endNodeId)) throw new ProtocolDecodeFailure('RoadSegment references a missing RoadNode.');
-  for (const lane of lanes) if (!segmentIds.has(lane.segmentId)) throw new ProtocolDecodeFailure('Lane references a missing RoadSegment.');
-  for (const connection of connections) if (!laneIds.has(connection.fromLaneId) || !laneIds.has(connection.toLaneId) || !nodeIds.has(connection.viaNodeId)) throw new ProtocolDecodeFailure('LaneConnection contains a dangling reference.');
-  for (const accessPoint of accessPoints) if (!segmentIds.has(accessPoint.segmentId)) throw new ProtocolDecodeFailure('RoadAccessPoint references a missing RoadSegment.');
-}
-
-function uniqueIds<T extends { readonly id: bigint }>(items: readonly T[], label: string): Set<bigint> {
-  const ids = new Set<bigint>();
-  for (const item of items) { if (ids.has(item.id)) throw new ProtocolDecodeFailure(`${label} IDs are duplicated.`); ids.add(item.id); }
-  return ids;
-}
-
 function decodeProtocolError(view: DataView, offset: number, payloadLength: number): ProtocolErrorMessage {
-  if (payloadLength < 4) throw new ProtocolDecodeFailure('Protocol error payload is too short.');
-  const end = offset + payloadLength; const code = view.getUint16(offset, true) as ProtocolErrorCode; const parameterCount = view.getUint16(offset + 2, true);
-  if (parameterCount > 16) throw new ProtocolDecodeFailure('Protocol error contains too many parameters.');
-  let cursor = offset + 4; const parameters: ProtocolErrorParameter[] = [];
-  for (let index = 0; index < parameterCount; index += 1) { const key = readUtf8String(view, cursor, end, 64); cursor = key.nextOffset; const value = readUtf8String(view, cursor, end, 256); cursor = value.nextOffset; parameters.push({ key: key.value, value: value.value }); }
-  if (cursor !== end) throw new ProtocolDecodeFailure('Protocol error payload contains trailing bytes.');
+  if (payloadLength < 4) throw new ProtocolDecodeFailure('Error payload is too short.');
+  const end = offset + payloadLength; const code = view.getUint16(offset, true) as ProtocolErrorCode; const parameterCount = view.getUint16(offset + 2, true); let cursor = offset + 4; const parameters: ProtocolErrorParameter[] = [];
+  for (let index = 0; index < parameterCount; index += 1) {
+    const key = readUtf8String(view, cursor, end); cursor = key.nextOffset; const value = readUtf8String(view, cursor, end); cursor = value.nextOffset; parameters.push({ key: key.value, value: value.value });
+  }
+  if (cursor !== end) throw new ProtocolDecodeFailure('Error payload contains trailing bytes.');
   return { type: MessageType.Error, code, parameters };
 }
 
-function readUtf8String(view: DataView, offset: number, end: number, maximumByteLength: number): { readonly value: string; readonly nextOffset: number } {
-  if (offset + 2 > end) throw new ProtocolDecodeFailure('Protocol string length is truncated.');
-  const byteLength = view.getUint16(offset, true); const valueOffset = offset + 2; const nextOffset = valueOffset + byteLength;
-  if (byteLength > maximumByteLength || nextOffset > end) throw new ProtocolDecodeFailure('Protocol string exceeds its allowed bounds.');
-  try { return { value: utf8Decoder.decode(new Uint8Array(view.buffer, view.byteOffset + valueOffset, byteLength)), nextOffset }; }
-  catch { throw new ProtocolDecodeFailure('Protocol string is not valid UTF-8.'); }
+function readUtf8String(view: DataView, offset: number, end: number): { readonly value: string; readonly nextOffset: number } {
+  if (offset + 2 > end) throw new ProtocolDecodeFailure('Error string length is truncated.'); const length = view.getUint16(offset, true); const start = offset + 2; const nextOffset = start + length;
+  if (nextOffset > end) throw new ProtocolDecodeFailure('Error string payload is truncated.');
+  try { return { value: utf8Decoder.decode(new Uint8Array(view.buffer, view.byteOffset + start, length)), nextOffset }; } catch { throw new ProtocolDecodeFailure('Error payload contains invalid UTF-8.'); }
 }
 
-function validateWorldVolume(volume: WorldVolume): void {
-  if (!Number.isFinite(volume.minX) || !Number.isFinite(volume.minY) || !Number.isFinite(volume.minZ) || !Number.isFinite(volume.maxX) || !Number.isFinite(volume.maxY) || !Number.isFinite(volume.maxZ) || volume.maxX < volume.minX || volume.maxY < volume.minY || volume.maxZ < volume.minZ) throw new RangeError('World volume coordinates must be finite and ordered.');
+function validateRoadReferences(nodes: readonly RoadNode[], segments: readonly RoadSegment[], lanes: readonly Lane[], connections: readonly LaneConnection[], accessPoints: readonly RoadAccessPoint[]): void {
+  const nodeIds = uniqueIds(nodes.map((item) => item.id), 'RoadNode'); const segmentIds = uniqueIds(segments.map((item) => item.id), 'RoadSegment'); const laneIds = uniqueIds(lanes.map((item) => item.id), 'Lane'); uniqueIds(connections.map((item) => item.id), 'LaneConnection'); uniqueIds(accessPoints.map((item) => item.id), 'RoadAccessPoint');
+  for (const segment of segments) if (!nodeIds.has(segment.startNodeId) || !nodeIds.has(segment.endNodeId)) throw new ProtocolDecodeFailure('RoadSegment references a missing RoadNode.');
+  for (const lane of lanes) if (!segmentIds.has(lane.segmentId)) throw new ProtocolDecodeFailure('Lane references a missing RoadSegment.');
+  for (const connection of connections) if (!laneIds.has(connection.fromLaneId) || !laneIds.has(connection.toLaneId) || !nodeIds.has(connection.viaNodeId)) throw new ProtocolDecodeFailure('LaneConnection references a missing Road entity.');
+  for (const access of accessPoints) if (!segmentIds.has(access.segmentId)) throw new ProtocolDecodeFailure('RoadAccessPoint references a missing RoadSegment.');
 }
 
-function validateUInt16(value: number, label: string): void { if (!Number.isInteger(value) || value < 0 || value > 0xffff) throw new RangeError(`${label} must fit in an unsigned 16-bit integer.`); }
-function assertPayloadLength(actual: number, expected: number, type: MessageType): void { if (actual !== expected) throw new ProtocolDecodeFailure(`Protocol message ${String(type)} has payload length ${String(actual)}; expected ${String(expected)}.`); }
-function assertStableId(value: bigint, label: string): void { if (value === 0n) throw new ProtocolDecodeFailure(`${label} ID must be greater than zero.`); }
-function isRoadNodeKind(value: number): value is RoadNodeKind { return value >= RoadNodeKind.Endpoint && value <= RoadNodeKind.Intersection; }
-function isRoadKind(value: number): value is RoadKind { return value >= RoadKind.Local && value <= RoadKind.Service; }
-function isLaneDirection(value: number): value is LaneDirection { return value === LaneDirection.Forward || value === LaneDirection.Reverse; }
-function isTurnMovement(value: number): value is TurnMovement { return value >= TurnMovement.Unspecified && value <= TurnMovement.UTurn; }
-function isRoadAccessMode(value: number): value is RoadAccessMode { return value >= RoadAccessMode.Motor && value <= (RoadAccessMode.Motor | RoadAccessMode.Foot); }
-function isPedestrianMovementState(value: number): value is PedestrianMovementState { return value >= PedestrianMovementState.Walking && value <= PedestrianMovementState.Arrived; }
+function uniqueIds(ids: readonly bigint[], entityName: string): ReadonlySet<bigint> { const result = new Set<bigint>(); for (const id of ids) { assertStableId(id, entityName); if (result.has(id)) throw new ProtocolDecodeFailure(`${entityName} ID is duplicated.`); result.add(id); } return result; }
+function validateWorldVolume(volume: WorldVolume): void { for (const value of [volume.minX, volume.minY, volume.minZ, volume.maxX, volume.maxY, volume.maxZ]) if (!Number.isFinite(value)) throw new RangeError('Subscribe volume coordinates must be finite.'); if (volume.maxX < volume.minX || volume.maxY < volume.minY || volume.maxZ < volume.minZ) throw new RangeError('Subscribe volume maximums must be greater than or equal to minimums.'); }
+function validateUInt16(value: number, name: string): void { if (!Number.isInteger(value) || value < 0 || value > 0xffff) throw new RangeError(`${name} must be an unsigned 16-bit integer.`); }
+function assertPayloadLength(actual: number, expected: number, type: MessageType): void { if (actual !== expected) throw new ProtocolDecodeFailure(`Message ${String(type)} payload length is invalid.`); }
+function assertStableId(value: bigint, name: string): void { if (value === 0n) throw new ProtocolDecodeFailure(`${name} ID must be greater than zero.`); }
+function isRoadNodeKind(value: RoadNodeKind): boolean { return value === RoadNodeKind.Endpoint || value === RoadNodeKind.Intersection; }
+function isRoadKind(value: RoadKind): boolean { return value >= RoadKind.Local && value <= RoadKind.Service; }
+function isLaneDirection(value: LaneDirection): boolean { return value === LaneDirection.Forward || value === LaneDirection.Reverse; }
+function isTurnMovement(value: TurnMovement): boolean { return value >= TurnMovement.Unspecified && value <= TurnMovement.UTurn; }
+function isRoadAccessMode(value: RoadAccessMode): boolean { return value !== RoadAccessMode.None && (value & ~(RoadAccessMode.Motor | RoadAccessMode.Foot)) === 0; }
+function isPedestrianMovementState(value: PedestrianMovementState): boolean { return value >= PedestrianMovementState.Walking && value <= PedestrianMovementState.Arrived; }
