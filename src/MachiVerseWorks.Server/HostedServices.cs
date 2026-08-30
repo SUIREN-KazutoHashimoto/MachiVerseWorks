@@ -97,6 +97,8 @@ internal static class RoadSnapshotMessagePlanner
     }
 }
 
+internal readonly record struct PendingSnapshotDelivery(ClientConnection Connection, ClientSubscriptionState Subscription);
+
 internal sealed class SnapshotPublishService(SimulationRuntime simulation, ServerOptions options, ClientConnectionRegistry connections, E2eMetrics metrics, ILogger<SnapshotPublishService> logger) : BackgroundService
 {
     private static readonly TimeSpan ClientSendTimeout = TimeSpan.FromSeconds(5);
@@ -111,8 +113,10 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
                 _deliveryScheduler.ThrowIfFaulted();
+                var pending = CapturePendingDeliveries();
+                if (pending.Length == 0) continue;
                 var publishSnapshot = simulation.CapturePublishSnapshot();
-                SchedulePublish(publishSnapshot, stoppingToken);
+                SchedulePublish(publishSnapshot, pending, stoppingToken);
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -125,12 +129,25 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
         ServerLog.SnapshotPublisherStopped(logger);
     }
 
-    private void SchedulePublish(SimulationPublishSnapshot publishSnapshot, CancellationToken cancellationToken)
+    private PendingSnapshotDelivery[] CapturePendingDeliveries()
     {
-        foreach (var connection in connections.CreateSnapshot())
+        var candidates = connections.CreateSnapshot();
+        var pending = new List<PendingSnapshotDelivery>(candidates.Length);
+        foreach (var connection in candidates)
         {
-            if (connection.HandshakeCompleted && connection.Socket.State == WebSocketState.Open && connection.TryCaptureSubscription(out var subscription))
-                _deliveryScheduler.TrySchedule(connection.Id, () => PublishConnectionAsync(connection, subscription, publishSnapshot, cancellationToken));
+            if (!connection.HandshakeCompleted || connection.Socket.State != WebSocketState.Open || !connection.TryCaptureSubscription(out var subscription)) continue;
+            pending.Add(new PendingSnapshotDelivery(connection, subscription));
+        }
+        return pending.ToArray();
+    }
+
+    private void SchedulePublish(SimulationPublishSnapshot publishSnapshot, PendingSnapshotDelivery[] pending, CancellationToken cancellationToken)
+    {
+        foreach (var delivery in pending)
+        {
+            _deliveryScheduler.TrySchedule(
+                delivery.Connection.Id,
+                () => PublishConnectionAsync(delivery.Connection, delivery.Subscription, publishSnapshot, cancellationToken));
         }
     }
 
