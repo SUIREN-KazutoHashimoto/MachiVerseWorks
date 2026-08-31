@@ -19,6 +19,7 @@ public sealed partial class SimulationWorld
     {
         ValidatePoint(position);
         ValidateEnum(kind, nameof(kind));
+        EnsureRailwayInfrastructureMutable();
         return _railway.AddNode(position, kind);
     }
 
@@ -31,31 +32,45 @@ public sealed partial class SimulationWorld
         TrackElectrification electrification = TrackElectrification.None,
         TrackUsage usage = TrackUsage.Mainline)
     {
+        EnsureRailwayInfrastructureMutable();
         return _railway.AddSegment(startNodeId, endNodeId, direction, gaugeMeters, speedLimitMetersPerSecond, electrification, usage);
     }
 
-    public TrackConnectionId CreateTrackConnection(TrackSegmentId fromSegmentId, TrackSegmentId toSegmentId, TrackNodeId viaNodeId) =>
-        _railway.AddConnection(fromSegmentId, toSegmentId, viaNodeId);
+    public TrackConnectionId CreateTrackConnection(TrackSegmentId fromSegmentId, TrackSegmentId toSegmentId, TrackNodeId viaNodeId)
+    {
+        EnsureRailwayInfrastructureMutable();
+        return _railway.AddConnection(fromSegmentId, toSegmentId, viaNodeId);
+    }
 
     public BlockSectionId CreateBlockSection(IReadOnlyList<TrackSegmentId> trackSegmentIds)
     {
         ArgumentNullException.ThrowIfNull(trackSegmentIds);
+        EnsureRailwayInfrastructureMutable();
         if (trackSegmentIds.Count > RailwayInfrastructureLimits.MaximumBlockSectionSegmentCount)
             throw new ArgumentOutOfRangeException(nameof(trackSegmentIds), trackSegmentIds.Count, $"A block section may contain at most {RailwayInfrastructureLimits.MaximumBlockSectionSegmentCount} track segments.");
         return _railway.AddBlock(trackSegmentIds);
     }
 
-    public StationId CreateStation(WorldVolume bounds) => _railway.AddStation(bounds);
+    public StationId CreateStation(WorldVolume bounds)
+    {
+        EnsureRailwayInfrastructureMutable();
+        return _railway.AddStation(bounds);
+    }
 
     public PlatformId CreatePlatform(
         StationId stationId,
         TrackSegmentId trackSegmentId,
         double startSegmentOffset,
         double endSegmentOffset,
-        WorldVolume bounds) => _railway.AddPlatform(stationId, trackSegmentId, startSegmentOffset, endSegmentOffset, bounds);
+        WorldVolume bounds)
+    {
+        EnsureRailwayInfrastructureMutable();
+        return _railway.AddPlatform(stationId, trackSegmentId, startSegmentOffset, endSegmentOffset, bounds);
+    }
 
     public PlatformAccessPointId CreatePlatformAccessPoint(PlatformId platformId, RoadAccessPointId roadAccessPointId)
     {
+        EnsureRailwayInfrastructureMutable();
         if (!_roads.TryGetAccessPoint(roadAccessPointId, out var roadAccess))
             throw new ArgumentException($"Road access point {roadAccessPointId.Value} does not exist.", nameof(roadAccessPointId));
         if ((roadAccess.Mode & RoadAccessMode.Foot) == 0)
@@ -66,6 +81,7 @@ public sealed partial class SimulationWorld
     public DepotId CreateDepot(WorldVolume bounds, IReadOnlyList<TrackSegmentId> trackSegmentIds)
     {
         ArgumentNullException.ThrowIfNull(trackSegmentIds);
+        EnsureRailwayInfrastructureMutable();
         if (trackSegmentIds.Count > RailwayInfrastructureLimits.MaximumDepotTrackSegmentCount)
             throw new ArgumentOutOfRangeException(nameof(trackSegmentIds), trackSegmentIds.Count, $"A depot may contain at most {RailwayInfrastructureLimits.MaximumDepotTrackSegmentCount} track segments.");
         return _railway.AddDepot(bounds, trackSegmentIds);
@@ -117,6 +133,12 @@ public sealed partial class SimulationWorld
         return best ?? throw new InvalidOperationException("No walkable pedestrian route reaches the requested platform access point.");
     }
 
+    private void EnsureRailwayInfrastructureMutable()
+    {
+        if (_railwayOperations is not null)
+            throw new InvalidOperationException("Railway Infrastructure cannot be mutated after Railway Operations has been initialized. Complete infrastructure authoring before creating or reading operations state.");
+    }
+
     private static void ValidateRailwayCheckpoint(SimulationCheckpoint checkpoint, double cellSize)
     {
         var nodeData = checkpoint.TrackNodes ?? [];
@@ -151,6 +173,7 @@ public sealed partial class SimulationWorld
         {
             if (segment.Id.Value == 0 || !segments.TryAdd(segment.Id, segment)) throw new ArgumentException($"Track segment ID {segment.Id.Value} is zero or duplicated.", nameof(checkpoint));
             if (segment.StartNodeId == segment.EndNodeId || !nodes.ContainsKey(segment.StartNodeId) || !nodes.ContainsKey(segment.EndNodeId)) throw new ArgumentException($"Track segment {segment.Id.Value} has invalid node references.", nameof(checkpoint));
+            if (nodes[segment.StartNodeId].Position == nodes[segment.EndNodeId].Position) throw new ArgumentException($"Track segment {segment.Id.Value} has zero-length geometry.", nameof(checkpoint));
             ValidateEnum(segment.Direction, nameof(checkpoint));
             ValidateEnum(segment.Electrification, nameof(checkpoint));
             ValidateEnum(segment.Usage, nameof(checkpoint));
