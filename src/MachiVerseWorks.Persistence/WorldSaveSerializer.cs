@@ -45,6 +45,7 @@ public static partial class WorldSaveSerializer
         try
         {
             ValidateCollectionCountsBeforeMaterialization(utf8Json, limits);
+            ValidateNestedCollectionCountsBeforeMaterialization(utf8Json, limits);
             var document = JsonSerializer.Deserialize<SaveDataDocument>(utf8Json, JsonOptions) ?? throw new InvalidDataException("Save Data document is empty.");
             return RestoreDocument(document, limits);
         }
@@ -120,6 +121,7 @@ public static partial class WorldSaveSerializer
         ValidateCount(checkpoint.Platforms?.Count ?? 0, limits.MaximumRoadAccessPointCount, "Platforms");
         ValidateCount(checkpoint.PlatformAccessPoints?.Count ?? 0, limits.MaximumRoadAccessPointCount, "PlatformAccessPoints");
         ValidateCount(checkpoint.Depots?.Count ?? 0, limits.MaximumBuildingCount, "Depots");
+        ValidateNestedCheckpointWithinLimits(checkpoint, limits);
         ValidateRailwayOperationsCheckpointWithinLimits(checkpoint, limits);
         ValidateMultimodalTransitCheckpointWithinLimits(checkpoint.MultimodalTransit, limits);
     }
