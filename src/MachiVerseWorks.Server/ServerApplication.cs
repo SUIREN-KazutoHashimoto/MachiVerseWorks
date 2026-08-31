@@ -18,10 +18,13 @@ public static class ServerApplication
         builder.Services.AddSingleton<SimulationRuntime>();
         builder.Services.AddSingleton<ClientConnectionRegistry>();
         builder.Services.AddSingleton<ClientCommandQueue>();
+        builder.Services.AddSingleton<AdminCommandQueue>();
         builder.Services.AddSingleton<E2eMetrics>();
         builder.Services.AddSingleton<WebSocketSessionHandler>();
         builder.Services.AddHostedService<SimulationTickService>();
         builder.Services.AddHostedService<ClientCommandProcessor>();
+        builder.Services.AddHostedService<AdminCommandExecutorV2>();
+        builder.Services.AddHostedService<ServerConsoleService>();
         builder.Services.AddHostedService<SnapshotPublishService>();
         builder.Services.AddHostedService<PopulationPublishService>();
 
@@ -34,6 +37,7 @@ public static class ServerApplication
             {
                 status = "ok",
                 tick = simulation.TickCount,
+                paused = simulation.IsPaused,
                 agents = simulation.ActiveAgentCount,
                 pedestrians = simulation.ActivePedestrianCount,
                 vehicles = simulation.ActiveVehicleCount,

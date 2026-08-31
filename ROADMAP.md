@@ -2,8 +2,8 @@
 
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 20 — Server Administration Console（次）
-> **次の実装タスク:** P20-001 — Administration Consoleの目的・trust boundary・command / result契約を仕様化する
+> **現在:** Phase 20 — Server Administration Console（実装完了 / develop統合待ち）
+> **次の実装タスク:** PR #162を`develop`へ統合し、Phase 20を正式closeoutする
 
 ## 全体の現在地
 
@@ -29,7 +29,7 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 17 | Railway Infrastructure | ✅ 完了 |
 | 18 | Railway Operations | ✅ 完了 |
 | 19 | Multimodal Transit | ✅ 完了 |
-| 20 | Server Administration Console | ⏭️ 次 |
+| 20 | Server Administration Console | 🟨 develop統合待ち |
 | 21 | Industry / Jobs / Economy | ⏳ 待機 |
 | 22 | Logistics / Freight | ⏳ 待機 |
 | 23 | Power Infrastructure | ⏳ 待機 |
@@ -229,35 +229,35 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ## Phase 20 — Server Administration Console
 
-> **状態: ⬜ 未着手**
+> **状態: 🟨 実装完了 / develop統合待ち**
 > **依存:** Phase 4 / 8 / 19
 > Headless Serverの標準入力から、Simulationの運転制御・状態確認・主要Entityの追加/更新/削除・保存操作を安全に実行できる管理Consoleと、将来のRemote Admin / City Management UIから再利用できるserver-authoritative command境界を確立する。
 
-- ⬜ **P20-001** — Administration Consoleの目的・trust boundary・command grammar・stable result/error code・引数/単位/enum表現を仕様化する
-- ⬜ **P20-002** — stdin / command parser / bounded AdminCommandQueue / executor / SimulationRuntimeの責務とtick境界をarchitecture文書化し、Remote Adminから再利用する境界をADR化する
-- ⬜ **P20-003** — `AdminCommand` / `AdminCommandResult` / structured parameterの共通契約を実装し、表示文字列と実行結果を分離する
-- ⬜ **P20-004** — quoted token・`--option`・Invariant数値・stable ID・enumを扱う`AdminCommandParser`とcommand metadataベースの`help`生成を実装する
-- ⬜ **P20-005** — bounded single-reader `AdminCommandQueue`と逐次executorを実装し、World mutationを`SimulationRuntime`のauthoritative境界で安全に適用する
-- ⬜ **P20-006** — stdinを読むoptional `ServerConsoleService`をHostedServiceとして実装し、無効化設定・EOF・cancellation・graceful shutdownを扱う
-- ⬜ **P20-007** — `help` / `status` / `version` / `exit` / `server stop`の基本管理commandを実装する
-- ⬜ **P20-008** — `simulation status` / `pause` / `resume` / paused時の`step [count]`を実装し、automatic tickとmanual stepの順序をdeterministicにする
-- ⬜ **P20-009** — Agentの`list` / `show` / `add` / `update` / `remove`と位置・速度更新の正式Simulation APIを実装する
-- ⬜ **P20-010** — Buildingの`list` / `show` / `add` / `update` / `remove`とPOI・Road Access・Population参照を壊さない整合性検証を実装する
-- ⬜ **P20-011** — POIの`list` / `show` / `add` / `update` / `remove`とBuilding境界・参照整合性検証を実装する
-- ⬜ **P20-012** — Road Node / Segment / Laneの`list` / `show` / `add` / `update` / `remove` commandを既存Road Network mutation APIへ接続する
-- ⬜ **P20-013** — Lane Connection / Road Access Pointの`list` / `show` / `add` / `update` / `remove` commandを実装する
-- ⬜ **P20-014** — runtime Road topology変更時にServer read model revisionを単調増加させ、接続済みClientへ最新topologyが再配信されるinvalidate契約を実装する
-- ⬜ **P20-015** — Vehicleの`list` / `show` / `remove`と、Routing結果を必須にする安全な`spawn` command契約を実装する
-- ⬜ **P20-016** — Railway InfrastructureのNode / Segment / Connection / Block / Station / Platform / Access / Depotにread commandと既存Create APIを使うadd commandを実装する
-- ⬜ **P20-017** — Railway Infrastructureのupdate / removeに必要な正式Simulation APIと参照整合性validationを追加し、Console commandへ公開する
-- ⬜ **P20-018** — Train / Formation / Railway Route / Timetable / Serviceのread commandを実装し、既存Simulation APIで安全に表現できる生成操作だけを管理commandとして公開する
-- ⬜ **P20-019** — Server connectionの`list` / `show` / `disconnect` commandを実装し、Simulation Entity操作とconnection管理をnamespaceで分離する
-- ⬜ **P20-020** — `world save <path>`をcheckpoint captureとfile I/Oに分離して実装し、Simulation lock中の長時間I/Oを避ける
-- ⬜ **P20-021** — runtime `world load <path>`のWorld差し替え、known entity state、Road/Railway revision、publish read modelのinvalidate契約を設計・実装する
-- ⬜ **P20-022** — malformed input・unknown command・invalid enum/number・missing entity・reference conflict・queue full・invalid simulation stateをServer停止へ波及させないnegative testを追加する
-- ⬜ **P20-023** — parser / queue FIFO / executor / pause-step-resume / Entity mutation / Saveのunit・integration testを追加する
-- ⬜ **P20-024** — stdin→AdminCommandQueue→SimulationRuntime→publishまでを実Serverで検証し、pause中編集とresume後のClient反映を確認するE2Eを追加する
-- ⬜ **P20-025** — Administration Consoleのspecification / architecture / ADR / Server README / ROADMAPを同期する
+- ✅ **P20-001** — Administration Consoleの目的・trust boundary・command grammar・stable result/error code・引数/単位/enum表現を仕様化する
+- ✅ **P20-002** — stdin / command parser / bounded AdminCommandQueue / executor / SimulationRuntimeの責務とtick境界をarchitecture文書化し、Remote Adminから再利用する境界をADR化する
+- ✅ **P20-003** — `AdminCommand` / `AdminCommandResult` / structured parameterの共通契約を実装し、表示文字列と実行結果を分離する
+- ✅ **P20-004** — quoted token・`--option`・Invariant数値・stable ID・enumを扱う`AdminCommandParser`とcommand metadataベースの`help`生成を実装する
+- ✅ **P20-005** — bounded single-reader `AdminCommandQueue`と逐次executorを実装し、World mutationを`SimulationRuntime`のauthoritative境界で安全に適用する
+- ✅ **P20-006** — stdinを読むoptional `ServerConsoleService`をHostedServiceとして実装し、無効化設定・EOF・cancellation・graceful shutdownを扱う
+- ✅ **P20-007** — `help` / `status` / `version` / `exit` / `server stop`の基本管理commandを実装する
+- ✅ **P20-008** — `simulation status` / `pause` / `resume` / paused時の`step [count]`を実装し、automatic tickとmanual stepの順序をdeterministicにする
+- ✅ **P20-009** — Agentの`list` / `show` / `add` / `update` / `remove`と位置・速度更新の正式Simulation APIを実装する
+- ✅ **P20-010** — Buildingの`list` / `show` / `add` / `update` / `remove`とPOI・Road Access・Population参照を壊さない整合性検証を実装する
+- ✅ **P20-011** — POIの`list` / `show` / `add` / `update` / `remove`とBuilding境界・参照整合性検証を実装する
+- ✅ **P20-012** — Road Node / Segment / Laneの`list` / `show` / `add` / `update` / `remove` commandを既存Road Network mutation APIへ接続する
+- ✅ **P20-013** — Lane Connection / Road Access Pointの`list` / `show` / `add` / `update` / `remove` commandを実装する
+- ✅ **P20-014** — runtime Road topology変更時にServer read model revisionを単調増加させ、接続済みClientへ最新topologyが再配信されるinvalidate契約を実装する
+- ✅ **P20-015** — Vehicleの`list` / `show` / `remove`と、Routing結果を必須にする安全な`spawn` command契約を実装する
+- ✅ **P20-016** — Railway InfrastructureのNode / Segment / Connection / Block / Station / Platform / Access / Depotにread commandと既存Create APIを使うadd commandを実装する
+- ✅ **P20-017** — Railway Infrastructureのupdate / removeに必要な正式Simulation APIと参照整合性validationを追加し、Console commandへ公開する
+- ✅ **P20-018** — Train / Formation / Railway Route / Timetable / Serviceのread commandを実装し、既存Simulation APIで安全に表現できる生成操作だけを管理commandとして公開する
+- ✅ **P20-019** — Server connectionの`list` / `show` / `disconnect` commandを実装し、Simulation Entity操作とconnection管理をnamespaceで分離する
+- ✅ **P20-020** — `world save <path>`をcheckpoint captureとfile I/Oに分離して実装し、Simulation lock中の長時間I/Oを避ける
+- ✅ **P20-021** — runtime `world load <path>`のWorld差し替え、known entity state、Road/Railway revision、publish read modelのinvalidate契約を設計・実装する
+- ✅ **P20-022** — malformed input・unknown command・invalid enum/number・missing entity・reference conflict・queue full・invalid simulation stateをServer停止へ波及させないnegative testを追加する
+- ✅ **P20-023** — parser / queue FIFO / executor / pause-step-resume / Entity mutation / Saveのunit・integration testを追加する
+- ✅ **P20-024** — stdin→AdminCommandQueue→SimulationRuntime→publishまでを実Serverで検証し、pause中編集とresume後のClient反映を確認するE2Eを追加する
+- ✅ **P20-025** — Administration Consoleのspecification / architecture / ADR / Server README / ROADMAPを同期する
 
 ### Phase 20 完了条件
 
@@ -266,6 +266,13 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 - Road / Railway等のtopology変更やWorld load後にServer側read modelとClient配信状態が正しくinvalidateされ、変更が接続済みClientへ反映される。
 - 不正command・参照制約違反・stdin EOF・Console無効化・graceful shutdownでServer全体を不必要に停止させない。
 - command実行契約がstdin固有実装から分離され、将来のRemote Admin / City Management UIから再利用できる。
+
+### Phase 20 closeout evidence
+
+- CI run `33383683242`: repository / .NET build・test / Web lint・typecheck・test・build / CI gateが成功した。
+- End-to-end run `33383683232`: Phase 6〜19の既存Server→Browser回帰と、`administration-console-server-browser`が成功した。Phase 20 caseではstdinからpause、Road topology編集、manual step、resumeを実行し、接続済みBrowserが更新後topologyを受信した。
+- Dependency Review run `33383683396`が成功した。
+- Phase 20の実装・仕様・architecture・ADR・Server README・E2Eを含む統合単位はPR #162とする。`develop`統合後にPhase 20を正式closeoutする。
 
 ---
 

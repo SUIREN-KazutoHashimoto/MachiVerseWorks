@@ -88,6 +88,11 @@ jobs:
             script: scripts/run-phase19-e2e.sh
             artifacts: .artifacts/phase19-e2e
             timeout: 15
+          - id: administration-console
+            name: administration-console-server-browser
+            script: scripts/run-phase20-e2e.sh
+            artifacts: .artifacts/phase20-e2e
+            timeout: 15
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

@@ -23,6 +23,7 @@ internal sealed class ServerOptions
         bool allowInsecureRemoteAccess,
         bool enablePersonInspection,
         bool enableRemoteDiagnostics,
+        bool consoleEnabled,
         int maximumWebSocketConnections,
         TimeSpan helloTimeout,
         TimeSpan frameReceiveTimeout,
@@ -50,6 +51,7 @@ internal sealed class ServerOptions
         AllowInsecureRemoteAccess = allowInsecureRemoteAccess;
         EnablePersonInspection = enablePersonInspection;
         EnableRemoteDiagnostics = enableRemoteDiagnostics;
+        ConsoleEnabled = consoleEnabled;
         MaximumWebSocketConnections = maximumWebSocketConnections;
         HelloTimeout = helloTimeout;
         FrameReceiveTimeout = frameReceiveTimeout;
@@ -78,6 +80,7 @@ internal sealed class ServerOptions
     public bool AllowInsecureRemoteAccess { get; }
     public bool EnablePersonInspection { get; }
     public bool EnableRemoteDiagnostics { get; }
+    public bool ConsoleEnabled { get; }
     public int MaximumWebSocketConnections { get; }
     public TimeSpan HelloTimeout { get; }
     public TimeSpan FrameReceiveTimeout { get; }
@@ -130,6 +133,7 @@ internal sealed class ServerOptions
         var invalidRequestStrikeWindow = ReadDurationMilliseconds(configuration, "Server:InvalidRequestStrikeWindowMilliseconds", 60_000, 1_000, 600_000);
         var enableRemoteDiagnostics = ReadBoolean(configuration, "Server:EnableRemoteDiagnostics", false);
         var enablePersonInspection = ReadBoolean(configuration, "Server:EnablePersonInspection", IPAddress.IsLoopback(listenAddress));
+        var consoleEnabled = ReadBoolean(configuration, "Server:Console:Enabled", true);
         var allowedWebSocketOrigins = ReadAllowedWebSocketOrigins(configuration);
 
         var tickRate = ReadInt32(configuration, "Simulation:TickRate", 30);
@@ -150,7 +154,7 @@ internal sealed class ServerOptions
 
         return new ServerOptions(
             listenAddress, port, snapshotRate, maximumSubscriptionCellCount, allowedWebSocketOrigins,
-            allowInsecureRemoteAccess, enablePersonInspection, enableRemoteDiagnostics, maximumWebSocketConnections,
+            allowInsecureRemoteAccess, enablePersonInspection, enableRemoteDiagnostics, consoleEnabled, maximumWebSocketConnections,
             helloTimeout, frameReceiveTimeout, closeTimeout, requestRateLimitPerSecond, requestRateLimitBurst,
             invalidRequestStrikeLimit, invalidRequestStrikeWindow,
             tickRate, seed, spatialCellSize, initialAgentCount,

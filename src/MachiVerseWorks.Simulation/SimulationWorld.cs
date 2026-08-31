@@ -70,7 +70,7 @@ public sealed partial class SimulationWorld
     public SimulationCheckpoint CreateCheckpoint()
     {
         EnsurePedestrianNetwork();
-        var railwayOperations = RailwayOperations.CreateSnapshot();
+        var railwayOperations = _railwayOperations?.CreateSnapshot();
         return new SimulationCheckpoint(
             Config.TickRate, Config.Seed, Config.SpatialCellSize, Time.TickCount, Time.Elapsed.Ticks, _random.State,
             _agents.NextId, _agents.CreateCheckpoint(),
@@ -93,11 +93,11 @@ public sealed partial class SimulationWorld
             _railway.NextPlatformId, _railway.CreatePlatformCheckpoint(),
             _railway.NextPlatformAccessPointId, _railway.CreatePlatformAccessPointCheckpoint(),
             _railway.NextDepotId, _railway.CreateDepotCheckpoint(),
-            RailwayOperations.NextFormationId, railwayOperations.Formations,
-            RailwayOperations.NextRouteId, railwayOperations.Routes,
-            RailwayOperations.NextTimetableId, railwayOperations.Timetables,
-            RailwayOperations.NextServiceId, railwayOperations.Services,
-            RailwayOperations.NextTrainId, railwayOperations.Trains,
+            _railwayOperations?.NextFormationId ?? 1UL, railwayOperations?.Formations ?? Array.Empty<TrainFormationSnapshot>(),
+            _railwayOperations?.NextRouteId ?? 1UL, railwayOperations?.Routes ?? Array.Empty<RailwayRouteSnapshot>(),
+            _railwayOperations?.NextTimetableId ?? 1UL, railwayOperations?.Timetables ?? Array.Empty<TimetableSnapshot>(),
+            _railwayOperations?.NextServiceId ?? 1UL, railwayOperations?.Services ?? Array.Empty<RailwayServiceSnapshot>(),
+            _railwayOperations?.NextTrainId ?? 1UL, railwayOperations?.Trains ?? Array.Empty<TrainSnapshot>(),
             _multimodalTransit.CreateCheckpoint(Time.TickCount));
     }
 

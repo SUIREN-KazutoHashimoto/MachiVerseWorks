@@ -15,26 +15,73 @@ Kestrel
              ▼
       ClientCommandProcessor
 
-SimulationTickService ──► SimulationRuntime
-                               │ atomic capture
-                               ▼
-                     SimulationPublishSnapshot
-                        ├─ spatial domains
-                        │    └─ client-volume filtering
-                        └─ Multimodal Transit
-                             └─ world-wide mapping
-                               │
-                               ▼
-                      SnapshotPublishService
+stdin ──► ServerConsoleService ──► AdminCommandParser
+                                      │
+                                      ▼
+                         bounded AdminCommandQueue
+                                      │
+                                      ▼
+                         AdminCommandExecutorV2
+                                      │
+                                      ▼
+SimulationTickService ─────────► SimulationRuntime
+                                      │ atomic mutation/capture
+                                      ▼
+                            SimulationWorld
+                                      │
+                                      ▼
+                         SimulationPublishSnapshot
+                            ├─ spatial domains
+                            │    └─ client-volume filtering
+                            └─ Multimodal Transit
+                                 └─ world-wide mapping
+                                      │
+                                      ▼
+                             SnapshotPublishService
 
 PopulationPublishService ──► statistics / Person debug
 ```
 
 ## State ownership
 
-`SimulationRuntime`が`SimulationWorld`を所有する。WebSocket session、connection registry、Protocol message、publish read modelはSimulation mutable storeを直接所有しない。
+`SimulationRuntime`が`SimulationWorld`を所有する。WebSocket session、connection registry、Protocol message、publish read model、Administration ConsoleはSimulation mutable storeを直接所有しない。
 
 `SimulationRuntime._gate`はauthoritative mutationとatomic captureの境界である。1 publish cycleではClientごとにWorld queryせず、lock内で必要なdetached snapshot/read modelを1回captureする。Agent / Road / Pedestrian / Vehicle / Intersection / RailwayのClient別`WorldVolume` filtering、message planning、encoding、network I/Oはlock外で行う。Multimodal Transitは同じcaptureを使うが、現行2.8ではClient volumeでfilterせずworld-wide messageへmapする。
+
+Administration mutationも同じ`SimulationRuntime._gate`を通るため、Simulation tickの途中へstdin処理が割り込まない。Consoleのparseや表示、file I/OはWorld lockの責務ではない。
+
+## Administration command boundary
+
+Phase 20ではstdinをtransportとして扱い、command実行契約から分離する。
+
+- `ServerConsoleService`はstdinの1行入力、EOF、host cancellationだけを扱う。
+- `AdminCommandParser`はquoted token、`--option=value`、Invariant Culture数値、stable ID、enum表現を`AdminCommand`へ変換する。
+- `AdminCommandQueue`はbounded / single-reader channelで、producerへ無制限bufferを許さない。
+- `AdminCommandExecutorV2`はqueueをFIFOに逐次処理し、structured `AdminCommandResultCode`と人間向けmessageを返す。
+- mutation/readは`SimulationRuntime.Read` / `Mutate`、pause/resume/manual step、checkpoint/world replacement APIだけからauthoritative Worldへ到達する。
+- Remote Admin / City Management UIはstdin serviceを再利用せず、認証・認可・監査を別途通過した後に同じcommand queue/executor境界へ接続できる。
+
+Consoleはローカルtrusted operator向けであり、認証境界ではない。外部公開可能なRemote Admin endpointとして扱わない。
+
+## Administration ordering and pause
+
+`SimulationTickService`のautomatic tickとAdministration mutationは`SimulationRuntime`の同じlockで直列化される。`simulation pause`後はautomatic `Step()`がno-opになる。paused中の`simulation step [count]`だけが明示回数のWorld stepを進めるため、queue中のmutation、manual step、resumeの順序は再現可能である。
+
+Administration executor自体もsingle-readerなので、同時producerが存在しても受理済みcommandはqueue順に1件ずつ実行する。
+
+## Runtime topology invalidation
+
+Road / Railway Infrastructureのpublish read modelはrevision-drivenである。Administrationによるtopology mutation成功時、または`world load`でauthoritative Worldを差し替えた時に、対応revisionを単調増加させてcached read modelを破棄する。次のpublish captureで新しいread modelを生成し、接続済みClientは保持しているlast delivered revisionとの差によって再配信を受ける。
+
+World replacement時はRoadとRailwayの両revisionを進める。dynamic Agent / Pedestrian / Vehicle stateは既存known-ID差分処理によってupdate/removeへ収束し、新Worldの現在stateが次回publishの正本になる。
+
+## Administration save / load
+
+`world save`はruntime lock中に`SimulationCheckpoint`をcaptureし、lockを解放した後でdetached `SimulationWorld`をrestoreしてserialize/file writeする。長時間file I/O中にSimulation lockを保持しない。
+
+`world load`はfile readとdeserializeを先に完了し、検証済み`SimulationWorld`を`SimulationRuntime.ReplaceWorld`で短時間にatomic差し替えする。差し替え時にfixture pending state、Road/Railway read-model cacheを破棄し、revisionを進める。
+
+Railway Infrastructureのadministrative update/removeは既存Create APIのvalidationだけでは表現できないため、候補`SimulationCheckpoint`を構築し、`SimulationWorld.RestoreCheckpoint`の完全な参照整合性validationを先に通す。validation成功後のみ現在Railway storeへ反映する。Railway Operationsが初期化済みの場合は既存`EnsureRailwayInfrastructureMutable`契約に従いInfrastructure mutationを拒否する。
 
 ## Saveからのruntime configuration
 
@@ -67,7 +114,7 @@ network receive pathからSimulation stateを同期的に変更し続けず、Cl
 - static Railway Infrastructure revision/subscription state
 - send serialization / in-flight delivery state
 
-切断時はconnection-local stateを破棄する。
+切断時はconnection-local stateを破棄する。Administrationの`connection list` / `show` / `disconnect`はこのregistryだけを操作し、Simulation Entity namespaceと混在させない。
 
 ## Handshake / capability boundary
 
@@ -147,6 +194,8 @@ subscription変更中に古いdeliveryが完了しても、dynamic known-ID stat
 
 expected Client delivery停止とunexpected system faultを区別してstructured logへ記録する。shutdownではhosted serviceとWebSocket sessionをcancelし、新規delivery schedulingを止めてin-flight taskを回収する。
 
+Administration Consoleではunknown command、invalid number/enum、missing entity、reference conflict、queue full、invalid simulation state、I/O errorをstructured resultへ変換し、Server process faultへ昇格させない。stdin EOFはConsole Serviceだけを終了し、`exit` / `stop` commandだけが`IHostApplicationLifetime.StopApplication()`を通じてgraceful shutdownを要求する。
+
 ## 現行制約
 
 - Agent / Pedestrian / Vehicleは汎用aggregate compressionを持たない
@@ -154,5 +203,6 @@ expected Client delivery停止とunexpected system faultを区別してstructure
 - Railway Infrastructureだけが明示multi-frame chunk contractを持つ
 - Railway Operationsはsingle-frame + structured oversize error
 - Protocol 2.8 Multimodal Transitは現行world-wide deliveryで、Client volume filteringは未実装
+- Administration Consoleはlocal trusted operator interfaceであり、remote authentication / authorizationは未実装
 
-binary layoutは[`protocol.md`](protocol.md)、Web側state適用は[`web-client.md`](web-client.md)を参照する。
+binary layoutは[`protocol.md`](protocol.md)、Web側state適用は[`web-client.md`](web-client.md)、Administration command grammarは[`../specifications/server-administration-console.md`](../specifications/server-administration-console.md)を参照する。

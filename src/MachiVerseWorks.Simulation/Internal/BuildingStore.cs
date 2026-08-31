@@ -6,35 +6,26 @@ internal sealed class BuildingStore
     private ulong nextId = 1;
 
     public int Count => items.Count;
-
     public ulong NextId => nextId;
 
     public BuildingId Add(BuildingKind kind, WorldVolume bounds)
     {
-        if (nextId == ulong.MaxValue)
-        {
-            throw new OverflowException("Building ID capacity has been exhausted.");
-        }
-
+        if (nextId == ulong.MaxValue) throw new OverflowException("Building ID capacity has been exhausted.");
         var id = new BuildingId(nextId++);
         items.Add(id, new BuildingSnapshot(id, kind, bounds));
         return id;
     }
 
-    public bool Contains(BuildingId id)
+    public bool Update(BuildingId id, BuildingKind kind, WorldVolume bounds)
     {
-        return items.ContainsKey(id);
+        if (!items.ContainsKey(id)) return false;
+        items[id] = new BuildingSnapshot(id, kind, bounds);
+        return true;
     }
 
-    public bool Remove(BuildingId id)
-    {
-        return items.Remove(id);
-    }
-
-    public bool TryGetSnapshot(BuildingId id, out BuildingSnapshot snapshot)
-    {
-        return items.TryGetValue(id, out snapshot);
-    }
+    public bool Contains(BuildingId id) => items.ContainsKey(id);
+    public bool Remove(BuildingId id) => items.Remove(id);
+    public bool TryGetSnapshot(BuildingId id, out BuildingSnapshot snapshot) => items.TryGetValue(id, out snapshot);
 
     public BuildingSnapshot[] CreateSnapshot()
     {
@@ -52,20 +43,13 @@ internal sealed class BuildingStore
             var snapshot = snapshots[index];
             result[index] = new SimulationBuildingCheckpoint(snapshot.Id, snapshot.Kind, snapshot.Bounds);
         }
-
         return result;
     }
 
     public void Restore(IReadOnlyList<SimulationBuildingCheckpoint> buildings, ulong restoredNextId)
     {
         items.Clear();
-        foreach (var building in buildings)
-        {
-            items.Add(
-                building.Id,
-                new BuildingSnapshot(building.Id, building.Kind, building.Bounds));
-        }
-
+        foreach (var building in buildings) items.Add(building.Id, new BuildingSnapshot(building.Id, building.Kind, building.Bounds));
         nextId = restoredNextId;
     }
 }
