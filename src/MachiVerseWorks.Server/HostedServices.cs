@@ -72,6 +72,25 @@ internal static class RoadSnapshotMessagePlanner
     }
 }
 
+internal static class RailwayOperationsSnapshotMessagePlanner
+{
+    public const string TooLargeDetailCode = "railwayOperationsSnapshotTooLarge";
+
+    public static IProtocolMessage Create(RailwayOperationsSnapshotMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        var payloadLength = RailwayOperationsProtocolCodec.GetPayloadLength(message);
+        if ((ulong)payloadLength <= ProtocolFrameHeader.MaxPayloadLength) return message;
+        return new ProtocolErrorMessage(ProtocolErrorCode.InvalidRequest,
+        [
+            new ProtocolErrorParameter(ProtocolErrorParameterKeys.Field, "volume"),
+            new ProtocolErrorParameter(ProtocolErrorParameterKeys.DetailCode, TooLargeDetailCode),
+            new ProtocolErrorParameter("payloadBytes", payloadLength.ToString(CultureInfo.InvariantCulture)),
+            new ProtocolErrorParameter("maximumPayloadBytes", ProtocolFrameHeader.MaxPayloadLength.ToString(CultureInfo.InvariantCulture)),
+        ]);
+    }
+}
+
 internal readonly record struct PendingSnapshotDelivery(ClientConnection Connection, ClientSubscriptionState Subscription);
 
 internal sealed class SnapshotPublishService(SimulationRuntime simulation, ServerOptions options, ClientConnectionRegistry connections, E2eMetrics metrics, ILogger<SnapshotPublishService> logger) : BackgroundService
@@ -128,7 +147,12 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
             var pedestrianPlan = connection.NegotiatedVersion.SupportsPedestrians ? PedestrianSnapshotMessagePlanner.Create(snapshot.Pedestrians, subscription.KnownPedestrianIds, snapshot.TickCount) : new PedestrianSnapshotMessagePlan([], []);
             var vehiclePlan = connection.NegotiatedVersion.SupportsVehicles ? VehicleSnapshotMessagePlanner.Create(snapshot.Vehicles, subscription.KnownVehicleIds, snapshot.TickCount) : new VehicleSnapshotMessagePlan([], []);
             var intersectionMessages = connection.NegotiatedVersion.SupportsIntersectionControl ? snapshot.Intersections.Select(IntersectionControlMessageMapper.Create).ToArray() : [];
-            var railwayOperationsMessage = connection.NegotiatedVersion.SupportsRailwayOperations && snapshot.Trains.Length > 0 ? RailwayOperationsMessageMapper.Create(publishSnapshot.RailwayOperations, snapshot.Trains, snapshot.TickCount) : null;
+            IProtocolMessage? railwayOperationsMessage = null;
+            if (connection.NegotiatedVersion.SupportsRailwayOperations && snapshot.Trains.Length > 0)
+            {
+                var mappedRailwayOperations = RailwayOperationsMessageMapper.Create(publishSnapshot.RailwayOperations, snapshot.Trains, snapshot.TickCount);
+                railwayOperationsMessage = RailwayOperationsSnapshotMessagePlanner.Create(mappedRailwayOperations);
+            }
             var multimodalTransitMessage = connection.NegotiatedVersion.SupportsMultimodalTransit && (publishSnapshot.MultimodalTransit.Lines.Length > 0 || publishSnapshot.MultimodalTransit.Vehicles.Length > 0)
                 ? MultimodalTransitMessageMapper.Create(publishSnapshot.MultimodalTransit, snapshot.TickCount)
                 : null;

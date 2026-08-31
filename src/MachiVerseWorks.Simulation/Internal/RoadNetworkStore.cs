@@ -8,34 +8,37 @@ internal sealed class RoadNetworkStore
     private readonly Dictionary<LaneConnectionId, LaneConnectionSnapshot> connections = [];
     private readonly Dictionary<RoadAccessPointId, RoadAccessPointSnapshot> accessPoints = [];
     private readonly Dictionary<RoadNodeId, int> degreeByNode = [];
+    private readonly Dictionary<RoadNodeId, HashSet<RoadSegmentId>> incidentSegmentIdsByNode = [];
     private readonly RoadSpatialIndex spatialIndex;
     private ulong nextNodeId = 1, nextSegmentId = 1, nextLaneId = 1, nextConnectionId = 1, nextAccessPointId = 1;
     public RoadNetworkStore(double cellSize) => spatialIndex = new RoadSpatialIndex(cellSize);
     public int NodeCount => nodes.Count; public int SegmentCount => segments.Count; public int LaneCount => lanes.Count; public int ConnectionCount => connections.Count; public int AccessPointCount => accessPoints.Count;
     public ulong NextNodeId => nextNodeId; public ulong NextSegmentId => nextSegmentId; public ulong NextLaneId => nextLaneId; public ulong NextConnectionId => nextConnectionId; public ulong NextAccessPointId => nextAccessPointId;
 
-    public RoadNodeId AddNode(WorldPoint position, RoadNodeKind kind) { EnsureCapacity(nextNodeId, "Road node"); spatialIndex.ValidatePosition(position); var id = new RoadNodeId(nextNodeId++); nodes.Add(id, new(id, kind, position)); degreeByNode.Add(id, 0); spatialIndex.RegisterNode(id, position); return id; }
+    public RoadNodeId AddNode(WorldPoint position, RoadNodeKind kind) { EnsureCapacity(nextNodeId, "Road node"); spatialIndex.ValidatePosition(position); var id = new RoadNodeId(nextNodeId++); nodes.Add(id, new(id, kind, position)); degreeByNode.Add(id, 0); incidentSegmentIdsByNode.Add(id, []); spatialIndex.RegisterNode(id, position); return id; }
     public bool UpdateNode(RoadNodeId id, WorldPoint position, RoadNodeKind kind)
     {
         if (!nodes.ContainsKey(id)) return false;
         spatialIndex.ValidatePosition(position);
         if (kind == RoadNodeKind.Endpoint && degreeByNode[id] > 1) throw new InvalidOperationException($"Road node {id.Value} has multiple incident segments and must remain an intersection.");
         if (kind == RoadNodeKind.Endpoint && connections.Values.Any(x => x.ViaNodeId == id)) throw new InvalidOperationException($"Road node {id.Value} must remain an intersection while lane connections reference it.");
-        var incident = segments.Values.Where(s => s.StartNodeId == id || s.EndNodeId == id).ToArray(); nodes[id] = new(id, kind, position); spatialIndex.UpdateNode(id, position);
-        foreach (var s in incident) spatialIndex.UpdateSegment(s.Id, nodes[s.StartNodeId].Position, nodes[s.EndNodeId].Position); return true;
+        nodes[id] = new(id, kind, position); spatialIndex.UpdateNode(id, position);
+        foreach (var segmentId in incidentSegmentIdsByNode[id]) { var s = segments[segmentId]; spatialIndex.UpdateSegment(s.Id, nodes[s.StartNodeId].Position, nodes[s.EndNodeId].Position); }
+        return true;
     }
-    public bool RemoveNode(RoadNodeId id) { if (!nodes.ContainsKey(id)) return false; if (degreeByNode[id] != 0) throw new InvalidOperationException($"Road node {id.Value} cannot be removed while segments reference it."); if (connections.Values.Any(x => x.ViaNodeId == id)) throw new InvalidOperationException($"Road node {id.Value} cannot be removed while lane connections reference it."); spatialIndex.RemoveNode(id); degreeByNode.Remove(id); return nodes.Remove(id); }
+    public bool RemoveNode(RoadNodeId id) { if (!nodes.ContainsKey(id)) return false; if (degreeByNode[id] != 0) throw new InvalidOperationException($"Road node {id.Value} cannot be removed while segments reference it."); if (connections.Values.Any(x => x.ViaNodeId == id)) throw new InvalidOperationException($"Road node {id.Value} cannot be removed while lane connections reference it."); spatialIndex.RemoveNode(id); degreeByNode.Remove(id); incidentSegmentIdsByNode.Remove(id); return nodes.Remove(id); }
 
-    public RoadSegmentId AddSegment(RoadNodeId start, RoadNodeId end, RoadKind kind) { EnsureCapacity(nextSegmentId, "Road segment"); ValidateSegmentNodes(start, end, null); var id = new RoadSegmentId(nextSegmentId++); segments.Add(id, new(id, kind, start, end)); degreeByNode[start]++; degreeByNode[end]++; spatialIndex.RegisterSegment(id, nodes[start].Position, nodes[end].Position); return id; }
+    public RoadSegmentId AddSegment(RoadNodeId start, RoadNodeId end, RoadKind kind) { EnsureCapacity(nextSegmentId, "Road segment"); ValidateSegmentNodes(start, end, null); var id = new RoadSegmentId(nextSegmentId++); segments.Add(id, new(id, kind, start, end)); degreeByNode[start]++; degreeByNode[end]++; AttachSegment(id, start, end); spatialIndex.RegisterSegment(id, nodes[start].Position, nodes[end].Position); return id; }
     public bool UpdateSegment(RoadSegmentId id, RoadNodeId start, RoadNodeId end, RoadKind kind)
     {
         if (!segments.TryGetValue(id, out var previous)) return false; ValidateSegmentNodes(start, end, id);
         degreeByNode[previous.StartNodeId]--; degreeByNode[previous.EndNodeId]--; degreeByNode[start]++; degreeByNode[end]++; segments[id] = new(id, kind, start, end); spatialIndex.UpdateSegment(id, nodes[start].Position, nodes[end].Position);
         try { ValidateConnectionsForSegment(id); }
         catch { spatialIndex.UpdateSegment(id, nodes[previous.StartNodeId].Position, nodes[previous.EndNodeId].Position); segments[id] = previous; degreeByNode[start]--; degreeByNode[end]--; degreeByNode[previous.StartNodeId]++; degreeByNode[previous.EndNodeId]++; throw; }
+        DetachSegment(id, previous.StartNodeId, previous.EndNodeId); AttachSegment(id, start, end);
         return true;
     }
-    public bool RemoveSegment(RoadSegmentId id) { if (!segments.TryGetValue(id, out var s)) return false; if (lanes.Values.Any(l => l.SegmentId == id)) throw new InvalidOperationException($"Road segment {id.Value} cannot be removed while lanes reference it."); if (accessPoints.Values.Any(a => a.SegmentId == id)) throw new InvalidOperationException($"Road segment {id.Value} cannot be removed while access points reference it."); spatialIndex.RemoveSegment(id); degreeByNode[s.StartNodeId]--; degreeByNode[s.EndNodeId]--; return segments.Remove(id); }
+    public bool RemoveSegment(RoadSegmentId id) { if (!segments.TryGetValue(id, out var s)) return false; if (lanes.Values.Any(l => l.SegmentId == id)) throw new InvalidOperationException($"Road segment {id.Value} cannot be removed while lanes reference it."); if (accessPoints.Values.Any(a => a.SegmentId == id)) throw new InvalidOperationException($"Road segment {id.Value} cannot be removed while access points reference it."); spatialIndex.RemoveSegment(id); degreeByNode[s.StartNodeId]--; degreeByNode[s.EndNodeId]--; DetachSegment(id, s.StartNodeId, s.EndNodeId); return segments.Remove(id); }
 
     public LaneId AddLane(RoadSegmentId segment, LaneDirection direction, ushort order, double width, double speed) { EnsureCapacity(nextLaneId, "Lane"); ValidateLane(segment, direction, order, width, speed, null); var id = new LaneId(nextLaneId++); lanes.Add(id, new(id, segment, direction, order, width, speed)); return id; }
     public bool UpdateLane(LaneId id, RoadSegmentId segment, LaneDirection direction, ushort order, double width, double speed) { if (!lanes.TryGetValue(id, out var previous)) return false; ValidateLane(segment, direction, order, width, speed, id); lanes[id] = new(id, segment, direction, order, width, speed); try { ValidateConnectionsForLane(id); } catch { lanes[id] = previous; throw; } return true; }
@@ -51,6 +54,11 @@ internal sealed class RoadNetworkStore
     public bool ContainsBuildingReference(BuildingId id) => accessPoints.Values.Any(x => x.BuildingId == id);
     public bool ContainsPoiReference(PoiId id) => accessPoints.Values.Any(x => x.PoiId == id);
     public bool TryGetNode(RoadNodeId id, out RoadNodeSnapshot snapshot) => nodes.TryGetValue(id, out snapshot); public bool TryGetSegment(RoadSegmentId id, out RoadSegmentSnapshot snapshot) => segments.TryGetValue(id, out snapshot); public bool TryGetLane(LaneId id, out LaneSnapshot snapshot) => lanes.TryGetValue(id, out snapshot); public bool TryGetConnection(LaneConnectionId id, out LaneConnectionSnapshot snapshot) => connections.TryGetValue(id, out snapshot); public bool TryGetAccessPoint(RoadAccessPointId id, out RoadAccessPointSnapshot snapshot) => accessPoints.TryGetValue(id, out snapshot);
+    public IEnumerable<RoadSegmentSnapshot> GetIncidentSegments(RoadNodeId id)
+    {
+        if (!incidentSegmentIdsByNode.TryGetValue(id, out var segmentIds)) yield break;
+        foreach (var segmentId in segmentIds) yield return segments[segmentId];
+    }
     public RoadNetworkSnapshot CreateSnapshot() => CreateSnapshotCore(nodes.Keys.ToHashSet(), segments.Keys.ToHashSet());
     public RoadNetworkSnapshot CreateSnapshot(WorldVolume volume) { var selectedNodes = spatialIndex.QueryNodes(volume); var selectedSegments = spatialIndex.QuerySegments(volume); foreach (var id in selectedSegments) { var s = segments[id]; selectedNodes.Add(s.StartNodeId); selectedNodes.Add(s.EndNodeId); } return CreateSnapshotCore(selectedNodes, selectedSegments); }
 
@@ -61,9 +69,9 @@ internal sealed class RoadNetworkStore
     public IReadOnlyList<SimulationRoadAccessPointCheckpoint> CreateAccessPointCheckpoint() => accessPoints.Values.OrderBy(x => x.Id.Value).Select(static x => new SimulationRoadAccessPointCheckpoint(x.Id, x.SegmentId, x.SegmentOffset, x.BuildingId, x.PoiId, x.Mode)).ToArray();
     public void Restore(SimulationCheckpoint c)
     {
-        nodes.Clear(); segments.Clear(); lanes.Clear(); connections.Clear(); accessPoints.Clear(); degreeByNode.Clear();
-        foreach (var n in c.RoadNodes) { nodes.Add(n.Id, new(n.Id, n.Kind, n.Position)); degreeByNode.Add(n.Id, 0); spatialIndex.RegisterNode(n.Id, n.Position); }
-        foreach (var s in c.RoadSegments) { segments.Add(s.Id, new(s.Id, s.Kind, s.StartNodeId, s.EndNodeId)); degreeByNode[s.StartNodeId]++; degreeByNode[s.EndNodeId]++; spatialIndex.RegisterSegment(s.Id, nodes[s.StartNodeId].Position, nodes[s.EndNodeId].Position); }
+        nodes.Clear(); segments.Clear(); lanes.Clear(); connections.Clear(); accessPoints.Clear(); degreeByNode.Clear(); incidentSegmentIdsByNode.Clear();
+        foreach (var n in c.RoadNodes) { nodes.Add(n.Id, new(n.Id, n.Kind, n.Position)); degreeByNode.Add(n.Id, 0); incidentSegmentIdsByNode.Add(n.Id, []); spatialIndex.RegisterNode(n.Id, n.Position); }
+        foreach (var s in c.RoadSegments) { segments.Add(s.Id, new(s.Id, s.Kind, s.StartNodeId, s.EndNodeId)); degreeByNode[s.StartNodeId]++; degreeByNode[s.EndNodeId]++; AttachSegment(s.Id, s.StartNodeId, s.EndNodeId); spatialIndex.RegisterSegment(s.Id, nodes[s.StartNodeId].Position, nodes[s.EndNodeId].Position); }
         foreach (var x in c.Lanes) lanes.Add(x.Id, new(x.Id, x.SegmentId, x.Direction, x.Order, x.WidthMeters, x.SpeedLimitMetersPerSecond)); foreach (var x in c.LaneConnections) connections.Add(x.Id, new(x.Id, x.FromLaneId, x.ToLaneId, x.ViaNodeId, x.Movement)); foreach (var x in c.RoadAccessPoints) accessPoints.Add(x.Id, new(x.Id, x.SegmentId, x.SegmentOffset, x.BuildingId, x.PoiId, x.Mode));
         nextNodeId = c.NextRoadNodeId; nextSegmentId = c.NextRoadSegmentId; nextLaneId = c.NextLaneId; nextConnectionId = c.NextLaneConnectionId; nextAccessPointId = c.NextRoadAccessPointId;
     }
@@ -79,6 +87,8 @@ internal sealed class RoadNetworkStore
     private void ValidateAccessPoint(RoadSegmentId segment, double offset, BuildingId? building, PoiId? poi, RoadAccessMode mode) { if (!segments.ContainsKey(segment)) throw new ArgumentException($"Road segment {segment.Value} does not exist.", nameof(segment)); if (!double.IsFinite(offset) || offset < 0 || offset > 1) throw new ArgumentOutOfRangeException(nameof(offset), offset, "Road access point offset must be between zero and one."); if (building is null && poi is null) throw new ArgumentException("A road access point must reference a Building, POI, or both."); const RoadAccessMode supported = RoadAccessMode.Motor | RoadAccessMode.Foot; if (mode == RoadAccessMode.None || (mode & ~supported) != 0) throw new ArgumentOutOfRangeException(nameof(mode)); }
     private void ValidateConnectionsForLane(LaneId id) { foreach (var x in connections.Values.Where(x => x.FromLaneId == id || x.ToLaneId == id)) ValidateConnection(x.FromLaneId, x.ToLaneId, x.ViaNodeId, x.Movement, x.Id); }
     private void ValidateConnectionsForSegment(RoadSegmentId id) { foreach (var lane in lanes.Values.Where(x => x.SegmentId == id)) ValidateConnectionsForLane(lane.Id); }
+    private void AttachSegment(RoadSegmentId segmentId, RoadNodeId start, RoadNodeId end) { incidentSegmentIdsByNode[start].Add(segmentId); incidentSegmentIdsByNode[end].Add(segmentId); }
+    private void DetachSegment(RoadSegmentId segmentId, RoadNodeId start, RoadNodeId end) { incidentSegmentIdsByNode[start].Remove(segmentId); incidentSegmentIdsByNode[end].Remove(segmentId); }
     private RoadNodeId GetEntryNode(LaneSnapshot lane) { var s = segments[lane.SegmentId]; return lane.Direction == LaneDirection.Forward ? s.StartNodeId : s.EndNodeId; }
     private RoadNodeId GetExitNode(LaneSnapshot lane) { var s = segments[lane.SegmentId]; return lane.Direction == LaneDirection.Forward ? s.EndNodeId : s.StartNodeId; }
     private static void EnsureCapacity(ulong nextId, string name) { if (nextId == ulong.MaxValue) throw new OverflowException($"{name} ID capacity has been exhausted."); }

@@ -18,6 +18,8 @@ Road NetworkはRouting・Road Traffic・Intersection Controlが共有するSimul
 
 `RoadNodeKind`は`Endpoint`と`Intersection`を持つ。Endpointのincident segmentは最大1本で、複数segmentを接続する場合は明示的にIntersectionへ変更する。これによりgeometry上の偶然の接触をtopologyへ昇格させない。
 
+`RoadSegment`の両endpointはstable IDだけでなく3D positionも異ならなければならず、zero-length geometryをauthoritative stateとして許可しない。`CreateRoadSegment`、`UpdateRoadSegment`、incident segmentを持つ`UpdateRoadNode`、Checkpoint / Save復元はいずれも同じ不変条件を適用し、Road Traffic topology rebuildまで不正geometryを持ち越さない。
+
 `RoadKind`は`Local`、`Collector`、`Arterial`、`Highway`、`Service`を定義する。
 
 ## Lane

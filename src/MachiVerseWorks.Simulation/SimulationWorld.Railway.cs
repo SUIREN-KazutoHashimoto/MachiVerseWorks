@@ -37,7 +37,13 @@ public sealed partial class SimulationWorld
     public TrackConnectionId CreateTrackConnection(TrackSegmentId fromSegmentId, TrackSegmentId toSegmentId, TrackNodeId viaNodeId) =>
         _railway.AddConnection(fromSegmentId, toSegmentId, viaNodeId);
 
-    public BlockSectionId CreateBlockSection(IReadOnlyList<TrackSegmentId> trackSegmentIds) => _railway.AddBlock(trackSegmentIds);
+    public BlockSectionId CreateBlockSection(IReadOnlyList<TrackSegmentId> trackSegmentIds)
+    {
+        ArgumentNullException.ThrowIfNull(trackSegmentIds);
+        if (trackSegmentIds.Count > RailwayInfrastructureLimits.MaximumBlockSectionSegmentCount)
+            throw new ArgumentOutOfRangeException(nameof(trackSegmentIds), trackSegmentIds.Count, $"A block section may contain at most {RailwayInfrastructureLimits.MaximumBlockSectionSegmentCount} track segments.");
+        return _railway.AddBlock(trackSegmentIds);
+    }
 
     public StationId CreateStation(WorldVolume bounds) => _railway.AddStation(bounds);
 
@@ -57,7 +63,13 @@ public sealed partial class SimulationWorld
         return _railway.AddPlatformAccessPoint(platformId, roadAccessPointId);
     }
 
-    public DepotId CreateDepot(WorldVolume bounds, IReadOnlyList<TrackSegmentId> trackSegmentIds) => _railway.AddDepot(bounds, trackSegmentIds);
+    public DepotId CreateDepot(WorldVolume bounds, IReadOnlyList<TrackSegmentId> trackSegmentIds)
+    {
+        ArgumentNullException.ThrowIfNull(trackSegmentIds);
+        if (trackSegmentIds.Count > RailwayInfrastructureLimits.MaximumDepotTrackSegmentCount)
+            throw new ArgumentOutOfRangeException(nameof(trackSegmentIds), trackSegmentIds.Count, $"A depot may contain at most {RailwayInfrastructureLimits.MaximumDepotTrackSegmentCount} track segments.");
+        return _railway.AddDepot(bounds, trackSegmentIds);
+    }
 
     public RailwayInfrastructureSnapshot CreateRailwayInfrastructureSnapshot() => _railway.CreateSnapshot();
 
@@ -169,6 +181,8 @@ public sealed partial class SimulationWorld
         foreach (var block in blockData)
         {
             if (block is null || block.Id.Value == 0 || !blockIds.Add(block.Id) || block.SegmentIds is null || block.SegmentIds.Count == 0) throw new ArgumentException("Block section is null, empty, zero, or duplicated.", nameof(checkpoint));
+            if (block.SegmentIds.Count > RailwayInfrastructureLimits.MaximumBlockSectionSegmentCount)
+                throw new ArgumentException($"Block section {block.Id.Value} exceeds the {RailwayInfrastructureLimits.MaximumBlockSectionSegmentCount}-segment membership limit.", nameof(checkpoint));
             var local = new HashSet<TrackSegmentId>();
             foreach (var segmentId in block.SegmentIds)
             {
@@ -201,6 +215,8 @@ public sealed partial class SimulationWorld
         foreach (var depot in depotData)
         {
             if (depot is null || depot.Id.Value == 0 || !depotIds.Add(depot.Id) || depot.TrackSegmentIds is null || depot.TrackSegmentIds.Count == 0) throw new ArgumentException("Depot is null, empty, zero, or duplicated.", nameof(checkpoint));
+            if (depot.TrackSegmentIds.Count > RailwayInfrastructureLimits.MaximumDepotTrackSegmentCount)
+                throw new ArgumentException($"Depot {depot.Id.Value} exceeds the {RailwayInfrastructureLimits.MaximumDepotTrackSegmentCount}-segment membership limit.", nameof(checkpoint));
             var local = new HashSet<TrackSegmentId>();
             foreach (var segmentId in depot.TrackSegmentIds)
             {

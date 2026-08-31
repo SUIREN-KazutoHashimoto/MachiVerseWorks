@@ -73,6 +73,8 @@ Phase 15のdispatch policy:
 2. Motorを利用できない、またはMotor routeが成立しない場合はFoot TripとしてPedestrianへdispatchする。
 3. dispatchされたentity IDと`TripRequestId`をPersonのactive trip stateへ記録する。
 
+Motor routeが成立していても、出発Laneに安全なspawn gapがない場合は一時的なdispatch failureとして扱う。`CreateVehicle`のspawn競合をSimulation tick全体のfaultへ伝播させず、PersonをまだMotor Trip開始済みにはせず、同一planner呼び出しの残りmode fallbackへ進める。Vehicle/Pedestrian等の実行entity作成が成功してから`BeginTrip`をcommitする。
+
 この境界によりP16のPedestrian SimulationはPopulation由来Trip Requestを直接受け取れる。
 
 ## Person state machine

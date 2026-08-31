@@ -106,39 +106,39 @@ public sealed class RoutingTests
     }
 
     [TestMethod]
-    public void ZeroLengthLaneAcceptsPreferredEqualCostPredecessorAfterSettlement()
+    public void ShortConnectorAcceptsPreferredEqualCostPredecessorAfterSettlement()
     {
         var world = new SimulationWorld();
         var start = world.CreateRoadNode(new WorldPoint(0, 0, 0));
         var firstJunction = world.CreateRoadNode(new WorldPoint(10, 0, 0), RoadNodeKind.Intersection);
         var secondJunction = world.CreateRoadNode(new WorldPoint(20, 0, 0), RoadNodeKind.Intersection);
-        var zeroExit = world.CreateRoadNode(new WorldPoint(20, 0, 0), RoadNodeKind.Intersection);
+        var shortExit = world.CreateRoadNode(new WorldPoint(20.001, 0, 0), RoadNodeKind.Intersection);
         var end = world.CreateRoadNode(new WorldPoint(30, 0, 0));
         var incomingSegment = world.CreateRoadSegment(start, firstJunction);
         var middleSegment = world.CreateRoadSegment(firstJunction, secondJunction);
-        var zeroSegment = world.CreateRoadSegment(secondJunction, zeroExit);
-        var outgoingSegment = world.CreateRoadSegment(zeroExit, end);
+        var shortSegment = world.CreateRoadSegment(secondJunction, shortExit);
+        var outgoingSegment = world.CreateRoadSegment(shortExit, end);
         var incoming = world.CreateLane(incomingSegment, LaneDirection.Forward, 0);
         var firstMiddle = world.CreateLane(middleSegment, LaneDirection.Forward, 0);
-        var zeroLength = world.CreateLane(zeroSegment, LaneDirection.Forward, 0);
+        var shortLane = world.CreateLane(shortSegment, LaneDirection.Forward, 0);
         var preferredMiddle = world.CreateLane(middleSegment, LaneDirection.Forward, 1);
         var outgoing = world.CreateLane(outgoingSegment, LaneDirection.Forward, 0);
 
-        var preferredIntoZero = world.CreateLaneConnection(preferredMiddle, zeroLength, secondJunction);
+        var preferredIntoShort = world.CreateLaneConnection(preferredMiddle, shortLane, secondJunction);
         world.CreateLaneConnection(incoming, firstMiddle, firstJunction);
         world.CreateLaneConnection(incoming, preferredMiddle, firstJunction);
-        var firstIntoZero = world.CreateLaneConnection(firstMiddle, zeroLength, secondJunction);
-        world.CreateLaneConnection(zeroLength, outgoing, zeroExit);
+        var firstIntoShort = world.CreateLaneConnection(firstMiddle, shortLane, secondJunction);
+        world.CreateLaneConnection(shortLane, outgoing, shortExit);
 
-        Assert.IsTrue(preferredIntoZero.Value < firstIntoZero.Value);
-        Assert.IsTrue(zeroLength.Value < preferredMiddle.Value);
+        Assert.IsTrue(preferredIntoShort.Value < firstIntoShort.Value);
+        Assert.IsTrue(shortLane.Value < preferredMiddle.Value);
 
         var route = world.FindRoadRoute(new RouteRequest(new WorldPoint(1, 0, 0), new WorldPoint(29, 0, 0)));
 
         CollectionAssert.AreEqual(
-            new[] { incoming, preferredMiddle, zeroLength, outgoing },
+            new[] { incoming, preferredMiddle, shortLane, outgoing },
             route.Steps.Select(static step => step.LaneId).ToArray());
-        Assert.AreEqual(preferredIntoZero, route.Steps[1].ExitConnectionId);
+        Assert.AreEqual(preferredIntoShort, route.Steps[1].ExitConnectionId);
     }
 
     [TestMethod]
