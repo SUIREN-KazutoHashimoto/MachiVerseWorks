@@ -59,16 +59,16 @@ public sealed class MixedTrafficCrossingTests
     [TestMethod]
     public void UnsignalizedVehicleEntryGrantHasPriorityOverPedestrianCrossingForThatTick()
     {
-        var world = new SimulationWorld(new SimulationConfig(tickRate: 1));
+        var world = new SimulationWorld(new SimulationConfig(tickRate: 30));
         var center = world.CreateRoadNode(new WorldPoint(0d, 0d, 0d), RoadNodeKind.Intersection);
-        var west = CreateArm(world, center, new WorldPoint(-20d, 0d, 0d));
-        var east = CreateArm(world, center, new WorldPoint(20d, 0d, 0d));
-        var south = CreateArm(world, center, new WorldPoint(0d, -20d, 0d));
+        var west = CreateArm(world, center, new WorldPoint(-10d, 0d, 0d));
+        var east = CreateArm(world, center, new WorldPoint(10d, 0d, 0d));
+        var south = CreateArm(world, center, new WorldPoint(0d, -10d, 0d));
         var westEast = world.CreateLaneConnection(west.InboundLaneId, east.OutboundLaneId, center, TurnMovement.Straight);
         world.CreateLaneConnection(south.InboundLaneId, east.OutboundLaneId, center, TurnMovement.Left);
 
-        var southBuilding = world.CreateBuilding(new WorldVolume(-1d, -21d, 0d, 1d, -19d, 3d), BuildingKind.Residential);
-        var westBuilding = world.CreateBuilding(new WorldVolume(-21d, -1d, 0d, -19d, 1d, 3d), BuildingKind.Commercial);
+        var southBuilding = world.CreateBuilding(new WorldVolume(-1d, -11d, 0d, 1d, -9d, 3d), BuildingKind.Residential);
+        var westBuilding = world.CreateBuilding(new WorldVolume(-11d, -1d, 0d, -9d, 1d, 3d), BuildingKind.Commercial);
         world.CreateRoadAccessPoint(south.SegmentId, 1d, southBuilding, mode: RoadAccessMode.Foot);
         world.CreateRoadAccessPoint(west.SegmentId, 1d, westBuilding, mode: RoadAccessMode.Foot);
 
@@ -80,10 +80,14 @@ public sealed class MixedTrafficCrossingTests
         Assert.AreEqual(IntersectionControlMode.Unsignalized, initialControl.Mode);
         Assert.IsTrue(GetCrossing(world, crossingId).IsOpen);
 
-        world.CreateVehicle(
+        var blocker = world.CreateVehicle(
         [
-            new RouteLaneStep(west.InboundLaneId, west.SegmentId, 1d, 0d, 20d, 2d, westEast),
-            new RouteLaneStep(east.OutboundLaneId, east.SegmentId, 0d, 1d, 20d, 2d, null),
+            new RouteLaneStep(east.OutboundLaneId, east.SegmentId, 0d, 1d, 10d, 10_000d, null),
+        ], performance: new VehiclePerformance(0.001d, 0.001d, 1d, 2d, 1.5d));
+        var vehicle = world.CreateVehicle(
+        [
+            new RouteLaneStep(west.InboundLaneId, west.SegmentId, 1d, 0d, 10d, 1d, westEast),
+            new RouteLaneStep(east.OutboundLaneId, east.SegmentId, 0d, 1d, 10d, 1d, null),
         ], initialSpeedMetersPerSecond: 8d);
         var pedestrian = world.CreatePedestrian(
             new TripRequest(
@@ -92,21 +96,28 @@ public sealed class MixedTrafficCrossingTests
                 TripEndpoint.ForBuilding(westBuilding),
                 TravelMode.Foot),
             walkingSpeedMetersPerSecond: 10d);
+        Assert.IsTrue(world.SetPedestrianCrossingOpen(crossingId, false));
 
-        world.Step();
-        Assert.IsTrue(world.TryGetPedestrianSnapshot(pedestrian, out var approaching));
-        Assert.AreEqual(PedestrianMovementState.Walking, approaching.State);
-        Assert.IsTrue(GetCrossing(world, crossingId).IsOpen);
+        for (var tick = 0; tick < world.Config.TickRate * 3; tick++) world.Step();
 
+        Assert.IsTrue(world.TryGetVehicleSnapshot(vehicle, out var stoppedVehicle));
+        Assert.AreEqual(0, stoppedVehicle.RouteStepIndex);
+        Assert.AreEqual(VehicleMovementState.WaitingForTraffic, stoppedVehicle.State);
+        Assert.AreEqual(10d, stoppedVehicle.RouteProgressMeters, 1e-8);
+        Assert.IsTrue(world.TryGetPedestrianSnapshot(pedestrian, out var manuallyWaiting));
+        Assert.AreEqual(PedestrianMovementState.WaitingForCrossing, manuallyWaiting.State);
+        Assert.AreEqual(0d, manuallyWaiting.Position.X, 1e-9);
+        Assert.AreEqual(0d, manuallyWaiting.Position.Y, 1e-9);
+
+        Assert.IsTrue(world.RemoveVehicle(blocker));
+        Assert.IsTrue(world.SetPedestrianCrossingOpen(crossingId, true));
         world.Step();
 
         var granted = world.CreateIntersectionControlSnapshot().Controllers.Single();
         Assert.IsTrue(granted.MovementStates.Any(static state => state.EntryGrantedThisTick));
         Assert.IsFalse(GetCrossing(world, crossingId).IsOpen);
-        Assert.IsTrue(world.TryGetPedestrianSnapshot(pedestrian, out var waiting));
-        Assert.AreEqual(PedestrianMovementState.WaitingForCrossing, waiting.State);
-        Assert.AreEqual(0d, waiting.Position.X, 1e-9);
-        Assert.AreEqual(0d, waiting.Position.Y, 1e-9);
+        Assert.IsTrue(world.TryGetPedestrianSnapshot(pedestrian, out var automaticallyWaiting));
+        Assert.AreEqual(PedestrianMovementState.WaitingForCrossing, automaticallyWaiting.State);
 
         world.Step();
 
