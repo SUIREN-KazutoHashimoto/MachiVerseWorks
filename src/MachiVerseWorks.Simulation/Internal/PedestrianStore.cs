@@ -74,10 +74,15 @@ internal sealed class PedestrianStore
         return result.ToArray();
     }
 
-    public void Step(double deltaSeconds, PedestrianNetworkStore network, PedestrianSpatialIndex spatialIndex)
+    public void Step(
+        double deltaSeconds,
+        PedestrianNetworkStore network,
+        PedestrianSpatialIndex spatialIndex,
+        Func<PedestrianCrossingId, bool> isCrossingOpen)
     {
         ArgumentNullException.ThrowIfNull(network);
         ArgumentNullException.ThrowIfNull(spatialIndex);
+        ArgumentNullException.ThrowIfNull(isCrossingOpen);
         if (pedestrians.Count == 0) return;
 
         occupancy.Clear();
@@ -96,7 +101,7 @@ internal sealed class PedestrianStore
             var oldKey = GetOccupancyKey(pedestrian.CurrentLeg, pedestrian.ProgressMeters);
             if (occupancy.TryGetValue(oldKey, out var oldOwner) && oldOwner == pedestrian.Id) occupancy.Remove(oldKey);
             var oldPosition = pedestrian.Position;
-            StepPedestrian(pedestrian, deltaSeconds, network, occupancy);
+            StepPedestrian(pedestrian, deltaSeconds, network, occupancy, isCrossingOpen);
             if (pedestrian.Position != oldPosition) spatialIndex.Update(pedestrian.Id, pedestrian.Position);
             if (pedestrian.State != PedestrianMovementState.Arrived)
             {
@@ -188,7 +193,12 @@ internal sealed class PedestrianStore
         return new PedestrianState(id, request, route, speed, legIndex, progress, movementState, positionAtProgress, velocity);
     }
 
-    private static void StepPedestrian(PedestrianState pedestrian, double deltaSeconds, PedestrianNetworkStore network, Dictionary<(PedestrianEdgeId EdgeId, int Bin), PedestrianId> occupancy)
+    private static void StepPedestrian(
+        PedestrianState pedestrian,
+        double deltaSeconds,
+        PedestrianNetworkStore network,
+        Dictionary<(PedestrianEdgeId EdgeId, int Bin), PedestrianId> occupancy,
+        Func<PedestrianCrossingId, bool> isCrossingOpen)
     {
         var remainingDistance = pedestrian.WalkingSpeedMetersPerSecond * deltaSeconds;
         pedestrian.State = PedestrianMovementState.Walking;
@@ -220,7 +230,7 @@ internal sealed class PedestrianStore
             }
 
             var nextLeg = pedestrian.Route.Legs[pedestrian.LegIndex + 1];
-            if (network.TryGetCrossing(leg.EdgeId, nextLeg.EdgeId, out var crossingId) && !network.IsCrossingOpen(crossingId))
+            if (network.TryGetCrossing(leg.EdgeId, nextLeg.EdgeId, out var crossingId) && !isCrossingOpen(crossingId))
             {
                 pedestrian.State = PedestrianMovementState.WaitingForCrossing;
                 pedestrian.Velocity = default;
