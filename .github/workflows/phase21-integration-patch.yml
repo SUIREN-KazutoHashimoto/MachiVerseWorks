@@ -1,0 +1,69 @@
+name: Phase21 integration patch
+
+on:
+  push:
+    branches: [feature/phase21-economy]
+    paths: [.github/workflows/phase21-integration-patch.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/phase21-economy
+      - name: Patch Phase21 integration
+        shell: python
+        run: |
+          from pathlib import Path
+
+          p = Path('src/MachiVerseWorks.Persistence/WorldSaveSerializer.cs')
+          s = p.read_text()
+          replacements = [
+            ('        ValidateMultimodalTransitCheckpointWithinLimits(checkpoint.MultimodalTransit, limits);\n',
+             '        ValidateMultimodalTransitCheckpointWithinLimits(checkpoint.MultimodalTransit, limits);\n        ValidateEconomyCheckpointWithinLimits(checkpoint.Economy, limits);\n'),
+            ('                MultimodalTransit = checkpoint.MultimodalTransit,\n',
+             '                MultimodalTransit = checkpoint.MultimodalTransit,\n                Economy = checkpoint.Economy,\n'),
+            ('SaveFormatVersion.RailwayOperations or SaveFormatVersion.MultimodalTransit))',
+             'SaveFormatVersion.RailwayOperations or SaveFormatVersion.MultimodalTransit or SaveFormatVersion.Economy))'),
+            ('        var hasMultimodalTransit = format >= SaveFormatVersion.MultimodalTransit;\n',
+             '        var hasMultimodalTransit = format >= SaveFormatVersion.MultimodalTransit;\n        var hasEconomy = format >= SaveFormatVersion.Economy;\n'),
+            ('        var multimodalTransitData = hasMultimodalTransit ? simulation.MultimodalTransit ?? throw new InvalidDataException("Save Data is missing Multimodal Transit state.") : null;\n',
+             '        var multimodalTransitData = hasMultimodalTransit ? simulation.MultimodalTransit ?? throw new InvalidDataException("Save Data is missing Multimodal Transit state.") : null;\n        var economyData = hasEconomy ? simulation.Economy ?? throw new InvalidDataException("Save Data is missing Economy state.") : null;\n'),
+            ('        ValidateMultimodalTransitCheckpointWithinLimits(multimodalTransitData, limits);\n',
+             '        ValidateMultimodalTransitCheckpointWithinLimits(multimodalTransitData, limits);\n        ValidateEconomyCheckpointWithinLimits(economyData, limits);\n'),
+            ('            railwayOperations.NextTrainId, railwayOperations.Trains,\n            multimodalTransitData);\n',
+             '            railwayOperations.NextTrainId, railwayOperations.Trains,\n            multimodalTransitData,\n            economyData);\n'),
+          ]
+          for old, new in replacements:
+            if old not in s:
+              raise SystemExit(f'missing serializer anchor: {old!r}')
+            s = s.replace(old, new, 1)
+          p.write_text(s)
+
+          p = Path('src/web/src/person-inspection-protocol.ts')
+          s = p.read_text()
+          old = 'export const WEB_CURRENT_PROTOCOL_VERSION: ProtocolVersion = Object.freeze({ major: 2, minor: 9 });'
+          if old not in s: raise SystemExit('missing web protocol anchor')
+          p.write_text(s.replace(old, 'export const WEB_CURRENT_PROTOCOL_VERSION: ProtocolVersion = Object.freeze({ major: 2, minor: 10 });', 1))
+
+          for file in [
+            Path('tests/MachiVerseWorks.Persistence.Tests/MultimodalTransitSaveTests.cs'),
+            Path('tests/MachiVerseWorks.Persistence.Tests/RailwayOperationsSaveTests.cs'),
+          ]:
+            s = file.read_text()
+            s = s.replace('"\\\"formatVersion\\\": 10"', '"\\\"formatVersion\\\": 11"')
+            file.write_text(s)
+
+          wf = Path('.github/workflows/phase21-integration-patch.yml')
+          wf.unlink()
+      - name: Commit patch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "feat: integrate phase21 persistence and web version"
+          git push origin HEAD:feature/phase21-economy
