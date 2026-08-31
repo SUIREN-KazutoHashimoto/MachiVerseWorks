@@ -12,13 +12,30 @@ public static class MultimodalTransitProtocolCodec
     private const int VehicleLength = 70;
     private const int ArrivalLength = 32;
 
+    public static int GetPayloadLength(MultimodalTransitSnapshotMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(message.Lines);
+        ArgumentNullException.ThrowIfNull(message.Stops);
+        ArgumentNullException.ThrowIfNull(message.Patterns);
+        ArgumentNullException.ThrowIfNull(message.Vehicles);
+        ArgumentNullException.ThrowIfNull(message.ArrivalEstimates);
+        var patternBytes = 0;
+        foreach (var pattern in message.Patterns)
+        {
+            ArgumentNullException.ThrowIfNull(pattern);
+            ArgumentNullException.ThrowIfNull(pattern.Stops);
+            patternBytes = checked(patternBytes + PatternHeaderLength + pattern.Stops.Count * PatternStopLength);
+        }
+        return checked(HeaderLength + message.Lines.Count * LineLength + message.Stops.Count * StopLength + patternBytes + message.Vehicles.Count * VehicleLength + message.ArrivalEstimates.Count * ArrivalLength);
+    }
+
     public static byte[] Serialize(MultimodalTransitSnapshotMessage message, ProtocolVersion version)
     {
         ArgumentNullException.ThrowIfNull(message);
         if (!version.SupportsMultimodalTransit) throw new ArgumentOutOfRangeException(nameof(version), version, "Multimodal Transit messages require Protocol 2.8 or newer.");
         Validate(message);
-        var patternBytes = message.Patterns.Sum(static item => checked(PatternHeaderLength + item.Stops.Count * PatternStopLength));
-        var payloadLength = checked(HeaderLength + message.Lines.Count * LineLength + message.Stops.Count * StopLength + patternBytes + message.Vehicles.Count * VehicleLength + message.ArrivalEstimates.Count * ArrivalLength);
+        var payloadLength = GetPayloadLength(message);
         if ((uint)payloadLength > ProtocolFrameHeader.MaxPayloadLength) throw new ArgumentException("Multimodal Transit payload exceeds the protocol payload limit.", nameof(message));
         var frame = new byte[ProtocolFrameHeader.Size + payloadLength];
         ProtocolFrameHeader.Write(frame, new ProtocolFrameHeader(version, MessageType.MultimodalTransitSnapshot, checked((uint)payloadLength)));

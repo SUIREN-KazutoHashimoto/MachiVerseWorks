@@ -1,3 +1,4 @@
+using System.Globalization;
 using MachiVerseWorks.Protocol;
 using MachiVerseWorks.Simulation;
 
@@ -5,7 +6,23 @@ namespace MachiVerseWorks.Server;
 
 internal static class MultimodalTransitMessageMapper
 {
-    public static MultimodalTransitSnapshotMessage Create(MultimodalTransitSnapshot transit, ulong tickCount)
+    public const string TooLargeDetailCode = "multimodalTransitSnapshotTooLarge";
+
+    public static IProtocolMessage Create(MultimodalTransitSnapshot transit, ulong tickCount)
+    {
+        var message = CreateSnapshot(transit, tickCount);
+        var payloadLength = MultimodalTransitProtocolCodec.GetPayloadLength(message);
+        if ((ulong)payloadLength <= ProtocolFrameHeader.MaxPayloadLength) return message;
+        return new ProtocolErrorMessage(ProtocolErrorCode.InvalidRequest,
+        [
+            new ProtocolErrorParameter(ProtocolErrorParameterKeys.Field, "snapshot"),
+            new ProtocolErrorParameter(ProtocolErrorParameterKeys.DetailCode, TooLargeDetailCode),
+            new ProtocolErrorParameter("payloadBytes", payloadLength.ToString(CultureInfo.InvariantCulture)),
+            new ProtocolErrorParameter("maximumPayloadBytes", ProtocolFrameHeader.MaxPayloadLength.ToString(CultureInfo.InvariantCulture)),
+        ]);
+    }
+
+    internal static MultimodalTransitSnapshotMessage CreateSnapshot(MultimodalTransitSnapshot transit, ulong tickCount)
     {
         ArgumentNullException.ThrowIfNull(transit);
         var lines = transit.Lines.Select(static item => new ProtocolTransitLine(item.Id.Value, (ProtocolTransitMode)item.Mode)).ToArray();

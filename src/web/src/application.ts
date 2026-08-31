@@ -17,6 +17,7 @@ import { IntersectionControlStore, VehicleStore } from './traffic-store.ts';
 import { WorldView } from './world-view.ts';
 
 const SUBSCRIPTION_TOO_LARGE_DETAIL_CODE = 'subscriptionVolumeTooLarge';
+const ROAD_SNAPSHOT_TOO_LARGE_DETAIL_CODE = 'roadSnapshotTooLarge';
 
 export class Application {
   private readonly localizer = initializeLocalization();
@@ -171,7 +172,8 @@ export class Application {
   private handleProtocolError(message: ProtocolErrorMessage): void {
     const parameters: Record<string, string> = {};
     for (const parameter of message.parameters) parameters[parameter.key] = parameter.value;
-    if (message.code === ProtocolErrorCode.InvalidRequest && parameters.detailCode === SUBSCRIPTION_TOO_LARGE_DETAIL_CODE && this.view.zoomInForSubscriptionRetry()) {
+    const retryableSubscriptionError = parameters.detailCode === SUBSCRIPTION_TOO_LARGE_DETAIL_CODE || parameters.detailCode === ROAD_SNAPSHOT_TOO_LARGE_DETAIL_CODE;
+    if (message.code === ProtocolErrorCode.InvalidRequest && retryableSubscriptionError && this.view.zoomInForSubscriptionRetry()) {
       this.lastSubscription = null;
       this.lastSubscriptionAt = Number.NEGATIVE_INFINITY;
       this.ui.clearError();
