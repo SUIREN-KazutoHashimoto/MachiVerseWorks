@@ -7,16 +7,24 @@ using MachiVerseWorks.Simulation;
 
 namespace MachiVerseWorks.Server;
 
+internal sealed record ClientHandshakeState(ProtocolVersion Version);
+internal sealed class ConnectionLimitExceededException : InvalidOperationException
+{
+    public ConnectionLimitExceededException(int maximum) : base($"The WebSocket connection limit of {maximum} has been reached.") { }
+}
+
 internal sealed class ClientConnection : IDisposable
 {
     private readonly object _stateGate = new();
     private readonly object _lifetimeGate = new();
+    private readonly object _requestGate = new();
     private readonly SemaphoreSlim _sendGate = new(1, 1);
     private HashSet<ulong> _knownAgentIds = [];
     private HashSet<ulong> _knownPedestrianIds = [];
     private HashSet<ulong> _knownVehicleIds = [];
     private WorldVolume? _subscription;
     private ulong? _inspectedPersonId;
+    private ClientHandshakeState? _handshakeState;
     private long _subscriptionRevision;
     private long _lastRoadSubscriptionRevision = long.MinValue;
     private ulong _lastRoadRevision;
@@ -25,16 +33,61 @@ internal sealed class ClientConnection : IDisposable
     private int _activeSendCount;
     private bool _disposeRequested;
     private bool _sendGateDisposed;
+    private double _requestTokens = -1d;
+    private long _requestTokenTimestamp = Stopwatch.GetTimestamp();
+    private int _invalidRequestStrikeCount;
+    private long _invalidRequestWindowTimestamp = Stopwatch.GetTimestamp();
 
     public ClientConnection(Guid id, WebSocket socket) { Id = id; Socket = socket ?? throw new ArgumentNullException(nameof(socket)); }
     public Guid Id { get; }
     public WebSocket Socket { get; }
-    public bool HandshakeCompleted { get; private set; }
-    public ProtocolVersion NegotiatedVersion { get; private set; }
-    public void CompleteHandshake(ProtocolVersion negotiatedVersion) { NegotiatedVersion = negotiatedVersion; HandshakeCompleted = true; }
+    public bool HandshakeCompleted => Volatile.Read(ref _handshakeState) is not null;
+    public ProtocolVersion NegotiatedVersion => Volatile.Read(ref _handshakeState)?.Version ?? default;
+
+    public void CompleteHandshake(ProtocolVersion negotiatedVersion)
+    {
+        var state = new ClientHandshakeState(negotiatedVersion);
+        if (Interlocked.CompareExchange(ref _handshakeState, state, null) is not null)
+            throw new InvalidOperationException("The client handshake has already completed.");
+    }
+
+    public bool TryConsumeRequest(int requestsPerSecond, int burst)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(requestsPerSecond);
+        if (burst < requestsPerSecond) throw new ArgumentOutOfRangeException(nameof(burst));
+        lock (_requestGate)
+        {
+            var now = Stopwatch.GetTimestamp();
+            if (_requestTokens < 0d) _requestTokens = burst;
+            var elapsedSeconds = Stopwatch.GetElapsedTime(_requestTokenTimestamp, now).TotalSeconds;
+            _requestTokenTimestamp = now;
+            _requestTokens = Math.Min(burst, _requestTokens + (elapsedSeconds * requestsPerSecond));
+            if (_requestTokens < 1d) return false;
+            _requestTokens -= 1d;
+            return true;
+        }
+    }
+
+    public bool RegisterInvalidRequest(int strikeLimit, TimeSpan strikeWindow)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(strikeLimit);
+        if (strikeWindow <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(strikeWindow));
+        lock (_requestGate)
+        {
+            var now = Stopwatch.GetTimestamp();
+            if (Stopwatch.GetElapsedTime(_invalidRequestWindowTimestamp, now) >= strikeWindow)
+            {
+                _invalidRequestWindowTimestamp = now;
+                _invalidRequestStrikeCount = 0;
+            }
+            _invalidRequestStrikeCount = checked(_invalidRequestStrikeCount + 1);
+            return _invalidRequestStrikeCount < strikeLimit;
+        }
+    }
 
     public void SetSubscription(WorldVolume volume) { lock (_stateGate) { _subscription = volume; _subscriptionRevision = checked(_subscriptionRevision + 1); } }
     public void SetInspectedPerson(ulong personId) { if (personId == 0) throw new ArgumentOutOfRangeException(nameof(personId)); lock (_stateGate) _inspectedPersonId = personId; }
+    public void ClearInspectedPerson() { lock (_stateGate) _inspectedPersonId = null; }
     public bool TryGetInspectedPersonId(out ulong personId)
     {
         lock (_stateGate)
@@ -141,21 +194,40 @@ internal readonly record struct ClientSubscriptionState(WorldVolume Volume, long
 internal sealed class ClientConnectionRegistry
 {
     private readonly ConcurrentDictionary<Guid, ClientConnection> _connections = new();
-    public int Count => _connections.Count;
-    public ClientConnection Register(WebSocket socket)
+    private int _connectionCount;
+    public int Count => Volatile.Read(ref _connectionCount);
+    public ClientConnection Register(WebSocket socket) => Register(socket, int.MaxValue);
+    public ClientConnection Register(WebSocket socket, int maximumConnections)
     {
+        ArgumentNullException.ThrowIfNull(socket);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumConnections);
+        var count = Interlocked.Increment(ref _connectionCount);
+        if (count > maximumConnections)
+        {
+            Interlocked.Decrement(ref _connectionCount);
+            throw new ConnectionLimitExceededException(maximumConnections);
+        }
+
         var connection = new ClientConnection(Guid.NewGuid(), socket);
-        if (!_connections.TryAdd(connection.Id, connection)) { connection.Dispose(); throw new InvalidOperationException("Failed to register a unique client connection."); }
-        return connection;
+        if (_connections.TryAdd(connection.Id, connection)) return connection;
+        Interlocked.Decrement(ref _connectionCount);
+        connection.Dispose();
+        throw new InvalidOperationException("Failed to register a unique client connection.");
     }
     public bool TryGet(Guid id, out ClientConnection? connection) => _connections.TryGetValue(id, out connection);
-    public bool Remove(Guid id) => _connections.TryRemove(id, out _);
+    public bool Remove(Guid id)
+    {
+        if (!_connections.TryRemove(id, out _)) return false;
+        Interlocked.Decrement(ref _connectionCount);
+        return true;
+    }
     public ClientConnection[] CreateSnapshot() => _connections.Values.ToArray();
 }
 
 internal abstract record ClientCommand(Guid ConnectionId);
 internal sealed record SubscribeVolumeCommand(Guid ConnectionId, WorldVolume Volume) : ClientCommand(ConnectionId);
 internal sealed record InspectPersonCommand(Guid ConnectionId, ulong PersonId) : ClientCommand(ConnectionId);
+internal sealed record ClearPersonInspectionCommand(Guid ConnectionId) : ClientCommand(ConnectionId);
 
 internal sealed class ClientCommandQueue
 {
@@ -178,6 +250,7 @@ internal sealed class ClientCommandProcessor(ClientCommandQueue queue, ClientCon
                 {
                     case SubscribeVolumeCommand subscribe: connection.SetSubscription(subscribe.Volume); break;
                     case InspectPersonCommand inspect: connection.SetInspectedPerson(inspect.PersonId); break;
+                    case ClearPersonInspectionCommand: connection.ClearInspectedPerson(); break;
                     default: ServerLog.UnsupportedClientCommand(logger, command.GetType().Name); break;
                 }
             }
