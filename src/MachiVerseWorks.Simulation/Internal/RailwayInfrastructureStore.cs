@@ -60,6 +60,7 @@ internal sealed class RailwayInfrastructureStore
         if (startNodeId == endNodeId) throw new ArgumentException("A track segment must connect two distinct track nodes.");
         ValidateNodeAttachment(startNodeId);
         ValidateNodeAttachment(endNodeId);
+        if (_nodes[startNodeId].Position == _nodes[endNodeId].Position) throw new ArgumentException("A track segment must have non-zero 3D length.");
         ValidateSegmentAttributes(direction, gaugeMeters, speedLimitMetersPerSecond, electrification, usage);
         var id = new TrackSegmentId(_nextSegmentId++);
         _segments.Add(id, new TrackSegmentSnapshot(id, startNodeId, endNodeId, direction, gaugeMeters, speedLimitMetersPerSecond, electrification, usage));
@@ -181,31 +182,36 @@ internal sealed class RailwayInfrastructureStore
             var start = _nodes[segment.StartNodeId].Position;
             var end = _nodes[segment.EndNodeId].Position;
             if (!SegmentBoundsIntersectVolume(start, end, volume)) continue;
-            selectedSegments.Add(segment.Id);
-            selectedNodes.Add(segment.StartNodeId);
-            selectedNodes.Add(segment.EndNodeId);
-        }
-
-        var selectedPlatforms = _platforms.Values
-            .Where(item => VolumesIntersect(item.Bounds, volume) || selectedSegments.Contains(item.TrackSegmentId))
-            .Select(static item => item.Id)
-            .ToHashSet();
-        foreach (var platformId in selectedPlatforms)
-        {
-            var platform = _platforms[platformId];
-            selectedSegments.Add(platform.TrackSegmentId);
-            var segment = _segments[platform.TrackSegmentId];
-            selectedNodes.Add(segment.StartNodeId);
-            selectedNodes.Add(segment.EndNodeId);
+            AddSegmentClosure(segment.Id, selectedSegments, selectedNodes);
         }
 
         var selectedStations = _stations.Values.Where(item => VolumesIntersect(item.Bounds, volume)).Select(static item => item.Id).ToHashSet();
-        foreach (var platformId in selectedPlatforms) selectedStations.Add(_platforms[platformId].StationId);
+        var selectedPlatforms = _platforms.Values.Where(item => VolumesIntersect(item.Bounds, volume)).Select(static item => item.Id).ToHashSet();
+        var selectedDepots = _depots.Values.Where(item => VolumesIntersect(item.Bounds, volume)).Select(static item => item.Id).ToHashSet();
 
-        var selectedDepots = _depots.Values
-            .Where(item => VolumesIntersect(item.Bounds, volume) || item.TrackSegmentIds.Any(selectedSegments.Contains))
-            .Select(static item => item.Id)
-            .ToHashSet();
+        var changed = true;
+        while (changed)
+        {
+            changed = false;
+            foreach (var block in _blocks.Values)
+            {
+                if (!block.SegmentIds.Any(selectedSegments.Contains)) continue;
+                foreach (var segmentId in block.SegmentIds) changed |= AddSegmentClosure(segmentId, selectedSegments, selectedNodes);
+            }
+            foreach (var depot in _depots.Values)
+            {
+                if (!selectedDepots.Contains(depot.Id) && !depot.TrackSegmentIds.Any(selectedSegments.Contains)) continue;
+                changed |= selectedDepots.Add(depot.Id);
+                foreach (var segmentId in depot.TrackSegmentIds) changed |= AddSegmentClosure(segmentId, selectedSegments, selectedNodes);
+            }
+            foreach (var platform in _platforms.Values)
+            {
+                if (!selectedPlatforms.Contains(platform.Id) && !selectedSegments.Contains(platform.TrackSegmentId)) continue;
+                changed |= selectedPlatforms.Add(platform.Id);
+                changed |= selectedStations.Add(platform.StationId);
+                changed |= AddSegmentClosure(platform.TrackSegmentId, selectedSegments, selectedNodes);
+            }
+        }
 
         return CreateSnapshotCore(selectedNodes, selectedSegments, selectedStations, selectedPlatforms, selectedDepots);
     }
@@ -283,6 +289,15 @@ internal sealed class RailwayInfrastructureStore
         var accessPoints = _platformAccessPoints.Values.Where(item => selectedPlatforms.Contains(item.PlatformId)).OrderBy(static item => item.Id.Value).ToArray();
         var depots = _depots.Values.Where(item => selectedDepots.Contains(item.Id)).OrderBy(static item => item.Id.Value).Select(static item => new DepotSnapshot(item.Id, item.Bounds, item.TrackSegmentIds.ToArray())).ToArray();
         return new RailwayInfrastructureSnapshot(nodes, segments, connections, blocks, stations, platforms, accessPoints, depots);
+    }
+
+    private bool AddSegmentClosure(TrackSegmentId id, HashSet<TrackSegmentId> selectedSegments, HashSet<TrackNodeId> selectedNodes)
+    {
+        var changed = selectedSegments.Add(id);
+        var segment = _segments[id];
+        changed |= selectedNodes.Add(segment.StartNodeId);
+        changed |= selectedNodes.Add(segment.EndNodeId);
+        return changed;
     }
 
     private void ValidateNodeAttachment(TrackNodeId id)
