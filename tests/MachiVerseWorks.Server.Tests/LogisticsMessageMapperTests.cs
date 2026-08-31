@@ -1,3 +1,4 @@
+using MachiVerseWorks.Protocol;
 using MachiVerseWorks.Simulation;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -23,7 +24,7 @@ public sealed class LogisticsMessageMapperTests
         var message = LogisticsMessageMapper.Create(snapshot);
 
         Assert.AreEqual(256, message.Shipments.Count);
-        Assert.IsTrue(message.Shipments.Any(static item => item.ShipmentId == 301 && item.State == Protocol.ProtocolShipmentState.InTransit));
+        Assert.IsTrue(message.Shipments.Any(static item => item.ShipmentId == 301 && item.State == ProtocolShipmentState.InTransit));
         Assert.IsTrue(message.Shipments.Any(static item => item.ShipmentId == 300));
         Assert.IsFalse(message.Shipments.Any(static item => item.ShipmentId == 1));
     }
