@@ -2,72 +2,76 @@
 
 ## Boundary
 
-Railway infrastructure is authoritative Simulation state. It is intentionally separated from train-operation state so Phase 18 can consume a stable topology without owning or duplicating track geometry.
+Railway Infrastructureはauthoritative Simulation stateで、Track topology / Station / Platform / Depotを所有する。Train運行stateはRailway Operationsへ分離する。
 
-The data path is:
-
-`SimulationWorld / RailwayInfrastructureStore` → `SimulationCheckpoint / Save Format 8` → `SimulationRuntime / RailwayInfrastructureReadModel` → `Protocol 2.6` → `Web RailwayInfrastructureLayer`.
+```text
+SimulationWorld / RailwayInfrastructureStore
+  -> SimulationCheckpoint / Save Format 8+
+  -> SimulationRuntime / RailwayInfrastructureReadModel
+  -> Protocol 2.6 message 700
+  -> Web RailwayInfrastructureLayer
+```
 
 ## Simulation ownership
 
-`SimulationWorld` exposes railway commands and snapshots while `Internal/RailwayInfrastructureStore` owns dictionaries, stable-ID counters, invariants, spatial filtering, checkpoint projection, and connectivity validation.
+`SimulationWorld`がpublic command / snapshot API、`Internal/RailwayInfrastructureStore`がdictionary、stable-ID counter、topology invariant、spatial filter、checkpoint projectionを所有する。
 
-The store does not infer connectivity from geometry. `TrackConnection` is the only traversable segment-to-segment edge. This makes bridges, tunnels, stacked tracks, and same-level crossings representable without topology ambiguity.
+geometryからconnectivityを推論せず、`TrackConnection`だけをtraversable edgeとする。Platform pedestrian integrationは`PlatformAccessPoint -> RoadAccessPoint` referenceで行う。
 
-Road/pedestrian integration occurs at `PlatformAccessPoint`: Simulation validates that the referenced `RoadAccessPoint` exists and permits foot access, then delegates walking route calculation to the existing pedestrian network.
+RoadAccessPoint lifecycleはcross-domain guardを持つ。PlatformAccessPoint参照中はRoadAccessPoint削除と`Foot` flag除去を拒否し、validな位置/endpoint更新はPedestrian Network invalidate後に許可する。
 
-`BlockSection`と`Depot`の可変長TrackSegment membershipはそれぞれ100,000件をhard limitとする。public mutationとCheckpoint validationで同じ上限を適用し、Protocol transportの制約より大きいauthoritative aggregateを作成・復元できないようにする。
+BlockSection / Depot membershipは各100,000件hard limit。public mutation / checkpoint restoreで同じ上限を適用する。
+
+## Connectivity diagnostic
+
+`ValidateConnectivity()`はdirected TrackConnectionを**undirected adjacency**へ追加してTrackSegmentのweak component数を数える。`TraversableConnectionCount`は元のdirected connection record数。
+
+これはhealth/topology diagnosticであり、direction-aware route reachabilityを意味しない。Route constructionはRailway Operations側でdirected connection / TrackDirectionを再検証する。
 
 ## Persistence boundary
 
-`SimulationCheckpoint` is the in-memory persistence contract. Format 8 projects railway records to JSON DTOs in `MachiVerseWorks.Persistence`, including every stable ID and next-ID counter.
+Save Format 8がRailway Infrastructureを導入し、current Format 10でも同じentity / next-ID contractを保持する。Format 3〜7は空Railway stateへmigrationする。
 
-Migration is one-way at load time: formats 3–7 produce empty railway collections and next IDs of 1. No older format is rewritten in place. Existing bounded-input checks are reused for railway arrays so hostile collection counts are rejected before unbounded materialization.
-
-BlockSection / Depotの100,000件membership上限はCheckpoint restore boundaryでも検証されるため、Save DataからProtocol配信不能な単一aggregateをauthoritative stateへ導入しない。
+BlockSection / Depot nested membershipはSaveのpre-materialization scannerでもboundedに検証し、restore後にProtocol配信不能な単一aggregateを導入しない。
 
 ## Server read model
 
-`SimulationRuntime.CapturePublishSnapshot()` captures railway state under the same world lock as other authoritative publish data. A `RailwayInfrastructureReadModel` pairs the static snapshot with a revision number.
+`SimulationRuntime.CapturePublishSnapshot()`はworld lock下でRailway stateとrevisionをdetached read modelへcaptureする。Client別3D filteringはcapture後に行う。
 
-`SnapshotPublishService` applies each client's 3D subscription to the read model. The client connection retains the last sent railway revision/subscription state, so an unchanged topology is not serialized every tick. A new subscription or changed revision causes a fresh filtered snapshot.
+connectionはlast sent railway revisionとsubscription revisionを持つ。両方不変なら同じstatic topologyを毎tickserializeしない。
 
-This keeps the hot path proportional to client interest rather than world-wide railway size.
+## Protocol chunk boundary
 
-## Protocol boundary
+message 700のpayload headerはrevision + `isFullSnapshot` + 8 collection counts。`RailwayInfrastructureProtocolChunker`は1 MiB上限を超えるaggregateをentity境界でsplitする。
 
-Railway distribution uses a dedicated Protocol 2.6 codec rather than expanding the original generic message codec. Message type 700 contains all static Phase 17 railway entity kinds.
+ChunkBuilderはNode → Segment → Connection → Block → Station → Platform → PlatformAccessPoint → Depotの順にitemを詰める。source snapshotがfullなら最初のemitted chunkだけfull=true、それ以降はfalse。全chunkは同revision。
 
-The decoder performs fixed-size/count checks before collection materialization and validates IDs, enum ranges, finite dimensions, normalized platform offsets, and volume ordering. Referential/topological correctness remains Simulation responsibility; the wire codec guarantees structurally valid transport data.
+単一Block / Depot itemはsplitしない。Simulationの100,000件membership limitにより正当stateの可変item単体overflowを防ぐ。
 
-Snapshot全体が1 MiBを超える場合、`RailwayInfrastructureProtocolChunker`はentity境界で複数frameへ分割する。一方、BlockSection / Depot 1件のmembership自体は分割しない。Simulation側の100,000件上限によりBlockSectionは約0.8 MiB、Depotも約0.8 MiB以内へ収まり、single-item overflowを正当stateから発生させない。
+## Web assembly boundary
 
-## Web boundary
+`RailwayInfrastructureLayer.apply()`の契約:
 
-`connection.ts` negotiates Protocol 2.6 and dispatches message type 700 through `railway-infrastructure.ts`. `RailwayInfrastructureLayer` owns Three.js static geometry separate from the dynamic agent, pedestrian, and vehicle render paths.
+- full=true: 保持中mapをresetし、そのframe revisionをcurrentに設定
+- full=false: current revisionと一致しなければignore
+- 同revision continuation: Node / Segment / Station / Platform mapへaccumulate
+- 各apply後、現在揃っているmapからgeometryを再構築
 
-Rendering maps Simulation `(x, y, z)` to Three.js `(x, z, y)` consistently with existing WorldView geometry. Tracks are `LineSegments`; Station and Platform `WorldVolume`s are 12-edge wireframes. The layer keys updates by railway revision and supports clear/dispose on reconnect/application shutdown.
+full=trueはrevisionが既に同じでも必ずresetする。これが「subscription変更のみ・topology revision不変」のfiltered snapshot切替を成立させる。
 
-## Tests and performance gates
+Protocolにはchunk index / total / final markerがない。WebSocket frame orderingとServerのordered splitをtransport contractとして使う。
 
-Phase 17 validation is split by responsibility:
+## Walking access selection
 
-- Simulation tests: explicit topology, spatial crossing isolation, pedestrian Platform access, checkpoint restoration.
-- Persistence tests: Format 8 roundtrip and Format 7 migration.
-- Protocol tests: 2.6 roundtrip, minimum-version enforcement, malformed payload rejection.
-- Web tests: binary decoding and actual Three.js geometry construction.
-- E2E: a Format 8 Save is loaded by the Server and verified in a real browser through Protocol 2.6.
-- Benchmark: 10k/100k TrackSegment spatial snapshot, full snapshot, and connectivity validation.
+`FindWalkingRouteToPlatform`はPlatformAccessPoint stable ID昇順でaccessを評価し、各RoadAccessPointのPOI→Building候補から最短walking routeを選ぶ。exact-length tieは低いPlatformAccessPoint IDを優先し、同access内の完全tieは候補列挙順のPOIが維持される。
 
-性能回帰は`.github/workflows/benchmarks.yml`の`railway-10k-100k` jobへ集約し、`benchmark-railway-infrastructure` artifactとして保存する。E2Eは`.github/workflows/e2e.yml`の`save-server-browser-railway` jobで継続検証する。
+## Verification / performance
 
-## Phase 18 extension points
+- Simulation: explicit topology / weak component diagnostic / access guards / checkpoint
+- Persistence: Format 8+ / bounded membership
+- Protocol: 2.6 codec / chunking / 1 MiB boundary
+- Web: full reset / continuation accumulation / revision mismatch ignore
+- E2E: `save-server-browser-railway`
+- Benchmark: `railway-10k-100k`
 
-Phase 18 should consume, not mutate the meaning of, these contracts:
-
-- Train routes reference ordered TrackSegments/TrackConnections.
-- Block occupancy references `BlockSectionId`.
-- station stops reference `StationId`/`PlatformId`.
-- depot lifecycle references `DepotId` and its member tracks.
-
-Operational occupancy, switch position, signalling aspect, train position, service, timetable, and delay are deliberately excluded from Phase 17 infrastructure snapshots.
+workflowは`.github/workflows/e2e.yml`と`.github/workflows/benchmarks.yml`へ集約済み。Railway Infrastructure benchmarkのscenarioとreference baselineは[`../development/railway-infrastructure-benchmark.md`](../development/railway-infrastructure-benchmark.md)に記録する。

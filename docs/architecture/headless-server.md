@@ -2,7 +2,7 @@
 
 ## 概要
 
-Headless ServerはASP.NET Core / Kestrel上でHTTP health endpointとbinary WebSocket endpointを提供し、1つの`SimulationWorld`をserver-authoritativeな正本として所有する。位置・速度・subscription・snapshotはフルネイティブ3Dで、current Protocolは2.2である。
+Headless ServerはASP.NET Core / Kestrel上でHTTP health endpointとbinary WebSocket endpointを提供し、1つの`SimulationWorld`をserver-authoritativeな正本として所有する。current Protocolは **2.8**。position、subscription、snapshotはnative 3Dである。
 
 ```text
 Kestrel
@@ -16,131 +16,144 @@ Kestrel
       ClientCommandProcessor
 
 SimulationTickService ──► SimulationRuntime
-                               │
-                               │ atomic capture / publish cycle
+                               │ atomic capture
                                ▼
                      SimulationPublishSnapshot
-                        ├─ Agent values
-                        ├─ Pedestrian values
-                        └─ Road read model + revision
+                        ├─ Agent / Pedestrian / Vehicle
+                        ├─ Intersection Control
+                        ├─ Road read model + revision
+                        ├─ Railway Infrastructure + revision
+                        ├─ Railway Operations
+                        └─ Multimodal Transit
                                │
-                     lock-free client filtering
+                     client-volume filtering
                                ▼
                       SnapshotPublishService
+
+PopulationPublishService ──► statistics / Person debug
 ```
 
 ## State ownership
 
-`SimulationRuntime`が`SimulationWorld`を所有する。WebSocket session、connection registry、Protocol message、publish read modelはSimulationのmutable storeを直接所有しない。
+`SimulationRuntime`が`SimulationWorld`を所有する。WebSocket session、connection registry、Protocol message、publish read modelはSimulation mutable storeを直接所有しない。
 
-`SimulationRuntime._gate`はauthoritative mutationとatomic captureの境界である。1回のpublish cycleではClientごとにWorld queryを行わず、lock内でAgent / Pedestrian / Roadとtickを1回だけdetached valueへcaptureする。Client別`WorldVolume` filtering、message planning、encoding、network I/Oはlock外で行う。
-
-これにより10 / 100 Clientへ異なるsubscriptionを配信しても、Client数に比例して`Step()`と同じglobal lockを長時間占有しない。
+`SimulationRuntime._gate`はauthoritative mutationとatomic captureの境界である。1 publish cycleではClientごとにWorld queryせず、lock内で必要なdetached snapshot/read modelを1回captureする。Client別`WorldVolume` filtering、message planning、encoding、network I/Oはlock外で行う。
 
 ## Saveからのruntime configuration
 
-`Simulation:SavePath`を指定した場合、Save Dataから復元した`SimulationWorld.Config`をruntimeの正本とする。
+`Simulation:SavePath`を指定した場合、Save Dataから復元した`SimulationWorld.Config`をruntime正本とする。
 
-- tick schedulerは`simulation.TickRate` / `simulation.TickInterval`を使用する。
-- `HelloAck`のtick rateも同じ復元値を通知する。
-- subscription cell validationは`simulation.SpatialCellSize`を使用する。
+- schedulerは復元Worldのtick intervalを使用
+- `HelloAck` tick rateも同じ値
+- subscription cell validationも復元Worldのspatial cell sizeを使用
 
-起動時`ServerOptions`の`Simulation:TickRate` / `Simulation:SpatialCellSize`とSave内設定が異なっても、復元済みWorldとscheduler / guardで別々の値を使わない。新規Worldを作る場合だけServerOptionsからSimulationConfigを構築する。
+新規WorldだけServerOptionsからSimulationConfigを構築する。
 
-## Simulation tick lifecycle
+## Tick lifecycle
 
-`SimulationTickService`は`BackgroundService`と`PeriodicTimer`を使い、`SimulationRuntime`が公開するtick intervalで`Step()`を呼ぶ。network receive / sendをtick loopへ持ち込まず、application stopping tokenによりgraceful shutdownする。
+`SimulationTickService`は`BackgroundService` / `PeriodicTimer`から`SimulationRuntime.Step()`を呼ぶ。network receive/sendをtick loopへ持ち込まない。application stopping tokenでgraceful shutdownする。
 
 ## Client command boundary
 
-network receive pathからSimulation / connection stateを同期的に横断して変更し続けないため、Client commandはbounded `Channel<ClientCommand>`へ投入する。
+network receive pathからSimulation stateを同期的に変更し続けず、Client commandはbounded `Channel<ClientCommand>`へ投入する。
 
-現在のsubscription commandは`SubscribeVolume`である。2D `SubscribeArea`互換入口は持たない。
-
-`SubscribeVolume`はcommand queueへ投入する前にserver policyで検証する。座標はfiniteかつ各軸`max >= min`を要求し、volume両端が`SpatialGrid`へ変換できることを確認する。
-
-走査対象セル数は`cellsX × cellsY × cellsZ`で数え、`Server:MaximumSubscriptionCellCount`以下に制限する。既定値は262,144 cells、既定cell sizeはSimulation Worldの64mである。
-
-Web Clientは16:9だけを前提にせず、21:9等の横長viewportでも既定budget内へ収まるzoom下限を適用する。Serverがより厳しいbudgetで`subscriptionVolumeTooLarge`を返した場合はClientがzoom-inして新しいvolumeを再送し、viewportだけが最後に受理されたsubscriptionより広い状態を放置しない。
+現行subscription commandは3D `SubscribeVolume`。finite、各軸`max >= min`、SpatialGrid変換可能性、`MaximumSubscriptionCellCount`をcommand queue前に検証する。2D `SubscribeArea`互換入口はない。
 
 ## Connection state
 
-`ClientConnectionRegistry`がactive connectionを管理する。各connectionは次を保持する。
+`ClientConnectionRegistry`はactive connectionごとに少なくとも次を保持する。
 
-- WebSocket
-- handshake完了状態
-- negotiated Protocol version
-- current `WorldVolume` subscription
-- subscription revision
-- Clientが既に認識しているAgent ID set
-- Clientが既に認識しているPedestrian ID set
-- 最後に配信済みのRoad topology revisionとsubscription revision
+- WebSocket / handshake state / negotiated Protocol version
+- current `WorldVolume` / subscription revision
+- dynamic entity delivery state
+- static Road revision/subscription state
+- static Railway Infrastructure revision/subscription state
+- send serialization / in-flight delivery state
 
-connection切断時はregistryから削除し、subscription / known entity / Road delivery stateもconnectionと一緒に破棄する。
+切断時はconnection-local stateを破棄する。
 
-## Handshake
+## Handshake / capability boundary
 
-1. Clientが`Hello` frame headerで希望Protocol versionを提示する。
-2. Serverは同一majorかつ`requested minor <= current minor`の場合だけ受理する。
-3. negotiated versionはClientが要求したversionそのものとする。
-4. Serverは同じversionをconnection state、`HelloAck` payload、以後のframe headerへ使用する。
-5. handshake後は受信frame headerがnegotiated versionと完全一致することを要求する。
+1. Clientが`Hello` frame headerで希望versionを提示
+2. majorが同じでrequested minorがServer current以下なら受理
+3. negotiated versionは要求versionそのもの
+4. `HelloAck`と以後のframe headerも同じversion
+5. handshake後は受信header versionの完全一致を要求
 
-Server 2.2 / Client 2.0ではAgentだけ、2.1ではRoadまで、2.2ではPedestrianまで配信する。
+Server 2.8はminorごとに次を追加配信する。
+
+- 2.0 Agent
+- 2.1 Road
+- 2.2 Pedestrian
+- 2.3 Vehicle
+- 2.4 Intersection Control
+- 2.5 Population statistics / Person debug
+- 2.6 Railway Infrastructure
+- 2.7 Railway Operations
+- 2.8 Multimodal Transit
+
+negotiated minorより新しいmessageを送らない。
 
 ## Atomic publish read model
 
-`SnapshotPublishService`はSimulation tickとは別の`PeriodicTimer`で動く。各cycleでまず送信可能なsubscription済みconnectionを収集し、対象が0件ならSimulation snapshotを生成しない。
+`SnapshotPublishService`はSimulation tickとは別周期で動く。subscription済み送信対象が0なら不要なcaptureを避ける。
 
-対象Clientがある場合、`SimulationRuntime.CapturePublishSnapshot()`を**cycleにつき1回**呼ぶ。このcapture内で次を同一lock・同一tick時点から取得する。
+capture対象は同一Simulation lock / tick時点のdetached dataで、少なくともAgent / Pedestrian / Vehicle、Intersection state、Road、Railway Infrastructure、Railway Operations、Multimodal Transitを含む。Train等のdynamic positionもcapture後にClient volumeでfilterする。
 
-- batch `TickCount`
-- 全active Agentのdetached snapshots
-- 全Pedestrianのdetached snapshots
-- Road Networkのimmutable read modelとrevision
+Population statistics / Person inspectorは専用`PopulationPublishService` / inspect command boundaryを持ち、traffic snapshot publish intervalと独立してよい。
 
-その後、各connectionは共有`SimulationPublishSnapshot.Query(volume)`をlock外で実行する。Agent / Pedestrian / Road / remove metadataはbatchの同じtickを使用するため、publish途中にSimulationがstepしても1回のdelivery内へ異なるtickを混在させない。
+## Static Road delivery
 
-10 / 100 Client条件のread-model queryは専用benchmark workflowでaverage / p95 / p99とallocationを記録する。
+Road topologyはrevision-driven。connectionはsubscription revision + road revisionを記録し、両方不変なら同じRoad snapshotを毎tick再送しない。subscription変更またはtopology revision変更時にfiltered snapshotを送る。
 
-## Road topology delivery
+Road snapshotはsingle-frame。payload 1 MiB超過をsend前に検出し、対象subscriptionへ`InvalidRequest` / `roadSnapshotTooLarge`を返す。publisher全体のfaultにはしない。
 
-Road Networkは現時点ではServer経由で静的topologyとして扱う。SimulationRuntimeはRoad read modelをgeneration単位で保持し、topology変更時だけrevisionを更新する。
+## Railway Infrastructure delivery
 
-connectionは`subscription revision + road revision`を記録し、両方が不変なら次のAgent/Pedestrian snapshot周期でRoad全体を再送しない。subscription変更またはRoad revision変更時だけ最新Road snapshotを送る。
+Railway InfrastructureはProtocol 2.6のstatic/revision-driven read modelである。subscription変更またはrailway revision変更時にfiltered snapshotを送る。
 
-Web側も同一Road topologyの再受信ではRoad store generationを進めず、Three.js geometryの全再構築を発生させない。
+1 MiB超snapshotは`RailwayInfrastructureProtocolChunker`でentity境界へ分割する。同deliveryの全chunkは同revisionで、先頭だけ`isFullSnapshot=true`、continuationはfalse。BlockSection / Depot 1件は分割しない。
 
-### Road payload 1 MiB boundary
+Clientはfull chunkで旧stateをresetし、同revision continuationを順にaccumulateする。このためrailway revisionが同じままsubscriptionだけ変わった場合も、先頭full flagによって旧volume stateを残さない。
 
-Protocol frame payload上限は1 MiBであり、Road snapshotは送信前に固定layoutからpayload bytesを計算する。上限を超える場合、`ProtocolCodec.Serialize`へ到達させず対象Clientへ`InvalidRequest` / detail code `roadSnapshotTooLarge`を送る。
+## Railway Operations delivery
 
-これはsubscription固有の拒否であり、`SnapshotDeliveryScheduler`のunexpected system faultとして記録しない。他ClientのAgent/Road/Pedestrian配信は継続する。現Protocol 2.1/2.2ではRoad chunkingを暗黙導入せず、将来必要になればversioned contractとして追加する。
+Protocol 2.7のdynamic message 710はvisible Trainと、そのTrainが参照するService / Timetableをmappingする。Train visibilityはpublish snapshotにある**Train position point**を3D subscriptionへ照合する。
+
+message 710はsingle-frame。`RailwayOperationsProtocolCodec.GetPayloadLength()`でpayload長をpreflightし、1 MiB超過時はpartial snapshotを送らず`InvalidRequest` / `railwayOperationsSnapshotTooLarge`へ変換する。1 Clientの大規模subscriptionをpublisher全体のfaultへ波及させない。
+
+## Multimodal Transit delivery
+
+Protocol 2.8のmessage 720はLine / Stop / Pattern、realtime Bus・Taxi state、arrival estimateを同じpublish captureからmapする。Road TrafficとRailway Operationsのauthoritative movementを複製せず、Multimodal Transitのcross-mode stateだけをwireへ投影する。
+
+2.7以下へmessage 720を送らない。
 
 ## Snapshot delivery isolation
 
-snapshot publisherはconnectionごとに最大1件のdelivery taskだけをin-flightとして保持する。同じconnectionが配送中なら次のpublish周期はqueueせずdropする。異なるconnectionのdeliveryは独立taskとして進むため、slow Clientのnetwork backpressureを他Clientへ伝播させない。
+connectionごとに最大1件のdelivery taskをin-flightにし、同connectionが配送中なら次周期をqueueせずdropする。異なるconnectionのdeliveryは独立taskなのでslow Clientのbackpressureを他Clientへ伝播させない。
 
-各deliveryではlinked `CancellationTokenSource`を1つ作り、各message send直前に5秒timeoutを再設定する。5秒以内に1messageを送信できないconnectionはabortしてregistryから除外する。
+各message sendへtimeoutを適用し、transport由来のexpected Client failureはconnection単位で隔離する。unexpected invariant violationはscheduler faultとして扱う一方、事前分類可能なpayload超過はstructured Client errorへ変換する。
 
-transport由来のexpected Client failureだけをconnection隔離対象とする。それ以外のunexpected invariant violationはCritical logとscheduler faultとしてServerへ伝播する。ただし事前に分類可能なRoad payload超過はstructured Client errorへ変換済みなのでunexpected exception扱いしない。
+## Subscription revision / remove consistency
 
-## Subscription revisionとremove整合性
+subscription変更中に古いdeliveryが完了しても、dynamic known-ID stateは次deliveryのremove生成へ利用できる。一方、static topologyの「配信済みrevision」markerは対応subscription revisionが一致する場合だけcommitする。
 
-subscription変更中に古いdeliveryが完了しても、古いvolumeで送信済みのknown Agent / Pedestrian ID集合は次deliveryでremoveを生成するために反映する。一方、Roadの「このsubscriptionへ配信済み」というrevision markerは対応するsubscription revisionが一致する場合だけcommitする。
-
-これによりvolume移動時に旧entityのremoveを失わず、古いRoad deliveryだけで新subscriptionのRoad配信を抑止しない。
+これによりvolume移動時のremove欠落と、古いstatic deliveryによる新subscription配信抑止を避ける。
 
 ## Send serialization
 
-同一WebSocketへhandshake/error responseとsnapshot publisherが同時sendしないよう、connection単位でsendを直列化する。Protocol serializationはsend lockの前に行い、WebSocket I/O ownershipだけを排他する。
+同一WebSocketへhandshake/error responseとsnapshot publisherが同時sendしないようconnection単位でsendを直列化する。serializationはsend lockの前に行い、lockはWebSocket I/O ownershipだけを守る。
 
-## Logging / graceful shutdown
+## Logging / shutdown
 
-Server structured loggingはsource-generated `LoggerMessage`を使用する。expected Client delivery停止はDebug、unexpected snapshot delivery faultはCriticalで記録する。
+expected Client delivery停止とunexpected system faultを区別してstructured logへ記録する。shutdownではhosted serviceとWebSocket sessionをcancelし、新規delivery schedulingを止めてin-flight taskを回収する。
 
-application stopではhosted service cancellation tokenとWebSocket session linked tokenをcancelする。snapshot publisherは新規scheduleを停止後、既存in-flight taskを回収して終了する。integration testではserver stop後にSimulation tickが増えないことを確認する。
+## 現行制約
 
-## 現段階の制約
+- Agent / Pedestrian / Vehicleは汎用aggregate compressionを持たない
+- Roadはsingle-frameでoversize error
+- Railway Infrastructureだけが明示multi-frame chunk contractを持つ
+- Railway Operationsはsingle-frame + structured oversize error
+- Protocol 2.8 Multimodal Transitもversioned aggregateとして扱い、暗黙wire変更を行わない
 
-Agent / Pedestrianはentityごとのframeで送信しており、汎用batching / compressionは未導入である。Roadはstatic revision抑制を行うが、1 MiB超のtopology chunkingはまだ提供しない。これらはProtocol互換性を保ったまま暗黙変更せず、計測結果を基にversioned contractとして拡張する。
+binary layoutは[`protocol.md`](protocol.md)、Web側state適用は[`web-client.md`](web-client.md)を参照する。

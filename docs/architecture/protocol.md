@@ -1,28 +1,26 @@
 # Protocol Binary Layout
 
-MachiVerseWorks の Server / Web Client 間で使用するbinary protocolを定義する。Protocolはapplication `VERSION`とは独立してversioningし、current protocol versionは **2.5** とする。
+MachiVerseWorksのServer / Web Client間binary protocolを定義する。ProtocolはApplication `VERSION`とSave formatから独立してversioningし、current protocol versionは **2.8** とする。
 
 ## Version compatibility
 
-`ProtocolVersion`は`major.minor`。breaking changeはmajorを上げる。2.0で3D wire contractを必須化し、以後は同一major内で後方互換なmessageを追加する。
+`ProtocolVersion`は`major.minor`。breaking changeはmajorを上げる。2.0でnative 3D wire contractを必須化し、以後は同一major内で後方互換なmessageを追加する。
 
-- Protocol 2.0: Agent / 3D `SubscribeVolume`
-- Protocol 2.1: `RoadNetworkSnapshot`
-- Protocol 2.2: `PedestrianSpawn` / `PedestrianUpdate` / `PedestrianRemove`
-- Protocol 2.3: `VehicleSpawn` / `VehicleUpdate` / `VehicleRemove`
-- Protocol 2.4: `IntersectionControlSnapshot`
-- Protocol 2.5: `InspectPerson` / `PopulationStatistics` / `PersonDebug`
-- Protocol 2.6: `RailwayInfrastructureSnapshot`
-- Protocol 2.7: `RailwayOperationsSnapshot`
-- Protocol 2.8: `MultimodalTransitSnapshot`
+- 2.0: Agent / 3D `SubscribeVolume`
+- 2.1: `RoadNetworkSnapshot`
+- 2.2: Pedestrian spawn / update / remove
+- 2.3: Vehicle spawn / update / remove
+- 2.4: `IntersectionControlSnapshot`
+- 2.5: `InspectPerson` / `PopulationStatistics` / `PersonDebug`
+- 2.6: `RailwayInfrastructureSnapshot`
+- 2.7: `RailwayOperationsSnapshot`
+- 2.8: `MultimodalTransitSnapshot`
 
-同一majorではServer current以下のminorをClientが要求した場合に受理できる。negotiation成立時のversionはClientがHello frame headerで要求したversionそのものとし、Server connection state、`HelloAck` payload、以後のframe headerで同一値を使用する。
-
-Serverはnegotiated minorより新しいmessageを送らない。Client要求minorがServer currentより新しい場合、またはmajorが異なる場合はnegotiationを拒否する。
+同一majorではServer current以下のminorをClientが要求した場合に受理できる。negotiation成立versionはClientが`Hello` frame headerで要求したversionそのものとし、connection state、`HelloAck` payload、以後のframe headerへ同じ値を使う。Serverはnegotiated minorより新しいmessageを送らない。
 
 ## Common frame header
 
-全整数値とIEEE 754 `double`はlittle-endian。Headerは固定16 bytes。payload lengthの最大値は **1,048,576 bytes (1 MiB)** とする。
+全整数値とIEEE 754 `double`はlittle-endian。Headerは固定16 bytes。payload上限は **1,048,576 bytes (1 MiB)**。
 
 | Offset | Size | Type | Field |
 | ---: | ---: | --- | --- |
@@ -30,14 +28,14 @@ Serverはnegotiated minorより新しいmessageを送らない。Client要求min
 | 4 | 2 | `uint16` | protocol major |
 | 6 | 2 | `uint16` | protocol minor |
 | 8 | 2 | `uint16` | message type |
-| 10 | 2 | `uint16` | flags, currently 0 |
+| 10 | 2 | `uint16` | flags, current 0 |
 | 12 | 4 | `uint32` | payload length |
 
-headerで宣言されたpayload lengthと実frame lengthが一致しないframe、未知flags、1 MiBを超えるpayloadは拒否する。
+headerのpayload lengthと実frame長が一致しないframe、未知flags、1 MiB超payloadは拒否する。
 
 ## Message type IDs
 
-| ID | Name | Direction | Minimum version |
+| ID | Name | Direction | Minimum |
 | ---: | --- | --- | --- |
 | 1 | `Hello` | Client → Server | 2.0 |
 | 2 | `HelloAck` | Server → Client | 2.0 |
@@ -56,297 +54,217 @@ headerで宣言されたpayload lengthと実frame lengthが一致しないframe�
 | 500 | `IntersectionControlSnapshot` | Server → Client | 2.4 |
 | 600 | `PopulationStatistics` | Server → Client | 2.5 |
 | 601 | `PersonDebug` | Server → Client | 2.5 |
+| 700 | `RailwayInfrastructureSnapshot` | Server → Client | 2.6 |
+| 710 | `RailwayOperationsSnapshot` | Server → Client | 2.7 |
+| 720 | `MultimodalTransitSnapshot` | Server → Client | 2.8 |
 | 900 | `Error` | Server → Client | 2.0 |
 
-`SubscribeArea`は存在しない。Agent / Road / Pedestrian / Vehicle / Intersectionはいずれも同じ3D `SubscribeVolume`をinterest management境界として使用する。Population statisticsはWorld全体の集計、Person debugはstable Person ID指定のdebug contractであり、volume内全Person詳細を転送しない。
+`SubscribeArea`は存在しない。Agent / Road / Pedestrian / Vehicle / Intersection / Railway / Transitは3D `SubscribeVolume`をinterest-management境界として使う。Population statisticsはWorld全体集計、Person debugはstable Person ID指定のdebug contractである。
 
 ## Hello / HelloAck
 
-`Hello` payloadは0 bytes。Clientが希望するProtocol versionをframe headerへ設定する。
+`Hello` payloadは0 bytes。Client希望versionをframe headerへ設定する。
 
-`HelloAck` payloadは6 bytes。
-
-| Offset | Size | Type | Field |
-| ---: | ---: | --- | --- |
-| 0 | 2 | `uint16` | negotiated major |
-| 2 | 2 | `uint16` | negotiated minor |
-| 4 | 2 | `uint16` | Simulation tick rate |
-
-HelloAck payload versionとframe header versionは一致しなければならない。
+`HelloAck` payloadは6 bytes: negotiated major `uint16`、minor `uint16`、Simulation tick rate `uint16`。payload versionとframe header versionは一致しなければならない。
 
 ## SubscribeVolume
 
-Payloadは48 bytes。
+Payloadは48 bytes、`minX,minY,minZ,maxX,maxY,maxZ`の6個の`double`。全値finiteかつ各軸`max >= min`を要求する。ServerはSpatial Cell budgetを適用し、過大volumeを`InvalidRequest`として拒否できる。
 
-| Offset | Size | Type | Field |
-| ---: | ---: | --- | --- |
-| 0 | 8 | `double` | min X |
-| 8 | 8 | `double` | min Y |
-| 16 | 8 | `double` | min Z |
-| 24 | 8 | `double` | max X |
-| 32 | 8 | `double` | max Y |
-| 40 | 8 | `double` | max Z |
+## Agent messages
 
-全座標はfiniteで、各軸`max >= min`を要求する。ServerはSpatial Cell budgetを適用し、過大なvolumeを`InvalidRequest`として拒否できる。
+`AgentSpawn` / `AgentUpdate`は64 bytes。
 
-## AgentSpawn / AgentUpdate
+- Agent ID `uint64`
+- position X/Y/Z `double` ×3
+- velocity X/Y/Z `double` ×3
+- simulation tick `uint64`
 
-両messageは同じ64-byte payloadを使用する。
-
-| Offset | Size | Type | Field |
-| ---: | ---: | --- | --- |
-| 0 | 8 | `uint64` | Agent ID |
-| 8 | 8 | `double` | position X |
-| 16 | 8 | `double` | position Y |
-| 24 | 8 | `double` | position Z |
-| 32 | 8 | `double` | velocity X |
-| 40 | 8 | `double` | velocity Y |
-| 48 | 8 | `double` | velocity Z |
-| 56 | 8 | `uint64` | simulation tick count |
-
-`AgentRemove`はAgent ID 8 bytes + tick count 8 bytesの16-byte payload。
+`AgentRemove`はAgent ID + tickの16 bytes。
 
 ## RoadNetworkSnapshot
 
-Protocol 2.1以上。Payloadは28-byte collection headerの後にRoadNode / RoadSegment / Lane / LaneConnection / RoadAccessPointをこの順番で連結する。
+Protocol 2.1以上。28-byte headerの後にNode / Segment / Lane / LaneConnection / RoadAccessPointを連結する。
 
-### Collection header — 28 bytes
+Header: tick `uint64` + 各collection count `uint32` ×5。
 
-| Offset | Size | Type | Field |
-| ---: | ---: | --- | --- |
-| 0 | 8 | `uint64` | simulation tick count |
-| 8 | 4 | `uint32` | RoadNode count |
-| 12 | 4 | `uint32` | RoadSegment count |
-| 16 | 4 | `uint32` | Lane count |
-| 20 | 4 | `uint32` | LaneConnection count |
-| 24 | 4 | `uint32` | RoadAccessPoint count |
+固定item長:
 
-payload lengthは次式と完全一致する。
+- RoadNode: 33 bytes = ID、kind、XYZ
+- RoadSegment: 25 bytes = ID、kind、start/end Node ID
+- Lane: 35 bytes = ID、Segment ID、direction、order、width、speed limit
+- LaneConnection: 33 bytes = ID、from/to Lane、via Node、TurnMovement
+- RoadAccessPoint: 41 bytes = ID、Segment ID、offset、Building ID、POI ID、mode flags
 
-`28 + nodeCount*33 + segmentCount*25 + laneCount*35 + connectionCount*33 + accessPointCount*41`
+payload lengthは `28 + nodes*33 + segments*25 + lanes*35 + connections*33 + accessPoints*41` と一致する。ID uniquenessとsnapshot内参照整合性をcodecで検証する。現ProtocolではRoad snapshotをchunkせず、1 MiB超過はServerが送信前にstructured Errorへ変換する。
 
-### RoadNode — 33 bytes
+## Pedestrian messages
 
-| Offset | Size | Type | Field |
-| ---: | ---: | --- | --- |
-| 0 | 8 | `uint64` | RoadNode ID |
-| 8 | 1 | `uint8` | RoadNodeKind |
-| 9 | 8 | `double` | X |
-| 17 | 8 | `double` | Y |
-| 25 | 8 | `double` | Z |
+Protocol 2.2以上。Spawn / Updateは81 bytes。
 
-### RoadSegment — 25 bytes
+- Pedestrian ID、TripRequest ID
+- position XYZ、velocity XYZ
+- walking speed
+- movement state byte
+- tick `uint64`
 
-| Offset | Size | Type | Field |
-| ---: | ---: | --- | --- |
-| 0 | 8 | `uint64` | RoadSegment ID |
-| 8 | 1 | `uint8` | RoadKind |
-| 9 | 8 | `uint64` | start RoadNode ID |
-| 17 | 8 | `uint64` | end RoadNode ID |
+movement state: Walking / WaitingForCrossing / WaitingForOccupancy / Arrived。RemoveはID + tickの16 bytes。
 
-### Lane — 35 bytes
+## Vehicle messages
 
-| Offset | Size | Type | Field |
-| ---: | ---: | --- | --- |
-| 0 | 8 | `uint64` | Lane ID |
-| 8 | 8 | `uint64` | RoadSegment ID |
-| 16 | 1 | `uint8` | LaneDirection |
-| 17 | 2 | `uint16` | order |
-| 19 | 8 | `double` | width metres |
-| 27 | 8 | `double` | speed limit m/s |
+Protocol 2.3以上。Spawn / Updateは105 bytes。
 
-### LaneConnection — 33 bytes
+- Vehicle ID、Lane ID
+- position XYZ、forward XYZ
+- speed、length、width、height
+- movement state byte
+- tick `uint64`
 
-| Offset | Size | Type | Field |
-| ---: | ---: | --- | --- |
-| 0 | 8 | `uint64` | LaneConnection ID |
-| 8 | 8 | `uint64` | from Lane ID |
-| 16 | 8 | `uint64` | to Lane ID |
-| 24 | 8 | `uint64` | via RoadNode ID |
-| 32 | 1 | `uint8` | TurnMovement |
-
-### RoadAccessPoint — 41 bytes
-
-| Offset | Size | Type | Field |
-| ---: | ---: | --- | --- |
-| 0 | 8 | `uint64` | RoadAccessPoint ID |
-| 8 | 8 | `uint64` | RoadSegment ID |
-| 16 | 8 | `double` | normalized segment offset `[0,1]` |
-| 24 | 8 | `uint64` | Building ID, 0 = none |
-| 32 | 8 | `uint64` | POI ID, 0 = none |
-| 40 | 1 | `uint8` | RoadAccessMode flags |
-
-Road entity IDは0不可かつ種別内で一意。参照先Node / Segment / Lane / Connectionはsnapshot内に存在しなければならない。RoadAccessPointはBuilding / POI参照をstable IDで伝える。
-
-単一Road snapshotが1 MiBを超える場合、現2.xでは暗黙chunkingせずsubscriptionへ明示errorを返す。
-
-## PedestrianSpawn / PedestrianUpdate
-
-Protocol 2.2以上。両messageは同じ81-byte payloadを持つ。
-
-| Offset | Size | Type | Field |
-| ---: | ---: | --- | --- |
-| 0 | 8 | `uint64` | Pedestrian ID |
-| 8 | 8 | `uint64` | TripRequest ID |
-| 16 | 8 | `double` | position X |
-| 24 | 8 | `double` | position Y |
-| 32 | 8 | `double` | position Z |
-| 40 | 8 | `double` | velocity X |
-| 48 | 8 | `double` | velocity Y |
-| 56 | 8 | `double` | velocity Z |
-| 64 | 8 | `double` | walking speed m/s |
-| 72 | 1 | `uint8` | movement state |
-| 73 | 8 | `uint64` | simulation tick count |
-
-Movement state: 0=`Walking`, 1=`WaitingForCrossing`, 2=`WaitingForOccupancy`, 3=`Arrived`。
-
-`PedestrianRemove`はPedestrian ID 8 bytes + tick count 8 bytesの16-byte payload。
-
-## VehicleSpawn / VehicleUpdate
-
-Protocol 2.3以上。両messageは同じ105-byte payloadを持つ。
-
-| Offset | Size | Type | Field |
-| ---: | ---: | --- | --- |
-| 0 | 8 | `uint64` | Vehicle ID |
-| 8 | 8 | `uint64` | Lane ID |
-| 16 | 8 | `double` | position X |
-| 24 | 8 | `double` | position Y |
-| 32 | 8 | `double` | position Z |
-| 40 | 8 | `double` | forward X |
-| 48 | 8 | `double` | forward Y |
-| 56 | 8 | `double` | forward Z |
-| 64 | 8 | `double` | speed m/s |
-| 72 | 8 | `double` | length m |
-| 80 | 8 | `double` | width m |
-| 88 | 8 | `double` | height m |
-| 96 | 1 | `uint8` | Vehicle movement state |
-| 97 | 8 | `uint64` | simulation tick count |
-
-Vehicle movement state: 0=`Driving`, 1=`WaitingForTraffic`, 2=`ChangingLane`, 3=`Arrived`。
-
-`VehicleRemove`はVehicle ID 8 bytes + tick count 8 bytesの16-byte payload。
+movement state: Driving / WaitingForTraffic / ChangingLane / Arrived。RemoveはID + tickの16 bytes。
 
 ## IntersectionControlSnapshot
 
-Protocol 2.4以上。1 frameはsubscription volume内の1 intersection controllerを表す。Payloadは31-byte controller headerと0個以上の63-byte movement stateを連結する。
+Protocol 2.4以上。1 frameは1 intersection controller。31-byte controller header + `movementCount * 63` bytes。
 
-payload lengthは `31 + movementCount*63` と完全一致する。
+Controller header:
 
-### Controller header — 31 bytes
+- tick `uint64`
+- intersection RoadNode ID `uint64`
+- control mode `uint8`
+- phase index `uint16`
+- phase tick `uint64`
+- movement count `uint32`
 
-| Offset | Size | Type | Field |
-| ---: | ---: | --- | --- |
-| 0 | 8 | `uint64` | simulation tick count |
-| 8 | 8 | `uint64` | intersection RoadNode ID |
-| 16 | 1 | `uint8` | IntersectionControlMode |
-| 17 | 2 | `uint16` | phase index |
-| 19 | 8 | `uint64` | phase tick |
-| 27 | 4 | `uint32` | movement count |
+Movement item:
 
-### Movement state — 63 bytes
+- movement ID / LaneConnection ID / from Lane ID / to Lane ID
+- TurnMovement byte
+- stop-line XYZ doubles
+- SignalIndication byte
+- queue length `uint32`
+- entry-granted byte
 
-| Offset | Size | Type | Field |
-| ---: | ---: | --- | --- |
-| 0 | 8 | `uint64` | IntersectionMovement ID |
-| 8 | 8 | `uint64` | LaneConnection ID |
-| 16 | 8 | `uint64` | from Lane ID |
-| 24 | 8 | `uint64` | to Lane ID |
-| 32 | 1 | `uint8` | TurnMovement |
-| 33 | 8 | `double` | stop-line X |
-| 41 | 8 | `double` | stop-line Y |
-| 49 | 8 | `double` | stop-line Z |
-| 57 | 1 | `uint8` | SignalIndication |
-| 58 | 4 | `uint32` | queue length |
-| 62 | 1 | `uint8` | entry granted this tick, 0 or 1 |
+## Population messages
 
-`IntersectionControlMode`: 0=`Unsignalized`, 1=`FixedSignal`。`SignalIndication`: 0=`Red`, 1=`Yellow`, 2=`Green`。
+### InspectPerson
 
-## InspectPerson
+Protocol 2.5以上。Client → Serverの8-byte Person ID request。0は不可。missing Personは`InvalidRequest`。
 
-Protocol 2.5以上。Clientがdebug対象Personをstable IDで選択するrequest。Payloadは8 bytes。
+### PopulationStatistics
 
-| Offset | Size | Type | Field |
-| ---: | ---: | --- | --- |
-| 0 | 8 | `uint64` | Person ID |
+固定56 bytes。Household / Person、travel state、activity別countとtickを持つ。多数Person detailを毎publishで転送しない。
 
-Person IDは0不可。存在しないPersonを指定した場合、Serverは`InvalidRequest`を返す。
+### PersonDebug
 
-## PopulationStatistics
+固定100 bytes。Person / Household、residence/current/destination endpoint、activity/travel state、active Trip / TravelMode / Pedestrian / Vehicle reference、tickを持つ。optional stable IDは0、optional enumは`0xff`をnull sentinelとする。
 
-Protocol 2.5以上。Payloadは固定56 bytes。多数Personのdetailを毎publishで転送せず、集計のみを固定長で配信する。
+## RailwayInfrastructureSnapshot
 
-| Offset | Size | Type | Field |
-| ---: | ---: | --- | --- |
-| 0 | 4 | `uint32` | Household count |
-| 4 | 4 | `uint32` | Person count |
-| 8 | 4 | `uint32` | AtActivity count |
-| 12 | 4 | `uint32` | Walking count |
-| 16 | 4 | `uint32` | Driving count |
-| 20 | 4 | `uint32` | Home count |
-| 24 | 4 | `uint32` | Work count |
-| 28 | 4 | `uint32` | Education count |
-| 32 | 4 | `uint32` | Shopping count |
-| 36 | 4 | `uint32` | Healthcare count |
-| 40 | 4 | `uint32` | Recreation count |
-| 44 | 4 | `uint32` | Errand count |
-| 48 | 8 | `uint64` | simulation tick count |
+Protocol 2.6以上、message 700。static Railway topologyをrevision付きで配信する。
 
-各state/activity別countはPerson countとの整合をServer側Simulation snapshotから生成する。
+### Header — 41 bytes
 
-## PersonDebug
+- revision `uint64`
+- `isFullSnapshot` `uint8` (0/1)
+- Node / Segment / Connection / Block / Station / Platform / PlatformAccessPoint / Depot count `uint32` ×8
 
-Protocol 2.5以上。Payloadは固定100 bytes。optional IDは0、optional enumは`0xff`をnull sentinelとして使用する。
+### Items
 
-| Offset | Size | Type | Field |
-| ---: | ---: | --- | --- |
-| 0 | 8 | `uint64` | Person ID |
-| 8 | 8 | `uint64` | Household ID |
-| 16 | 8 | `uint64` | residence Building ID, 0 = none |
-| 24 | 8 | `uint64` | residence POI ID, 0 = none |
-| 32 | 8 | `uint64` | current Building ID, 0 = none |
-| 40 | 8 | `uint64` | current POI ID, 0 = none |
-| 48 | 1 | `uint8` | current ActivityKind |
-| 49 | 1 | `uint8` | PersonTravelState |
-| 50 | 8 | `uint64` | destination Building ID, 0 = none |
-| 58 | 8 | `uint64` | destination POI ID, 0 = none |
-| 66 | 1 | `uint8` | destination ActivityKind, `0xff` = none |
-| 67 | 8 | `uint64` | active TripRequest ID, 0 = none |
-| 75 | 1 | `uint8` | active TravelMode, `0xff` = none |
-| 76 | 8 | `uint64` | Pedestrian ID, 0 = none |
-| 84 | 8 | `uint64` | Vehicle ID, 0 = none |
-| 92 | 8 | `uint64` | simulation tick count |
+- TrackNode 33 bytes: ID、kind、XYZ
+- TrackSegment 43 bytes: ID、start/end Node ID、direction、gauge、speed limit、electrification、usage
+- TrackConnection 32 bytes: ID、from/to Segment ID、via Node ID
+- BlockSection: 12-byte header (ID + count) + `8 * segmentIds`
+- Station 56 bytes: ID + 3D bounds 6 doubles
+- Platform 88 bytes: ID、Station ID、TrackSegment ID、start/end offset、3D bounds
+- PlatformAccessPoint 24 bytes: ID、Platform ID、RoadAccessPoint ID
+- Depot: 60-byte header (ID + 3D bounds + count) + `8 * trackSegmentIds`
 
-Person / Household IDは0不可。residenceとcurrent endpointはBuilding / POIのどちらか一方を必須とし、destinationだけは両方0を許す。enumは定義済みnumeric valueのみ許可する。
+### Chunk semantics
+
+1 MiBを超えるsnapshotは`RailwayInfrastructureProtocolChunker`が**entity境界**で複数frameへ分割する。1つのBlockSection / Depot item自体は分割しない。
+
+- 全chunkは同じ`revision`を持つ
+- source snapshotがfullの場合、**最初のchunkだけ**`isFullSnapshot=true`
+- continuation chunkは`isFullSnapshot=false`
+- encode orderは Node → Segment → Connection → Block → Station → Platform → PlatformAccessPoint → Depot
+- chunk index / total count / explicit final markerは持たず、WebSocketのframe orderingとincremental applyを前提にする
+- Clientは`isFullSnapshot=true`を受けた時点で同revisionでも保持中Railway stateをresetし、そのframeから新しいsnapshotを組み立てる
+- `isFullSnapshot=false`は現在保持中revisionと一致する場合だけcontinuationとして適用し、revision不一致なら無視する
+
+subscription変更でRailway revision自体が変わらなくても、Serverは新しいfiltered snapshotの先頭をfullとして送るため、Clientは旧volume由来stateを残さない。
+
+SimulationのBlockSection / Depot membership hard limitは100,000件で、単一可変itemがProtocol 1 MiB上限を超えないようにする。
+
+## RailwayOperationsSnapshot
+
+Protocol 2.7以上、message 710。dynamic Train stateと関連Service / Timetableだけを配信する。**single-frame contract**でchunkingしない。
+
+### Header — 20 bytes
+
+- tick `uint64`
+- Train count `uint32`
+- Service count `uint32`
+- Timetable count `uint32`
+
+### Train — 129 bytes
+
+- ID / Formation ID / Service ID / Route ID
+- position XYZ、forward XYZ、speed
+- movement state byte
+- current Block / current Platform / assigned Platform / current Depot / dwell departure tick
+
+optional IDsは0 sentinel。
+
+### Service — 77 bytes
+
+- ID / Formation / Route / Timetable / origin Depot / destination Depot / planned start
+- service state byte
+- delay ticks
+- next stop index `int32`
+- Train ID (0 = none)
+
+### Timetable
+
+12-byte header (ID + stop count) + 40-byte Stop。
+
+StopはStation ID、planned arrival、planned departure、minimum dwell、preferred Platform ID (0 = none)の5個の`uint64`。
+
+`RailwayOperationsProtocolCodec.GetPayloadLength()`がallocation前に正確なpayload長を算出する。1 MiB超過時、Serverはmessage 710を送らず`InvalidRequest` / `detailCode=railwayOperationsSnapshotTooLarge`を対象subscriptionへ返す。partial snapshotや暗黙chunkingは行わない。
 
 ## MultimodalTransitSnapshot
 
-Protocol 2.8以上、message type 720。Payloadは28-byte collection headerの後にLine / Stop / Pattern(+可変Stop列) / realtime Vehicle / Arrival Estimateを連結する。
+Protocol 2.8以上、message 720。28-byte headerの後にLine / Stop / Pattern / realtime Vehicle / Arrival Estimateを連結する。
 
-collection headerは`tickCount:uint64`と5個の`uint32` count。固定要素長はLine 9 bytes、Stop 57 bytes、Pattern header 28 bytes、Pattern Stop 24 bytes、Vehicle 70 bytes、Arrival Estimate 32 bytes。optional stable IDは0をnull sentinelとする。Bus StopはLane、Railway StopはStation（任意Platform）、Railway PatternはRailway Serviceを参照する。Bus/Taxi realtime Vehicleは3D position/stateを持ち、Bus arrivalはStop / Line / Vehicleの全参照が同一frame内に存在することを要求する。
+Headerはtick `uint64` + Line / Stop / Pattern / Vehicle / Arrival count `uint32` ×5。
 
-Protocol 2.7以下へmessage 720は送信しない。
+固定/可変item長:
+
+- Line 9 bytes: ID + mode
+- Stop 57 bytes: ID + kind + XYZ + Lane / Station / Platform ID
+- Pattern header 28 bytes: ID + Line ID + RailwayService ID + stop count
+- Pattern Stop 24 bytes: Stop ID + travel ticks from previous + dwell ticks
+- Vehicle 70 bytes: ID + kind + Trip/RoadVehicle reference + stop index + XYZ + state + ETA/dwell tick
+- Arrival Estimate 32 bytes: Stop ID + Line ID + Vehicle ID + estimated arrival tick
+
+optional stable IDは0 sentinel。Bus StopはLane、Railway StopはStation（任意Platform）、Railway PatternはRailway Serviceを参照する。Arrival Estimateは同frame内のStop / Line / Vehicleを参照しなければならない。2.7以下へmessage 720を送らない。
 
 ## Snapshot tick semantics
 
-1回のServer publish cycleでAgent、Pedestrian、Vehicle、Intersection、Roadのtick metadataは同じauthoritative capture時点を表す。Client別volume filterはcapture後のimmutable read modelに対して行う。
+traffic publish cycle内のAgent / Pedestrian / Vehicle / Intersection / Road / Railway / Transit dataは同じauthoritative captureを基礎にし、Client別volume filterはcapture後のimmutable read modelへ適用する。
 
-Population publisherもSimulation lock経由でauthoritative tickに対応するstatistics / Person debugを取得するが、traffic snapshot publisherとは独立serviceであり、別publish interval間でtick値が異なることは許容する。各message自身のtick countを観測時点として扱う。
+Population publisherは専用serviceであり、別publish intervalのtickがtraffic snapshotと異なることを許容する。各message自身のtickを観測時点とする。
 
 ## Codec separation
 
-固定的なcore messageは`ProtocolCodec`を使用する。domain固有のlayoutは専用codecへ分離する。
-
+- core: `ProtocolCodec`
 - Intersection: `IntersectionControlProtocolCodec`
 - Population: `PopulationProtocolCodec`
 - Railway Infrastructure: `RailwayInfrastructureProtocolCodec`
 - Railway Operations: `RailwayOperationsProtocolCodec`
 - Multimodal Transit: `MultimodalTransitProtocolCodec`
 
-Serverはcommon headerのmessage typeを読み、専用codec対象だけを対応codecへdispatchする。Web ClientもTraffic / Population frameを判別し、対応decoderへ渡す。
+Server / Webはcommon headerのmessage typeから対応decoderへdispatchする。Simulation内部classをwire object graphとして直接露出しない。
 
 ## Error / decode failure
 
-Error payload、stable error code、frame validationはProtocol boundaryで扱う。未知message、invalid payload、非有限座標、frame length不一致、unsupported minor message、negotiation後のframe version変更は安全に拒否する。
-
-Error表示文はProtocolへ埋め込まず、stable code / structured parameterをClient側でlocalizeする。
+unknown message、invalid payload、non-finite値、frame length不一致、unsupported minor message、negotiation後のversion変更を安全に拒否する。Error表示文はProtocolへ埋め込まず、stable error code / structured parameterをClient側でlocalizeする。

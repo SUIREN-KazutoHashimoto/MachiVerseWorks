@@ -2,112 +2,126 @@
 
 ## Purpose
 
-Phase 17 establishes the authoritative static railway infrastructure consumed by later train-operation phases. The scope is track topology, block sections, stations, platforms, pedestrian access, and depots. Train, timetable, occupancy, signalling state, and service operation remain Phase 18 concerns.
+Phase 17で導入したauthoritativeな静的Railway Infrastructureを定義する。scopeはTrack topology、BlockSection、Station、Platform、pedestrian access、Depot。Train / Timetable / Service等の動的運行stateは[`railway-operations.md`](railway-operations.md)が所有する。
 
-## Coordinate and topology contract
+## Coordinate / topology
 
-Railway geometry uses the same world coordinate system as the rest of Simulation: X/Y are horizontal coordinates in metres and Z is altitude in metres. A `TrackSegment` is a straight 3D segment between two `TrackNode` positions.
+Railway geometryはSimulation共通の3D world座標を使う。X/Yが水平metres、Zが高度metres。`TrackSegment`は2つの`TrackNode`を結ぶ直線3D segmentである。
 
-Geometric intersection never implies railway connectivity. Two tracks are connected only when they share a `TrackNode` and an explicit `TrackConnection` permits traversal. Therefore an elevated, ground-level, or underground segment may cross another segment at the same X/Y without creating a route between them.
+geometry上の交差はconnectivityを意味しない。共有`TrackNode`と明示`TrackConnection`がある場合だけsegment間を遷移できる。橋、トンネル、stacked track、same-XY crossingを暗黙接続しない。
 
 ## Stable IDs
 
-The following entities have monotonic unsigned 64-bit stable IDs:
+TrackNode / TrackSegment / TrackConnection / BlockSection / Station / Platform / PlatformAccessPoint / Depotは独立したmonotonic `ulong` stable IDを持つ。0はinvalid。Checkpoint / Saveはentity IDとnext-ID counterの両方を保持する。
 
-- `TrackNodeId`
-- `TrackSegmentId`
-- `TrackConnectionId`
-- `BlockSectionId`
-- `StationId`
-- `PlatformId`
-- `PlatformAccessPointId`
-- `DepotId`
+## TrackNode / TrackSegment
 
-ID value zero is invalid. Checkpoint and Save Data preserve both entity IDs and each next-ID counter so restored worlds continue the same identity sequence.
+Node kind:
 
-## Track nodes and segments
+- `Endpoint`: incident segmentは最大1
+- `Junction`: 複数segmentを接続可能
+- `Switch`: 複数segmentを接続可能なswitch topology
 
-`TrackNode` contains a 3D `WorldPoint` and a node kind:
+Segmentはstart/end Node、direction、gauge、speed limit、electrification、usageを持つ。gauge / speedはfiniteかつ正。start/end IDおよび3D positionが同じzero-length segmentをauthoritative stateとして許可しない。
 
-- `Endpoint`: may have one incident segment.
-- `Junction`: may join multiple segments.
-- `Switch`: may join multiple segments and represents switch topology intended for operations.
+## TrackConnection
 
-`TrackSegment` contains:
+`TrackConnection`が唯一のsegment-to-segment traversable edge。from/to Segmentはvia Junction/Switchへincidentし、direction contractがarrival / departureを許可しなければならない。
 
-- start/end `TrackNodeId`
-- direction: bidirectional, start-to-end, or end-to-start
-- gauge in metres
-- speed limit in metres/second
-- electrification: none, overhead, or third rail
-- usage: mainline, siding, or depot
+Connectionはdirected。双方向遷移が必要なら2 connectionを定義する。
 
-Gauge and speed limit must be finite and greater than zero. A segment cannot connect a node to itself.
+## Connectivity diagnostics
 
-## Traversable connections
+`ValidateRailwayInfrastructure()`は次を返す。
 
-`TrackConnection` is the authoritative transition from one segment to another through a declared Junction or Switch node. Both segments must be incident to the via node and their direction contracts must allow arrival from the source and departure onto the destination.
+- `TrackComponentCount`: TrackSegmentをvertex、各**directed** `TrackConnection`を診断上は**undirected adjacency**として扱ったときのweakly connected component数
+- `TraversableConnectionCount`: 登録済みdirected `TrackConnection` record数
 
-Connections are directed. Bidirectional junction traversal is represented by two explicit connections when both directions are intended.
+したがって`TrackComponentCount`はdirected reachabilityやstrongly connected component数ではない。Track direction / Connection directionを考慮した「経路として到達できるか」はRailway Route validation側の責務である。
 
-## Block sections
+## BlockSection
 
-A `BlockSection` contains one or more TrackSegment IDs. A TrackSegment belongs to at most one block section. Phase 17 defines only the static separation boundary; occupancy and reservation are Phase 18 state.
+1つ以上のTrackSegment IDを持ち、1 Segmentは高々1 BlockSectionへ所属する。1 BlockSectionのmembershipは最大100,000件。
 
-1つの`BlockSection`が保持できるTrackSegment membershipは最大100,000件とする。この上限はSimulation mutation、Checkpoint / Save復元の双方で適用し、Protocol 2.6の単一BlockSection itemが1 MiB payload上限内へ必ず収まることを保証する。
+このhard limitはpublic mutation、Checkpoint / Save restoreの両方へ適用し、単一BlockSection itemがProtocol 1 MiB frameへ収まる範囲を保証する。Block ownership / reservationはRailway Operations stateである。
 
-## Stations and platforms
+## Station / Platform
 
-A `Station` owns a 3D `WorldVolume` and stable ID. A `Platform` references exactly one Station and one TrackSegment, has a normalized `[startSegmentOffset, endSegmentOffset]` interval on that segment, and owns its own 3D bounds.
+Stationは3D `WorldVolume`。Platformは1 Stationと1 TrackSegmentを参照し、segment上の`[startSegmentOffset,endSegmentOffset]`と3D boundsを持つ。
 
-Platform offsets satisfy `0 <= start < end <= 1`.
+`0 <= start < end <= 1`を要求する。
 
-## Pedestrian access
+## Platform pedestrian access
 
-`PlatformAccessPoint` joins a Platform to an existing `RoadAccessPoint`. The referenced RoadAccessPoint must permit `RoadAccessMode.Foot`. `FindWalkingRouteToPlatform` evaluates the Platform's pedestrian access points through the existing pedestrian network and returns the shortest reachable walking route.
+`PlatformAccessPoint`はPlatformと既存`RoadAccessPoint`を結ぶ。作成時、RoadAccessPointが存在し`RoadAccessMode.Foot`を含むことを要求する。
 
-This keeps railway infrastructure independent from pedestrian pathfinding while giving multimodal phases a stable interchange contract.
+この参照はlifecycle invariantでもある。
 
-## Depot and siding
+- PlatformAccessPointから参照されているRoadAccessPointは削除できない
+- 参照中RoadAccessPointの`Foot` flagを外す更新は拒否する
+- Segment / offset / Building / POI等の他fieldは、RoadAccessPoint自身のinvariantを満たし`Foot`を維持する限り更新できる
+- RoadAccessPoint更新はderived Pedestrian Networkをinvalidateし、次route queryで再構築する
 
-A `Depot` owns a 3D volume and one or more TrackSegments. Depot membership accepts siding/depot usage segments and rejects mainline-only segments. Phase 17 models infrastructure only; train storage and entry/exit lifecycle belong to Phase 18.
+### `FindWalkingRouteToPlatform`
 
-1つの`Depot`が保持できるTrackSegment membershipも最大100,000件とする。BlockSectionと同様に、CreateとCheckpoint / Save復元の両境界で検証する。
+1 Platformに複数accessがある場合の選択はdeterministicである。
 
-## Spatial query and validation
+1. PlatformAccessPointをstable ID昇順で列挙
+2. 各RoadAccessPointからPOI endpoint、次にBuilding endpointの順で候補化
+3. reachable routeの`TotalLengthMeters`が最短のものを選択
+4. 距離が完全一致する場合は小さいPlatformAccessPoint IDを優先
+5. 同一PlatformAccessPoint内でPOI / Building route距離まで同一なら、候補順によりPOIが先に維持される
 
-`CreateRailwayInfrastructureSnapshot(WorldVolume)` returns the railway entities relevant to the requested 3D volume. Segment selection is based on 3D segment bounds, and dependent Station/Platform/Depot entities are included when their geometry or referenced track is selected.
+到達可能なaccessが1つもなければ`InvalidOperationException`。
 
-`ValidateRailwayInfrastructure()` reports connected-component count and traversable-connection count using explicit TrackConnections, not geometry intersections. This rule is intentionally identical for same-Z crossings and grade-separated crossings: without shared nodes and declared connections, they are disconnected.
+## Depot / siding
+
+Depotは3D volumeと1つ以上のTrackSegmentを持つ。membershipはSiding / Depot usageを受理しMainlineを拒否する。1 Depotのmembershipも最大100,000件。
+
+Train storage / departure / completion lifecycleはRailway Operationsが所有する。
+
+## Spatial query
+
+`CreateRailwayInfrastructureSnapshot(WorldVolume)`は3D volumeと交差するTrack、関連Station / Platform / Depot等を返す。Segmentは3D AABBでbroad-phase選択する。
 
 ## Persistence
 
-Save Format 8 adds all railway entities and next-ID counters. Formats 3 through 7 remain readable and migrate to an empty railway infrastructure with all railway next IDs initialized to 1.
+Railway InfrastructureはSave Format 8で導入された。current Save Format 10でも同じstable topology contractを保持する。Format 3〜7は空Railway stateへmigrationする。
 
-All railway collections remain subject to bounded deserialization and materialization limits. Save Data stores raw numeric values and enum codes, never localized presentation strings. BlockSection / Depot membershipの100,000件上限はrestore validationにも適用し、Protocolでは送信不能な正当stateをSaveから導入しない。
+外部Saveではtop-level collectionとnested Block/Depot membershipの両方をDTO materialization前にbounded scanする。100,000件domain hard limitはrestore validationにも適用する。
 
-## Protocol and server distribution
+## Protocol / Server distribution
 
-Protocol 2.6 adds message type `700`, `RailwayInfrastructureSnapshot`. It carries revision, full-snapshot flag, TrackNodes, TrackSegments, TrackConnections, BlockSections, Stations, Platforms, PlatformAccessPoints, and Depots.
+Protocol 2.6 message 700 `RailwayInfrastructureSnapshot`を使用する。revision、`isFullSnapshot`、Node / Segment / Connection / Block / Station / Platform / PlatformAccessPoint / Depotを持つ。
 
-The Server treats railway topology as static infrastructure with a revision. It sends a filtered snapshot when a client subscribes, when the subscription volume changes, or when the railway revision changes; it does not resend identical static topology every simulation tick.
+Serverはstatic topology revisionとClient subscriptionを追跡し、subscription変更またはrailway revision変更時にfiltered snapshotを送る。毎Simulation tick同一topologyを再送しない。
 
-Railway Infrastructure snapshot全体が1 MiBを超える場合は複数frameへchunkするが、1つのBlockSection / Depot item自体は分割しない。Simulation側membership上限により各itemは必ず1 frameへ収まり、正当なauthoritative stateが`RailwayInfrastructureProtocolChunker`のsingle-item overflowでpublisherをfaultさせない。
+### Multi-frame contract
+
+1 MiBを超えるsnapshotはentity境界でchunkする。
+
+- 同deliveryの全frameは同じrevision
+- full deliveryの**先頭frameだけ**`isFullSnapshot=true`
+- continuationは`false`
+- entity orderはNode → Segment → Connection → Block → Station → Platform → PlatformAccessPoint → Depot
+- Block / Depot 1 itemは分割しない
+- chunk index / total count / final markerは持たない
+
+Web Clientはfull frameを受けると同revisionでも旧stateをresetする。同revision continuationだけをaccumulateし、revisionが一致しないcontinuationは無視する。WebSocket orderingを前提とする。
+
+subscriptionだけが変化してrevisionが同じ場合も、新filtered delivery先頭はfull=trueなので旧volume由来entityを残さない。
 
 ## Web rendering
 
-The Web Client negotiates Protocol 2.6 and decodes RailwayInfrastructureSnapshot independently of older dynamic message codecs. TrackSegments render as Three.js line segments using world altitude. Station and Platform volumes render as 3D wireframes. Static geometry is rebuilt only when the railway revision changes.
+Trackは3D line、Station / Platformはwireframe volumeとして描画する。Simulation `(X,Y,Z)`をThree.js `(X,Z,Y)`へ境界変換する。static geometryはRailway Infrastructure layerが所有する。
 
-## Deterministic validation fixture
+## Verification
 
-The Phase 17 deterministic fixture includes:
+- Simulation: topology / crossing isolation / access lifecycle / route tie-break / checkpoint
+- Persistence: Format 8+ roundtrip / migration / bounded membership
+- Protocol: 2.6 codec / malformed payload / chunk boundary
+- Web: decoder / full+continuation revision semantics / Three.js geometry
+- E2E: `.github/workflows/e2e.yml`の`save-server-browser-railway`
+- Benchmark: `.github/workflows/benchmarks.yml`の`railway-10k-100k`
 
-- parallel/double-track infrastructure
-- an explicit branch/junction
-- Station and Platform
-- pedestrian PlatformAccessPoint
-- siding/depot track
-- elevated and underground tracks
-- same-XY crossings that remain disconnected unless an explicit shared topology exists
-
-The Phase 17 Save→Server→Browser E2E loads a Format 8 fixture, negotiates Protocol 2.6, verifies railway entity counts and no implicit grade-separated connection, then checks Track/Station/Platform geometry in a real headless browser.
+benchmark scenarioと参考baselineは[`../development/railway-infrastructure-benchmark.md`](../development/railway-infrastructure-benchmark.md)を参照する。

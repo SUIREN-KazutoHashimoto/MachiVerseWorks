@@ -2,54 +2,96 @@
 
 ## 目的
 
-Browser ClientはHeadless Serverから受け取るProtocol 2.x snapshotを描画可能なClient stateへ変換するpresentation層です。Simulationの権威はServerに残し、Clientは予測・Simulation更新を行いません。
+Browser ClientはHeadless Serverから受け取るProtocol 2.8までのsnapshotを描画・debug UI stateへ変換するpresentation層である。Simulationの権威はServerに残し、ClientはSimulation更新や運行判断を行わない。
 
 ## Data flow
 
 ```text
 WebSocket
   -> MachiVerseConnection
-  -> Protocol decoder (XYZ)
-  -> EntityStore (XYZ previous/current)
-  -> interpolation (XYZ)
-  -> WorldView / InstancedMesh
-                       \\-> Web Audio
+  -> message type dispatch
+     ├─ Agent EntityStore ----------┐
+     ├─ PedestrianStore ------------┤
+     ├─ VehicleStore ---------------┤ -> WorldView / interpolation
+     ├─ RoadNetwork ----------------┤
+     ├─ IntersectionControlStore ---┤
+     ├─ Population debug -----------┤
+     ├─ RailwayInfrastructureLayer -┤
+     ├─ RailwayOperationsLayer -----┤
+     └─ Multimodal Transit debug ---┘
+                                      -> Web Audio
 ```
 
-`MachiVerseConnection`はconnection lifecycle、Hello/HelloAck、binary frame受信、切断検知、最小reconnectを所有します。Protocol wire layoutはC# projectへ依存せず、`src/web/src/protocol.ts`に同じstable contractを実装します。
-
-`EntityStore`はClient側のsnapshot stateだけを所有します。spawn/update/removeを順序通り反映し、update時にXYZのprevious/current positionと受信間隔を保存します。描画は1 snapshot分遅延させ、受信間隔を基準に3軸positionを線形補間します。
+`connection.ts`はconnection lifecycle、Hello/HelloAck、binary frame decode、reconnectを所有する。wire contractはC# object graphへ依存せず、TypeScript側にもversioned decoderとして実装する。
 
 ## Coordinate mapping
 
-Simulationの正本座標は`(X,Y,Z)`で、Zが高度です。Three.js / Web Audio境界では次の1箇所の規則で明示変換します。
+Simulation正本座標は`(X,Y,Z)`、Zが高度。Three.js / Web Audio境界だけで次へ変換する。
 
-```text
-Simulation (X, Y, Z) -> Three.js / Web Audio (X, Z, Y)
-```
+`Simulation (X,Y,Z) -> Three.js / Web Audio (X,Z,Y)`
 
-Simulation内部の軸定義をrenderer固有座標へ合わせません。Agent、listener、positional audio、Ambient Zoneは同じ変換を使用します。
+Agent、Pedestrian、Vehicle、Train、Road/Rail geometry、listener/audio emitterで同じ規則を使う。
 
 ## Camera / subscription
 
-Three.jsの`OrthographicCamera`は傾斜した3D cameraとして扱います。subscriptionは2D visible rectangleや固定高度bandから作りません。
+`OrthographicCamera`のnear/farを含む8 frustum cornerをworldへunprojectし、Simulation座標へ戻した3D AABBへpaddingを加えて`SubscribeVolume`を生成する。2D rectangleや固定高度bandは使わない。
 
-`WorldView.getSubscriptionVolume()`はcameraのnear/farを含む8つのfrustum cornerをworld座標へunprojectし、Simulation座標へ写像した3D AABBへ20% paddingを追加して`SubscribeVolume`を生成します。したがってcameraのpan、zoom、高度、向き、clip rangeが変わればXYZ全軸のsubscriptionも追従します。
+pan/zoom中は設定周期で再評価し、ほぼ同じvolumeは再送しない。Serverが`subscriptionVolumeTooLarge`を返した場合はzoom-inして再送する。Reconnect後はHelloAck後に最新desired volumeを送る。
 
-Drag/zoom中のcommand floodを避けるため、subscription再評価は設定された周期で行い、前回volumeと実質的に同じ場合は送信しません。Reconnect後は最新のdesired subscriptionをHelloAck後に再送します。
+## Dynamic entity state
 
-Server側は`MaximumSubscriptionCellCount`で外部入力を制限します。既定cameraの16:9最小zoomでfull frustum volumeを受理できるよう、現在の既定budgetは262,144 cellsです。
+Agent / Pedestrian / Vehicleはstable ID単位のClient storeを持ち、spawn/update/removeを順序どおり適用する。previous/current 3D positionと受信間隔から描画補間を行い、Client predictionをauthoritative stateとして扱わない。
 
-## Rendering
+## Road / Intersection / Population
 
-Agentは個別Meshを常設せず`THREE.InstancedMesh`で描画します。必要capacityは2倍ずつ拡張します。各instanceのtranslationは`(sim.X, sim.Z + halfSize, sim.Y)`とし、高度差を実mesh transformへ反映します。
+Road topologyはstatic revisionとして扱い、同一topologyの再受信で不要なThree.js geometry rebuildを避ける。Intersection Controlはcontroller/movement snapshotをdebug/render stateへ反映する。
 
-Browser E2Eではhelperの戻り値だけでなく、`WorldView.render()`後の`InstancedMesh` matrixを観測して同一XY・異なるZが異なるThree.js Yへ配置されることを確認します。
+PopulationはWorld全体statisticsと明示`InspectPerson`結果だけをUIへ表示し、全Person詳細をvolume購読しない。
+
+## Railway Infrastructure
+
+`RailwayInfrastructureLayer`はTrack / Station / Platformのstatic Three.js geometryを所有する。
+
+Protocol 2.6 multi-frame contract:
+
+- `isFullSnapshot=true`を受けると、**revisionが同じでも**保持中Railway stateをresetしてそのframeを新snapshot先頭として適用
+- `isFullSnapshot=false`は現在保持中revisionと一致する場合だけcontinuationとして適用
+- revision不一致のcontinuationは無視
+- 同revision continuationはNode / Segment / Station / Platform mapへaccumulateし、その時点で構築可能なgeometryを更新
+
+chunk index/final markerはないため、WebSocket orderingとServer側entity-order chunkingを前提にする。subscriptionだけ変わりrevisionが同じ場合でも、新delivery先頭full flagで旧volume geometryを除去できる。
+
+## Railway Operations
+
+Protocol 2.7 `RailwayOperationsSnapshot`はTrain position / forwardを直接受信し、`RailwayOperationsLayer`がstable Train IDごとのmeshへ適用する。snapshotに存在しないTrain meshはそのapply時に除去する。
+
+現在のwire contractはFormation定義やFormation lengthを送らないため、Trainは**18 × 3 × 3 world-unitの固定BoxGeometry**をdebug proxyとして描画する。これは列車長・編成形状の視覚的正本ではない。
+
+Serverの3D subscription判定もTrain body envelopeではなく`TrainSnapshot.Position` pointに基づく。長いFormationがvolumeへ一部だけ交差する意味は現Protocol 2.7では表現しない。
+
+Railway Debugの「次到着」は、次Timetable stopの`plannedArrivalTick + service.delayTicks`を表示する**schedule-based projection**である。物理position / speed / block/platform待ちから毎tick再計算するkinematic ETAではない。新しい遅延はRailway Operationsのarrival時に`DelayTicks`へ反映された後の表示から効く。
+
+## Multimodal Transit
+
+Protocol 2.8はLine / Stop / Pattern、realtime Bus / Taxi position/state、arrival estimateを受ける。Transit Debugはroute、stop/line数、Bus/Taxi、`estimatedArrivalTick`を表示する。
+
+このTransit arrival estimateはPhase 19のMultimodal Transit contractであり、前節のRailway Debug schedule projectionとは別物として扱う。Railway Serviceへの参照があってもUI上のarrival semanticsを混同しない。
+
+## Reconnect / lifecycle
+
+WebSocket close時にAgent / Pedestrian / Vehicle / Intersection、Road、Railway Infrastructure / Operations、Population / Transit debug stateをclearする。新sessionへ旧connectionのentity/revision stateを持ち越さない。
+
+`dispose()`ではThree.js geometry/materialとAudio resourceを解放する。
 
 ## Localization
 
-`locales/manifest.json`の`defaultLocale`がClient起動時localeの正本です。Protocol errorはnumeric codeのまま受信し、`error.protocol.<code>` resourceへClient側で変換します。
+`locales/manifest.json`の`defaultLocale`が起動locale正本。Protocol Errorはnumeric code / structured parameterのまま受信し、Client resourceへ変換する。
 
-## Reconnect
+## Verification
 
-WebSocket close時はClient EntityStoreを破棄します。1秒から最大5秒までの指数backoffで再接続し、新しいServer connectionのspawn snapshotからstateを再構築します。古いconnectionのentity stateを新しいsessionへ持ち越しません。
+- unit: codec、store、revision/chunk適用、UI projection
+- render: Three.js matrix / geometryを実観測
+- E2E: `.github/workflows/e2e.yml`からServer / WebSocket / headless browserを接続
+- performance: decode/frame metricsとbenchmarkを必要なdomainごとに計測
+
+Protocol binary契約は[`protocol.md`](protocol.md)を正本とする。
