@@ -38,6 +38,20 @@ public sealed class AdminCommandTests
     }
 
     [TestMethod]
+    public async Task QueuePreservesFifoOrder()
+    {
+        var queue = new AdminCommandQueue();
+        Assert.IsTrue(queue.TryWrite(Request(new AdminCommand("status", [], new Dictionary<string, string?>(), "first"))));
+        Assert.IsTrue(queue.TryWrite(Request(new AdminCommand("version", [], new Dictionary<string, string?>(), "second"))));
+
+        await using var enumerator = queue.ReadAllAsync(CancellationToken.None).GetAsyncEnumerator();
+        Assert.IsTrue(await enumerator.MoveNextAsync());
+        Assert.AreEqual("first", enumerator.Current.Command.RawText);
+        Assert.IsTrue(await enumerator.MoveNextAsync());
+        Assert.AreEqual("second", enumerator.Current.Command.RawText);
+    }
+
+    [TestMethod]
     public void PauseStepResumeHasDeterministicTickOrdering()
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
