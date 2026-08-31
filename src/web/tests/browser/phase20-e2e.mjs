@@ -27,6 +27,8 @@ const connection = new MachiVerseConnection(serverUrl, { minimumDelayMs: 100, ma
   },
   onProtocolError: (message) => { protocolError = new Error(`Protocol error ${String(message.code)}.`); },
   onClientError: (error) => { clientError = error; },
+  onDisconnected: () => {},
+  onHelloAck: () => {},
 });
 
 try {
