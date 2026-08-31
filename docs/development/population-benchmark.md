@@ -1,29 +1,32 @@
 # Phase 15 Population Benchmark
 
-Phase 15 Population & Daily Activity のplanner / fixed tick / managed memory baselineを記録する。
+Phase 15 Population & Daily Activity のplanner / fixed tick / managed memory baselineと、Population trip dispatch hot pathの継続回帰scenarioを記録する。
 
-## 対象
+## 対象scenario
 
-`PopulationBenchmarkRunner`で次のPerson数を同一scenarioで計測する。
+`PopulationBenchmarkRunner`はCSVの`scenario`列で次を区別する。
 
-- 1,000 Person / 250 Household
-- 10,000 Person / 2,500 Household
-- 100,000 Person / 25,000 Household
+| Scenario | Person | 目的 |
+| --- | ---: | --- |
+| `idle` | 1,000 / 10,000 / 100,000 | Population Store走査、Need更新、daily plannerの基礎baseline |
+| `foot-dispatch` | 1,000 / 10,000 | Population Trip Request → walking route → Pedestrian生成と継続歩行 |
+| `motor-dispatch` | 1,000 / 10,000 | Population Trip Request → Motor access解決 / routing → Vehicle生成と継続走行 |
 
-各Householdは4 Person、全Personは`Home` activity windowを1日中持つ。交通entity生成やroute searchの変動を混ぜず、Population Store走査、Need更新、daily plannerの基礎コストを観測する。
+`idle`は各Household 4 Person、全Personが`Home` activity windowを1日中持つ従来baselineを維持する。交通entity生成やroute searchを混ぜないため、historical Phase 15 baselineとの比較に使う。
 
-交通を伴うPopulation Trip Request -> Pedestrian / Vehicle -> arrivalはSimulation integration testで別に検証する。
+`foot-dispatch` / `motor-dispatch`はwarmup中にはTripを発生させず、最初のmeasurement tickで対象Personを一斉にactivity transitionさせる。これによりdispatch spikeをwarmupで消さず、その後のPedestrian / Vehicle継続処理も同じmeasurement windowで観測する。
+
+100,000 Person同時dispatchはCIの通常回帰には含めない。大規模rush-hour workloadは専用負荷試験として扱い、標準benchmark jobの時間・メモリbudgetを不必要に膨らませない。
 
 ## 実行条件
 
-GitHub Actions `Phase 15 Population Benchmark` run `33301355867`。
+GitHub Actions `.github/workflows/benchmarks.yml` の`population-1k-10k-100k` scenario jobから実行する。
 
 - runner OS: Ubuntu 24.04
-- runner image: `ubuntu-24.04`
-- .NET SDK: repository `global.json`、run時 10.0.400
+- .NET SDK: repository `global.json`
 - Simulation tick rate: 30 Hz
-- warmup: 10 ticks
-- measurement: 50 ticks
+- default CI warmup: 10 ticks
+- default CI measurement: 50 ticks
 - seed: 15015
 - spatial cell size: 64 m
 
@@ -36,7 +39,15 @@ dotnet run \
   -- --population --warmup 10 --ticks 50
 ```
 
-## Baseline result
+CSV列:
+
+```text
+scenario,persons,households,ticks,average_ms,p50_ms,p95_ms,p99_ms,max_ms,allocated_bytes_per_tick,managed_bytes
+```
+
+## Historical idle baseline
+
+以下は従来のHome-only `idle` scenarioをGitHub Actions run `33301355867`で計測したhistorical baseline。dispatch scenario導入後も、この表は過去測定値として書き換えず比較基準に残す。
 
 | Person | Household | Average | p50 | p95 | p99 | Max | Allocated / tick | Managed bytes |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -44,21 +55,16 @@ dotnet run \
 | 10,000 | 2,500 | 0.5294 ms | 0.5325 ms | 0.5846 ms | 0.6388 ms | 0.6388 ms | 64 B | 5,579,016 B |
 | 100,000 | 25,000 | 3.1623 ms | 2.9659 ms | 4.1998 ms | 6.1704 ms | 6.1704 ms | 64 B | 54,000,200 B |
 
-30 Hzのtick budgetは約33.33 ms。100,000 Personのbaselineは平均で約9.5%、p99で約18.5%を使用した。
+30 Hzのtick budgetは約33.33 ms。historical 100,000 Person idle baselineは平均で約9.5%、p99で約18.5%を使用した。
 
 managed memoryは100,000 Personで約54.0 MB、単純換算で約540 bytes / Person。ただしこの値にはHousehold、Dictionary / List capacity、SimulationWorld基礎stateなども含むためPerson object単体のサイズではない。
 
-## 判定
+## Regression interpretation
 
-Phase 15 baselineとして次を確認した。
+- `idle`はplanner / Need / store traversalの基礎性能を監視する。
+- `foot-dispatch`はendpoint候補解決、walking route、Pedestrian生成、Pedestrian tickの統合costを監視する。
+- `motor-dispatch`はMotor access index、candidate pair評価、Road route、Vehicle生成、Vehicle tickの統合costを監視する。
+- measurement最初のtickに一斉dispatchが含まれるため、`max_ms` / p99はdispatch spikeの退行検知に特に重要。
+- scenario間の絶対値を同一workloadとして比較しない。それぞれ別のperformance contractである。
 
-- 1,000 / 10,000 / 100,000 Personの3段階で計測できる。
-- 100,000 Personでもplanner / tick traversalは30 Hz budget内に十分収まる。
-- measurement loopのmanaged allocationは64 B / tickでPerson数に比例して増えていない。
-- managed memoryはPerson数にほぼ比例して増加しており、100,000 Person時でもPhase 15の観測用途として扱える範囲にある。
-
-## 注意点
-
-このbenchmarkはPopulation plannerの基礎baselineであり、100,000 Personが同時にTripを開始するrush-hour workloadを表さない。Road Routing、Vehicle、Pedestrian、Protocol publishはそれぞれ既存benchmarkまたは後続の統合benchmarkで評価する。
-
-Population側では全Person詳細を毎publishで複製せず、Protocol 2.5の`PopulationStatistics`を固定長集計として配信し、個別`PersonDebug`はID指定時だけ生成する。
+Population publishはこのSimulation benchmarkへ含めない。Server publishは`PopulationStatistics`固定長集計とID指定`PersonDebug`のServer/Protocol tests、およびPopulation Browser E2Eで別途検証する。
