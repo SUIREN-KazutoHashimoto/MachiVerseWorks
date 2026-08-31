@@ -147,6 +147,7 @@ internal sealed class ClientConnection : IDisposable
                 RailwayOperationsSnapshotMessage railwayOperations => RailwayOperationsProtocolCodec.Serialize(railwayOperations, version),
                 MultimodalTransitSnapshotMessage multimodalTransit => MultimodalTransitProtocolCodec.Serialize(multimodalTransit, version),
                 EconomySnapshotMessage economy => EconomyProtocolCodec.Serialize(economy, version),
+                LogisticsSnapshotMessage logistics => LogisticsProtocolCodec.Serialize(logistics, version),
                 InspectPersonMessage or PopulationStatisticsMessage or PersonDebugMessage => PopulationProtocolCodec.Serialize(message, version),
                 _ => ProtocolCodec.Serialize(message, version),
             };

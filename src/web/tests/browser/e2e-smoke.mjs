@@ -86,7 +86,7 @@ async function runPedestrianScenario() {
   await waitUntil(() => pedestrians.size === 1 && firstPedestrianSpawn !== null, 'pedestrian spawn received');
   const firstObserved = firstPedestrianSpawn;
   await waitUntil(() => sawPedestrianUpdate, 'pedestrian update received');
-  await waitUntil(() => [...pedestrians.sample()].some((pedestrian) => pedestrian.state === PedestrianMovementState.Arrived), 'pedestrian arrived at destination building');
+  await waitUntil(() => [...pedestrians.sample()].some((pedestrian) => pedestrian.state === PedestrianMovementState.Arrived && nearlyEqual(pedestrian.x, 20) && nearlyEqual(pedestrian.y, 0) && nearlyEqual(pedestrian.z, 0)), 'pedestrian arrived at destination building and interpolation settled');
   const arrived = [...pedestrians.sample()].find((pedestrian) => pedestrian.pedestrianId === firstObserved.pedestrianId);
   assert(arrived !== undefined, 'arrived pedestrian remains in client store');
   const observedDistance = Math.hypot(arrived.x - firstObserved.x, arrived.y - firstObserved.y, arrived.z - firstObserved.z);

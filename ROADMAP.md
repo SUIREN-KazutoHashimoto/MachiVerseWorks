@@ -1,9 +1,7 @@
-# MachiVerseWorks Roadmap
-
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 22 — Logistics / Freight
-> **次の実装タスク:** P22-001 Commodity / Inventory / Order / Shipmentの正本契約を仕様化する
+> **現在:** Phase 22 — Logistics / Freight（実装完了 / develop統合待ち）
+> **次の実装タスク:** PR #165 の最終レビュー・検証を完了し、develop統合後にPhase 22を正式closeoutする
 
 ## 全体の現在地
 
@@ -31,7 +29,7 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 19 | Multimodal Transit | ✅ 完了 |
 | 20 | Server Administration Console | ✅ 完了 |
 | 21 | Industry / Jobs / Economy | ✅ 完了 |
-| 22 | Logistics / Freight | ▶️ 次 |
+| 22 | Logistics / Freight | 🟨 実装完了 / 統合待ち |
 | 23 | Power Infrastructure | ⏳ 待機 |
 | 24 | Urban Growth & City Generation | ⏳ 待機 |
 | 25 | City Management UI | ⏳ 待機 |
@@ -321,31 +319,45 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ## Phase 22 — Logistics / Freight
 
-> **状態: ⬜ 未着手**
+> **状態: 🟨 実装完了 / develop統合待ち**
 > **依存:** Phase 13 / 21
 > 生産・在庫・注文・Shipment・Freight Vehicleを接続し、都市内物流をSimulationする。
 
-- ⬜ **P22-001** — Commodity / Inventory / Order / Shipmentの正本契約を仕様化する
-- ⬜ **P22-002** — Establishmentごとのinventoryとcapacityを実装する
-- ⬜ **P22-003** — production / consumptionから補充Orderを生成する最小ruleを実装する
-- ⬜ **P22-004** — OrderをShipmentへまとめるallocation policyを実装する
-- ⬜ **P22-005** — Warehouse / loading point / delivery pointをUrban Worldへ接続する
-- ⬜ **P22-006** — Freight VehicleをRoad Trafficへ接続する
-- ⬜ **P22-007** — pickup / loading / transit / unloading / deliveredのShipment state machineを実装する
-- ⬜ **P22-008** — Freight routeと配送順序をRoutingへ接続する
-- ⬜ **P22-009** — 渋滞・配送遅延がinventoryへ影響する最低限の連携を実装する
-- ⬜ **P22-010** — Logistics stateをcheckpoint / Save Dataへ含める
-- ⬜ **P22-011** — Shipment / inventory / freight statisticsをProtocol / Serverで配信する
-- ⬜ **P22-012** — Web ClientでFreight Vehicle / Shipment / inventoryをdebug表示する
-- ⬜ **P22-013** — 生産→配送→在庫補充を実Server→Browserで検証するE2Eを追加する
-- ⬜ **P22-014** — 大規模Shipment / Inventoryのtick・routing・memory benchmarkを記録する
-- ⬜ **P22-015** — Logistics / Freightのspecification / architecture / ROADMAPを同期する
+- ✅ **P22-001** — Commodity / Inventory / Order / Shipmentの正本契約を仕様化する
+- ✅ **P22-002** — Establishmentごとのinventoryとcapacityを実装する
+- ✅ **P22-003** — production / consumptionから補充Orderを生成する最小ruleを実装する
+- ✅ **P22-004** — OrderをShipmentへまとめるallocation policyを実装する
+- ✅ **P22-005** — Warehouse / loading point / delivery pointをUrban Worldへ接続する
+- ✅ **P22-006** — Freight VehicleをRoad Trafficへ接続する
+- ✅ **P22-007** — pickup / loading / transit / unloading / deliveredのShipment state machineを実装する
+- ✅ **P22-008** — Freight routeと配送順序をRoutingへ接続する
+- ✅ **P22-009** — 渋滞・配送遅延がinventoryへ影響する最低限の連携を実装する
+- ✅ **P22-010** — Logistics stateをcheckpoint / Save Dataへ含める
+- ✅ **P22-011** — Shipment / inventory / freight statisticsをProtocol / Serverで配信する
+- ✅ **P22-012** — Web ClientでFreight Vehicle / Shipment / inventoryをdebug表示する
+- ✅ **P22-013** — 生産→配送→在庫補充を実Server→Browserで検証するE2Eを追加する
+- ✅ **P22-014** — 大規模Shipment / Inventoryのtick・routing・memory benchmarkを記録する
+- ✅ **P22-015** — Logistics / Freightのspecification / architecture / ROADMAPを同期する
 
 ### Phase 22 完了条件
 
 - 生産側の物資がShipmentとして道路網を移動し、需要側inventoryへ到着する。
 - FreightがRoad Trafficの渋滞を共有し、配送遅延が観測できる。
 - Logistics stateを保存復元して継続できる。
+
+### Phase 22 implementation evidence
+
+- Simulation: `Commodity` / `Inventory` / `LogisticsOrder` / `Shipment`をstable IDで保持し、Company production deltaを同一Company内で1回だけSupplier群へ配分する。未完了Orderは`(EstablishmentId, CommodityId)`のactive indexで管理し、ShipmentはPickup→Loading→InTransit→Unloading→Deliveredを遷移する。
+- Road Traffic / Routing: Freight Vehicleは既存Road Routing / VehicleStoreを再利用し、Arrived観測後にresident Vehicleを解放する。Shipmentにはhistorical `VehicleId`を残し、配送履歴の増加がRoad Traffic stateを無制限に増やさない。
+- Persistence: Economy checkpoint配下のoptional Logistics stateとしてSave Format 11へ後方互換追加した。Logistics配列はDTO materialization前のstreaming scanと復元後validationの両方でboundedに検証する。
+- Protocol / Server / Web: Protocol 2.11 `LogisticsSnapshot` (`MessageType 740`)を追加し、Serverはactive Shipmentを優先したbounded debug entryを配信、Web ClientでInventory / Shipment / Freight Vehicle ID / delayをdebug表示する。
+- Tests: 同一Company複数Supplierの生産量重複防止、Delivered後のFreight Vehicle解放、Save pre-materialization limit、256件超Shipment historyでのactive debug selectionを含む回帰testを追加した。
+- CI: review対応コードを含むCI run `33450375345`がrepository / .NET build・test / Web lint・typecheck・test・build / CI gateまで成功した。benchmark fixture更新後もCI run `33450666762`でbuild / test成功を確認した。
+- E2E: End-to-end run `33450666785`でPhase 22 Logisticsを含む既存Server→Browser回帰が成功した。benchmark fixture更新はE2E runtime契約を変更しない。
+- Benchmark: Benchmarks run `33450666769`の`logistics-inventory-100-1000`で100 / 1,000 Inventory・Shipment historyのTick / RoutingBatch / Snapshotを全6ケース計測した。baselineは[`docs/development/logistics-freight-benchmark.md`](docs/development/logistics-freight-benchmark.md)を正本とする。
+- Dependency Review: run `33451262959`が成功した。
+- Specification / Architecture: [`docs/specifications/logistics-freight.md`](docs/specifications/logistics-freight.md)、[`docs/architecture/logistics-freight.md`](docs/architecture/logistics-freight.md)を正本とする。
+- PR #165はreview対応・実装検証済みだが、本ROADMAP更新時点では`develop`未統合である。統合後にPhase 22を正式closeoutし、Phase 23へ現在地を進める。
 
 ---
 
