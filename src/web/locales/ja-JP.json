@@ -16,6 +16,7 @@
   "personDebug.title": "Person Debug",
   "personDebug.personId": "Person ID",
   "personDebug.inspect": "表示",
+  "personDebug.clear": "解除",
   "personDebug.none": "Person未選択",
   "personDebug.summary": "Person {id} / Household {household} / 居住 {residence} / 現在 {current} / 目的地 {destination} / Activity {activity} / 移動 {travel}",
   "activity.home": "自宅",
