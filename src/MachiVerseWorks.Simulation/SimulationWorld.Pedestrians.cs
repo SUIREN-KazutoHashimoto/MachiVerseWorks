@@ -7,6 +7,8 @@ public sealed partial class SimulationWorld
     private readonly PedestrianNetworkStore _pedestrianNetwork = new();
     private readonly PedestrianStore _pedestrians = new();
     private readonly PedestrianSpatialIndex _pedestrianSpatialIndex;
+    private readonly Dictionary<PedestrianCrossingId, RoadNodeId> _pedestrianCrossingNodes = [];
+    private readonly Dictionary<PedestrianCrossingId, bool> _pedestrianCrossingControlPermissions = [];
     private bool _pedestrianNetworkDirty = true;
 
     public int PedestrianCount => _pedestrians.Count;
@@ -15,7 +17,20 @@ public sealed partial class SimulationWorld
     public PedestrianNetworkSnapshot CreatePedestrianNetworkSnapshot()
     {
         EnsurePedestrianNetwork();
-        return _pedestrianNetwork.CreateSnapshot();
+        RefreshPedestrianCrossingControl(Time.TickCount);
+        var snapshot = _pedestrianNetwork.CreateSnapshot();
+        if (snapshot.Crossings.Count == 0) return snapshot;
+
+        var crossings = new PedestrianCrossingSnapshot[snapshot.Crossings.Count];
+        for (var index = 0; index < crossings.Length; index++)
+        {
+            var crossing = snapshot.Crossings[index];
+            crossings[index] = crossing with
+            {
+                IsOpen = crossing.IsOpen && IsPedestrianCrossingControlOpen(crossing.Id),
+            };
+        }
+        return snapshot with { Crossings = crossings };
     }
 
     public PedestrianRoute FindWalkingRoute(TripEndpoint origin, TripEndpoint destination)
@@ -66,20 +81,64 @@ public sealed partial class SimulationWorld
     {
         if (_pedestrians.Count == 0) return;
         EnsurePedestrianNetwork();
-        _pedestrians.Step(deltaSeconds, _pedestrianNetwork, _pedestrianSpatialIndex);
+        var tickCount = checked(Time.TickCount + 1UL);
+        RefreshPedestrianCrossingControl(tickCount);
+        _pedestrians.Step(
+            deltaSeconds,
+            _pedestrianNetwork,
+            _pedestrianSpatialIndex,
+            crossingId => _pedestrianNetwork.IsCrossingOpen(crossingId) && IsPedestrianCrossingControlOpen(crossingId));
     }
+
+    private void RefreshPedestrianCrossingControl(ulong tickCount)
+    {
+        _pedestrianCrossingControlPermissions.Clear();
+        if (_pedestrianCrossingNodes.Count == 0) return;
+
+        EnsureRoadTrafficTopology();
+        var intersectionSnapshot = _intersectionControl.CreateSnapshot(tickCount);
+        var controllers = new Dictionary<RoadNodeId, IntersectionControllerSnapshot>(intersectionSnapshot.Controllers.Count);
+        foreach (var controller in intersectionSnapshot.Controllers) controllers.Add(controller.IntersectionNodeId, controller);
+
+        foreach (var pair in _pedestrianCrossingNodes)
+        {
+            if (!controllers.TryGetValue(pair.Value, out var controller))
+            {
+                _pedestrianCrossingControlPermissions[pair.Key] = true;
+                continue;
+            }
+
+            var isOpen = controller.Mode switch
+            {
+                IntersectionControlMode.FixedSignal => controller.MovementStates.All(
+                    static state => state.Indication == SignalIndication.Red && !state.EntryGranted),
+                IntersectionControlMode.Unsignalized => controller.MovementStates.All(static state => !state.EntryGranted),
+                _ => false,
+            };
+            _pedestrianCrossingControlPermissions[pair.Key] = isOpen;
+        }
+    }
+
+    private bool IsPedestrianCrossingControlOpen(PedestrianCrossingId id) =>
+        !_pedestrianCrossingControlPermissions.TryGetValue(id, out var isOpen) || isOpen;
 
     private void InvalidatePedestrianNetwork()
     {
         if (_pedestrians.Count > 0)
             throw new InvalidOperationException("Road topology cannot be changed while stored Pedestrians reference derived routes. Remove them before mutating the walk network.");
         _pedestrianNetworkDirty = true;
+        _pedestrianCrossingNodes.Clear();
+        _pedestrianCrossingControlPermissions.Clear();
     }
 
     private void EnsurePedestrianNetwork()
     {
         if (!_pedestrianNetworkDirty) return;
         _pedestrianNetwork.Rebuild(_roads.CreateSnapshot());
+        _pedestrianCrossingNodes.Clear();
+        foreach (var crossing in _pedestrianNetwork.CreateSnapshot().Crossings)
+            _pedestrianCrossingNodes.Add(crossing.Id, crossing.RoadNodeId);
+        _pedestrianCrossingControlPermissions.Clear();
         _pedestrianNetworkDirty = false;
     }
 
