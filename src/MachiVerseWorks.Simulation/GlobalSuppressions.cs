@@ -12,3 +12,9 @@ using System.Diagnostics.CodeAnalysis;
     Justification = "Activity validation intentionally remains on the SimulationWorld population seam for policy extension without changing public construction flow.",
     Scope = "member",
     Target = "~M:MachiVerseWorks.Simulation.SimulationWorld.ValidateActivityWindow(MachiVerseWorks.Simulation.DailyActivityWindow,System.String)")]
+[assembly: SuppressMessage(
+    "Performance",
+    "CA1822:Mark members as static",
+    Justification = "Logistics access-point validation stays on the SimulationWorld logistics seam so establishment location policy can evolve without changing public configuration flow.",
+    Scope = "member",
+    Target = "~M:MachiVerseWorks.Simulation.SimulationWorld.AccessPointMatchesEstablishment(MachiVerseWorks.Simulation.RoadAccessPointSnapshot,MachiVerseWorks.Simulation.SimulationWorld.EconomyEstablishmentState)")]
