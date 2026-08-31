@@ -29,16 +29,20 @@ internal static class LogisticsMessageMapper
             item.CommodityId.Value,
             item.Quantity,
             item.Capacity)).ToArray();
-        var shipments = snapshot.Shipments.Take(MaximumDebugEntries).Select(static item => new ProtocolShipment(
-            item.Id.Value,
-            item.OrderId.Value,
-            item.SourceEstablishmentId.Value,
-            item.DestinationEstablishmentId.Value,
-            item.CommodityId.Value,
-            item.Quantity,
-            (ProtocolShipmentState)item.State,
-            item.VehicleId?.Value ?? 0UL,
-            item.DelayTicks)).ToArray();
+        var shipments = snapshot.Shipments
+            .OrderBy(static item => item.State == ShipmentState.Delivered ? 1 : 0)
+            .ThenByDescending(static item => item.Id.Value)
+            .Take(MaximumDebugEntries)
+            .Select(static item => new ProtocolShipment(
+                item.Id.Value,
+                item.OrderId.Value,
+                item.SourceEstablishmentId.Value,
+                item.DestinationEstablishmentId.Value,
+                item.CommodityId.Value,
+                item.Quantity,
+                (ProtocolShipmentState)item.State,
+                item.VehicleId?.Value ?? 0UL,
+                item.DelayTicks)).ToArray();
         return new LogisticsSnapshotMessage(protocolStatistics, Array.AsReadOnly(inventories), Array.AsReadOnly(shipments));
     }
 }
