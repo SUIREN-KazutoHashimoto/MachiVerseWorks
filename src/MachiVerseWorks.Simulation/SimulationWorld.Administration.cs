@@ -119,7 +119,19 @@ public sealed partial class SimulationWorld
     private bool MutateRailwayCheckpoint(Func<SimulationCheckpoint, (SimulationCheckpoint Checkpoint, bool Changed)> mutation)
     {
         EnsureRailwayInfrastructureMutable();
-        var current = CreateCheckpoint();
+        SimulationCheckpoint current;
+        try
+        {
+            current = CreateCheckpoint();
+        }
+        finally
+        {
+            // CreateCheckpoint materializes an empty RailwayOperationsStore so it can persist
+            // operation counters. Infrastructure administration must not make that incidental
+            // capture permanently freeze otherwise-uninitialized infrastructure authoring.
+            _railwayOperations = null;
+        }
+
         var result = mutation(current);
         if (!result.Changed) return false;
         _ = RestoreCheckpoint(result.Checkpoint);
