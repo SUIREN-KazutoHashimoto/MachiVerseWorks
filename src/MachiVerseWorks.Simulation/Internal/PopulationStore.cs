@@ -50,10 +50,17 @@ internal sealed class PopulationStore
         return id;
     }
 
-    public TripRequestId AllocateTripRequestId()
+    public TripRequestId PeekTripRequestId()
     {
         EnsureCapacity(nextTripRequestId, "Trip request");
-        return new TripRequestId(nextTripRequestId++);
+        return new TripRequestId(nextTripRequestId);
+    }
+
+    public void CommitTripRequestId(TripRequestId id)
+    {
+        if (id.Value != nextTripRequestId)
+            throw new InvalidOperationException($"Trip Request ID {id.Value} is not the currently reserved ID {nextTripRequestId}.");
+        nextTripRequestId = checked(nextTripRequestId + 1);
     }
 
     public PersonState GetPersonAt(int index) => persons[index];
@@ -77,6 +84,26 @@ internal sealed class PopulationStore
             return true;
         }
         state = null!;
+        return false;
+    }
+
+    public bool ContainsPedestrianReference(PedestrianId id)
+    {
+        for (var index = 0; index < persons.Count; index++)
+        {
+            var person = persons[index];
+            if (person.TravelState == PersonTravelState.Walking && person.PedestrianId == id) return true;
+        }
+        return false;
+    }
+
+    public bool ContainsVehicleReference(VehicleId id)
+    {
+        for (var index = 0; index < persons.Count; index++)
+        {
+            var person = persons[index];
+            if (person.TravelState == PersonTravelState.Driving && person.VehicleId == id) return true;
+        }
         return false;
     }
 
