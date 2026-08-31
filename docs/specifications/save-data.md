@@ -128,18 +128,20 @@ Vehicle / Pedestrian / Population / Railway / Multimodal Transitは、同じauth
 
 - UTF-8 Save Data: 128 MiB
 - Agent: 1,000,000
-- Building: 1,000,000
+- Building / Station / Depot: 1,000,000（shared infrastructure-site limit）
 - POI: 1,000,000
-- RoadNode: 1,000,000
-- RoadSegment: 1,000,000
+- RoadNode / TrackNode: 1,000,000（shared infrastructure-node limit）
+- RoadSegment / TrackSegment / BlockSection: 1,000,000（shared infrastructure-segment limit）
 - Lane: 2,000,000
-- LaneConnection: 4,000,000
-- RoadAccessPoint: 1,000,000
+- LaneConnection / TrackConnection: 4,000,000（shared infrastructure-connection limit）
+- RoadAccessPoint / Platform / PlatformAccessPoint: 1,000,000（shared infrastructure-access-point limit）
 - Pedestrian: 1,000,000
 - PedestrianCrossing: 4,000,000
 - Vehicle: 1,000,000
 - Household: 1,000,000
 - Person: 1,000,000
+
+既存constructor parameterとのsource compatibilityを維持するため、shared infrastructure limitの入力名は当面`maximumBuildingCount` / `maximumRoadNodeCount` / `maximumRoadSegmentCount` / `maximumLaneConnectionCount` / `maximumRoadAccessPointCount`を維持する。public propertyでは同じ値を`MaximumInfrastructureSiteCount` / `MaximumInfrastructureNodeCount` / `MaximumInfrastructureSegmentCount` / `MaximumInfrastructureConnectionCount` / `MaximumInfrastructureAccessPointCount`として明示し、Road名propertyは互換aliasとして同値を返す。したがってこれらのcustom limit変更は対応するRoad / Railway collectionの双方へ意図的に適用される。
 
 単一entity内のnested collectionにも独立した上限を適用する。
 
