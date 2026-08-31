@@ -7,6 +7,8 @@ namespace MachiVerseWorks.Server.Tests;
 [TestClass]
 public sealed class AdminCommandTests
 {
+    private static readonly string[] QuotedCommandArguments = ["save", "saves/city one.json"];
+
     [TestMethod]
     public void ParserSupportsQuotedTokensAndOptions()
     {
@@ -14,7 +16,7 @@ public sealed class AdminCommandTests
         Assert.IsTrue(parsed, error?.Message);
         Assert.IsNotNull(command);
         Assert.AreEqual("world", command.Name);
-        CollectionAssert.AreEqual(new[] { "save", "saves/city one.json" }, command.Arguments.ToArray());
+        CollectionAssert.AreEqual(QuotedCommandArguments, command.Arguments.ToArray());
         Assert.AreEqual("true", command.Options["force"]);
     }
 
