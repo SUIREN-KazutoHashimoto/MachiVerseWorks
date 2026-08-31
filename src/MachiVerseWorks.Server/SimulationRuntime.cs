@@ -3,6 +3,8 @@ using MachiVerseWorks.Simulation;
 
 namespace MachiVerseWorks.Server;
 
+internal sealed record PopulationPublishSnapshot(PopulationStatistics Statistics, IReadOnlyDictionary<ulong, PersonSnapshot> InspectedPersons);
+
 internal sealed class SimulationRuntime
 {
     private readonly object _gate = new();
@@ -59,6 +61,21 @@ internal sealed class SimulationRuntime
     public RailwayInfrastructureSnapshot CreateRailwayInfrastructureSnapshot(WorldVolume volume) { lock (_gate) { EnsureFixtures(); return _world.CreateRailwayInfrastructureSnapshot(volume); } }
     public PopulationStatistics CreatePopulationStatistics() { lock (_gate) return _world.CreatePopulationStatistics(); }
     public bool TryGetPersonSnapshot(PersonId id, out PersonSnapshot snapshot) { lock (_gate) return _world.TryGetPersonSnapshot(id, out snapshot); }
+
+    public PopulationPublishSnapshot CapturePopulationPublishSnapshot(IReadOnlySet<ulong> inspectedPersonIds)
+    {
+        ArgumentNullException.ThrowIfNull(inspectedPersonIds);
+        lock (_gate)
+        {
+            var statistics = _world.CreatePopulationStatistics();
+            var persons = new Dictionary<ulong, PersonSnapshot>(inspectedPersonIds.Count);
+            foreach (var personId in inspectedPersonIds)
+            {
+                if (_world.TryGetPersonSnapshot(new PersonId(personId), out var person)) persons.Add(personId, person);
+            }
+            return new PopulationPublishSnapshot(statistics, persons);
+        }
+    }
 
     public SimulationPublishSnapshot CapturePublishSnapshot()
     {
