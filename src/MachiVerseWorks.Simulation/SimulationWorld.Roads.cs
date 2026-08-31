@@ -157,14 +157,9 @@ public sealed partial class SimulationWorld
     private void ValidateIncidentRoadSegmentGeometry(RoadNodeId nodeId, WorldPoint position)
     {
         if (!_roads.TryGetNode(nodeId, out _)) return;
-        var snapshot = _roads.CreateSnapshot();
-        foreach (var segment in snapshot.Segments)
+        foreach (var segment in _roads.GetIncidentSegments(nodeId))
         {
-            RoadNodeId otherNodeId;
-            if (segment.StartNodeId == nodeId) otherNodeId = segment.EndNodeId;
-            else if (segment.EndNodeId == nodeId) otherNodeId = segment.StartNodeId;
-            else continue;
-
+            var otherNodeId = segment.StartNodeId == nodeId ? segment.EndNodeId : segment.StartNodeId;
             if (_roads.TryGetNode(otherNodeId, out var other) && position == other.Position)
                 throw new ArgumentException("Updating the road node would create a zero-length road segment.", nameof(position));
         }
