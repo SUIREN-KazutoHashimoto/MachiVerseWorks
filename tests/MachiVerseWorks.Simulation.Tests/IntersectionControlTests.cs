@@ -97,9 +97,11 @@ public sealed class IntersectionControlTests
 
         var blockerRoute = new[]
         {
-            new RouteLaneStep(outbound, eastSegment, 0d, 0d, 0d, 0d, null),
+            new RouteLaneStep(outbound, eastSegment, 0d, 1d, 10d, 10_000d, null),
         };
-        world.CreateVehicle(blockerRoute);
+        world.CreateVehicle(
+            blockerRoute,
+            performance: new VehiclePerformance(0.001d, 0.001d, 1d, 2d, 1.5d));
 
         var route = new[]
         {
