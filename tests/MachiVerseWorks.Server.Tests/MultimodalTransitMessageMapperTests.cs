@@ -1,4 +1,3 @@
-using System.Globalization;
 using MachiVerseWorks.Protocol;
 using MachiVerseWorks.Simulation;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -39,22 +38,17 @@ public sealed class MultimodalTransitMessageMapperTests
     [TestMethod]
     public void OversizedSnapshotBecomesStructuredErrorBeforeSerialization()
     {
-        var lines = Enumerable.Range(1, 116_506)
-            .Select(static index => new ProtocolTransitLine((ulong)index, ProtocolTransitMode.Bus))
-            .ToArray();
-        var message = new MultimodalTransitSnapshotMessage(1, lines, [], [], [], []);
-        var payloadLength = MultimodalTransitProtocolCodec.GetPayloadLength(message);
-        Assert.IsTrue((ulong)payloadLength > ProtocolFrameHeader.MaxPayloadLength);
+        var world = new SimulationWorld(new SimulationConfig(tickRate: 10));
+        for (var index = 0; index < 116_506; index++) world.CreateTransitLine(TransitMode.Bus);
 
-        var error = new ProtocolErrorMessage(ProtocolErrorCode.InvalidRequest,
-        [
-            new ProtocolErrorParameter(ProtocolErrorParameterKeys.Field, "snapshot"),
-            new ProtocolErrorParameter(ProtocolErrorParameterKeys.DetailCode, MultimodalTransitMessageMapper.TooLargeDetailCode),
-            new ProtocolErrorParameter("payloadBytes", payloadLength.ToString(CultureInfo.InvariantCulture)),
-            new ProtocolErrorParameter("maximumPayloadBytes", ProtocolFrameHeader.MaxPayloadLength.ToString(CultureInfo.InvariantCulture)),
-        ]);
+        var planned = MultimodalTransitMessageMapper.Create(world.CreateMultimodalTransitSnapshot(), world.Time.TickCount);
 
+        var error = planned as ProtocolErrorMessage;
+        Assert.IsNotNull(error);
         Assert.AreEqual(ProtocolErrorCode.InvalidRequest, error.Code);
+        Assert.IsTrue(error.Parameters.Any(parameter => parameter.Key == ProtocolErrorParameterKeys.Field && parameter.Value == "snapshot"));
         Assert.IsTrue(error.Parameters.Any(parameter => parameter.Key == ProtocolErrorParameterKeys.DetailCode && parameter.Value == MultimodalTransitMessageMapper.TooLargeDetailCode));
+        var payloadText = error.Parameters.Single(parameter => parameter.Key == "payloadBytes").Value;
+        Assert.IsTrue(ulong.Parse(payloadText, System.Globalization.CultureInfo.InvariantCulture) > ProtocolFrameHeader.MaxPayloadLength);
     }
 }
