@@ -37,6 +37,7 @@ public class LogisticsBenchmarks
         }
 
         for (ulong tick = 0; tick < EconomyDefaults.TicksPerEconomicDay; tick++) _world.Step();
+        ConvertGeneratedShipmentsToCompletedHistory();
         _routeRequest = new RouteRequest(new WorldPoint(5, 0, 0), new WorldPoint(95, 0, 0), RoutingCostMetric.EstimatedTravelTime);
     }
 
@@ -53,4 +54,40 @@ public class LogisticsBenchmarks
 
     [Benchmark]
     public LogisticsSnapshot Snapshot() => _world.CreateLogisticsSnapshot();
+
+    private void ConvertGeneratedShipmentsToCompletedHistory()
+    {
+        var checkpoint = _world.CreateCheckpoint();
+        var economy = checkpoint.Economy ?? throw new InvalidOperationException("Benchmark Economy checkpoint is missing.");
+        var logistics = economy.Logistics ?? throw new InvalidOperationException("Benchmark Logistics checkpoint is missing.");
+        if (logistics.Shipments.Count != InventoryCount)
+            throw new InvalidOperationException($"Benchmark expected {InventoryCount} generated Shipments, got {logistics.Shipments.Count}.");
+
+        var inventories = logistics.Inventories.Select(static item => item.Role == InventoryRole.Consumer
+            ? item with { Quantity = item.TargetQuantity, DailyConsumptionUnits = 0d }
+            : item).ToArray();
+        var orders = logistics.Orders.Select(static item => item with { State = LogisticsOrderState.Completed }).ToArray();
+        var shipments = logistics.Shipments.Select(item => item with
+        {
+            State = ShipmentState.Delivered,
+            VehicleId = null,
+            DeliveredTick = checkpoint.TickCount,
+            PlannedDeliveryTick = 0,
+            UnloadingCompleteTick = checkpoint.TickCount,
+        }).ToArray();
+
+        _world = SimulationWorld.RestoreCheckpoint(checkpoint with
+        {
+            Economy = economy with
+            {
+                Logistics = logistics with
+                {
+                    Inventories = inventories,
+                    Orders = orders,
+                    Shipments = shipments,
+                    DeliveredShipmentCount = checked((ulong)shipments.Length),
+                },
+            },
+        });
+    }
 }
