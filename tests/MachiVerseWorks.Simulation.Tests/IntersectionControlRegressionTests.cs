@@ -138,7 +138,7 @@ public sealed class IntersectionControlRegressionTests
         return connections;
     }
 
-    private static void AddBlockedFlows(SimulationWorld world, MultiLaneArm from, MultiLaneArm to, IReadOnlyList<LaneConnectionId> connections)
+    private static void AddBlockedFlows(SimulationWorld world, MultiLaneArm from, MultiLaneArm to, LaneConnectionId[] connections)
     {
         for (var index = 0; index < from.Inbound.Length; index++)
         {
