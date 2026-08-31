@@ -136,9 +136,11 @@ public sealed class NestedSaveLimitTests
         var world = new SimulationWorld(new SimulationConfig(seed: 0x1809UL));
         RailwayOperationsFixtures.SeedDeterministic(world);
         var checkpoint = world.CreateCheckpoint();
-        var maximumRouteSegments = checkpoint.RailwayRoutes!.Max(static route => route.TrackSegmentIds.Count);
-        var maximumStops = checkpoint.Timetables!.Max(static timetable => timetable.Stops.Count);
-        var totalStops = checkpoint.Timetables.Sum(static timetable => timetable.Stops.Count);
+        var routes = checkpoint.RailwayRoutes ?? throw new AssertFailedException("Railway Operations fixture did not create routes.");
+        var timetables = checkpoint.Timetables ?? throw new AssertFailedException("Railway Operations fixture did not create timetables.");
+        var maximumRouteSegments = routes.Max(static route => route.TrackSegmentIds.Count);
+        var maximumStops = timetables.Max(static timetable => timetable.Stops.Count);
+        var totalStops = timetables.Sum(static timetable => timetable.Stops.Count);
         Assert.IsTrue(maximumRouteSegments > 1);
         Assert.IsTrue(maximumStops > 1);
         Assert.IsTrue(totalStops > 1);
