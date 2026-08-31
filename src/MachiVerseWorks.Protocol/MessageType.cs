@@ -24,5 +24,6 @@ public enum MessageType : ushort
     RailwayOperationsSnapshot = 710,
     MultimodalTransitSnapshot = 720,
     EconomySnapshot = 730,
+    LogisticsSnapshot = 740,
     Error = 900,
 }

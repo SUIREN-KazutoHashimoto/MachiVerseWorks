@@ -9,45 +9,26 @@ import {
   encodeHello,
   encodeSubscribeVolume,
 } from './protocol.ts';
-import {
-  decodePopulationFrame,
-  encodeInspectPerson,
-  isPopulationFrame,
-  type PopulationProtocolMessage,
-} from './population-protocol.ts';
-import {
-  WEB_CURRENT_PROTOCOL_VERSION,
-  encodeClearPersonInspection,
-} from './person-inspection-protocol.ts';
-import {
-  decodeRailwayFrame,
-  isRailwayFrame,
-  type RailwayProtocolMessage,
-} from './railway-infrastructure.ts';
-import {
-  decodeRailwayOperationsFrame,
-  isRailwayOperationsFrame,
-  type RailwayOperationsProtocolMessage,
-} from './railway-operations.ts';
-import {
-  decodeMultimodalTransitFrame,
-  isMultimodalTransitFrame,
-  type MultimodalTransitProtocolMessage,
-} from './multimodal-transit.ts';
-import {
-  decodeTrafficFrame,
-  isTrafficFrame,
-  type TrafficProtocolMessage,
-} from './traffic-protocol.ts';
-import {
-  decodeEconomyFrame,
-  isEconomyFrame,
-  type EconomyProtocolMessage,
-} from './economy-protocol.ts';
+import { decodePopulationFrame, encodeInspectPerson, isPopulationFrame, type PopulationProtocolMessage } from './population-protocol.ts';
+import { WEB_CURRENT_PROTOCOL_VERSION, encodeClearPersonInspection } from './person-inspection-protocol.ts';
+import { decodeRailwayFrame, isRailwayFrame, type RailwayProtocolMessage } from './railway-infrastructure.ts';
+import { decodeRailwayOperationsFrame, isRailwayOperationsFrame, type RailwayOperationsProtocolMessage } from './railway-operations.ts';
+import { decodeMultimodalTransitFrame, isMultimodalTransitFrame, type MultimodalTransitProtocolMessage } from './multimodal-transit.ts';
+import { decodeTrafficFrame, isTrafficFrame, type TrafficProtocolMessage } from './traffic-protocol.ts';
+import { decodeEconomyFrame, isEconomyFrame, type EconomyProtocolMessage } from './economy-protocol.ts';
+import { decodeLogisticsFrame, isLogisticsFrame, type LogisticsProtocolMessage } from './logistics-protocol.ts';
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'handshaking' | 'connected' | 'reconnecting';
 export interface FrameDecodeMetrics { readonly frameBytes: number; readonly decodeTimeMs: number; }
-export interface ConnectionCallbacks { readonly onStateChanged: (state: ConnectionState) => void; readonly onMessage: (message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage | MultimodalTransitProtocolMessage | EconomyProtocolMessage) => void; readonly onProtocolError: (message: ProtocolErrorMessage) => void; readonly onClientError: (error: Error) => void; readonly onDisconnected: () => void; readonly onHelloAck: (version: ProtocolVersion, tickRate: number) => void; readonly onFrameDecoded?: (metrics: FrameDecodeMetrics) => void; }
+export interface ConnectionCallbacks {
+  readonly onStateChanged: (state: ConnectionState) => void;
+  readonly onMessage: (message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage | MultimodalTransitProtocolMessage | EconomyProtocolMessage | LogisticsProtocolMessage) => void;
+  readonly onProtocolError: (message: ProtocolErrorMessage) => void;
+  readonly onClientError: (error: Error) => void;
+  readonly onDisconnected: () => void;
+  readonly onHelloAck: (version: ProtocolVersion, tickRate: number) => void;
+  readonly onFrameDecoded?: (metrics: FrameDecodeMetrics) => void;
+}
 export interface ReconnectOptions { readonly minimumDelayMs: number; readonly maximumDelayMs: number; }
 
 export class MachiVerseConnection {
@@ -119,10 +100,7 @@ export class MachiVerseConnection {
       if (this.state === 'handshaking') {
         const envelope = decodeFrame(buffer);
         if (onFrameDecoded !== undefined) onFrameDecoded({ frameBytes: buffer.byteLength, decodeTimeMs: Math.max(0, performance.now() - decodeStartedAt) });
-        if (envelope.message.type === MessageType.Error) {
-          this.callbacks.onProtocolError(envelope.message);
-          return;
-        }
+        if (envelope.message.type === MessageType.Error) { this.callbacks.onProtocolError(envelope.message); return; }
         if (envelope.message.type !== MessageType.HelloAck) throw new ProtocolDecodeFailure('Expected HelloAck as the first server message.');
         const negotiatedVersion = resolveNegotiatedProtocolVersion(envelope.version, envelope.message.protocolVersion);
         this.negotiatedVersion = negotiatedVersion;
@@ -134,36 +112,37 @@ export class MachiVerseConnection {
         return;
       }
 
-      const economyFrame = isEconomyFrame(buffer);
-      const multimodalTransitFrame = !economyFrame && isMultimodalTransitFrame(buffer);
-      const railwayFrame = !economyFrame && !multimodalTransitFrame && isRailwayFrame(buffer);
-      const railwayOperationsFrame = !multimodalTransitFrame && !railwayFrame && isRailwayOperationsFrame(buffer);
-      const populationFrame = !multimodalTransitFrame && !railwayFrame && !railwayOperationsFrame && isPopulationFrame(buffer);
-      const trafficFrame = !multimodalTransitFrame && !railwayFrame && !railwayOperationsFrame && !populationFrame && isTrafficFrame(buffer);
-      const envelope = economyFrame
-        ? decodeEconomyFrame(buffer)
-        : multimodalTransitFrame
-          ? decodeMultimodalTransitFrame(buffer)
-        : railwayFrame
-          ? decodeRailwayFrame(buffer)
-          : railwayOperationsFrame
-            ? decodeRailwayOperationsFrame(buffer)
-            : populationFrame
-              ? decodePopulationFrame(buffer)
-              : trafficFrame
-                ? decodeTrafficFrame(buffer)
-                : decodeFrame(buffer);
+      const logisticsFrame = isLogisticsFrame(buffer);
+      const economyFrame = !logisticsFrame && isEconomyFrame(buffer);
+      const multimodalTransitFrame = !logisticsFrame && !economyFrame && isMultimodalTransitFrame(buffer);
+      const railwayFrame = !logisticsFrame && !economyFrame && !multimodalTransitFrame && isRailwayFrame(buffer);
+      const railwayOperationsFrame = !logisticsFrame && !economyFrame && !multimodalTransitFrame && !railwayFrame && isRailwayOperationsFrame(buffer);
+      const populationFrame = !logisticsFrame && !economyFrame && !multimodalTransitFrame && !railwayFrame && !railwayOperationsFrame && isPopulationFrame(buffer);
+      const trafficFrame = !logisticsFrame && !economyFrame && !multimodalTransitFrame && !railwayFrame && !railwayOperationsFrame && !populationFrame && isTrafficFrame(buffer);
+      const envelope = logisticsFrame
+        ? decodeLogisticsFrame(buffer)
+        : economyFrame
+          ? decodeEconomyFrame(buffer)
+          : multimodalTransitFrame
+            ? decodeMultimodalTransitFrame(buffer)
+            : railwayFrame
+              ? decodeRailwayFrame(buffer)
+              : railwayOperationsFrame
+                ? decodeRailwayOperationsFrame(buffer)
+                : populationFrame
+                  ? decodePopulationFrame(buffer)
+                  : trafficFrame
+                    ? decodeTrafficFrame(buffer)
+                    : decodeFrame(buffer);
       if (onFrameDecoded !== undefined) onFrameDecoded({ frameBytes: buffer.byteLength, decodeTimeMs: Math.max(0, performance.now() - decodeStartedAt) });
       if (this.state !== 'connected') {
-        if (!economyFrame && !multimodalTransitFrame && !railwayFrame && !railwayOperationsFrame && !populationFrame && !trafficFrame && envelope.message.type === MessageType.Error) this.callbacks.onProtocolError(envelope.message as ProtocolErrorMessage);
+        if (!logisticsFrame && !economyFrame && !multimodalTransitFrame && !railwayFrame && !railwayOperationsFrame && !populationFrame && !trafficFrame && envelope.message.type === MessageType.Error) this.callbacks.onProtocolError(envelope.message as ProtocolErrorMessage);
         return;
       }
 
       const negotiatedVersion = this.negotiatedVersion;
-      if (negotiatedVersion === null || !protocolVersionsEqual(envelope.version, negotiatedVersion)) {
-        throw new ProtocolDecodeFailure('Server frame version changed after protocol negotiation.');
-      }
-      if (!economyFrame && !multimodalTransitFrame && !railwayFrame && !railwayOperationsFrame && !populationFrame && !trafficFrame && envelope.message.type === MessageType.Error) {
+      if (negotiatedVersion === null || !protocolVersionsEqual(envelope.version, negotiatedVersion)) throw new ProtocolDecodeFailure('Server frame version changed after protocol negotiation.');
+      if (!logisticsFrame && !economyFrame && !multimodalTransitFrame && !railwayFrame && !railwayOperationsFrame && !populationFrame && !trafficFrame && envelope.message.type === MessageType.Error) {
         this.callbacks.onProtocolError(envelope.message as ProtocolErrorMessage);
         return;
       }
@@ -203,17 +182,9 @@ export class MachiVerseConnection {
   private setState(state: ConnectionState): void { if (this.state === state) return; this.state = state; this.callbacks.onStateChanged(state); }
 }
 
-export function resolveNegotiatedProtocolVersion(
-  frameVersion: ProtocolVersion,
-  acknowledgedVersion: ProtocolVersion,
-  supportedVersion: ProtocolVersion = WEB_CURRENT_PROTOCOL_VERSION,
-): ProtocolVersion {
-  if (!protocolVersionsEqual(frameVersion, acknowledgedVersion)) {
-    throw new ProtocolDecodeFailure('HelloAck frame version and payload version do not match.');
-  }
-  if (frameVersion.major !== supportedVersion.major || frameVersion.minor > supportedVersion.minor) {
-    throw new ProtocolDecodeFailure('Server selected an unsupported protocol version.');
-  }
+export function resolveNegotiatedProtocolVersion(frameVersion: ProtocolVersion, acknowledgedVersion: ProtocolVersion, supportedVersion: ProtocolVersion = WEB_CURRENT_PROTOCOL_VERSION): ProtocolVersion {
+  if (!protocolVersionsEqual(frameVersion, acknowledgedVersion)) throw new ProtocolDecodeFailure('HelloAck frame version and payload version do not match.');
+  if (frameVersion.major !== supportedVersion.major || frameVersion.minor > supportedVersion.minor) throw new ProtocolDecodeFailure('Server selected an unsupported protocol version.');
   return Object.freeze({ ...frameVersion });
 }
 

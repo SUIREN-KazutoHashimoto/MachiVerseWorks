@@ -21,6 +21,7 @@ public static class ServerApplication
         builder.Services.AddSingleton<AdminCommandQueue>();
         builder.Services.AddSingleton<E2eMetrics>();
         builder.Services.AddSingleton<WebSocketSessionHandler>();
+        builder.Services.AddHostedService<LogisticsFixtureHostedService>();
         builder.Services.AddHostedService<SimulationTickService>();
         builder.Services.AddHostedService<ClientCommandProcessor>();
         builder.Services.AddHostedService<AdminCommandExecutorV2>();
@@ -28,6 +29,7 @@ public static class ServerApplication
         builder.Services.AddHostedService<SnapshotPublishService>();
         builder.Services.AddHostedService<PopulationPublishService>();
         builder.Services.AddHostedService<EconomyPublishService>();
+        builder.Services.AddHostedService<LogisticsPublishService>();
 
         var app = builder.Build();
         app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30), KeepAliveTimeout = TimeSpan.FromSeconds(15) });
