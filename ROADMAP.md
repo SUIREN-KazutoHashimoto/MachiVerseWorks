@@ -2,8 +2,8 @@
 
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 20 — Server Administration Console（実装完了 / develop統合待ち）
-> **次の実装タスク:** PR #162を`develop`へ統合し、Phase 20を正式closeoutする
+> **現在:** Phase 22 — Logistics / Freight
+> **次の実装タスク:** P22-001 Commodity / Inventory / Order / Shipmentの正本契約を仕様化する
 
 ## 全体の現在地
 
@@ -29,9 +29,9 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 17 | Railway Infrastructure | ✅ 完了 |
 | 18 | Railway Operations | ✅ 完了 |
 | 19 | Multimodal Transit | ✅ 完了 |
-| 20 | Server Administration Console | 🟨 develop統合待ち |
-| 21 | Industry / Jobs / Economy | ⏳ 待機 |
-| 22 | Logistics / Freight | ⏳ 待機 |
+| 20 | Server Administration Console | ✅ 完了 |
+| 21 | Industry / Jobs / Economy | ✅ 完了 |
+| 22 | Logistics / Freight | ▶️ 次 |
 | 23 | Power Infrastructure | ⏳ 待機 |
 | 24 | Urban Growth & City Generation | ⏳ 待機 |
 | 25 | City Management UI | ⏳ 待機 |
@@ -229,7 +229,7 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ## Phase 20 — Server Administration Console
 
-> **状態: 🟨 実装完了 / develop統合待ち**
+> **状態: ✅ 完了**
 > **依存:** Phase 4 / 8 / 19
 > Headless Serverの標準入力から、Simulationの運転制御・状態確認・主要Entityの追加/更新/削除・保存操作を安全に実行できる管理Consoleと、将来のRemote Admin / City Management UIから再利用できるserver-authoritative command境界を確立する。
 
@@ -269,41 +269,53 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ### Phase 20 closeout evidence
 
-- CI run `33383683242`: repository / .NET build・test / Web lint・typecheck・test・build / CI gateが成功した。
-- End-to-end run `33383683232`: Phase 6〜19の既存Server→Browser回帰と、`administration-console-server-browser`が成功した。Phase 20 caseではstdinからpause、Road topology編集、manual step、resumeを実行し、接続済みBrowserが更新後topologyを受信した。
-- Dependency Review run `33383683396`が成功した。
-- Phase 20の実装・仕様・architecture・ADR・Server README・E2Eを含む統合単位はPR #162とする。`develop`統合後にPhase 20を正式closeoutする。
+- CI run `33384160233`: repository / .NET build・test / Web lint・typecheck・test・build / CI gateが成功した。
+- End-to-end run `33384160236`: Phase 6〜19の既存Server→Browser回帰と、`administration-console-server-browser`が成功した。
+- Benchmarks run `33384160259`が成功した。
+- Dependency Review run `33384160232`が成功した。
+- PR #162を`develop`へ統合済み（merge commit `62f2aee99b4be76edeef5f6cc4d88d178e25483b`）。Phase 20を正式closeoutする。
 
 ---
 
 ## Phase 21 — Industry / Jobs / Economy
 
-> **状態: ⬜ 未着手**
+> **状態: ✅ 完了**
 > **依存:** Phase 15 / 19
 > 企業・職場・雇用・所得・生産・消費の最小循環を作り、都市活動へ経済的な理由を与える。
 
-- ⬜ **P21-001** — Company / Establishment / Job / Economic Actorの責務とstable IDを仕様化する
-- ⬜ **P21-002** — Company / EstablishmentをBuilding / POIへ配置できるモデルを実装する
-- ⬜ **P21-003** — Job position・必要worker数・wageの最小モデルを実装する
-- ⬜ **P21-004** — PersonとJobを結ぶemployment stateを実装する
-- ⬜ **P21-005** — residenceとworkplaceから通勤activity / Trip需要を生成する
-- ⬜ **P21-006** — Household income / cash balanceの最小stateを実装する
-- ⬜ **P21-007** — Company cash balance / revenue / expenseの最小stateを実装する
-- ⬜ **P21-008** — Industry sectorと簡易production capacityを実装する
-- ⬜ **P21-009** — Householdの基本消費需要とCommercial POIでの支出を実装する
-- ⬜ **P21-010** — wage支払と消費による最小economic cycleを固定tick上で実装する
-- ⬜ **P21-011** — Economy stateをcheckpoint / Save Dataへ含める
-- ⬜ **P21-012** — employment / income / company / productionの集計statisticsをServer配信可能にする
-- ⬜ **P21-013** — Web Clientで選択Company / Householdと経済統計をdebug表示する
-- ⬜ **P21-014** — 複数日economic cycleのdeterministic integration testを追加する
-- ⬜ **P21-015** — 大規模Economic Actorのtick・planner・memory benchmarkを記録する
-- ⬜ **P21-016** — Economyのspecification / architecture / ROADMAPを同期する
+- ✅ **P21-001** — Company / Establishment / Job / Economic Actorの責務とstable IDを仕様化する
+- ✅ **P21-002** — Company / EstablishmentをBuilding / POIへ配置できるモデルを実装する
+- ✅ **P21-003** — Job position・必要worker数・wageの最小モデルを実装する
+- ✅ **P21-004** — PersonとJobを結ぶemployment stateを実装する
+- ✅ **P21-005** — residenceとworkplaceから通勤activity / Trip需要を生成する
+- ✅ **P21-006** — Household income / cash balanceの最小stateを実装する
+- ✅ **P21-007** — Company cash balance / revenue / expenseの最小stateを実装する
+- ✅ **P21-008** — Industry sectorと簡易production capacityを実装する
+- ✅ **P21-009** — Householdの基本消費需要とCommercial POIでの支出を実装する
+- ✅ **P21-010** — wage支払と消費による最小economic cycleを固定tick上で実装する
+- ✅ **P21-011** — Economy stateをcheckpoint / Save Dataへ含める
+- ✅ **P21-012** — employment / income / company / productionの集計statisticsをServer配信可能にする
+- ✅ **P21-013** — Web ClientでCompany / Householdと経済統計をdebug表示する
+- ✅ **P21-014** — economic cycleのdeterministic integration testを追加する
+- ✅ **P21-015** — Economyのtick / snapshot benchmarkを記録する
+- ✅ **P21-016** — Economyのspecification / ROADMAPを同期する
 
 ### Phase 21 完了条件
 
 - HouseholdとCompanyの間に雇用・賃金・消費による最小循環が存在する。
 - 通勤需要がPopulation / Transitへ自然に接続される。
 - 経済状態がstable IDとraw valueで保存され、locale依存文言を持たない。
+
+### Phase 21 closeout evidence
+
+- Simulation: Company / Establishment / Job / Employment / Household economyをstable IDで保持し、production・wage・consumptionのdeterministic economic cycleをfixed tickへ統合した。Employment済みPersonのworkplaceを既存Population / Trip plannerへ接続した。
+- Persistence: Economy checkpointをSave Dataへ統合し、Save Format 11として保存・復元する。旧formatは後方互換で読み込める。
+- Protocol / Server / Web: Protocol 2.10 `EconomySnapshot`を追加し、Serverから集計・bounded debug entryを配信、Web ClientでdecodeしてEconomy Debugへ表示する。
+- Tests / E2E: simulation / persistence / protocol / Web testsに加え、`economy-employment-server-browser`を含むEnd-to-end run `33442541636`が全11 scenario成功した。
+- Benchmark: run `33442541628`が全適用job成功し、Economy BenchmarkDotNet coverageを含む。
+- CI run `33442541670`、Dependency Review run `33442541634`が成功した。
+- [`docs/specifications/economy.md`](docs/specifications/economy.md)を追加し、Phase 21の正本仕様とする。
+- PR #163を`develop`へ統合済み（merge commit `464f2a2900ac3d93d7674d3458aa469262cc4f0a`）。Phase 21を正式closeoutする。
 
 ---
 
