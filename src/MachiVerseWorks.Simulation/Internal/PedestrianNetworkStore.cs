@@ -11,6 +11,8 @@ internal sealed class PedestrianNetworkStore
     private readonly Dictionary<PoiId, List<PedestrianNodeId>> poiNodes = [];
     private readonly Dictionary<(PedestrianEdgeId First, PedestrianEdgeId Second), PedestrianCrossingId> crossingByEdges = [];
     private readonly Dictionary<PedestrianCrossingId, PedestrianCrossingSnapshot> crossings = [];
+    private readonly Dictionary<RoadNodeId, PedestrianNodeId> roadNodeStableIds = [];
+    private readonly Dictionary<RoadAccessPointId, PedestrianNodeId> accessNodeStableIds = [];
     private Dictionary<PedestrianCrossingId, bool> crossingPermissions = [];
 
     public int NodeCount => nodes.Count;
@@ -23,6 +25,7 @@ internal sealed class PedestrianNetworkStore
         var previousPermissions = crossingPermissions;
         nodes.Clear(); edges.Clear(); adjacency.Clear(); buildingNodes.Clear(); poiNodes.Clear(); crossingByEdges.Clear(); crossings.Clear();
         crossingPermissions = [];
+        RebuildStableNodeIds(roadNetwork);
 
         var roadNodes = new Dictionary<RoadNodeId, RoadNodeSnapshot>(roadNetwork.Nodes.Count);
         foreach (var node in roadNetwork.Nodes) roadNodes.Add(node.Id, node);
@@ -227,9 +230,55 @@ internal sealed class PedestrianNetworkStore
         return new WorldVector((to.X - from.X) * scale, (to.Y - from.Y) * scale, (to.Z - from.Z) * scale);
     }
 
+    private void RebuildStableNodeIds(RoadNetworkSnapshot roadNetwork)
+    {
+        roadNodeStableIds.Clear();
+        accessNodeStableIds.Clear();
+        var usedRoadIds = new HashSet<ulong>();
+        var usedAccessIds = new HashSet<ulong>();
+        var overflowRoadNodes = new List<RoadNodeId>();
+        var overflowAccessPoints = new List<RoadAccessPointId>();
+
+        foreach (var node in roadNetwork.Nodes.OrderBy(static item => item.Id.Value))
+        {
+            if (node.Id.Value == 0) throw new InvalidOperationException("Road node ID 0 cannot be mapped to a Pedestrian stable ID.");
+            if (node.Id.Value <= StableIdMask)
+            {
+                usedRoadIds.Add(node.Id.Value);
+                roadNodeStableIds.Add(node.Id, new PedestrianNodeId(node.Id.Value));
+            }
+            else overflowRoadNodes.Add(node.Id);
+        }
+
+        foreach (var access in roadNetwork.AccessPoints
+                     .Where(static item => (item.Mode & RoadAccessMode.Foot) != 0)
+                     .OrderBy(static item => item.Id.Value))
+        {
+            if (access.Id.Value == 0) throw new InvalidOperationException("Road access point ID 0 cannot be mapped to a Pedestrian stable ID.");
+            if (access.Id.Value <= StableIdMask)
+            {
+                usedAccessIds.Add(access.Id.Value);
+                accessNodeStableIds.Add(access.Id, new PedestrianNodeId(AccessNodeFlag | access.Id.Value));
+            }
+            else overflowAccessPoints.Add(access.Id);
+        }
+
+        foreach (var id in overflowRoadNodes)
+        {
+            var localId = AllocateOverflowStableId(0x52, id.Value, usedRoadIds);
+            roadNodeStableIds.Add(id, new PedestrianNodeId(localId));
+        }
+        foreach (var id in overflowAccessPoints)
+        {
+            var localId = AllocateOverflowStableId(0x41, id.Value, usedAccessIds);
+            accessNodeStableIds.Add(id, new PedestrianNodeId(AccessNodeFlag | localId));
+        }
+    }
+
     private PedestrianNodeId EnsureRoadNode(RoadNodeSnapshot roadNode)
     {
-        var id = new PedestrianNodeId(MapRoadNodeId(roadNode.Id));
+        if (!roadNodeStableIds.TryGetValue(roadNode.Id, out var id))
+            throw new InvalidOperationException($"Road node {roadNode.Id.Value} does not have a Pedestrian stable-ID mapping.");
         if (!nodes.ContainsKey(id))
         {
             nodes.Add(id, new PedestrianNodeSnapshot(id, PedestrianNodeKind.RoadJunction, roadNode.Position, roadNode.Id, null));
@@ -240,7 +289,8 @@ internal sealed class PedestrianNetworkStore
 
     private PedestrianNodeId EnsureAccessNode(RoadAccessPointSnapshot access, WorldPoint position)
     {
-        var id = new PedestrianNodeId(MapAccessPointId(access.Id));
+        if (!accessNodeStableIds.TryGetValue(access.Id, out var id))
+            throw new InvalidOperationException($"Road access point {access.Id.Value} does not have a Pedestrian stable-ID mapping.");
         if (!nodes.ContainsKey(id))
         {
             nodes.Add(id, new PedestrianNodeSnapshot(id, PedestrianNodeKind.AccessPoint, position, null, access.Id));
@@ -300,16 +350,17 @@ internal sealed class PedestrianNetworkStore
 
     private static (PedestrianEdgeId First, PedestrianEdgeId Second) NormalizeEdgePair(PedestrianEdgeId first, PedestrianEdgeId second) => first.Value <= second.Value ? (first, second) : (second, first);
 
-    private static ulong MapRoadNodeId(RoadNodeId id)
+    private static ulong AllocateOverflowStableId(byte domain, ulong sourceId, HashSet<ulong> usedIds)
     {
-        if (id.Value == 0 || id.Value > StableIdMask) throw new InvalidOperationException("Road node ID exceeds the pedestrian stable-ID mapping range.");
-        return id.Value;
-    }
-
-    private static ulong MapAccessPointId(RoadAccessPointId id)
-    {
-        if (id.Value == 0 || id.Value > StableIdMask) throw new InvalidOperationException("Road access point ID exceeds the pedestrian stable-ID mapping range.");
-        return AccessNodeFlag | id.Value;
+        var candidate = HashStableId(domain, sourceId) & StableIdMask;
+        if (candidate == 0) candidate = 1;
+        var start = candidate;
+        while (!usedIds.Add(candidate))
+        {
+            candidate = candidate == StableIdMask ? 1 : candidate + 1;
+            if (candidate == start) throw new InvalidOperationException("Pedestrian stable-ID domain is exhausted.");
+        }
+        return candidate;
     }
 
     private static WorldPoint Interpolate(WorldPoint first, WorldPoint second, double alpha) => new(
