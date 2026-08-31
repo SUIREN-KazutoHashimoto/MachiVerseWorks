@@ -163,7 +163,22 @@ Vehicle / Pedestrian / Populationのcheckpoint復元後も、同じRoad Network 
 - Household: 1,000,000
 - Person: 1,000,000
 
-同じlimit contractをserialize / deserializeへ適用する。collection件数は`Utf8JsonReader`でDTO materialization前にも検証し、巨大配列を先に確保しない。
+単一entity内のnested collectionにも独立した上限を適用する。
+
+- `vehicles[].routeSteps`: 100,000 / Vehicle
+- `persons[].schedule`: 4,096 / Person
+- `persons[].needs`: `NeedKind`の定義数。現行は7 / Person
+- `blockSections[].segmentIds`: 100,000 / BlockSection
+- `depots[].trackSegmentIds`: 100,000 / Depot
+- `railwayOperations.routes[].trackSegmentIds`: 100,000 / RailwayRoute
+- `railwayOperations.timetables[].stops`: 100,000 / Timetable
+- Railway Operations Timetable stop総数: 1,000,000 / World
+
+同じlimit contractをserialize / deserializeへ適用する。deserializeではtop-level collectionに加えてnested collectionも`Utf8JsonReader`でDTO materialization前に検証し、巨大配列を先に確保しない。nested scannerはJSON path / parent contextを追跡するため、同名の`trackSegmentIds`でもDepotとRailwayRouteを混同しない。
+
+serializeでは`SimulationCheckpoint`からSave DTO配列へ投影する前に同じnested上限を検証する。BlockSection / DepotのSave上限はSimulation正本の100,000件membership上限を超えて設定できない。
+
+Vehicle Route、Person Schedule、Railway membership / Routeなどは、128 MiBのSave Data byte上限と単一entity上限の組み合わせで総入力量も制約する。Timetable stopは既存のWorld単位capacity contractを明示化し、単一Timetable上限とは別に総数も制限する。
 
 `Save(Stream, ...)`は全体がlimit内であることを確認してからdestinationへ書き込むため、limit超過時にpartial Saveを残さない。
 

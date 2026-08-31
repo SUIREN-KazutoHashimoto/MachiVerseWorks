@@ -101,7 +101,7 @@ public static partial class WorldSaveSerializer
             if (timetable?.Stops is null) throw new InvalidDataException("Save Data is missing a RailwayOperations Timetable stop list.");
             stopCount = checked(stopCount + timetable.Stops.Length);
         }
-        ValidateCount(stopCount, limits.MaximumRoadAccessPointCount, "TimetableStops");
+        ValidateCount(stopCount, limits.MaximumTimetableStopTotalCount, "TimetableStops");
     }
 
     private static RestoredRailwayOperations RestoreRailwayOperations(SaveRailwayOperationsData? data, bool enabled)
