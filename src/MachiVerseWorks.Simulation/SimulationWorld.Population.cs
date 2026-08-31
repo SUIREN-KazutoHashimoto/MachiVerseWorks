@@ -147,12 +147,12 @@ public sealed partial class SimulationWorld
             if (person.TravelState == PersonTravelState.Walking && person.PedestrianId is { } pedestrianId)
             {
                 arrived = TryGetPedestrianSnapshot(pedestrianId, out var pedestrian) && pedestrian.State == PedestrianMovementState.Arrived;
-                if (arrived) RemovePedestrian(pedestrianId);
+                if (arrived) RemovePedestrianCore(pedestrianId);
             }
             else if (person.TravelState == PersonTravelState.Driving && person.VehicleId is { } vehicleId)
             {
                 arrived = TryGetVehicleSnapshot(vehicleId, out var vehicle) && vehicle.State == VehicleMovementState.Arrived;
-                if (arrived) RemoveVehicle(vehicleId);
+                if (arrived) RemoveVehicleCore(vehicleId);
             }
             else if (person.TravelState == PersonTravelState.Transit && person.ActiveTripRequestId is { } transitTripId)
             {
@@ -196,37 +196,74 @@ public sealed partial class SimulationWorld
 
     private void TryStartPopulationTrip(PersonState person, ActivityKind destinationActivity, TripEndpoint destination)
     {
-        var tripId = _population.AllocateTripRequestId();
+        var tripId = _population.PeekTripRequestId();
         var request = new TripRequest(tripId, person.CurrentLocation, destination, TravelMode.Any);
         ModeChoiceDecision decision;
-        try { decision = ChooseMode(request, person.Demographics.HasPrivateVehicle); }
-        catch (InvalidOperationException) { TryStartWalkingTrip(person, destinationActivity, destination, tripId); return; }
+        bool started;
+        try
+        {
+            decision = ChooseMode(request, person.Demographics.HasPrivateVehicle);
+        }
+        catch (InvalidOperationException)
+        {
+            started = TryStartWalkingTrip(person, destinationActivity, destination, tripId);
+            if (started) _population.CommitTripRequestId(tripId);
+            return;
+        }
 
-        if (decision.Mode == TransitMode.Motor && TryStartMotorTrip(person, destinationActivity, destination, tripId)) return;
-        if (decision.Mode == TransitMode.Taxi && TryStartTaxiTrip(person, destinationActivity, destination, tripId)) return;
-        if (decision.Mode is TransitMode.Bus or TransitMode.Railway && TryStartTransitTrip(person, destinationActivity, destination, tripId, decision.JourneyId)) return;
-        TryStartWalkingTrip(person, destinationActivity, destination, tripId);
+        started = decision.Mode switch
+        {
+            TransitMode.Motor => TryStartMotorTrip(person, destinationActivity, destination, tripId),
+            TransitMode.Taxi => TryStartTaxiTrip(person, destinationActivity, destination, tripId),
+            TransitMode.Bus or TransitMode.Railway => TryStartTransitTrip(person, destinationActivity, destination, tripId, decision.JourneyId),
+            _ => false,
+        };
+        if (!started) started = TryStartWalkingTrip(person, destinationActivity, destination, tripId);
+        if (started) _population.CommitTripRequestId(tripId);
     }
 
     private bool TryStartMotorTrip(PersonState person, ActivityKind destinationActivity, TripEndpoint destination, TripRequestId tripId)
     {
-        if (!TryResolveRoadAccessPosition(person.CurrentLocation, RoadAccessMode.Motor, out var originPosition)
-            || !TryResolveRoadAccessPosition(destination, RoadAccessMode.Motor, out var destinationPosition)) return false;
-        RouteResult route;
-        try
+        var origins = _roads.GetAccessPoints(person.CurrentLocation, RoadAccessMode.Motor);
+        var destinations = _roads.GetAccessPoints(destination, RoadAccessMode.Motor);
+        RouteResult? selectedRoute = null;
+        RoadAccessPointId selectedOrigin = default;
+        RoadAccessPointId selectedDestination = default;
+        for (var originIndex = 0; originIndex < origins.Length; originIndex++)
         {
-            route = FindRoadRoute(new RouteRequest(originPosition, destinationPosition, RoutingCostMetric.EstimatedTravelTime));
+            var originAccess = origins[originIndex];
+            if (!_roads.TryGetAccessPointPosition(originAccess.Id, out var originPosition)) continue;
+            for (var destinationIndex = 0; destinationIndex < destinations.Length; destinationIndex++)
+            {
+                var destinationAccess = destinations[destinationIndex];
+                if (!_roads.TryGetAccessPointPosition(destinationAccess.Id, out var destinationPosition)) continue;
+                RouteResult route;
+                try
+                {
+                    route = FindRoadRoute(new RouteRequest(originPosition, destinationPosition, RoutingCostMetric.EstimatedTravelTime));
+                }
+                catch (InvalidOperationException)
+                {
+                    continue;
+                }
+                if (route.Steps.Count == 0) continue;
+                if (selectedRoute is null
+                    || route.Cost < selectedRoute.Cost
+                    || (route.Cost == selectedRoute.Cost && originAccess.Id.Value < selectedOrigin.Value)
+                    || (route.Cost == selectedRoute.Cost && originAccess.Id == selectedOrigin && destinationAccess.Id.Value < selectedDestination.Value))
+                {
+                    selectedRoute = route;
+                    selectedOrigin = originAccess.Id;
+                    selectedDestination = destinationAccess.Id;
+                }
+            }
         }
-        catch (InvalidOperationException)
-        {
-            return false;
-        }
-        if (route.Steps.Count == 0) return false;
+        if (selectedRoute is null) return false;
 
         VehicleId vehicleId;
         try
         {
-            vehicleId = CreateVehicle(route);
+            vehicleId = CreateVehicle(selectedRoute);
         }
         catch (InvalidOperationException)
         {
@@ -290,59 +327,12 @@ public sealed partial class SimulationWorld
 
     private bool TryResolveRoadAccessPosition(TripEndpoint endpoint, RoadAccessMode mode, out WorldPoint position)
     {
-        var road = _roads.CreateSnapshot();
-        RoadAccessPointSnapshot? selected = null;
-        for (var index = 0; index < road.AccessPoints.Count; index++)
-        {
-            var access = road.AccessPoints[index];
-            if ((access.Mode & mode) == 0 || !MatchesEndpoint(access, endpoint)) continue;
-            if (selected is null || access.Id.Value < selected.Value.Id.Value) selected = access;
-        }
-        if (selected is null)
-        {
-            position = default;
-            return false;
-        }
-
-        RoadSegmentSnapshot? segment = null;
-        for (var index = 0; index < road.Segments.Count; index++)
-        {
-            if (road.Segments[index].Id == selected.Value.SegmentId)
-            {
-                segment = road.Segments[index];
-                break;
-            }
-        }
-        if (segment is null)
-        {
-            position = default;
-            return false;
-        }
-
-        WorldPoint? start = null;
-        WorldPoint? end = null;
-        for (var index = 0; index < road.Nodes.Count && (start is null || end is null); index++)
-        {
-            var node = road.Nodes[index];
-            if (node.Id == segment.Value.StartNodeId) start = node.Position;
-            if (node.Id == segment.Value.EndNodeId) end = node.Position;
-        }
-        if (start is null || end is null)
-        {
-            position = default;
-            return false;
-        }
-
-        var offset = selected.Value.SegmentOffset;
-        position = new WorldPoint(
-            start.Value.X + ((end.Value.X - start.Value.X) * offset),
-            start.Value.Y + ((end.Value.Y - start.Value.Y) * offset),
-            start.Value.Z + ((end.Value.Z - start.Value.Z) * offset));
-        return true;
+        var candidates = _roads.GetAccessPoints(endpoint, mode);
+        for (var index = 0; index < candidates.Length; index++)
+            if (_roads.TryGetAccessPointPosition(candidates[index].Id, out position)) return true;
+        position = default;
+        return false;
     }
-
-    private static bool MatchesEndpoint(RoadAccessPointSnapshot access, TripEndpoint endpoint) =>
-        endpoint.BuildingId is { } buildingId ? access.BuildingId == buildingId : access.PoiId == endpoint.PoiId;
 
     private PersonSnapshot CreatePersonSnapshot(PersonState state) => new(
         state.Id,
@@ -445,7 +435,7 @@ public sealed partial class SimulationWorld
             throw new ArgumentOutOfRangeException(nameof(demographics), demographics.AgeYears, "Person age must be between zero and 130 years.");
     }
 
-    private void ValidateActivityWindow(DailyActivityWindow window, string parameterName)
+    private static void ValidateActivityWindow(DailyActivityWindow window, string parameterName)
     {
         ValidateEnum(window.Activity, parameterName);
         ValidateEnum(window.Priority, parameterName);
@@ -465,23 +455,24 @@ public sealed partial class SimulationWorld
 
         var buildingIds = checkpoint.Buildings.Select(static item => item.Id).ToHashSet();
         var poiIds = checkpoint.Pois.Select(static item => item.Id).ToHashSet();
-        var householdIds = new HashSet<HouseholdId>();
+        var householdResidences = new Dictionary<HouseholdId, TripEndpoint>();
         for (var index = 0; index < households.Count; index++)
         {
             var household = households[index];
-            if (household.Id.Value == 0 || !householdIds.Add(household.Id)) throw new ArgumentException("Household IDs must be non-zero and unique.", nameof(checkpoint));
+            if (household.Id.Value == 0 || !householdResidences.TryAdd(household.Id, household.Residence)) throw new ArgumentException("Household IDs must be non-zero and unique.", nameof(checkpoint));
             ValidateCheckpointEndpoint(household.Residence, buildingIds, poiIds, nameof(checkpoint));
         }
 
         var personIds = new HashSet<PersonId>();
-        var pedestrianIds = (checkpoint.Pedestrians ?? []).Select(static item => item.Id).ToHashSet();
+        var pedestrians = (checkpoint.Pedestrians ?? []).ToDictionary(static item => item.Id);
         var vehicleIds = (checkpoint.Vehicles ?? []).Select(static item => item.Id).ToHashSet();
         ulong maximumTripId = 0;
         for (var index = 0; index < persons.Count; index++)
         {
             var person = persons[index];
             if (person.Id.Value == 0 || !personIds.Add(person.Id)) throw new ArgumentException("Person IDs must be non-zero and unique.", nameof(checkpoint));
-            if (!householdIds.Contains(person.HouseholdId)) throw new ArgumentException($"Person {person.Id.Value} references a missing Household.", nameof(checkpoint));
+            if (!householdResidences.TryGetValue(person.HouseholdId, out var householdResidence)) throw new ArgumentException($"Person {person.Id.Value} references a missing Household.", nameof(checkpoint));
+            if (person.Residence != householdResidence) throw new ArgumentException($"Person {person.Id.Value} residence does not match Household {person.HouseholdId.Value} residence.", nameof(checkpoint));
             ValidatePersonDemographics(person.Demographics);
             ValidateCheckpointEndpoint(person.Residence, buildingIds, poiIds, nameof(checkpoint));
             ValidateCheckpointEndpoint(person.CurrentLocation, buildingIds, poiIds, nameof(checkpoint));
@@ -490,15 +481,69 @@ public sealed partial class SimulationWorld
             if (person.Destination is { } destination) ValidateCheckpointEndpoint(destination, buildingIds, poiIds, nameof(checkpoint));
             if (person.DestinationActivity is { } destinationActivity) ValidateEnum(destinationActivity, nameof(checkpoint));
             if (person.ActiveTravelMode is { } activeMode) ValidateEnum(activeMode, nameof(checkpoint));
-            if (person.ActiveTripRequestId is { } tripId) maximumTripId = Math.Max(maximumTripId, tripId.Value);
-            if (person.TravelState == PersonTravelState.Walking && (person.PedestrianId is not { } pedestrianId || !pedestrianIds.Contains(pedestrianId)))
-                throw new ArgumentException($"Walking Person {person.Id.Value} references a missing Pedestrian.", nameof(checkpoint));
-            if (person.TravelState == PersonTravelState.Driving && (person.VehicleId is not { } vehicleId || !vehicleIds.Contains(vehicleId)))
-                throw new ArgumentException($"Driving Person {person.Id.Value} references a missing Vehicle.", nameof(checkpoint));
             if (person.Schedule is null || person.Needs is null) throw new ArgumentException($"Person {person.Id.Value} schedule or needs are missing.", nameof(checkpoint));
+            for (var scheduleIndex = 0; scheduleIndex < person.Schedule.Count; scheduleIndex++)
+            {
+                var window = person.Schedule[scheduleIndex];
+                ValidateActivityWindow(window, nameof(checkpoint));
+                if (window.Destination is { } scheduleDestination) ValidateCheckpointEndpoint(scheduleDestination, buildingIds, poiIds, nameof(checkpoint));
+            }
+            _ = CopyAndValidateNeeds(person.Needs, nameof(checkpoint));
+
+            ValidatePopulationTravelCheckpoint(person, pedestrians, vehicleIds, checkpoint.MultimodalTransit);
+            if (person.ActiveTripRequestId is { } tripId)
+            {
+                if (tripId.Value == 0) throw new ArgumentException($"Person {person.Id.Value} has a zero active Trip Request ID.", nameof(checkpoint));
+                maximumTripId = Math.Max(maximumTripId, tripId.Value);
+            }
         }
         if (checkpoint.NextTripRequestId <= maximumTripId)
             throw new ArgumentOutOfRangeException(nameof(checkpoint), checkpoint.NextTripRequestId, "Next Trip Request ID must be greater than active Trip Request IDs.");
+    }
+
+    private static void ValidatePopulationTravelCheckpoint(
+        SimulationPersonCheckpoint person,
+        IReadOnlyDictionary<PedestrianId, SimulationPedestrianCheckpoint> pedestrians,
+        IReadOnlySet<VehicleId> vehicleIds,
+        MultimodalTransitCheckpoint? transit)
+    {
+        var hasDestination = person.Destination is not null && person.DestinationActivity is not null;
+        switch (person.TravelState)
+        {
+            case PersonTravelState.AtActivity:
+                if (person.Destination is not null || person.DestinationActivity is not null || person.ActiveTripRequestId is not null
+                    || person.ActiveTravelMode is not null || person.PedestrianId is not null || person.VehicleId is not null)
+                    throw new ArgumentException($"At-activity Person {person.Id.Value} must not contain active trip references.", nameof(person));
+                break;
+            case PersonTravelState.Walking:
+                if (!hasDestination || person.ActiveTripRequestId is not { } walkingTrip || walkingTrip.Value == 0 || person.ActiveTravelMode != TravelMode.Foot
+                    || person.PedestrianId is not { } pedestrianId || person.VehicleId is not null
+                    || !pedestrians.TryGetValue(pedestrianId, out var pedestrian) || pedestrian.TripRequestId != walkingTrip)
+                    throw new ArgumentException($"Walking Person {person.Id.Value} has inconsistent Pedestrian or trip references.", nameof(person));
+                break;
+            case PersonTravelState.Driving:
+                if (!hasDestination || person.ActiveTripRequestId is not { } drivingTrip || drivingTrip.Value == 0 || person.ActiveTravelMode != TravelMode.Motor
+                    || person.VehicleId is not { } vehicleId || person.PedestrianId is not null || !vehicleIds.Contains(vehicleId))
+                    throw new ArgumentException($"Driving Person {person.Id.Value} has inconsistent Vehicle or trip references.", nameof(person));
+                break;
+            case PersonTravelState.Transit:
+                if (!hasDestination || person.ActiveTripRequestId is not { } transitTrip || transitTrip.Value == 0 || person.ActiveTravelMode != TravelMode.Transit
+                    || person.PedestrianId is not null || person.VehicleId is not null || !ContainsTransitTripReference(transit, transitTrip))
+                    throw new ArgumentException($"Transit Person {person.Id.Value} has inconsistent multimodal trip references.", nameof(person));
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(person), person.TravelState, "Person travel state is not defined.");
+        }
+    }
+
+    private static bool ContainsTransitTripReference(MultimodalTransitCheckpoint? transit, TripRequestId tripRequestId)
+    {
+        if (transit is null) return false;
+        for (var index = 0; index < transit.Passengers.Count; index++)
+            if (transit.Passengers[index].TripRequestId == tripRequestId) return true;
+        for (var index = 0; index < transit.TaxiRequests.Count; index++)
+            if (transit.TaxiRequests[index].TripRequestId == tripRequestId) return true;
+        return false;
     }
 
     private static void ValidateCheckpointEndpoint(TripEndpoint endpoint, HashSet<BuildingId> buildings, HashSet<PoiId> pois, string parameterName)
