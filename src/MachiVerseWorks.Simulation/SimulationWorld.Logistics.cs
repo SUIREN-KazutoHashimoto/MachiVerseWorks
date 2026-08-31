@@ -7,6 +7,7 @@ public sealed partial class SimulationWorld
     private readonly Dictionary<(EstablishmentId EstablishmentId, CommodityId CommodityId), LogisticsInventoryState> _logisticsInventories = [];
     private readonly List<LogisticsOrderStateData> _logisticsOrders = [];
     private readonly Dictionary<LogisticsOrderId, LogisticsOrderStateData> _logisticsOrderIndex = [];
+    private readonly HashSet<(EstablishmentId EstablishmentId, CommodityId CommodityId)> _activeLogisticsOrderKeys = [];
     private readonly List<LogisticsShipmentStateData> _logisticsShipments = [];
     private readonly Dictionary<ShipmentId, LogisticsShipmentStateData> _logisticsShipmentIndex = [];
     private ulong _nextCommodityId = 1;
@@ -115,13 +116,10 @@ public sealed partial class SimulationWorld
 
     public LogisticsStatistics CreateLogisticsStatistics()
     {
-        var openOrders = 0;
         var inTransit = 0;
         var delayed = 0;
         var inventoryUnits = 0d;
         var inTransitUnits = 0d;
-        foreach (var order in _logisticsOrders)
-            if (order.State != LogisticsOrderState.Completed) openOrders++;
         foreach (var inventory in _logisticsInventories.Values) inventoryUnits += inventory.Quantity;
         foreach (var shipment in _logisticsShipments)
         {
@@ -135,7 +133,7 @@ public sealed partial class SimulationWorld
         return new LogisticsStatistics(
             _logisticsCommodities.Count,
             _logisticsInventories.Count,
-            openOrders,
+            _activeLogisticsOrderKeys.Count,
             _logisticsShipments.Count,
             inTransit,
             delayed,
@@ -166,16 +164,37 @@ public sealed partial class SimulationWorld
 
     private void ReceiveEconomicProduction()
     {
+        var suppliersByCompany = new Dictionary<CompanyId, List<LogisticsInventoryState>>();
         foreach (var inventory in _logisticsInventories.Values
                      .Where(static item => item.Role == InventoryRole.Supplier)
                      .OrderBy(static item => item.EstablishmentId.Value).ThenBy(static item => item.CommodityId.Value))
         {
             if (!_economyEstablishmentIndex.TryGetValue(inventory.EstablishmentId, out var establishment)
-                || !TryGetEstablishmentCompany(establishment, out var company)) continue;
-            var producedDelta = Math.Max(0d, company.ProducedUnits - inventory.ObservedCompanyProducedUnits);
-            inventory.ObservedCompanyProducedUnits = company.ProducedUnits;
-            if (producedDelta <= 0d) continue;
-            inventory.Quantity = Math.Min(inventory.Capacity, inventory.Quantity + producedDelta);
+                || !_economyCompanyIndex.ContainsKey(establishment.CompanyId)) continue;
+            if (!suppliersByCompany.TryGetValue(establishment.CompanyId, out var companyInventories))
+            {
+                companyInventories = [];
+                suppliersByCompany.Add(establishment.CompanyId, companyInventories);
+            }
+            companyInventories.Add(inventory);
+        }
+
+        foreach (var pair in suppliersByCompany.OrderBy(static item => item.Key.Value))
+        {
+            var company = _economyCompanyIndex[pair.Key];
+            var inventories = pair.Value;
+            var observedProduction = inventories.Min(static item => item.ObservedCompanyProducedUnits);
+            var remainingProduction = Math.Max(0d, company.ProducedUnits - observedProduction);
+            foreach (var inventory in inventories) inventory.ObservedCompanyProducedUnits = company.ProducedUnits;
+
+            foreach (var inventory in inventories)
+            {
+                if (remainingProduction <= 0d) break;
+                var availableCapacity = Math.Max(0d, inventory.Capacity - inventory.Quantity);
+                var accepted = Math.Min(availableCapacity, remainingProduction);
+                inventory.Quantity += accepted;
+                remainingProduction -= accepted;
+            }
         }
     }
 
@@ -196,8 +215,8 @@ public sealed partial class SimulationWorld
                      .OrderBy(static item => item.EstablishmentId.Value).ThenBy(static item => item.CommodityId.Value))
         {
             if (inventory.Quantity > inventory.ReorderPoint) continue;
-            if (_logisticsOrders.Any(item => item.DestinationEstablishmentId == inventory.EstablishmentId
-                && item.CommodityId == inventory.CommodityId && item.State != LogisticsOrderState.Completed)) continue;
+            var activeKey = (inventory.EstablishmentId, inventory.CommodityId);
+            if (_activeLogisticsOrderKeys.Contains(activeKey)) continue;
             var quantity = inventory.TargetQuantity - inventory.Quantity;
             if (quantity < LogisticsDefaults.MinimumOrderQuantity) continue;
             EnsureLogisticsIdCapacity(_nextLogisticsOrderId, "Logistics order");
@@ -205,6 +224,8 @@ public sealed partial class SimulationWorld
             var order = new LogisticsOrderStateData(id, inventory.EstablishmentId, inventory.CommodityId, quantity, tickCount);
             _logisticsOrders.Add(order);
             _logisticsOrderIndex.Add(id, order);
+            if (!_activeLogisticsOrderKeys.Add(activeKey))
+                throw new InvalidOperationException("An active Logistics Order already exists for the destination inventory.");
         }
     }
 
@@ -271,6 +292,8 @@ public sealed partial class SimulationWorld
             if (shipment.State == ShipmentState.InTransit && shipment.VehicleId is { } vehicleId
                 && TryGetVehicleSnapshot(vehicleId, out var vehicle) && vehicle.State == VehicleMovementState.Arrived)
             {
+                if (!RemoveVehicleCore(vehicleId))
+                    throw new InvalidOperationException($"Freight Vehicle {vehicleId.Value} disappeared before Logistics could release it.");
                 shipment.State = ShipmentState.Unloading;
                 shipment.UnloadingCompleteTick = checked(tickCount + LogisticsDefaults.UnloadingTicks);
                 continue;
@@ -283,7 +306,12 @@ public sealed partial class SimulationWorld
                 shipment.State = ShipmentState.Delivered;
                 shipment.DeliveredTick = tickCount;
                 _deliveredShipmentCount = checked(_deliveredShipmentCount + 1);
-                if (_logisticsOrderIndex.TryGetValue(shipment.OrderId, out var order)) order.State = LogisticsOrderState.Completed;
+                if (_logisticsOrderIndex.TryGetValue(shipment.OrderId, out var order))
+                {
+                    order.State = LogisticsOrderState.Completed;
+                    if (!_activeLogisticsOrderKeys.Remove((order.DestinationEstablishmentId, order.CommodityId)))
+                        throw new InvalidOperationException($"Completed Logistics Order {order.Id.Value} was missing from the active-order index.");
+                }
             }
         }
     }
@@ -378,6 +406,7 @@ public sealed partial class SimulationWorld
         _logisticsInventories.Clear();
         _logisticsOrders.Clear();
         _logisticsOrderIndex.Clear();
+        _activeLogisticsOrderKeys.Clear();
         _logisticsShipments.Clear();
         _logisticsShipmentIndex.Clear();
         _nextCommodityId = 1;
@@ -408,6 +437,9 @@ public sealed partial class SimulationWorld
             };
             _logisticsOrders.Add(state);
             _logisticsOrderIndex.Add(state.Id, state);
+            if (state.State != LogisticsOrderState.Completed
+                && !_activeLogisticsOrderKeys.Add((state.DestinationEstablishmentId, state.CommodityId)))
+                throw new InvalidOperationException("Restored Logistics state contains duplicate active Orders for one destination inventory.");
         }
         foreach (var item in checkpoint.Shipments)
         {
@@ -466,11 +498,13 @@ public sealed partial class SimulationWorld
         }
 
         var orderIds = new HashSet<LogisticsOrderId>();
+        var activeOrderKeys = new HashSet<(EstablishmentId, CommodityId)>();
         var maxOrderId = 0UL;
         foreach (var item in logistics.Orders)
         {
             if (item.Id.Value == 0 || !orderIds.Add(item.Id) || !establishmentIds.Contains(item.DestinationEstablishmentId)
-                || !commodityIds.Contains(item.CommodityId) || !double.IsFinite(item.Quantity) || item.Quantity <= 0d || !Enum.IsDefined(item.State))
+                || !commodityIds.Contains(item.CommodityId) || !double.IsFinite(item.Quantity) || item.Quantity <= 0d || !Enum.IsDefined(item.State)
+                || (item.State != LogisticsOrderState.Completed && !activeOrderKeys.Add((item.DestinationEstablishmentId, item.CommodityId))))
                 throw new ArgumentException("Logistics contains invalid Order state.", nameof(checkpoint));
             maxOrderId = Math.Max(maxOrderId, item.Id.Value);
         }
@@ -485,7 +519,7 @@ public sealed partial class SimulationWorld
                 || !establishmentIds.Contains(item.SourceEstablishmentId) || !establishmentIds.Contains(item.DestinationEstablishmentId)
                 || !commodityIds.Contains(item.CommodityId) || !double.IsFinite(item.Quantity) || item.Quantity <= 0d
                 || !Enum.IsDefined(item.State) || !accessPointIds.Contains(item.PickupAccessPointId) || !accessPointIds.Contains(item.DeliveryAccessPointId)
-                || (item.VehicleId is { } vehicleId && !vehicleIds.Contains(vehicleId)))
+                || (item.State == ShipmentState.InTransit && (item.VehicleId is not { } vehicleId || !vehicleIds.Contains(vehicleId))))
                 throw new ArgumentException("Logistics contains invalid Shipment state.", nameof(checkpoint));
             maxShipmentId = Math.Max(maxShipmentId, item.Id.Value);
         }
