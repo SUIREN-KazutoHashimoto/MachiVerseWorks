@@ -11,12 +11,12 @@ Track / Station / Platform / Depot topologyはRailway Infrastructureが正本で
 Formation / RailwayRoute / Timetable / RailwayService / Trainはmonotonic `ulong` stable ID。0 invalid。Checkpoint / Saveはnext-ID counterも保存する。
 
 - Formation: length、max speed / acceleration / service deceleration、capacity
-- RailwayRoute: explicit TrackConnection / TrackDirectionに従うordered TrackSegment sequence
-- Timetable: ordered Station stop、planned arrival/departure、minimum dwell、optional preferred Platform
+- RailwayRoute: explicit TrackConnection / TrackDirectionに従うordered TrackSegment sequence。同一TrackSegmentの複数occurrenceは現行route modelでは表現せず、Route作成時にrejectする
+- Timetable: ordered Station stop、planned arrival/departure、minimum dwell、optional preferred Platform。`PreferredPlatformId`はrequired assignmentではなくsoft preferenceとして扱う
 - RailwayService: Formation / Route / Timetable / origin Depot / destination Depot / planned start
 - Train: Serviceを実行するmutable physical state。1 Serviceにつき高々1 Train
 
-Preferred Platformのfallback semantics等、実装変更を伴う未確定事項はこの文書整理では変更せず、既存runtime contractを別Issueで扱う。
+Route作成はvalidation成功後にstable IDをcommitする。missing segment、接続不整合、repeated TrackSegment等で作成が失敗しても`NextRailwayRouteId`を消費しない。TrackSegment geometryはRailway Infrastructure側でnon-zero 3D lengthを保証するため、Operationsへzero-length segmentは到達しない。
 
 ## Fixed-tick movement
 
@@ -45,7 +45,9 @@ Route pointが次のTrackSegment / Blockへ進むときは:
 
 次Timetable stopへ接近するとRoute上のeligible Platformを選び、reserveできなければstop手前で待つ。assignment後はPlatform center distanceへbrakeし、arrivalで`Dwelling`へ遷移する。
 
-Platform ownershipはexclusive。departure時にPlatformをreleaseして次stopへ進む。
+`PreferredPlatformId`は**soft preference**である。preferred Platformが対象StationかつRoute上で、Trainの現在route distanceより前方にあり、reserve可能なら最初に選ぶ。preferredがoccupied、Route外、または既にTrain後方にある場合は、同Stationの残りのeligible Platformをstable Platform ID順で試し、最初にreserveできる前方Platformへfallbackする。preferred指定によって、別の有効Platformが存在するServiceを不必要に成立不能にはしない。
+
+Platform ownershipはexclusive。departure時にPlatformをreleaseして次stopへ進む。現行RailwayRouteは同一TrackSegmentの再出現を禁止するため、Platformのroute distanceは一意に解決できる。
 
 ## Delay semantics
 
@@ -109,6 +111,9 @@ Phase 19の[`multimodal-transit.md`](multimodal-transit.md)が提供する`estim
 検証対象:
 
 - explicit Route / direction / connection validation
+- repeated TrackSegment routeのrejectとfailed Route creationのID非消費
+- Preferred Platformを先に試し、利用不能時はstable Platform ID順にfallbackするsoft-preference semantics
+- Train後方のPlatformをassignment候補から除外すること
 - nonnull Block / Platform ownershipのexclusive性
 - route-pointがBlock boundaryを越えた時点でprevious Blockをreleaseする簡略model
 - Formation lengthがrear-clearanceへ使われないこと
