@@ -73,7 +73,7 @@ internal sealed class RoadNetworkStore
 
     public RoadAccessPointSnapshot[] GetAccessPoints(TripEndpoint endpoint, RoadAccessMode mode)
     {
-        IReadOnlyList<RoadAccessPointId>? ids = endpoint.BuildingId is { } buildingId
+        List<RoadAccessPointId>? ids = endpoint.BuildingId is { } buildingId
             ? accessPointIdsByBuilding.GetValueOrDefault(buildingId)
             : endpoint.PoiId is { } poiId ? accessPointIdsByPoi.GetValueOrDefault(poiId) : null;
         if (ids is null || ids.Count == 0) return [];
