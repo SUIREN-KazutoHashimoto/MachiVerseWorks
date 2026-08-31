@@ -19,6 +19,31 @@ public sealed class RailwayOperationsTests
     }
 
     [TestMethod]
+    public void FailedRouteCreationDoesNotConsumeStableId()
+    {
+        var world = new SimulationWorld();
+        var a = world.CreateTrackNode(new WorldPoint(0d, 0d, 0d));
+        var b = world.CreateTrackNode(new WorldPoint(10d, 0d, 0d), TrackNodeKind.Junction);
+        var c = world.CreateTrackNode(new WorldPoint(20d, 0d, 0d));
+        var first = world.CreateTrackSegment(a, b);
+        var second = world.CreateTrackSegment(b, c);
+        var expectedNextId = world.CreateCheckpoint().NextRailwayRouteId;
+
+        Assert.ThrowsExactly<ArgumentException>(() => world.CreateRailwayRoute([new TrackSegmentId(ulong.MaxValue)]));
+        Assert.ThrowsExactly<ArgumentException>(() => world.CreateRailwayRoute([first, second]));
+        Assert.ThrowsExactly<ArgumentException>(() => world.CreateRailwayRoute([first, first]));
+
+        var failed = world.CreateCheckpoint();
+        Assert.AreEqual(expectedNextId, failed.NextRailwayRouteId);
+        Assert.AreEqual(0, failed.RailwayRoutes!.Count);
+
+        world.CreateTrackConnection(first, second, b);
+        var created = world.CreateRailwayRoute([first, second]);
+        Assert.AreEqual(expectedNextId, created.Value);
+        Assert.AreEqual(expectedNextId + 1, world.CreateCheckpoint().NextRailwayRouteId);
+    }
+
+    [TestMethod]
     public void MultipleTrainsNeverOwnTheSameBlockOrPlatform()
     {
         var world = new SimulationWorld();
