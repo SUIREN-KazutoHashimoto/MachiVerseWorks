@@ -49,6 +49,7 @@ internal sealed class PedestrianStore
         ArgumentNullException.ThrowIfNull(spatialIndex);
         if (!pedestrians.Remove(id)) return false;
         if (!spatialIndex.Remove(id)) throw new InvalidOperationException($"Pedestrian {id.Value} was missing from the spatial index during removal.");
+        if (!orderedIds.Remove(id)) throw new InvalidOperationException($"Pedestrian {id.Value} was missing from deterministic iteration order during removal.");
         return true;
     }
 
@@ -170,6 +171,7 @@ internal sealed class PedestrianStore
     private static PedestrianState CreateState(PedestrianId id, TripRequest request, PedestrianRoute route, double speed, int legIndex, double progress, PedestrianMovementState movementState, PedestrianNetworkStore network)
     {
         if (id.Value == 0) throw new ArgumentOutOfRangeException(nameof(id));
+        if (request.Mode is not (TravelMode.Any or TravelMode.Foot)) throw new ArgumentException("Pedestrians require a Foot or Any Trip Request.", nameof(request));
         if (!double.IsFinite(speed) || speed <= 0d) throw new ArgumentOutOfRangeException(nameof(speed));
         if (!Enum.IsDefined(movementState)) throw new ArgumentOutOfRangeException(nameof(movementState));
         if (route.Legs.Count == 0)
