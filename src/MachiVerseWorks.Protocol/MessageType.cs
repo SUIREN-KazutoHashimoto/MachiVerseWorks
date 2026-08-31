@@ -6,6 +6,7 @@ public enum MessageType : ushort
     HelloAck = 2,
     SubscribeVolume = 3,
     InspectPerson = 4,
+    ClearPersonInspection = 5,
     AgentSpawn = 100,
     AgentUpdate = 101,
     AgentRemove = 102,
