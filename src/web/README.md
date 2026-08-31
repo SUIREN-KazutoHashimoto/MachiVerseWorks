@@ -5,11 +5,11 @@ Vite + TypeScript + Three.jsで構成するMachiVerseWorksのブラウザ3D Clie
 ## Data flow
 
 ```text
-WebSocket / Protocol 2.8
+WebSocket / Protocol 2.9
   ├─ Agent / Pedestrian / Vehicle stores -> interpolation -> WorldView
   ├─ Road Network -----------------------> static road geometry
   ├─ Intersection Control ---------------> traffic debug/render state
-  ├─ Population --------------------------> statistics / Person inspector
+  ├─ Population --------------------------> statistics / Person inspector / explicit clear
   ├─ Railway Infrastructure --------------> revision-aware static 3D layer
   ├─ Railway Operations ------------------> Train layer / railway debug
   └─ Multimodal Transit ------------------> Transit debug / realtime state
@@ -17,7 +17,7 @@ WebSocket / Protocol 2.8
                                               -> Web Audio
 ```
 
-Protocol wire layoutはC# object graphへ依存せずTypeScript側にもstable contractとして実装します。現在のnegotiated currentはProtocol 2.8です。
+Protocol wire layoutはC# object graphへ依存せずTypeScript側にもstable contractとして実装します。現在のnegotiated currentはProtocol 2.9です。Person inspectorは`InspectPerson`で開始し、2.9の`ClearPersonInspection`で明示解除できます。
 
 ## 起動
 
@@ -65,6 +65,6 @@ npm test
 npm run build
 ```
 
-実Server / WebSocket / headless browserを接続するE2Eは`.github/workflows/e2e.yml`へ集約されています。Protocol 2.8までの主要経路を同workflowのmatrixで継続検証します。
+実Server / WebSocket / headless browserを接続するE2Eは`.github/workflows/e2e.yml`へ集約されています。Protocol 2.9までの主要経路を同workflowのmatrixで継続検証します。
 
 詳細は[`../../docs/architecture/web-client.md`](../../docs/architecture/web-client.md)を参照してください。
