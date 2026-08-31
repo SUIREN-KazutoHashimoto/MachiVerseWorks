@@ -57,6 +57,25 @@ public sealed class P1StabilizationTests
     }
 
     [TestMethod]
+    public void RoadIncidentSegmentIndexTracksMutationRestoreAndRemoval()
+    {
+        var world = new SimulationWorld();
+        var a = world.CreateRoadNode(new WorldPoint(0, 0, 0));
+        var b = world.CreateRoadNode(new WorldPoint(10, 0, 0));
+        var c = world.CreateRoadNode(new WorldPoint(20, 0, 0));
+        var segment = world.CreateRoadSegment(a, b);
+
+        Assert.IsTrue(world.UpdateRoadSegment(segment, c, b, RoadKind.Local));
+        Assert.IsTrue(world.UpdateRoadNode(a, new WorldPoint(10, 0, 0), RoadNodeKind.Endpoint));
+        Assert.ThrowsExactly<ArgumentException>(() => world.UpdateRoadNode(c, new WorldPoint(10, 0, 0), RoadNodeKind.Endpoint));
+
+        var restored = SimulationWorld.RestoreCheckpoint(world.CreateCheckpoint());
+        Assert.ThrowsExactly<ArgumentException>(() => restored.UpdateRoadNode(c, new WorldPoint(10, 0, 0), RoadNodeKind.Endpoint));
+        Assert.IsTrue(restored.RemoveRoadSegment(segment));
+        Assert.IsTrue(restored.UpdateRoadNode(c, new WorldPoint(10, 0, 0), RoadNodeKind.Endpoint));
+    }
+
+    [TestMethod]
     public void RoadCheckpointRejectsZeroLengthGeometry()
     {
         var world = new SimulationWorld();
