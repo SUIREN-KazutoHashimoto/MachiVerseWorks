@@ -67,6 +67,7 @@ public sealed class WorldSaveLimits
         MaximumPersonCount = RequirePositive(maximumPersonCount, nameof(maximumPersonCount), "Maximum Person count");
         MaximumVehicleRouteStepCount = RequirePositive(maximumVehicleRouteStepCount, nameof(maximumVehicleRouteStepCount), "Maximum Vehicle route step count");
         MaximumPersonScheduleEntryCount = RequirePositive(maximumPersonScheduleEntryCount, nameof(maximumPersonScheduleEntryCount), "Maximum Person schedule entry count");
+        MaximumPersonNeedCount = PersonNeedKindCount;
         MaximumBlockSectionSegmentCount = RequireAtMost(
             maximumBlockSectionSegmentCount,
             RailwayInfrastructureLimits.MaximumBlockSectionSegmentCount,
@@ -99,7 +100,7 @@ public sealed class WorldSaveLimits
     public int MaximumPersonCount { get; }
     public int MaximumVehicleRouteStepCount { get; }
     public int MaximumPersonScheduleEntryCount { get; }
-    public int MaximumPersonNeedCount => PersonNeedKindCount;
+    public int MaximumPersonNeedCount { get; }
     public int MaximumBlockSectionSegmentCount { get; }
     public int MaximumDepotTrackSegmentCount { get; }
     public int MaximumRailwayRouteSegmentCount { get; }
