@@ -1,6 +1,6 @@
 # Protocol Binary Layout
 
-MachiVerseWorksのServer / Web Client間binary protocolを定義する。ProtocolはApplication `VERSION`とSave formatから独立してversioningし、current protocol versionは **2.8** とする。
+MachiVerseWorksのServer / Web Client間binary protocolを定義する。ProtocolはApplication `VERSION`とSave formatから独立してversioningし、current protocol versionは **2.9** とする。
 
 ## Version compatibility
 
@@ -15,6 +15,7 @@ MachiVerseWorksのServer / Web Client間binary protocolを定義する。Protoco
 - 2.6: `RailwayInfrastructureSnapshot`
 - 2.7: `RailwayOperationsSnapshot`
 - 2.8: `MultimodalTransitSnapshot`
+- 2.9: `ClearPersonInspection`
 
 同一majorではServer current以下のminorをClientが要求した場合に受理できる。negotiation成立versionはClientが`Hello` frame headerで要求したversionそのものとし、connection state、`HelloAck` payload、以後のframe headerへ同じ値を使う。Serverはnegotiated minorより新しいmessageを送らない。
 
@@ -41,6 +42,7 @@ headerのpayload lengthと実frame長が一致しないframe、未知flags、1 M
 | 2 | `HelloAck` | Server → Client | 2.0 |
 | 3 | `SubscribeVolume` | Client → Server | 2.0 |
 | 4 | `InspectPerson` | Client → Server | 2.5 |
+| 5 | `ClearPersonInspection` | Client → Server | 2.9 |
 | 100 | `AgentSpawn` | Server → Client | 2.0 |
 | 101 | `AgentUpdate` | Server → Client | 2.0 |
 | 102 | `AgentRemove` | Server → Client | 2.0 |
@@ -59,7 +61,7 @@ headerのpayload lengthと実frame長が一致しないframe、未知flags、1 M
 | 720 | `MultimodalTransitSnapshot` | Server → Client | 2.8 |
 | 900 | `Error` | Server → Client | 2.0 |
 
-`SubscribeArea`は存在しない。Agent / Road / Pedestrian / Vehicle / Intersection / Railwayは3D `SubscribeVolume`をClient別spatial filteringの境界として使う。Protocol 2.8のMultimodal Transitは現行Serverではsubscription volumeで絞らず、subscription済みconnectionへworld-wide snapshotを配信する。Population statisticsはWorld全体集計、Person debugはstable Person ID指定のdebug contractである。
+`SubscribeArea`は存在しない。Agent / Road / Pedestrian / Vehicle / Intersection / Railwayは3D `SubscribeVolume`をClient別spatial filteringの境界として使う。Protocol 2.8で追加されたMultimodal Transitは現行Serverではsubscription volumeで絞らず、subscription済みconnectionへworld-wide snapshotを配信する。Population statisticsはWorld全体集計、Person debugはstable Person ID指定のdebug contractである。
 
 ## Hello / HelloAck
 
@@ -149,6 +151,10 @@ Movement item:
 ### InspectPerson
 
 Protocol 2.5以上。Client → Serverの8-byte Person ID request。0は不可。missing Personは`InvalidRequest`。
+
+### ClearPersonInspection
+
+Protocol 2.9以上。Client → Server、payloadは0 bytes。connectionに保持しているPerson inspection targetを明示的にclearする。2.8以下ではmessage type 5を送信しない。
 
 ### PopulationStatistics
 
@@ -248,7 +254,7 @@ Headerはtick `uint64` + Line / Stop / Pattern / Vehicle / Arrival count `uint32
 
 optional stable IDは0 sentinel。Bus StopはLane、Railway StopはStation（任意Platform）、Railway PatternはRailway Serviceを参照する。Arrival Estimateは同frame内のStop / Line / Vehicleを参照しなければならない。2.7以下へmessage 720を送らない。
 
-現行Serverはmessage 720のLine / Stop / Pattern / Vehicle / Arrival EstimateをClient `SubscribeVolume`でfilterせず、`publishSnapshot.MultimodalTransit`全体からmessageを作成する。したがってProtocol 2.8のTransit deliveryは現時点ではworld-wideであり、volume-based interest managementは将来拡張事項である。
+現行Serverはmessage 720のLine / Stop / Pattern / Vehicle / Arrival EstimateをClient `SubscribeVolume`でfilterせず、`publishSnapshot.MultimodalTransit`全体からmessageを作成する。したがってTransit deliveryは現時点ではworld-wideであり、volume-based interest managementは将来拡張事項である。`MultimodalTransitProtocolCodec.GetPayloadLength()`で送信前にpayload長を計算し、1 MiB超過時はmessage 720をserializeせず`InvalidRequest` / `detailCode=multimodalTransitSnapshotTooLarge`へ変換する。
 
 ## Snapshot tick semantics
 
