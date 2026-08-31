@@ -17,6 +17,7 @@ internal sealed class SimulationRuntime
     private bool _railwayFixturePending;
     private bool _railwayOperationsFixturePending;
     private bool _multimodalTransitFixturePending;
+    private bool _economyFixturePending;
     private RoadNetworkReadModel? _roadReadModel;
     private RailwayInfrastructureReadModel? _railwayReadModel;
     private ulong _roadRevision = 1;
@@ -43,6 +44,7 @@ internal sealed class SimulationRuntime
         _railwayFixturePending = ReadFixture(configuration, "Simulation:RailwayFixture");
         _railwayOperationsFixturePending = ReadFixture(configuration, "Simulation:RailwayOperationsFixture");
         _multimodalTransitFixturePending = ReadFixture(configuration, "Simulation:MultimodalTransitFixture");
+        _economyFixturePending = ReadFixture(configuration, "Simulation:EconomyFixture");
     }
 
     public int TickRate { get { lock (_gate) return _world.Config.TickRate; } }
@@ -104,7 +106,7 @@ internal sealed class SimulationRuntime
             _roadReadModel = null;
             _railwayReadModel = null;
             _pedestrianFixturePending = _roadTrafficFixturePending = _trafficFixturePending = _populationFixturePending = false;
-            _railwayFixturePending = _railwayOperationsFixturePending = _multimodalTransitFixturePending = false;
+            _railwayFixturePending = _railwayOperationsFixturePending = _multimodalTransitFixturePending = _economyFixturePending = false;
         }
     }
 
@@ -155,6 +157,7 @@ internal sealed class SimulationRuntime
         if (_railwayFixturePending) { RailwayInfrastructureFixtures.SeedDeterministic(_world); _railwayFixturePending = false; _railwayRevision = checked(_railwayRevision + 1); _railwayReadModel = null; }
         if (_railwayOperationsFixturePending) { RailwayOperationsFixtures.SeedDeterministic(_world); _railwayOperationsFixturePending = false; _railwayRevision = checked(_railwayRevision + 1); _railwayReadModel = null; }
         if (_multimodalTransitFixturePending) { MultimodalTransitFixtures.SeedDeterministic(_world); _multimodalTransitFixturePending = false; _roadRevision = checked(_roadRevision + 1); _railwayRevision = checked(_railwayRevision + 1); _roadReadModel = null; _railwayReadModel = null; }
+        if (_economyFixturePending) { SeedEconomyFixture(_world); _economyFixturePending = false; }
     }
 
     private static void SeedPopulationFixture(SimulationWorld world)
@@ -162,6 +165,20 @@ internal sealed class SimulationRuntime
         var home = world.CreateBuilding(new WorldVolume(-2d, -2d, 0d, 2d, 2d, 4d), BuildingKind.Residential);
         var household = world.CreateHousehold(TripEndpoint.ForBuilding(home));
         world.CreatePerson(household, new PersonDemographics(35, IsEmployed: true), [new DailyActivityWindow(ActivityKind.Home, 0, 1440)]);
+    }
+
+    private static void SeedEconomyFixture(SimulationWorld world)
+    {
+        var home = world.CreateBuilding(new WorldVolume(-4d, -4d, 0d, 4d, 4d, 4d), BuildingKind.Residential);
+        var shop = world.CreateBuilding(new WorldVolume(16d, -4d, 0d, 24d, 4d, 4d), BuildingKind.Commercial);
+        var poi = world.CreatePoi(new WorldPoint(20d, 0d, 0d), PoiKind.Retail, shop);
+        var household = world.CreateHousehold(TripEndpoint.ForBuilding(home));
+        var person = world.CreatePerson(household, new PersonDemographics(35, IsEmployed: true), [new DailyActivityWindow(ActivityKind.Home, 0, 1440)]);
+        world.SetHouseholdCashBalance(household, 1_000);
+        var company = world.CreateCompany(IndustrySector.Retail, 100_000, 10d);
+        var establishment = world.CreateEstablishment(company, shop, poi);
+        var job = world.CreateJob(establishment, 2, 500);
+        world.AssignEmployment(person, job);
     }
 
     private static void SeedPedestrianFixture(SimulationWorld world)

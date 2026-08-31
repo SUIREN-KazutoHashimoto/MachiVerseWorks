@@ -59,7 +59,8 @@ public sealed record SimulationCheckpoint(
     IReadOnlyList<RailwayServiceSnapshot>? RailwayServices = null,
     ulong NextTrainId = 1,
     IReadOnlyList<TrainSnapshot>? Trains = null,
-    MultimodalTransitCheckpoint? MultimodalTransit = null);
+    MultimodalTransitCheckpoint? MultimodalTransit = null,
+    EconomyCheckpoint? Economy = null);
 
 public readonly record struct SimulationAgentCheckpoint(AgentId Id, WorldPoint Position, WorldVector Velocity, bool IsActive);
 public readonly record struct SimulationBuildingCheckpoint(BuildingId Id, BuildingKind Kind, WorldVolume Bounds);

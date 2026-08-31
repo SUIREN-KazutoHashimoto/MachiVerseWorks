@@ -118,6 +118,10 @@ internal sealed class ServerTestHost : IAsyncDisposable
             decoded = MultimodalTransitProtocolCodec.TryDeserialize(frame, out var multimodalTransit, out error);
             envelope = decoded ? new ProtocolEnvelope(header.Version, multimodalTransit) : null;
         }
+        else if (header.MessageType == MessageType.EconomySnapshot)
+        {
+            decoded = EconomyProtocolCodec.TryDeserialize(frame, out envelope, out error);
+        }
         else
         {
             decoded = ProtocolCodec.TryDeserialize(frame, out envelope, out error);

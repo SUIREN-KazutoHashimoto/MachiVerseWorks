@@ -6,6 +6,7 @@ import { ActivityKind, PersonTravelState, type PersonDebugMessage, type Populati
 import { TransitMode, TransitVehicleKind, TransitVehicleState, type MultimodalTransitSnapshotMessage } from './multimodal-transit.ts';
 import { protocolVersionToString, type ProtocolVersion } from './protocol.ts';
 import { RailwayServiceState, type RailwayOperationsSnapshotMessage } from './railway-operations.ts';
+import type { EconomySnapshotMessage } from './economy-protocol.ts';
 
 export class AgentCountFormatter {
   private readonly formatter: Intl.NumberFormat;
@@ -28,6 +29,7 @@ export class ClientUi {
   private readonly trainsValue = document.createElement('span');
   private readonly railwayDebugValue = document.createElement('div');
   private readonly transitDebugValue = document.createElement('div');
+  private readonly economyDebugValue = document.createElement('div');
   private readonly audioValue = document.createElement('span');
   private readonly decodeValue: HTMLSpanElement | null;
   private readonly frameValue: HTMLSpanElement | null;
@@ -98,6 +100,14 @@ export class ClientUi {
     transitDebug.append(transitDebugTitle, this.transitDebugValue);
     panel.append(transitDebug);
 
+    const economyDebug = document.createElement('div');
+    economyDebug.className = 'economy-debug';
+    const economyDebugTitle = document.createElement('strong');
+    economyDebugTitle.textContent = localizer.t('economyDebug.title');
+    this.economyDebugValue.className = 'economy-debug-value';
+    economyDebug.append(economyDebugTitle, this.economyDebugValue);
+    panel.append(economyDebug);
+
     this.errorValue.className = 'client-error';
     this.errorValue.hidden = true;
     panel.append(this.errorValue);
@@ -131,6 +141,7 @@ export class ClientUi {
     this.clearPopulation();
     this.clearRailwayOperations();
     this.clearMultimodalTransit();
+    this.clearEconomy();
     this.setAudioState('locked');
     if (this.decodeValue !== null) this.decodeValue.textContent = '—';
     if (this.frameValue !== null) this.frameValue.textContent = '—';
@@ -217,6 +228,14 @@ export class ClientUi {
   }
 
   public clearMultimodalTransit(): void { this.transitDebugValue.textContent = this.localizer.t('transitDebug.none'); }
+
+  public setEconomy(message: EconomySnapshotMessage): void {
+    const s = message.statistics;
+    const companies = message.companies.slice(0, 4).map((company) => `C${company.companyId.toString()}: ${company.employeeCount}人 / 売上 ${company.revenue.toString()}`).join(', ');
+    this.economyDebugValue.textContent = this.localizer.t('economyDebug.summary', { companies: s.companyCount, jobs: s.jobCount, employed: s.employedPersonCount, vacancies: s.vacantPositionCount, income: s.householdIncome, spending: s.householdSpending, revenue: s.companyRevenue, expense: s.companyExpense, produced: s.producedUnits.toFixed(1), cycle: s.economicCycle, details: companies || '—' });
+  }
+
+  public clearEconomy(): void { this.economyDebugValue.textContent = this.localizer.t('economyDebug.none'); }
 
   public setPersonDebug(message: PersonDebugMessage): void {
     const residence = formatEndpoint(message.residenceBuildingId, message.residencePoiId);

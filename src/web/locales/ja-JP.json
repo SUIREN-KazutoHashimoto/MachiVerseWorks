@@ -52,5 +52,8 @@
   "personTravel.transit": "公共交通",
   "transitDebug.title": "Transit Debug",
   "transitDebug.none": "交通情報なし",
-  "transitDebug.summary": "Route {routes} / Stop {stops} / Bus Line {busLines} / Railway Line {railwayLines} / Bus {buses} / Taxi {taxis} / Vehicle {vehicles} / 到着 {arrivals}"
+  "transitDebug.summary": "Route {routes} / Stop {stops} / Bus Line {busLines} / Railway Line {railwayLines} / Bus {buses} / Taxi {taxis} / Vehicle {vehicles} / 到着 {arrivals}",
+  "economyDebug.title": "Economy Debug",
+  "economyDebug.none": "経済情報なし",
+  "economyDebug.summary": "企業 {companies} / Job {jobs} / 雇用 {employed} / 求人 {vacancies} / 世帯所得 {income} / 消費 {spending} / 売上 {revenue} / 費用 {expense} / 生産 {produced} / Cycle {cycle} / {details}"
 }
