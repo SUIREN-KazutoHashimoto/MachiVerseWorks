@@ -24,7 +24,7 @@ if (args.Contains("--population", StringComparer.Ordinal))
     var options = BenchmarkOptions.Parse(benchmarkArgs);
     var results = PopulationBenchmarkRunner.Run(options);
 
-    Console.WriteLine("persons,households,ticks,average_ms,p50_ms,p95_ms,p99_ms,max_ms,allocated_bytes_per_tick,managed_bytes");
+    Console.WriteLine("scenario,persons,households,ticks,average_ms,p50_ms,p95_ms,p99_ms,max_ms,allocated_bytes_per_tick,managed_bytes,max_active_pedestrians,max_active_vehicles");
     foreach (var result in results) Console.WriteLine(result.ToCsv());
     return;
 }
