@@ -125,7 +125,7 @@ public sealed partial class SimulationWorld
         foreach (var inventory in _logisticsInventories.Values) inventoryUnits += inventory.Quantity;
         foreach (var shipment in _logisticsShipments)
         {
-            if (shipment.State is ShipmentState.Loading or ShipmentState.InTransit or ShipmentState.Unloading)
+            if (shipment.State is ShipmentState.Pickup or ShipmentState.Loading or ShipmentState.InTransit or ShipmentState.Unloading)
             {
                 inTransit++;
                 inTransitUnits += shipment.Quantity;
@@ -247,6 +247,12 @@ public sealed partial class SimulationWorld
     {
         foreach (var shipment in _logisticsShipments.Where(static item => item.State != ShipmentState.Delivered).OrderBy(static item => item.Id.Value))
         {
+            if (shipment.State == ShipmentState.Pickup)
+            {
+                shipment.State = ShipmentState.Loading;
+                continue;
+            }
+
             if (shipment.State == ShipmentState.Loading && tickCount >= shipment.LoadingCompleteTick)
             {
                 if (!TryCreateFreightRoute(shipment.PickupAccessPointId, shipment.DeliveryAccessPointId, out var route)) continue;
@@ -313,7 +319,7 @@ public sealed partial class SimulationWorld
         return true;
     }
 
-    private bool AccessPointMatchesEstablishment(RoadAccessPointSnapshot accessPoint, EconomyEstablishmentState establishment) =>
+    private static bool AccessPointMatchesEstablishment(RoadAccessPointSnapshot accessPoint, EconomyEstablishmentState establishment) =>
         (establishment.PoiId is { } poiId && accessPoint.PoiId == poiId)
         || (establishment.BuildingId is { } buildingId && accessPoint.BuildingId == buildingId);
 
@@ -563,7 +569,7 @@ public sealed partial class SimulationWorld
         public EstablishmentId DestinationEstablishmentId { get; } = destinationEstablishmentId;
         public CommodityId CommodityId { get; } = commodityId;
         public double Quantity { get; } = quantity;
-        public ShipmentState State { get; set; } = ShipmentState.Loading;
+        public ShipmentState State { get; set; } = ShipmentState.Pickup;
         public VehicleId? VehicleId { get; set; }
         public RoadAccessPointId PickupAccessPointId { get; } = pickupAccessPointId;
         public RoadAccessPointId DeliveryAccessPointId { get; } = deliveryAccessPointId;

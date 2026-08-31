@@ -7,7 +7,7 @@ namespace MachiVerseWorks.Benchmarks;
 public class LogisticsBenchmarks
 {
     private SimulationWorld _world = null!;
-    private RouteRequest _routeRequest;
+    private RouteRequest _routeRequest = null!;
 
     [Params(100, 1_000)]
     public int InventoryCount { get; set; }
@@ -36,7 +36,7 @@ public class LogisticsBenchmarks
             _world.ConfigureInventory(establishment, commodity, destinationAccess, InventoryRole.Consumer, capacity: 20d, initialQuantity: 0d, reorderPoint: 5d, targetQuantity: 10d, dailyConsumptionUnits: 1d);
         }
 
-        for (var tick = 0; tick < EconomyDefaults.TicksPerEconomicDay; tick++) _world.Step();
+        for (ulong tick = 0; tick < EconomyDefaults.TicksPerEconomicDay; tick++) _world.Step();
         _routeRequest = new RouteRequest(new WorldPoint(5, 0, 0), new WorldPoint(95, 0, 0), RoutingCostMetric.EstimatedTravelTime);
     }
 

@@ -6,6 +6,32 @@ namespace MachiVerseWorks.Simulation.Tests;
 public sealed class LogisticsSimulationTests
 {
     [TestMethod]
+    public void ShipmentTransitionsPickupLoadingTransitUnloadingDelivered()
+    {
+        var world = CreateWorld(out _, out _, out _);
+        for (var tick = 0; tick < 600; tick++) world.Step();
+        Assert.AreEqual(ShipmentState.Pickup, world.CreateLogisticsSnapshot().Shipments.Single().State);
+
+        world.Step();
+        Assert.AreEqual(ShipmentState.Loading, world.CreateLogisticsSnapshot().Shipments.Single().State);
+
+        world.Step();
+        Assert.AreEqual(ShipmentState.InTransit, world.CreateLogisticsSnapshot().Shipments.Single().State);
+
+        var observedUnloading = false;
+        for (var tick = 0; tick < 100; tick++)
+        {
+            world.Step();
+            var state = world.CreateLogisticsSnapshot().Shipments.Single().State;
+            if (state == ShipmentState.Unloading) observedUnloading = true;
+            if (state == ShipmentState.Delivered) break;
+        }
+
+        Assert.IsTrue(observedUnloading);
+        Assert.AreEqual(ShipmentState.Delivered, world.CreateLogisticsSnapshot().Shipments.Single().State);
+    }
+
+    [TestMethod]
     public void ProductionReplenishmentCreatesShipmentAndRestocksDestination()
     {
         var world = CreateWorld(out var commodity, out _, out var destination);
