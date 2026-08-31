@@ -7,6 +7,7 @@ namespace MachiVerseWorks.Benchmarks;
 
 internal static class PopulationBenchmarkRunner
 {
+    private const double DispatchSpawnSpacingMeters = 12d;
     private static readonly int[] IdlePersonCounts = [1_000, 10_000, 100_000];
     private static readonly int[] DispatchPersonCounts = [1_000, 10_000];
 
@@ -29,7 +30,7 @@ internal static class PopulationBenchmarkRunner
         var residence = world.CreateBuilding(new WorldVolume(-10d, -10d, 0d, 10d, 10d, 20d), BuildingKind.Residential);
         var endpoint = TripEndpoint.ForBuilding(residence);
         var schedule = new[] { new DailyActivityWindow(SimulationActivityKind.Home, 0, 1440) };
-        CreatePopulation(world, personCount, endpoint, schedule, hasPrivateVehicle: false);
+        CreateIdlePopulation(world, personCount, endpoint, schedule);
 
         for (var tick = 0; tick < options.WarmupTicks; tick++) world.Step();
         return Measure("idle", personCount, world, options);
@@ -38,38 +39,19 @@ internal static class PopulationBenchmarkRunner
     private static PopulationBenchmarkResult RunDispatchScenario(int personCount, TravelMode mode, BenchmarkOptions options)
     {
         var world = new SimulationWorld(new SimulationConfig(tickRate: 30, seed: 15015, spatialCellSize: 64d));
-        var home = world.CreateBuilding(new WorldVolume(0d, -3d, 0d, 4d, 3d, 4d), BuildingKind.Residential);
-        var work = world.CreateBuilding(new WorldVolume(996d, -3d, 0d, 1000d, 3d, 4d), BuildingKind.Commercial);
-        var start = world.CreateRoadNode(new WorldPoint(0d, 0d, 0d));
-        var end = world.CreateRoadNode(new WorldPoint(1000d, 0d, 0d));
-        var segment = world.CreateRoadSegment(start, end);
-        world.CreateLane(segment, LaneDirection.Forward, 0, speedLimitMetersPerSecond: 20d);
-        world.CreateRoadAccessPoint(segment, 0.01d, home, mode: RoadAccessMode.Motor | RoadAccessMode.Foot);
-        world.CreateRoadAccessPoint(segment, 0.99d, work, mode: RoadAccessMode.Motor | RoadAccessMode.Foot);
+        CreateDispatchPopulation(world, personCount, mode);
 
-        // Warm infrastructure/JIT paths without consuming the first Population dispatch tick.
+        // Warm fixed-tick/JIT paths before Persons are eligible to dispatch.
+        // The dispatch population uses Work windows starting at minute 1 so warmup does not consume the measured departure wave.
         for (var tick = 0; tick < options.WarmupTicks; tick++) world.Step();
-
-        var schedule = new[]
-        {
-            new DailyActivityWindow(SimulationActivityKind.Work, 0, 1440, TripEndpoint.ForBuilding(work), ActivityPriority.High),
-        };
-        CreatePopulation(
-            world,
-            personCount,
-            TripEndpoint.ForBuilding(home),
-            schedule,
-            hasPrivateVehicle: mode == TravelMode.Motor);
-
         return Measure(mode == TravelMode.Motor ? "motor-dispatch" : "foot-dispatch", personCount, world, options);
     }
 
-    private static void CreatePopulation(
+    private static void CreateIdlePopulation(
         SimulationWorld world,
         int personCount,
         TripEndpoint residence,
-        IReadOnlyList<DailyActivityWindow> schedule,
-        bool hasPrivateVehicle)
+        IReadOnlyList<DailyActivityWindow> schedule)
     {
         HouseholdId household = default;
         for (var index = 0; index < personCount; index++)
@@ -77,8 +59,48 @@ internal static class PopulationBenchmarkRunner
             if (index % 4 == 0) household = world.CreateHousehold(residence);
             world.CreatePerson(
                 household,
-                new PersonDemographics(30, IsEmployed: true, HasPrivateVehicle: hasPrivateVehicle),
+                new PersonDemographics(30, IsEmployed: true, HasPrivateVehicle: false),
                 schedule);
+        }
+    }
+
+    private static void CreateDispatchPopulation(SimulationWorld world, int personCount, TravelMode mode)
+    {
+        var segmentLengthMeters = (personCount + 3d) * DispatchSpawnSpacingMeters;
+        var roadStart = world.CreateRoadNode(new WorldPoint(0d, 0d, 0d));
+        var roadEnd = world.CreateRoadNode(new WorldPoint(segmentLengthMeters, 0d, 0d));
+        var segment = world.CreateRoadSegment(roadStart, roadEnd);
+        world.CreateLane(segment, LaneDirection.Forward, 0, speedLimitMetersPerSecond: 20d);
+
+        var workX = segmentLengthMeters - DispatchSpawnSpacingMeters;
+        var work = world.CreateBuilding(new WorldVolume(workX - 2d, -3d, 0d, workX + 2d, 3d, 4d), BuildingKind.Commercial);
+        world.CreateRoadAccessPoint(
+            segment,
+            workX / segmentLengthMeters,
+            work,
+            mode: RoadAccessMode.Motor | RoadAccessMode.Foot);
+        var workEndpoint = TripEndpoint.ForBuilding(work);
+        var workSchedule = new[]
+        {
+            new DailyActivityWindow(SimulationActivityKind.Work, 1, 1440, workEndpoint, ActivityPriority.High),
+        };
+
+        for (var index = 0; index < personCount; index++)
+        {
+            var homeX = (index + 1d) * DispatchSpawnSpacingMeters;
+            var home = world.CreateBuilding(
+                new WorldVolume(homeX - 2d, -3d, 0d, homeX + 2d, 3d, 4d),
+                BuildingKind.Residential);
+            world.CreateRoadAccessPoint(
+                segment,
+                homeX / segmentLengthMeters,
+                home,
+                mode: RoadAccessMode.Motor | RoadAccessMode.Foot);
+            var household = world.CreateHousehold(TripEndpoint.ForBuilding(home));
+            world.CreatePerson(
+                household,
+                new PersonDemographics(30, IsEmployed: true, HasPrivateVehicle: mode == TravelMode.Motor),
+                workSchedule);
         }
     }
 
@@ -108,10 +130,15 @@ internal static class PopulationBenchmarkRunner
         var statistics = world.CreatePopulationStatistics();
         if (statistics.PersonCount != personCount)
             throw new InvalidOperationException("Population benchmark setup did not preserve the requested Person count.");
-        if (scenario == "foot-dispatch" && maximumActivePedestrians == 0)
-            throw new InvalidOperationException("Foot dispatch benchmark did not create any active Pedestrian.");
-        if (scenario == "motor-dispatch" && maximumActiveVehicles == 0)
-            throw new InvalidOperationException("Motor dispatch benchmark did not create any active Vehicle.");
+        if (scenario == "foot-dispatch" && maximumActivePedestrians != personCount)
+            throw new InvalidOperationException($"Foot dispatch benchmark expected {personCount} active Pedestrians but observed {maximumActivePedestrians}.");
+        if (scenario == "motor-dispatch")
+        {
+            if (maximumActiveVehicles != personCount)
+                throw new InvalidOperationException($"Motor dispatch benchmark expected {personCount} active Vehicles but observed {maximumActiveVehicles}.");
+            if (maximumActivePedestrians != 0)
+                throw new InvalidOperationException($"Motor dispatch benchmark unexpectedly fell back to {maximumActivePedestrians} Pedestrians.");
+        }
 
         return new PopulationBenchmarkResult(
             scenario,
