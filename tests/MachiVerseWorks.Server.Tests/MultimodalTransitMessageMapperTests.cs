@@ -23,7 +23,7 @@ public sealed class MultimodalTransitMessageMapperTests
         world.CreateBusTransitVehicle(trip);
         world.Step();
 
-        var message = MultimodalTransitMessageMapper.Create(world.CreateMultimodalTransitSnapshot(), world.Time.TickCount);
+        var message = MultimodalTransitMessageMapper.CreateSnapshot(world.CreateMultimodalTransitSnapshot(), world.Time.TickCount);
 
         Assert.AreEqual(1, message.Lines.Count);
         Assert.AreEqual(2, message.Stops.Count);
@@ -33,5 +33,22 @@ public sealed class MultimodalTransitMessageMapperTests
         Assert.AreEqual(ProtocolTransitMode.Bus, message.Lines[0].Mode);
         Assert.AreEqual(second.Value, message.ArrivalEstimates[0].StopId);
         Assert.IsTrue(message.ArrivalEstimates[0].EstimatedArrivalTick > world.Time.TickCount);
+    }
+
+    [TestMethod]
+    public void OversizedSnapshotBecomesStructuredErrorBeforeSerialization()
+    {
+        var world = new SimulationWorld(new SimulationConfig(tickRate: 10));
+        for (var index = 0; index < 116_506; index++) world.CreateTransitLine(TransitMode.Bus);
+
+        var planned = MultimodalTransitMessageMapper.Create(world.CreateMultimodalTransitSnapshot(), world.Time.TickCount);
+
+        var error = planned as ProtocolErrorMessage;
+        Assert.IsNotNull(error);
+        Assert.AreEqual(ProtocolErrorCode.InvalidRequest, error.Code);
+        Assert.IsTrue(error.Parameters.Any(parameter => parameter.Key == ProtocolErrorParameterKeys.Field && parameter.Value == "snapshot"));
+        Assert.IsTrue(error.Parameters.Any(parameter => parameter.Key == ProtocolErrorParameterKeys.DetailCode && parameter.Value == MultimodalTransitMessageMapper.TooLargeDetailCode));
+        var payloadText = error.Parameters.Single(parameter => parameter.Key == "payloadBytes").Value;
+        Assert.IsTrue(ulong.Parse(payloadText, System.Globalization.CultureInfo.InvariantCulture) > ProtocolFrameHeader.MaxPayloadLength);
     }
 }

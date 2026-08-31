@@ -8,7 +8,7 @@ MachiVerseWorksのGitHub Actions運用方針です。
 
 現在のjob:
 
-- `repository`: 必須file、Markdown local link、.NET SDK、`VERSION`、localization manifest
+- `repository`: 必須file、Markdown local link / heading anchor、.NET SDK、`VERSION`、localization manifest
 - `detect components`: .NET / Web実装有無を検出
 - `dotnet`: restore / build / test
 - `web`: npm install / lint / typecheck / test / build
@@ -19,9 +19,12 @@ Branch protection / Rulesetのrequired checkは **`CI / ci-gate`** を正本と�
 ### Repository validation
 
 - 必須Repository fileが存在し空でないこと
-- `scripts/check-markdown-links.py`でMarkdown local linkを検証
+- `scripts/check-markdown-links.py`でMarkdown local file linkとheading anchorを検証
 - `global.json` SDK policy
-- `VERSION`の`A.B.C`形式とPR baseからのversion increase
+- `VERSION`の`A.B.C`形式
+- `develop`向けPRはbase `A.B.C`から厳密に`A.(B+1).0`へ更新
+- `main`向けPRはbase `A.B.C`から厳密に`(A+1).0.0`へ更新
+- その他のPR targetはbaseより大きい`VERSION`を要求
 - `src/web/locales/manifest.json`のlocale/default整合
 
 ### .NET

@@ -29,7 +29,7 @@ core frame / Agent / Road / Pedestrianは`ProtocolCodec`、domain固有の可変
 - `RailwayOperationsProtocolCodec`
 - `MultimodalTransitProtocolCodec`
 
-Railway Infrastructureは1 MiBを超えるsnapshotをentity境界で複数frameへ分割できます。Railway OperationsはProtocol 2.7のsingle-frame contractで、Serverが送信前にpayload長をpreflightします。Multimodal Transitは2.8以降だけへ配信します。Person inspectionの明示clearは2.9以降で利用できます。
+Railway Infrastructureは1 MiBを超えるsnapshotをentity境界で複数frameへ分割できます。Railway OperationsはProtocol 2.7のsingle-frame contractで、Serverが送信前にpayload長をpreflightします。Multimodal Transitもworld-wide single-frame contractのため送信前にpayload長をpreflightし、1 MiB超過時はstructured Errorへ変換します。Person inspectionの明示clearは2.9以降で利用できます。
 
 codecはstable ID、enum、finite値、payload length、collection構造などwire境界で検証します。Simulationのmutable storeやWeb UI表示文言はProtocolへ持ち込みません。
 

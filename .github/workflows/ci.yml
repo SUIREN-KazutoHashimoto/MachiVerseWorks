@@ -114,7 +114,7 @@ jobs:
 
           print(f"Application version: {value}")
 
-      - name: Require application version increase against PR base
+      - name: Validate application version transition against PR base
         if: github.event_name == 'pull_request'
         shell: bash
         env:
@@ -124,11 +124,11 @@ jobs:
           git fetch --no-tags --depth=1 origin "$BASE_REF"
           base_version="$(git show FETCH_HEAD:VERSION | tr -d '\r\n')"
           current_version="$(tr -d '\r\n' < VERSION)"
-          python - "$base_version" "$current_version" <<'PY'
+          python - "$base_version" "$current_version" "$BASE_REF" <<'PY'
           import re
           import sys
 
-          base, current = sys.argv[1], sys.argv[2]
+          base, current, target = sys.argv[1], sys.argv[2], sys.argv[3]
           pattern = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 
           def parse(value: str) -> tuple[int, int, int]:
@@ -137,12 +137,29 @@ jobs:
                   raise SystemExit(f"Invalid application version: {value}")
               return tuple(int(part) for part in match.groups())
 
-          if parse(current) <= parse(base):
+          base_parts = parse(base)
+          current_parts = parse(current)
+
+          if target == "develop":
+              expected = (base_parts[0], base_parts[1] + 1, 0)
+              if current_parts != expected:
+                  expected_text = ".".join(map(str, expected))
+                  raise SystemExit(
+                      f"develop PR must set VERSION to {expected_text}; base is {base}, current is {current}."
+                  )
+          elif target == "main":
+              expected = (base_parts[0] + 1, 0, 0)
+              if current_parts != expected:
+                  expected_text = ".".join(map(str, expected))
+                  raise SystemExit(
+                      f"main PR must set VERSION to {expected_text}; base is {base}, current is {current}."
+                  )
+          elif current_parts <= base_parts:
               raise SystemExit(
                   f"Application VERSION must increase from PR base {base}; current is {current}."
               )
 
-          print(f"Application VERSION increase: base={base}, current={current}")
+          print(f"Application VERSION transition: target={target}, base={base}, current={current}")
           PY
 
       - name: Validate locale manifest

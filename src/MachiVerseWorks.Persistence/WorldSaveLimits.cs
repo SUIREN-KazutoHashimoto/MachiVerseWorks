@@ -53,13 +53,18 @@ public sealed class WorldSaveLimits
     {
         MaximumBytes = RequirePositive(maximumBytes, nameof(maximumBytes), "Maximum Save Data bytes");
         MaximumAgentCount = RequirePositive(maximumAgentCount, nameof(maximumAgentCount), "Maximum Agent count");
-        MaximumBuildingCount = RequirePositive(maximumBuildingCount, nameof(maximumBuildingCount), "Maximum Building count");
+        MaximumInfrastructureSiteCount = RequirePositive(maximumBuildingCount, nameof(maximumBuildingCount), "Maximum Building / Railway site count");
+        MaximumBuildingCount = MaximumInfrastructureSiteCount;
         MaximumPoiCount = RequirePositive(maximumPoiCount, nameof(maximumPoiCount), "Maximum POI count");
-        MaximumRoadNodeCount = RequirePositive(maximumRoadNodeCount, nameof(maximumRoadNodeCount), "Maximum RoadNode count");
-        MaximumRoadSegmentCount = RequirePositive(maximumRoadSegmentCount, nameof(maximumRoadSegmentCount), "Maximum RoadSegment count");
+        MaximumInfrastructureNodeCount = RequirePositive(maximumRoadNodeCount, nameof(maximumRoadNodeCount), "Maximum Road / Railway infrastructure node count");
+        MaximumRoadNodeCount = MaximumInfrastructureNodeCount;
+        MaximumInfrastructureSegmentCount = RequirePositive(maximumRoadSegmentCount, nameof(maximumRoadSegmentCount), "Maximum Road / Railway infrastructure segment count");
+        MaximumRoadSegmentCount = MaximumInfrastructureSegmentCount;
         MaximumLaneCount = RequirePositive(maximumLaneCount, nameof(maximumLaneCount), "Maximum Lane count");
-        MaximumLaneConnectionCount = RequirePositive(maximumLaneConnectionCount, nameof(maximumLaneConnectionCount), "Maximum LaneConnection count");
-        MaximumRoadAccessPointCount = RequirePositive(maximumRoadAccessPointCount, nameof(maximumRoadAccessPointCount), "Maximum RoadAccessPoint count");
+        MaximumInfrastructureConnectionCount = RequirePositive(maximumLaneConnectionCount, nameof(maximumLaneConnectionCount), "Maximum Road / Railway infrastructure connection count");
+        MaximumLaneConnectionCount = MaximumInfrastructureConnectionCount;
+        MaximumInfrastructureAccessPointCount = RequirePositive(maximumRoadAccessPointCount, nameof(maximumRoadAccessPointCount), "Maximum Road / Railway infrastructure access-point count");
+        MaximumRoadAccessPointCount = MaximumInfrastructureAccessPointCount;
         MaximumPedestrianCount = RequirePositive(maximumPedestrianCount, nameof(maximumPedestrianCount), "Maximum Pedestrian count");
         MaximumPedestrianCrossingCount = RequirePositive(maximumPedestrianCrossingCount, nameof(maximumPedestrianCrossingCount), "Maximum PedestrianCrossing count");
         MaximumVehicleCount = RequirePositive(maximumVehicleCount, nameof(maximumVehicleCount), "Maximum Vehicle count");
@@ -87,12 +92,17 @@ public sealed class WorldSaveLimits
     public int MaximumBytes { get; }
     public int MaximumAgentCount { get; }
     public int MaximumBuildingCount { get; }
+    public int MaximumInfrastructureSiteCount { get; }
     public int MaximumPoiCount { get; }
     public int MaximumRoadNodeCount { get; }
+    public int MaximumInfrastructureNodeCount { get; }
     public int MaximumRoadSegmentCount { get; }
+    public int MaximumInfrastructureSegmentCount { get; }
     public int MaximumLaneCount { get; }
     public int MaximumLaneConnectionCount { get; }
+    public int MaximumInfrastructureConnectionCount { get; }
     public int MaximumRoadAccessPointCount { get; }
+    public int MaximumInfrastructureAccessPointCount { get; }
     public int MaximumPedestrianCount { get; }
     public int MaximumPedestrianCrossingCount { get; }
     public int MaximumVehicleCount { get; }

@@ -32,7 +32,7 @@ MachiVerseWorks は、市民・道路交通・公共交通・物流・産業・�
 ## Current baseline
 
 - Application version: ルート[`VERSION`](VERSION)を正本とする
-- Protocol: **2.8**
+- Protocol: **2.9**
 - Save format: **10**
 - Phase 17 Railway Infrastructure: ✅ 完了
 - Phase 18 Railway Operations: ✅ 完了
@@ -48,7 +48,7 @@ MachiVerseWorks は、市民・道路交通・公共交通・物流・産業・�
 │      Browser 3D Client       │
 │  TypeScript / Three.js       │
 └──────────────┬───────────────┘
-               │ Protocol 2.8 / WebSocket
+               │ Protocol 2.9 / WebSocket
 ┌──────────────▼───────────────┐
 │     MachiVerseWorks.Server   │
 │ lifecycle / command / I/O    │

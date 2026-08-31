@@ -75,9 +75,13 @@ Client / Server 間のwire互換性を表します。
 
 - `A.B.C` の3整数形式であること
 - 前後に不要な文字や空白行を持たないこと
-- Pull Requestでは、PR側の`VERSION`がtarget/base branchの`VERSION`より**必ず大きい**こと
+- `develop`向けPull Requestでは、baseが`A.B.C`ならPR側を厳密に`A.(B+1).0`とすること
+- `main`向けPull Requestでは、baseが`A.B.C`ならPR側を厳密に`(A+1).0.0`とすること
+- その他のPR targetでは、PR側の`VERSION`がtarget/base branchより大きいこと
 
-baseとの比較は`A`, `B`, `C`を整数tupleとして行います。versionの後退または再利用を検出した場合はrepository jobを失敗させるため、必須`ci-gate`も失敗します。
+baseとの比較は`A`, `B`, `C`を整数tupleとして行います。`develop` / `main`では単なる増加だけでなく、上記のbranch別transitionを要求します。versionの後退・再利用・誤ったincrement種別を検出した場合はrepository jobを失敗させるため、必須`ci-gate`も失敗します。
+
+通常コミットの`C + 1`は運用規則として維持しますが、merge commit、bot、release運用との衝突を避けるため現時点のpush CIでは1 commitごとのpatch incrementまでは強制しません。PR境界ではtarget branchに対応するA/B transitionを必須とします。
 
 通常開発へ移行するときは、CIの必須ファイル一覧にも `VERSION` を追加します。
 
@@ -88,4 +92,4 @@ baseとの比較は`A`, `B`, `C`を整数tupleとして行います。versionの
 - Save format versionをアプリケーションversionで代用しない。
 - Git tagだけをversionの正本にしない。
 - build日時を公式versionの代わりにしない。
-- target/base branch以下の`VERSION`を持つPRを作らない。
+- target/base branchの規則に反する`VERSION`を持つPRを作らない。

@@ -11,12 +11,11 @@ import { PopulationMessageType, type PopulationProtocolMessage, type PopulationS
 import { MessageType, ProtocolErrorCode, type AgentStateMessage, type PedestrianStateMessage, type ProtocolErrorMessage, type ProtocolMessage, type WorldVolume } from './protocol.ts';
 import { RailwayInfrastructureLayer, RailwayMessageType, type RailwayProtocolMessage } from './railway-infrastructure.ts';
 import { RailwayOperationsLayer, RailwayOperationsMessageType, type RailwayOperationsProtocolMessage, type RailwayOperationsSnapshotMessage } from './railway-operations.ts';
+import { isRetryableSubscriptionDetailCode } from './subscription-error-policy.ts';
 import { ClientUi } from './ui.ts';
 import { TrafficMessageType, type TrafficProtocolMessage, type VehicleStateMessage } from './traffic-protocol.ts';
 import { IntersectionControlStore, VehicleStore } from './traffic-store.ts';
 import { WorldView } from './world-view.ts';
-
-const SUBSCRIPTION_TOO_LARGE_DETAIL_CODE = 'subscriptionVolumeTooLarge';
 
 export class Application {
   private readonly localizer = initializeLocalization();
@@ -171,7 +170,7 @@ export class Application {
   private handleProtocolError(message: ProtocolErrorMessage): void {
     const parameters: Record<string, string> = {};
     for (const parameter of message.parameters) parameters[parameter.key] = parameter.value;
-    if (message.code === ProtocolErrorCode.InvalidRequest && parameters.detailCode === SUBSCRIPTION_TOO_LARGE_DETAIL_CODE && this.view.zoomInForSubscriptionRetry()) {
+    if (message.code === ProtocolErrorCode.InvalidRequest && isRetryableSubscriptionDetailCode(parameters.detailCode) && this.view.zoomInForSubscriptionRetry()) {
       this.lastSubscription = null;
       this.lastSubscriptionAt = Number.NEGATIVE_INFINITY;
       this.ui.clearError();
