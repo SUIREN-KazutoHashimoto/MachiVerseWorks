@@ -1,7 +1,7 @@
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 22 — Logistics / Freight（実装完了 / develop統合待ち）
-> **次の実装タスク:** PR #165 の最終レビュー・検証を完了し、develop統合後にPhase 22を正式closeoutする
+> **現在:** Phase 23 — Power Infrastructure
+> **次の実装タスク:** P23-001 Generator / Substation / PowerLine / Loadの正本契約を仕様化する
 
 ## 全体の現在地
 
@@ -29,12 +29,16 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 19 | Multimodal Transit | ✅ 完了 |
 | 20 | Server Administration Console | ✅ 完了 |
 | 21 | Industry / Jobs / Economy | ✅ 完了 |
-| 22 | Logistics / Freight | 🟨 実装完了 / 統合待ち |
-| 23 | Power Infrastructure | ⏳ 待機 |
-| 24 | Urban Growth & City Generation | ⏳ 待機 |
-| 25 | City Management UI | ⏳ 待機 |
-| 26 | Distribution & Compatibility | ⏳ 待機 |
-| 27 | Extension Platform & Localization | ⏳ 待機 |
+| 22 | Logistics / Freight | ✅ 完了 |
+| 23 | Power Infrastructure | ▶️ 次 |
+| 24 | Water & Sewer Infrastructure | ⏳ 待機 |
+| 25 | Gas Infrastructure | ⏳ 待機 |
+| 26 | Optical Communication Infrastructure | ⏳ 待機 |
+| 27 | Radio & Spectrum Foundation | ⏳ 待機 |
+| 28 | Urban Growth & City Generation | ⏳ 待機 |
+| 29 | City Management UI | ⏳ 待機 |
+| 30 | Distribution & Compatibility | ⏳ 待機 |
+| 31 | Extension Platform & Localization | ⏳ 待機 |
 
 Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴として [`docs/archive/roadmap-through-phase9-plan.md`](docs/archive/roadmap-through-phase9-plan.md) に保存しています。Phase 13〜16の正式closeout時点のTask状態と検証証跡は [`docs/archive/roadmap-phase13-through-phase16-closeout.md`](docs/archive/roadmap-phase13-through-phase16-closeout.md) に保存しています。
 
@@ -72,6 +76,10 @@ Phase 0〜8の詳細TaskとPhase 9着手時点の計画状態は、履歴とし�
   -> Industry / Jobs / Economy
   -> Logistics / Freight
   -> Power Infrastructure
+  -> Water / Sewer Infrastructure
+  -> Gas Infrastructure
+  -> Optical Communication Infrastructure
+  -> Radio / Spectrum Foundation
   -> Urban Growth / City Generation
   -> City Management UI
   -> Distribution / Compatibility
@@ -111,8 +119,8 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 | --- | --- |
 | Road上のBuilding / POI access | Phase 11 `RoadAccessPoint` |
 | 徒歩networkへのBuilding / POI access | Phase 16 |
-| Parcel / zoning / land use / development | Phase 24 |
-| Building / Parcel / POIのInspector・編集UI | Phase 25 |
+| Parcel / zoning / land use / development | Phase 28 |
+| Building / Parcel / POIのInspector・編集UI | Phase 29 |
 | 建物mesh / floor / room / entrance | 必要になるdomain Phaseで契約追加。Phase 10では`WorldVolume`のみを正本とする |
 | PopulationによるPOI選択 | Phase 15 |
 
@@ -319,7 +327,7 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ## Phase 22 — Logistics / Freight
 
-> **状態: 🟨 実装完了 / develop統合待ち**
+> **状態: ✅ 完了**
 > **依存:** Phase 13 / 21
 > 生産・在庫・注文・Shipment・Freight Vehicleを接続し、都市内物流をSimulationする。
 
@@ -345,7 +353,7 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 - FreightがRoad Trafficの渋滞を共有し、配送遅延が観測できる。
 - Logistics stateを保存復元して継続できる。
 
-### Phase 22 implementation evidence
+### Phase 22 closeout evidence
 
 - Simulation: `Commodity` / `Inventory` / `LogisticsOrder` / `Shipment`をstable IDで保持し、Company production deltaを同一Company内で1回だけSupplier群へ配分する。未完了Orderは`(EstablishmentId, CommodityId)`のactive indexで管理し、ShipmentはPickup→Loading→InTransit→Unloading→Deliveredを遷移する。
 - Road Traffic / Routing: Freight Vehicleは既存Road Routing / VehicleStoreを再利用し、Arrived観測後にresident Vehicleを解放する。Shipmentにはhistorical `VehicleId`を残し、配送履歴の増加がRoad Traffic stateを無制限に増やさない。
@@ -357,7 +365,7 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 - Benchmark: Benchmarks run `33450666769`の`logistics-inventory-100-1000`で100 / 1,000 Inventory・Shipment historyのTick / RoutingBatch / Snapshotを全6ケース計測した。baselineは[`docs/development/logistics-freight-benchmark.md`](docs/development/logistics-freight-benchmark.md)を正本とする。
 - Dependency Review: run `33451262959`が成功した。
 - Specification / Architecture: [`docs/specifications/logistics-freight.md`](docs/specifications/logistics-freight.md)、[`docs/architecture/logistics-freight.md`](docs/architecture/logistics-freight.md)を正本とする。
-- PR #165はreview対応・実装検証済みだが、本ROADMAP更新時点では`develop`未統合である。統合後にPhase 22を正式closeoutし、Phase 23へ現在地を進める。
+- PR #165を`develop`へ統合済み（merge commit `002009d74af79a3bbeaf02675bee9d631013e7a3`）。Phase 22を正式closeoutする。
 
 ---
 
@@ -365,14 +373,14 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 > **状態: ⬜ 未着手**
 > **依存:** Phase 10 / 21
-> 発電・送配電・需要を都市Entityと接続し、電力供給状態をSimulationへ導入する。
+> 発電・送配電・需要を都市Entityと接続し、電力供給状態をSimulationへ導入する。標準Simulationは接続・capacity・需要による簡易計算とし、高精度な潮流・電圧等の物理計算は交換可能なsolver境界の外側へ分離する。
 
 - ⬜ **P23-001** — Generator / Substation / PowerLine / Loadの正本契約を仕様化する
 - ⬜ **P23-002** — PowerNode / PowerLine topologyとstable IDを実装する
 - ⬜ **P23-003** — Generator capacity / output / operating stateの最小モデルを実装する
 - ⬜ **P23-004** — Building / EstablishmentをPower Loadへ関連付ける契約を実装する
 - ⬜ **P23-005** — 時刻・用途・activityからload demandを計算する最小ruleを実装する
-- ⬜ **P23-006** — network接続とcapacityを考慮する簡易power balance / dispatchを実装する
+- ⬜ **P23-006** — network接続とcapacityを考慮する交換可能な簡易power balance / dispatch solver境界を実装する
 - ⬜ **P23-007** — insufficient supply時のunserved demand / outage stateを実装する
 - ⬜ **P23-008** — outageをBuilding / Industryの稼働状態へ反映する最小連携を実装する
 - ⬜ **P23-009** — Power stateをcheckpoint / Save Dataへ含める
@@ -387,33 +395,162 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 - 都市のBuilding / Industryに電力需要があり、発電・network capacityに応じて供給状態が変化する。
 - outageを保存・配信・可視化できる。
 - Power Simulationが他domainと疎結合な明確な境界を持つ。
+- 標準の簡易solverを維持したまま、将来のExtensionが詳細な物理solverを提供できる責務境界が存在する。
 
 ---
 
-## Phase 24 — Urban Growth & City Generation
+## Phase 24 — Water & Sewer Infrastructure
 
 > **状態: ⬜ 未着手**
-> **依存:** Phase 10〜19 / 21〜23の主要都市モデル
-> Parcel / Zoning / Land Useとdeterministic city generationを導入し、都市を手作業fixtureだけでなく生成・成長させられるようにする。Phase 10から委譲されたParcel / land-useの正本はこのPhaseで導入する。
+> **依存:** Phase 10 / 21 / 23
+> 上水道と下水道の3D topology、需要・排水、施設capacity、供給/処理状態を都市Entityへ接続する。標準Simulationは接続とcapacity中心の簡易計算とし、水圧・流量・管内流等の詳細水理計算は交換可能なsolver境界の外側へ分離する。
 
-- ⬜ **P24-001** — Parcel境界・Zone種別・土地利用・占有/development stateの正本契約を仕様化する
-- ⬜ **P24-002** — Parcel store / stable ID lifecycleとZone designationを設定するSimulation commandを実装する
-- ⬜ **P24-003** — Road access・parcel size・land useからdevelopment suitabilityを評価する
-- ⬜ **P24-004** — Zoneに応じたBuilding用途・規模候補を選ぶdevelopment ruleを実装する
-- ⬜ **P24-005** — 空ParcelへのBuilding development lifecycleを実装する
-- ⬜ **P24-006** — demand変化に応じたredevelopment / vacancyの最小ruleを実装する
-- ⬜ **P24-007** — seedからRoad Networkを生成するdeterministic generatorを実装する
-- ⬜ **P24-008** — Road NetworkからParcelを生成するdeterministic subdivisionを実装する
-- ⬜ **P24-009** — Parcel / ZoneからBuilding / POIを生成するdeterministic generatorを実装する
-- ⬜ **P24-010** — 初期Population / Household / Jobを生成都市へ配置するseeding処理を実装する
-- ⬜ **P24-011** — Railway / Power等の既存Infrastructureを壊さないgeneration constraintを定義する
-- ⬜ **P24-012** — Parcel / Zone / city generation設定・seed・生成結果をSave / checkpoint契約へ統合する
-- ⬜ **P24-013** — Parcel / Zone / development stateをProtocol / Serverで配信し、Web Clientで可視化する
-- ⬜ **P24-014** — 同一seedで同一都市を生成するreproducibility E2Eを追加する
-- ⬜ **P24-015** — 小/中/大規模都市generation時間・memory・初期Simulation負荷benchmarkを記録する
-- ⬜ **P24-016** — Urban Growth / City Generationのspecification / architecture / ROADMAPを同期する
+- ⬜ **P24-001** — Water / Sewerの責務、単位、流向、簡易solverと高精度水理solverの境界を仕様化する
+- ⬜ **P24-002** — WaterNode / WaterPipe / SewerNode / SewerPipeのstable IDと3D topologyを実装する
+- ⬜ **P24-003** — WaterSource / Reservoir / Pump / SewageTreatmentPlantのcapacity・operating state最小モデルを実装する
+- ⬜ **P24-004** — Building / EstablishmentをWater / Sewer service pointへ関連付ける契約を実装する
+- ⬜ **P24-005** — Building用途・Population / Industry activityからwater demandとwastewater generationを計算する最小ruleを実装する
+- ⬜ **P24-006** — network接続とcapacityを考慮する交換可能な簡易Water Supply solverを実装する
+- ⬜ **P24-007** — treatment到達性とnetwork capacityを考慮する交換可能な簡易Sewer solverを実装する
+- ⬜ **P24-008** — unserved water / sewer unavailable / overflow等のservice stateを実装する
+- ⬜ **P24-009** — pump / treatment facilityの停止や停電をBuilding / Industryのservice stateへ反映する最小連携を実装する
+- ⬜ **P24-010** — Water / Sewer topologyの3D spatial queryと参照整合性validationを実装する
+- ⬜ **P24-011** — Water / Sewer stateをcheckpoint / Save Dataへ含める
+- ⬜ **P24-012** — Water / Sewer topology・demand・capacity・service stateをProtocol / Serverで配信する
+- ⬜ **P24-013** — Web Clientで配管・施設・供給/排水状態をdebug可視化する
+- ⬜ **P24-014** — 需要変動・施設停止・network切断・復旧を検証するdeterministic E2Eを追加する
+- ⬜ **P24-015** — 大規模Water / Sewer node・pipe・loadのtick・topology benchmarkを記録する
+- ⬜ **P24-016** — Water & Sewer Infrastructureのspecification / architecture / ROADMAPを同期する
 
 ### Phase 24 完了条件
+
+- Building / Industryが上水道と下水道へ接続され、需要・排水量とnetwork / facility capacityに応じてservice stateが変化する。
+- Water / Sewer topologyとservice stateを保存・配信・可視化できる。
+- 標準Simulationの完了に詳細な水圧・流量・管内流計算を要求せず、将来のExtensionが高精度solverを差し替えられる境界を持つ。
+
+---
+
+## Phase 25 — Gas Infrastructure
+
+> **状態: ⬜ 未着手**
+> **依存:** Phase 10 / 21 / 22 / 23
+> 配管によるガス供給と、LPガス等を想定した物流による配達供給を同じ都市需要へ接続する。標準の配管Simulationは接続・capacity中心とし、圧力・流量等の詳細物理計算は交換可能なsolver境界の外側へ分離する。
+
+- ⬜ **P25-001** — Pipeline Gas / Delivered Gasの責務、単位、需要・在庫・簡易solver境界を仕様化する
+- ⬜ **P25-002** — GasNode / GasPipe topologyとstable IDを実装する
+- ⬜ **P25-003** — GasSource / Storage / Regulatorのcapacity・operating state最小モデルを実装する
+- ⬜ **P25-004** — Building / EstablishmentをGas Loadへ関連付け、Pipeline / Delivered供給方式を表す契約を実装する
+- ⬜ **P25-005** — Building用途・Population / Industry activityからgas demandを計算する最小ruleを実装する
+- ⬜ **P25-006** — network接続とcapacityを考慮する交換可能な簡易Pipeline Gas solverを実装する
+- ⬜ **P25-007** — insufficient supply / pipe cut / facility停止時のunserved demand / outage stateを実装する
+- ⬜ **P25-008** — Delivered Gas向けBuilding / Establishment storage・inventory・capacityモデルを実装する
+- ⬜ **P25-009** — Delivered Gas inventory閾値から補充Orderを生成する最小ruleを実装する
+- ⬜ **P25-010** — Delivered Gasの補充を既存Logistics / Freightへ接続し、積載・道路輸送・配送・在庫補充を再利用する
+- ⬜ **P25-011** — Gas topologyの3D spatial queryと参照整合性validationを実装する
+- ⬜ **P25-012** — Pipeline / Delivered Gas stateをcheckpoint / Save Dataへ含める
+- ⬜ **P25-013** — Gas topology・demand・inventory・shipment・service stateをProtocol / Serverで配信する
+- ⬜ **P25-014** — Web ClientでGas pipe・施設・配送在庫・供給状態をdebug可視化する
+- ⬜ **P25-015** — pipe供給と配送供給の需要・障害・在庫切れ・復旧を検証するdeterministic E2Eを追加する
+- ⬜ **P25-016** — 大規模Gas node/loadとDelivered Gas inventory / Shipmentのtick・topology benchmarkを記録する
+- ⬜ **P25-017** — Gas Infrastructureのspecification / architecture / ROADMAPを同期する
+
+### Phase 25 完了条件
+
+- Pipeline Gasはnetwork接続とcapacityによりBuilding / Industryへ供給され、供給不足や切断をservice stateとして観測できる。
+- Delivered Gasは既存Logisticsを再利用して道路輸送され、需要側storage / inventoryを補充できる。
+- 配管の詳細な圧力・流量計算を標準完了条件に含めず、将来のExtensionが高精度solverを差し替えられる。
+
+---
+
+## Phase 26 — Optical Communication Infrastructure
+
+> **状態: ⬜ 未着手**
+> **依存:** Phase 10 / 21 / 23
+> 光ファイバーを中心とする固定通信のphysical topology、access、traffic demand、bandwidth、congestion、障害を都市Entityへ接続する。標準Simulationはroutingとcapacity中心とし、光損失・分散等の詳細伝送計算は交換可能なsolver境界の外側へ分離する。
+
+- ⬜ **P26-001** — Optical Communicationの責務、traffic / bandwidth単位、簡易solverと詳細光伝送solverの境界を仕様化する
+- ⬜ **P26-002** — OpticalNode / FiberLinkのstable IDと3D topologyを実装する
+- ⬜ **P26-003** — Exchange / CoreGateway / AggregationNode / AccessNodeの最小Infrastructureモデルを実装する
+- ⬜ **P26-004** — Building / Establishmentをfixed communication accessへ関連付ける契約を実装する
+- ⬜ **P26-005** — Building用途・Population / Industry activityからcommunication traffic demandを計算する最小ruleを実装する
+- ⬜ **P26-006** — topology routingとbottleneck capacityを考慮する交換可能な簡易Optical Network solverを実装する
+- ⬜ **P26-007** — capacity超過時のcongestion・available bandwidth・簡易latency stateを実装する
+- ⬜ **P26-008** — Fiber cut・node停止・停電による通信outageと復旧を実装する
+- ⬜ **P26-009** — 将来のRadio Site / Base Station等がbackhaulとしてOptical Networkへ接続できる参照境界を実装する
+- ⬜ **P26-010** — Optical topologyの3D spatial queryと参照整合性validationを実装する
+- ⬜ **P26-011** — Optical Communication stateをcheckpoint / Save Dataへ含める
+- ⬜ **P26-012** — Optical topology・traffic・capacity・congestion・outageをProtocol / Serverで配信する
+- ⬜ **P26-013** — Web ClientでFiber / node / access / congestion / outageをdebug可視化する
+- ⬜ **P26-014** — traffic増加・Fiber cut・停電・backhaul復旧を検証するdeterministic E2Eを追加する
+- ⬜ **P26-015** — 大規模Optical node/link/loadのrouting・tick・topology benchmarkを記録する
+- ⬜ **P26-016** — Optical Communication Infrastructureのspecification / architecture / ROADMAPを同期する
+
+### Phase 26 完了条件
+
+- Building / IndustryがOptical Networkへ接続され、traffic demandとlink / node capacityに応じてbandwidth・congestion・outage stateが変化する。
+- Radio等の後続domainがbackhaulとして参照できる安定した通信Infrastructure境界を持つ。
+- 詳細な光伝送物理を標準完了条件に含めず、将来のExtensionが高精度solverを差し替えられる。
+
+---
+
+## Phase 27 — Radio & Spectrum Foundation
+
+> **状態: ⬜ 未着手**
+> **依存:** Phase 10 / 23 / 26
+> LTE等の特定通信方式へ依存しないRadio / Spectrumの共通基盤を作り、周波数・送受信機・アンテナ・伝搬・干渉を都市の3D空間上で扱えるようにする。標準Simulationは軽量な簡易伝搬を用い、詳細な電磁界・ray tracing等は交換可能なsolver境界の外側へ分離する。
+
+- ⬜ **P27-001** — Radio / Spectrum Foundationの用途非依存責務、単位、determinism、solver境界を仕様化する
+- ⬜ **P27-002** — SpectrumBand / RadioChannelと周波数・bandwidth・overlapのstable契約を実装する
+- ⬜ **P27-003** — RadioSite / Transmitter / Receiver / Antenna / Emissionのstable IDとstateモデルを実装する
+- ⬜ **P27-004** — Antennaの3D position・orientation・gain・簡易radiation pattern契約を実装する
+- ⬜ **P27-005** — Transmissionのfrequency・bandwidth・transmit power・operating stateを実装する
+- ⬜ **P27-006** — Receiverの受信帯域・sensitivityと送受信候補を評価する共通契約を実装する
+- ⬜ **P27-007** — Radio Foundationから独立して差し替え可能な`IRadioPropagationSolver`相当のsolver境界を実装する
+- ⬜ **P27-008** — 距離・周波数・送信電力・antenna gainからreceived powerを求める軽量な標準propagation solverを実装する
+- ⬜ **P27-009** — Building `WorldVolume`を使うLoS / NLoS・簡易obstruction / penetration penaltyを実装する
+- ⬜ **P27-010** — 周波数帯域が重なるEmissionを候補化する簡易interference計算を実装する
+- ⬜ **P27-011** — received power・noise / interference・SINR等の用途非依存Radio Link resultを実装する
+- ⬜ **P27-012** — 大量Transmitterを全件走査しない3D spatial index / candidate queryを実装する
+- ⬜ **P27-013** — Radio Siteの電力供給とOptical backhaul参照を既存Infrastructureへ接続する
+- ⬜ **P27-014** — Radio / Spectrum stateをcheckpoint / Save Dataへ含める
+- ⬜ **P27-015** — Radio site・spectrum・emission・coverage / link resultをProtocol / Serverで配信する
+- ⬜ **P27-016** — Web ClientでRadio site・antenna・channel・簡易coverage / interferenceをdebug可視化する
+- ⬜ **P27-017** — 複数周波数・複数送信源・遮蔽・干渉・停電/backhaul障害を検証するdeterministic E2Eを追加する
+- ⬜ **P27-018** — 大規模Transmitter / Receiver / spectrum query / propagationのbenchmarkを記録する
+- ⬜ **P27-019** — Radio & Spectrum Foundationのspecification / architecture / ROADMAPを同期する
+
+### Phase 27 完了条件
+
+- LTE / 5G / Wi-Fi / Broadcast等の個別方式をRadio Foundationの正本へ埋め込まず、共通の周波数・送受信・アンテナ・伝搬・干渉結果を扱える。
+- 3D World上の位置・建物遮蔽・複数Emissionを考慮した軽量でdeterministicな標準Radio Simulationが成立する。
+- 詳細なreflection / diffraction / multipath / terrain / material / ray tracing等を標準完了条件に含めず、将来のExtensionが高精度propagation solverを差し替えられる。
+
+---
+
+## Phase 28 — Urban Growth & City Generation
+
+> **状態: ⬜ 未着手**
+> **依存:** Phase 10〜19 / 21〜27の主要都市モデル
+> Parcel / Zoning / Land Useとdeterministic city generationを導入し、都市を手作業fixtureだけでなく生成・成長させられるようにする。Phase 10から委譲されたParcel / land-useの正本はこのPhaseで導入する。
+
+- ⬜ **P28-001** — Parcel境界・Zone種別・土地利用・占有/development stateの正本契約を仕様化する
+- ⬜ **P28-002** — Parcel store / stable ID lifecycleとZone designationを設定するSimulation commandを実装する
+- ⬜ **P28-003** — Road access・parcel size・land useからdevelopment suitabilityを評価する
+- ⬜ **P28-004** — Zoneに応じたBuilding用途・規模候補を選ぶdevelopment ruleを実装する
+- ⬜ **P28-005** — 空ParcelへのBuilding development lifecycleを実装する
+- ⬜ **P28-006** — demand変化に応じたredevelopment / vacancyの最小ruleを実装する
+- ⬜ **P28-007** — seedからRoad Networkを生成するdeterministic generatorを実装する
+- ⬜ **P28-008** — Road NetworkからParcelを生成するdeterministic subdivisionを実装する
+- ⬜ **P28-009** — Parcel / ZoneからBuilding / POIを生成するdeterministic generatorを実装する
+- ⬜ **P28-010** — 初期Population / Household / Jobを生成都市へ配置するseeding処理を実装する
+- ⬜ **P28-011** — Railway / Power / Water / Sewer / Gas / Optical / Radio等の既存Infrastructureを壊さないgeneration constraintを定義する
+- ⬜ **P28-012** — Parcel / Zone / city generation設定・seed・生成結果をSave / checkpoint契約へ統合する
+- ⬜ **P28-013** — Parcel / Zone / development stateをProtocol / Serverで配信し、Web Clientで可視化する
+- ⬜ **P28-014** — 同一seedで同一都市を生成するreproducibility E2Eを追加する
+- ⬜ **P28-015** — 小/中/大規模都市generation時間・memory・初期Simulation負荷benchmarkを記録する
+- ⬜ **P28-016** — Urban Growth / City Generationのspecification / architecture / ROADMAPを同期する
+
+### Phase 28 完了条件
 
 - Parcel / Zone / land-useがSimulation正本として存在し、Zone指定からBuilding developmentへ状態が遷移できる。
 - 同一seed・設定から同一のRoad / Parcel / Buildingを再生成できる。
@@ -421,31 +558,35 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ---
 
-## Phase 25 — City Management UI
+## Phase 29 — City Management UI
 
 > **状態: ⬜ 未着手**
-> **依存:** Phase 24
+> **依存:** Phase 28
 > Browserから都市状態を調査・編集・管理するためのserver-authoritative UIとcommand境界を整える。
 
-- ⬜ **P25-001** — Build / Edit commandの認可・validation・ack/error契約を仕様化する
-- ⬜ **P25-002** — Protocolへserver-authoritative command request / resultの共通枠組みを追加する
-- ⬜ **P25-003** — Web Clientで3D Entityを選択するpicking / selection基盤を実装する
-- ⬜ **P25-004** — Building / Parcel / POI / Person / Vehicle等をServer read modelから表示するInspector基盤を実装する
-- ⬜ **P25-005** — Road / Laneのbuild / edit / remove commandとUIを実装する
-- ⬜ **P25-006** — Building / POI / Parcel / Zoneのbuild / edit commandとUIを実装する
-- ⬜ **P25-007** — Railway track / station / platformのbuild / edit commandとUIを実装する
-- ⬜ **P25-008** — Power Infrastructureのbuild / edit commandとUIを実装する
-- ⬜ **P25-009** — command失敗時にClient側だけ状態が進まないoptimistic-state禁止またはrollback方針を実装する
-- ⬜ **P25-010** — Simulation speed / pause / resume等の運転controlをServer commandとして実装する
-- ⬜ **P25-011** — Population / Traffic / Transit / Economy / Logistics / PowerのDashboard統計を実装する
-- ⬜ **P25-012** — Server configurationの変更可能項目・restart必要項目を分離してUI化する
-- ⬜ **P25-013** — current Save formatのsave / load操作をServer経由で実行する管理UIを追加する
-- ⬜ **P25-014** — destructive commandのconfirmationとstable error localizationを実装する
-- ⬜ **P25-015** — Inspector / build / edit / config / save操作のBrowser E2Eを追加する
-- ⬜ **P25-016** — 大規模都市でselection・overlay・dashboardが描画hot pathを阻害しないperformance testを追加する
-- ⬜ **P25-017** — City Management UIのarchitecture / UX contract / ROADMAPを同期する
+- ⬜ **P29-001** — Build / Edit commandの認可・validation・ack/error契約を仕様化する
+- ⬜ **P29-002** — Protocolへserver-authoritative command request / resultの共通枠組みを追加する
+- ⬜ **P29-003** — Web Clientで3D Entityを選択するpicking / selection基盤を実装する
+- ⬜ **P29-004** — Building / Parcel / POI / Person / Vehicle等をServer read modelから表示するInspector基盤を実装する
+- ⬜ **P29-005** — Road / Laneのbuild / edit / remove commandとUIを実装する
+- ⬜ **P29-006** — Building / POI / Parcel / Zoneのbuild / edit commandとUIを実装する
+- ⬜ **P29-007** — Railway track / station / platformのbuild / edit commandとUIを実装する
+- ⬜ **P29-008** — Power Infrastructureのbuild / edit commandとUIを実装する
+- ⬜ **P29-009** — Water / Sewer Infrastructureのbuild / edit commandとUIを実装する
+- ⬜ **P29-010** — Gas Infrastructureのbuild / edit commandとUIを実装する
+- ⬜ **P29-011** — Optical Communication Infrastructureのbuild / edit commandとUIを実装する
+- ⬜ **P29-012** — Radio Site / Antenna / Spectrum設定のbuild / edit commandとUIを実装する
+- ⬜ **P29-013** — command失敗時にClient側だけ状態が進まないoptimistic-state禁止またはrollback方針を実装する
+- ⬜ **P29-014** — Simulation speed / pause / resume等の運転controlをServer commandとして実装する
+- ⬜ **P29-015** — Population / Traffic / Transit / Economy / Logistics / Power / Utility / Communication / RadioのDashboard統計を実装する
+- ⬜ **P29-016** — Server configurationの変更可能項目・restart必要項目を分離してUI化する
+- ⬜ **P29-017** — current Save formatのsave / load操作をServer経由で実行する管理UIを追加する
+- ⬜ **P29-018** — destructive commandのconfirmationとstable error localizationを実装する
+- ⬜ **P29-019** — Inspector / build / edit / config / save操作のBrowser E2Eを追加する
+- ⬜ **P29-020** — 大規模都市でselection・overlay・dashboardが描画hot pathを阻害しないperformance testを追加する
+- ⬜ **P29-021** — City Management UIのarchitecture / UX contract / ROADMAPを同期する
 
-### Phase 25 完了条件
+### Phase 29 完了条件
 
 - 都市の主要EntityをBrowserから選択・調査できる。
 - build/edit操作は必ずServer-authoritative commandを経由し、Clientだけで正本状態を変更しない。
@@ -453,36 +594,36 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ---
 
-## Phase 26 — Distribution & Compatibility
+## Phase 30 — Distribution & Compatibility
 
 > **状態: ⬜ 未着手**
-> **依存:** Phase 25
+> **依存:** Phase 29
 > Save migrationと配布物を整備し、開発環境外でもversion付き成果物として起動・更新・復元できる状態にする。
 
 ### Save互換性
 
-- ⬜ **P26-001** — Save migrationのsupport範囲・失敗契約・version policyを仕様化する
-- ⬜ **P26-002** — Save formatごとのmigration stepを登録できるframeworkを実装する
-- ⬜ **P26-003** — repositoryに旧Save format fixtureを保持し、自動migration testを追加する
-- ⬜ **P26-004** — migration中断・unsupported version・破損dataを安全に拒否する
-- ⬜ **P26-005** — migration前後でstable IDと継続可能stateを保持するintegration testを追加する
+- ⬜ **P30-001** — Save migrationのsupport範囲・失敗契約・version policyを仕様化する
+- ⬜ **P30-002** — Save formatごとのmigration stepを登録できるframeworkを実装する
+- ⬜ **P30-003** — repositoryに旧Save format fixtureを保持し、自動migration testを追加する
+- ⬜ **P30-004** — migration中断・unsupported version・破損dataを安全に拒否する
+- ⬜ **P30-005** — migration前後でstable IDと継続可能stateを保持するintegration testを追加する
 
 ### 配布・Deployment
 
-- ⬜ **P26-006** — Server standalone binaryのsupported OS / architecture matrixを定義する
-- ⬜ **P26-007** — Windows / Linux向けServer publish artifactをCIで生成する
-- ⬜ **P26-008** — 必要性を検証した上で追加architecture / OS向けartifactを生成する
-- ⬜ **P26-009** — Web Client production buildのbase path / Server endpoint設定をdeployment向けに整理する
-- ⬜ **P26-010** — static hosting向けWeb Client artifactをCIで生成する
-- ⬜ **P26-011** — Server用container imageとruntime configuration契約を実装する
-- ⬜ **P26-012** — release artifactへVERSION・commit SHA・license / third-party noticeを同梱する
-- ⬜ **P26-013** — release artifactのchecksum / SBOM等、配布時に必要なintegrity metadataを生成する
-- ⬜ **P26-014** — package / binary / Web / containerを起動するrelease smoke testをCIへ追加する
-- ⬜ **P26-015** — install / upgrade / rollback / backup / restore手順をdocument化する
-- ⬜ **P26-016** — develop→main release時のversion / artifact / release note手順を自動化可能な形へ整理する
-- ⬜ **P26-017** — Distribution / Compatibilityのarchitecture / development docs / ROADMAPを同期する
+- ⬜ **P30-006** — Server standalone binaryのsupported OS / architecture matrixを定義する
+- ⬜ **P30-007** — Windows / Linux向けServer publish artifactをCIで生成する
+- ⬜ **P30-008** — 必要性を検証した上で追加architecture / OS向けartifactを生成する
+- ⬜ **P30-009** — Web Client production buildのbase path / Server endpoint設定をdeployment向けに整理する
+- ⬜ **P30-010** — static hosting向けWeb Client artifactをCIで生成する
+- ⬜ **P30-011** — Server用container imageとruntime configuration契約を実装する
+- ⬜ **P30-012** — release artifactへVERSION・commit SHA・license / third-party noticeを同梱する
+- ⬜ **P30-013** — release artifactのchecksum / SBOM等、配布時に必要なintegrity metadataを生成する
+- ⬜ **P30-014** — package / binary / Web / containerを起動するrelease smoke testをCIへ追加する
+- ⬜ **P30-015** — install / upgrade / rollback / backup / restore手順をdocument化する
+- ⬜ **P30-016** — develop→main release時のversion / artifact / release note手順を自動化可能な形へ整理する
+- ⬜ **P30-017** — Distribution / Compatibilityのarchitecture / development docs / ROADMAPを同期する
 
-### Phase 26 完了条件
+### Phase 30 完了条件
 
 - 開発toolchainを手作業構築しなくても、配布artifactからServerとWeb Clientを起動できる。
 - 対応対象の旧Save Dataを明示的なmigration経路で読み込める。
@@ -490,43 +631,44 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ---
 
-## Phase 27 — Extension Platform & Localization
+## Phase 31 — Extension Platform & Localization
 
 > **状態: ⬜ 未着手**
-> **依存:** Phase 26
-> 正本Simulationと互換性境界を壊さず、外部拡張と追加localeを導入できる公開拡張基盤を作る。
+> **依存:** Phase 30
+> 正本Simulationと互換性境界を壊さず、外部拡張・高精度solver・追加localeを導入できる公開拡張基盤を作る。
 
 ### Extension Platform
 
-- ⬜ **P27-001** — Extension / Modで公開する範囲と非公開内部APIの境界を仕様化する
-- ⬜ **P27-002** — Extension manifest・stable ID・version・dependency契約を定義する
-- ⬜ **P27-003** — data-only extensionとcode extensionを分離したloading modelを設計する
-- ⬜ **P27-004** — code extensionの信頼境界・権限・非sandbox性を明示し、安全なdefault policyを実装する
-- ⬜ **P27-005** — Simulationへextension contentを登録するversioned public APIを実装する
-- ⬜ **P27-006** — Extension固有Save Dataをnamespace付きで保存し、missing extension時の挙動を定義する
-- ⬜ **P27-007** — Protocolへextension固有wire typeを直接衝突させない拡張契約を設計する
-- ⬜ **P27-008** — Extensionのload order / dependency cycle / incompatible versionをvalidationする
-- ⬜ **P27-009** — Extension packageの開発・test用templateとsample extensionを追加する
+- ⬜ **P31-001** — Extension / Modで公開する範囲と非公開内部APIの境界を仕様化する
+- ⬜ **P31-002** — Extension manifest・stable ID・version・dependency契約を定義する
+- ⬜ **P31-003** — data-only extensionとcode extensionを分離したloading modelを設計する
+- ⬜ **P31-004** — code extensionの信頼境界・権限・非sandbox性を明示し、安全なdefault policyを実装する
+- ⬜ **P31-005** — Simulationへextension contentとPower / Water / Sewer / Gas / Optical / Radio等のsolver providerを登録するversioned public APIを実装する
+- ⬜ **P31-006** — Extension固有Save Dataをnamespace付きで保存し、missing extension時の挙動を定義する
+- ⬜ **P31-007** — Protocolへextension固有wire typeを直接衝突させない拡張契約を設計する
+- ⬜ **P31-008** — Extensionのload order / dependency cycle / incompatible versionをvalidationする
+- ⬜ **P31-009** — Extension packageの開発・test用templateとsample extensionを追加する
 
 ### Localization
 
-- ⬜ **P27-010** — `ja-JP`をdefaultにしたlocale discovery / fallback policyを再確認・固定する
-- ⬜ **P27-011** — 追加locale resource packを導入できるWeb Client loading境界を実装する
-- ⬜ **P27-012** — 数値・日時・単位・plural等のlocale formattingを共通化する
-- ⬜ **P27-013** — stable error code / structured parameterから各localeの表示文を生成するcoverageを拡張する
-- ⬜ **P27-014** — translation key欠落・未使用key・parameter不一致をCIで検出する
-- ⬜ **P27-015** — 少なくとも1つの追加localeで主要UI / Inspector / Dashboard / error表示をE2E確認する
+- ⬜ **P31-010** — `ja-JP`をdefaultにしたlocale discovery / fallback policyを再確認・固定する
+- ⬜ **P31-011** — 追加locale resource packを導入できるWeb Client loading境界を実装する
+- ⬜ **P31-012** — 数値・日時・単位・plural等のlocale formattingを共通化する
+- ⬜ **P31-013** — stable error code / structured parameterから各localeの表示文を生成するcoverageを拡張する
+- ⬜ **P31-014** — translation key欠落・未使用key・parameter不一致をCIで検出する
+- ⬜ **P31-015** — 少なくとも1つの追加localeで主要UI / Inspector / Dashboard / error表示をE2E確認する
 
 ### Closeout
 
-- ⬜ **P27-016** — Extension有無・追加locale有無でSave / Protocol / Simulation determinismが壊れないintegration testを追加する
-- ⬜ **P27-017** — Extension loadingとlocalizationのstartup / memory costをbenchmarkする
-- ⬜ **P27-018** — Extension author guide / localization guide / compatibility policyを整備する
-- ⬜ **P27-019** — architecture / ADR / ROADMAPを同期し、Phase 10〜27で計画した旧Backlogのcloseoutを確認する
+- ⬜ **P31-016** — Extension有無・solver差し替え有無・追加locale有無でSave / Protocol / Simulation determinismが壊れないintegration testを追加する
+- ⬜ **P31-017** — Extension loading・solver provider・localizationのstartup / memory costをbenchmarkする
+- ⬜ **P31-018** — Extension author guide / solver provider guide / localization guide / compatibility policyを整備する
+- ⬜ **P31-019** — architecture / ADR / ROADMAPを同期し、Phase 10〜31で計画した旧Backlogのcloseoutを確認する
 
-### Phase 27 完了条件
+### Phase 31 完了条件
 
 - 既存Simulation内部実装へ直接依存せず、versionedな公開境界からExtensionを追加できる。
+- 標準の軽量Infrastructure solverを維持したまま、Extensionが高精度な物理solverを安全に差し替えられる。
 - Extension固有stateがSave Dataと衝突せず、missing/incompatible extensionを安全に扱える。
 - `ja-JP`以外のlocaleを主要UIへ追加でき、Protocol / Save / Simulationへ翻訳済み文言を持ち込まない。
 
@@ -534,7 +676,7 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ## 旧「将来 Backlog」のPhase移行
 
-Phase 9終了時点で列挙していた将来Backlogは、以下の通りPhase 10〜27へ移行した。今後は各Phase内Taskを正本として追跡する。
+Phase 9終了時点で列挙していた将来Backlogは、以下の通りPhase 10〜31へ移行した。今後は各Phase内Taskを正本として追跡する。
 
 | 旧Backlogテーマ | 移行先 |
 | --- | --- |
@@ -552,28 +694,33 @@ Phase 9終了時点で列挙していた将来Backlogは、以下の通りPhase 
 | Industry / jobs / economy | Phase 21 |
 | Logistics / freight | Phase 22 |
 | Power generation / grid / demand | Phase 23 |
-| Parcel / zoning / land use | Phase 24 |
-| City generation | Phase 24 |
-| Inspector / dashboard / statistics UI | Phase 25 |
-| Build / edit commands | Phase 25 |
-| Server configuration UI | Phase 25 |
-| Save migration | Phase 26 |
-| Release packaging | Phase 26 |
-| Server binary distribution | Phase 26 |
-| Web Client deployment | Phase 26 |
-| Container image | Phase 26 |
-| Mod / extension architecture | Phase 27 |
-| Additional locales | Phase 27 |
+| Water supply / sewer network | Phase 24 |
+| Pipeline gas / delivered gas | Phase 25 |
+| Optical / fixed communication network | Phase 26 |
+| Radio / spectrum / propagation foundation | Phase 27 |
+| Parcel / zoning / land use | Phase 28 |
+| City generation | Phase 28 |
+| Inspector / dashboard / statistics UI | Phase 29 |
+| Build / edit commands | Phase 29 |
+| Server configuration UI | Phase 29 |
+| Save migration | Phase 30 |
+| Release packaging | Phase 30 |
+| Server binary distribution | Phase 30 |
+| Web Client deployment | Phase 30 |
+| Container image | Phase 30 |
+| Mod / extension architecture | Phase 31 |
+| High-fidelity infrastructure solver extensions | Phase 31 |
+| Additional locales | Phase 31 |
 
 ## Phase 9から継続する計画済み項目
 
-Phase 9では「3D座標を正本として扱える基盤」までを完了とし、具体的な物理・地形ルールは後続へ分離していた。Phase 10〜27へ直接割り当てられない項目も消さず、現行Backlogとして保持する。
+Phase 9では「3D座標を正本として扱える基盤」までを完了とし、具体的な物理・地形ルールは後続へ分離していた。Phase 10〜31へ直接割り当てられない項目も消さず、現行Backlogとして保持する。
 
 | Phase 9で非対象とした項目 | 現在の扱い |
 | --- | --- |
 | 道路・線路・建物ごとの高度制約 | Phase 10 / 11 / 17の3D geometry・topology・validationで扱う |
 | 地下・高架を考慮したpathfinding | Phase 12で扱う |
-| 旧Save formatから新formatへのmigration | Phase 26で扱う |
+| 旧Save formatから新formatへのmigration | Phase 30で扱う |
 | 重力・落下・ジャンプ等の垂直物理 | 継続Backlog（Phase未割当） |
 | 飛行・空中移動等のairborne movement | 継続Backlog（Phase未割当） |
 | terrain model / terrain collision | 継続Backlog（Phase未割当） |
@@ -581,7 +728,7 @@ Phase 9では「3D座標を正本として扱える基盤」までを完了と�
 
 ### 継続Backlog（Phase未割当）
 
-以下は計画済みだが、Phase 10〜27の完了に必須とはしない。着手時に独立Phaseまたは既存Phaseへの追加Taskとして分解する。
+以下は計画済みだが、Phase 10〜31の完了に必須とはしない。着手時に独立Phaseまたは既存Phaseへの追加Taskとして分解する。
 
 - Physics Foundation — 重力、落下、ジャンプ、垂直速度・加速度、物理stateのSave / Protocol / E2E
 - Airborne Movement — 飛行可能Entity、空中経路、飛行高度ルール、3D空間交通との競合境界
