@@ -80,14 +80,19 @@ def github_heading_slug(text: str) -> str:
 def heading_anchors(markdown: str) -> set[str]:
     without_fences = FENCED_CODE_RE.sub("", markdown)
     anchors: set[str] = set()
-    occurrences: dict[str, int] = {}
+    next_suffix: dict[str, int] = {}
     for match in HEADING_RE.finditer(without_fences):
         base = github_heading_slug(match.group(1))
         if not base:
             continue
-        occurrence = occurrences.get(base, 0)
-        anchor = base if occurrence == 0 else f"{base}-{occurrence}"
-        occurrences[base] = occurrence + 1
+
+        suffix = next_suffix.get(base, 0)
+        anchor = base if suffix == 0 else f"{base}-{suffix}"
+        while anchor in anchors:
+            suffix += 1
+            anchor = f"{base}-{suffix}"
+
+        next_suffix[base] = suffix + 1
         anchors.add(anchor)
     return anchors
 
