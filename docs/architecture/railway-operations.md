@@ -6,9 +6,11 @@ Railway OperationsはRailway Infrastructure上に構築するmutable Simulation 
 
 `SimulationWorld.RailwayOperations`がpublic façade、`RailwayOperationsStore`がFormation / Route / Timetable / Service / Trainとruntime Block / Platform owner indexを所有する。
 
+Railway Operationsを一度初期化した後はInfrastructure mutationを拒否する。Operations storeは初期化時のInfrastructure snapshotからroute/block/platform/depot参照indexを構築するため、後からInfrastructureだけを書き換えてstale operations viewを作ることを許可しない。
+
 ## Authoritative / derived state
 
-Definitionはstable IDで1回保存し、Route construction時にTrack geometryをordered route step / cumulative distanceへ解決する。Service construction時にTimetable stopをroute distanceへ解決する。
+Definitionはstable IDで1回保存し、Route construction時にTrack geometryをordered route step / cumulative distanceへ解決する。各route stepはそのTrackSegmentが所属する`BlockSectionId?`も解決する。Service construction時にTimetable stopをroute distanceへ解決する。
 
 Train mutable stateはroute distance、pose、speed、movement state、Block / Platform / Depot reference、dwell departure tick。Service stateはlifecycle、delay、next-stop index、Train reference。
 
@@ -20,11 +22,30 @@ Train mutable stateはroute distance、pose、speed、movement state、Block / P
 
 wall clock / async callback / Web stateはSimulation decisionに参加しない。
 
-## Block / Platform contention
+## Block contention / representative-point model
 
-owner dictionaryはexclusive resource index。reserveはcurrent ownerに対してidempotentで、別Train所有ならstop targetを越えない。
+`_blockOwners`は`BlockSectionId -> TrainId`のexclusive resource index。ただしowner判定が表すのはTrain body envelopeではなく、**Trainの`RouteDistanceMeters`でsampleされる代表点が現在属するBlock**である。
 
-Route step境界でもBlock transitionをmovement integration前に処理し、geometry上は新stepなのにownerだけ旧Blockというstateを避ける。
+Route stepにはnullable `BlockId`を持たせ、movement integrationでstep boundaryを越える前に次を行う。
+
+1. next stepのBlockがcurrent Blockと異なり、nonnullならnext Blockをreserveする。
+2. reserveできなければboundaryまででmovementを打ち切り`WaitingForBlock`にする。
+3. reserveできた、またはnext stepがBlock未所属ならcurrent Blockをreleaseする。
+4. `CurrentBlockId`をnext stepのBlockまたは`null`へ更新する。
+
+この処理をmovement integration中のboundaryごとに行うため、高速Trainが1 tickで複数stepを跨ぐ場合も同じ順序を適用する。
+
+`TrainFormation.LengthMeters`はこのowner indexやboundary transitionに入力されない。したがってTrain代表点が次Blockへ入った瞬間にprevious Blockは解放され、Formation後端がgeometry上previous Blockへ残るかは判定しない。これはPhase 18の意図した簡略modelであり、rear-clearance signalingではない。
+
+Block未所属stepでは`BlockId == null`、Trainも`CurrentBlockId == null`になる。`_blockOwners`へ登録されないため、同じBlock未所属TrackSegment上に複数Trainが存在してもBlock contentionは発生しない。Block-based separationを必要とする運行区間はInfrastructure側でBlockSectionへ所属させる必要がある。
+
+そのためOperations layerが提供する安全invariantは「同じ**nonnull BlockSection owner**を複数Trainが同時に持たない」まで。Train全長の占有、rear clearance、braking-distance interlocking、Block未所属Trackの衝突回避は別modelである。
+
+## Platform contention
+
+`_platformOwners`もexclusive resource index。reserveはcurrent ownerに対してidempotentで、別Train所有ならstop targetを越えない。
+
+Platform assignmentはTrain route point / stop distanceを基準にし、Formation body lengthはplatform occupancy geometryへ使用しない。
 
 ## Delay pipeline
 
@@ -40,7 +61,7 @@ Dwell departureは`max(plannedDeparture + DelayTicks, actualArrival + minimumDwe
 
 Save Format 9でRailway Operationsを導入し、current Format 10でも同sectionを保持する。restoreはInfrastructure → Operationsの順。
 
-Route / Timetable stop distanceを復元Infrastructureへ再validationし、Train materialization後にowner indexをrebuildする。Format 8以前はempty operations + next ID 1へmigrationする。
+Route / Timetable stop distanceを復元Infrastructureへ再validationし、Train materialization後にowner indexをrebuildする。`CurrentBlockId`は代表点ベースのownerだけを保存し、Formation bodyの占有区間は保存・再構築しない。Format 8以前はempty operations + next ID 1へmigrationする。
 
 ## Publish model
 
@@ -67,6 +88,8 @@ Railway Debugのnext arrivalはTimetableの`plannedArrivalTick + service.delayTi
 ## Verification
 
 - Simulation: Route / ownership / lifecycle / delay / checkpoint continuation
+- Block contract regression: long Formationでもroute pointのboundaryでprevious Blockをreleaseすること
+- Block contract regression: Block未所属Trackで複数Trainが`CurrentBlockId == null`のまま同時走行できること
 - Persistence: Format 9+ / Format 8 migration
 - Protocol: 2.7 roundtrip / malformed payload / 1 MiB boundary
 - Server: point spatial filter / related definition mapping / oversize error planning
