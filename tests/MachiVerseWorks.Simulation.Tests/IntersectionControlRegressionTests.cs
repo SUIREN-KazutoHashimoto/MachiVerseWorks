@@ -67,10 +67,14 @@ public sealed class IntersectionControlRegressionTests
         var south = CreateMultiLaneArm(world, center, new WorldPoint(0d, -30d, 0d), lanesPerArm);
         var north = CreateMultiLaneArm(world, center, new WorldPoint(0d, 30d, 0d), lanesPerArm);
 
-        AddBlockedFlows(world, center, west, east);
-        AddBlockedFlows(world, center, east, west);
-        AddBlockedFlows(world, center, south, north);
-        AddBlockedFlows(world, center, north, south);
+        var westEast = CreateFlowConnections(world, center, west, east);
+        var eastWest = CreateFlowConnections(world, center, east, west);
+        var southNorth = CreateFlowConnections(world, center, south, north);
+        var northSouth = CreateFlowConnections(world, center, north, south);
+        AddBlockedFlows(world, west, east, westEast);
+        AddBlockedFlows(world, east, west, eastWest);
+        AddBlockedFlows(world, south, north, southNorth);
+        AddBlockedFlows(world, north, south, northSouth);
 
         for (var tick = 0; tick < world.Config.TickRate * 5; tick++) world.Step();
 
@@ -126,16 +130,24 @@ public sealed class IntersectionControlRegressionTests
         return new MultiLaneArm(segment, inbound, outbound);
     }
 
-    private static void AddBlockedFlows(SimulationWorld world, RoadNodeId center, MultiLaneArm from, MultiLaneArm to)
+    private static LaneConnectionId[] CreateFlowConnections(SimulationWorld world, RoadNodeId center, MultiLaneArm from, MultiLaneArm to)
     {
+        var connections = new LaneConnectionId[from.Inbound.Length];
+        for (var index = 0; index < connections.Length; index++)
+            connections[index] = world.CreateLaneConnection(from.Inbound[index], to.Outbound[index], center, TurnMovement.Straight);
+        return connections;
+    }
+
+    private static void AddBlockedFlows(SimulationWorld world, MultiLaneArm from, MultiLaneArm to, LaneConnectionId[] connections)
+    {
+        var blockerPerformance = new VehiclePerformance(0.001d, 0.001d, 1d, 2d, 1.5d);
         for (var index = 0; index < from.Inbound.Length; index++)
         {
-            var connection = world.CreateLaneConnection(from.Inbound[index], to.Outbound[index], center, TurnMovement.Straight);
             world.CreateVehicle([
-                new RouteLaneStep(to.Outbound[index], to.Segment, 0d, 0d, 0d, 0d, null),
-            ]);
+                new RouteLaneStep(to.Outbound[index], to.Segment, 0d, 1d, 30d, 30_000d, null),
+            ], performance: blockerPerformance);
             world.CreateVehicle([
-                new RouteLaneStep(from.Inbound[index], from.Segment, 1d, 0d, 30d, 3d, connection),
+                new RouteLaneStep(from.Inbound[index], from.Segment, 1d, 0d, 30d, 3d, connections[index]),
                 new RouteLaneStep(to.Outbound[index], to.Segment, 0d, 1d, 30d, 3d, null),
             ], initialSpeedMetersPerSecond: 8d);
         }

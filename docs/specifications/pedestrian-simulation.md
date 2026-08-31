@@ -92,25 +92,40 @@ Pedestrian positionは専用3D spatial indexへ同期する。
 
 walking topologyはRoad Networkから派生するため、Pedestrianが保持するrouteを無効化するRoadNode / RoadSegment / RoadAccessPoint変更は、Pedestrianが存在する間は拒否する。Pedestrianが存在しない場合はderived networkをdirty化し、次回利用時に再構築する。
 
-## Crossing permission
+## Crossing permission / Vehicle priority
 
-Crossingのopen / closedはmutable authoritative stateである。`SetPedestrianCrossingOpen`で変更したpermissionはcheckpoint / Saveに含め、復元後も同じcrossing permissionを適用してからPedestrianを継続する。
+Crossingには2つのgateを持ち、実際の通行可否は両方がopenの場合だけtrueとする。
+
+```text
+effectiveCrossingOpen = manualPermission && intersectionControlPermission
+```
+
+`manualPermission`は`SetPedestrianCrossingOpen`で変更するauthoritative mutable stateで、checkpoint / Saveへ保存する。`false`は常に強制close。`true`はmanual gateを解除するだけで、Intersection / Vehicle由来の安全gateを開方向へ上書きしない。
+
+`intersectionControlPermission`はRoad / LaneConnection / Vehicle entry intent / TickCountから毎tick派生するruntime stateで、Saveへ重複保存しない。
+
+- `FixedSignal`: そのIntersectionの全Vehicle movementが`Red`かつ当該tickのentry grantが無いall-red windowだけcrossingをopenする。Green / Yellow中はcrossingをcloseする。
+- `Unsignalized`: Vehicle entry grantをそのtickだけPedestrianより優先し、いずれかのmovementに`EntryGrantedThisTick`がある間はcrossingをcloseする。grantが無いtickはmanual permissionに従ってopenできる。
+- 対応するIntersection controllerが無いcrossing: automatic gateは制約せずmanual permissionだけを使う。
+
+Pedestrianはincident edgeから別edgeへ切り替える瞬間にこのgateを評価し、closeなら交差点nodeで`WaitingForCrossing`、openになった次tickで`Walking`へ戻る。現行modelはcrossing polygon内の連続占有や、横断開始後に信号が変わったPedestrianのbody envelopeを表現しないpoint-transition modelである。
 
 ## Save / Protocol / Web
 
-- Save format 5はPedestrian ID、Trip endpoint、mode、speed、route progress、movement state、crossing permissionを保持する。
+- Save format 5はPedestrian ID、Trip endpoint、mode、speed、route progress、movement state、**manual crossing permission**を保持する。Intersection control permissionはderived stateなので保存しない。
 - Protocol 2.2は`PedestrianSpawn` / `PedestrianUpdate` / `PedestrianRemove`を追加する。
 - Serverは既存の3D volume subscriptionをPedestrianにも適用し、Pedestrian spatial indexからvolume内候補だけを取得する。
 - Web ClientはPedestrian stateを補間し、InstancedMeshで描画する。
 
 ## 非目標
 
-Phase 16では次を扱わない。
+現行Pedestrian modelでは次を扱わない。
 
 - 詳細な群集シミュレーション
 - 歩道幅や横断歩道polygonの高精度geometry
+- 横断中body envelopeとVehicle軌跡の連続衝突判定
 - 階段 / elevator / indoor navigation
 - Population生成そのもの
-- mode choiceや自動車との完全な優先制御
+- mode choice
 
-Population / Trip generationが後続実装された際は`TripRequest`境界へ接続する。
+Population / Trip generationは後続Phaseで`TripRequest`境界へ接続され、Vehicle / Intersection controlとのcrossing排他は上記のfixed-tick gate contractで扱う。

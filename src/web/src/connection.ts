@@ -16,6 +16,10 @@ import {
   type PopulationProtocolMessage,
 } from './population-protocol.ts';
 import {
+  WEB_CURRENT_PROTOCOL_VERSION,
+  encodeClearPersonInspection,
+} from './person-inspection-protocol.ts';
+import {
   decodeRailwayFrame,
   isRailwayFrame,
   type RailwayProtocolMessage,
@@ -26,7 +30,6 @@ import {
   type RailwayOperationsProtocolMessage,
 } from './railway-operations.ts';
 import {
-  WEB_MULTIMODAL_TRANSIT_PROTOCOL_VERSION,
   decodeMultimodalTransitFrame,
   isMultimodalTransitFrame,
   type MultimodalTransitProtocolMessage,
@@ -74,6 +77,14 @@ export class MachiVerseConnection {
     this.sendDesiredInspection();
   }
 
+  public clearPersonInspection(): void {
+    this.desiredPersonId = null;
+    const socket = this.socket;
+    const version = this.negotiatedVersion;
+    if (this.state !== 'connected' || socket === null || socket.readyState !== WebSocket.OPEN || version === null || version.major !== 2 || version.minor < 9) return;
+    socket.send(encodeClearPersonInspection(version));
+  }
+
   private openSocket(isReconnect: boolean): void {
     const currentSocket = this.socket;
     if (currentSocket !== null && currentSocket.readyState < WebSocket.CLOSING) currentSocket.close(1000, 'Connection replaced');
@@ -81,7 +92,7 @@ export class MachiVerseConnection {
     const socket = new WebSocket(this.serverUrl);
     socket.binaryType = 'arraybuffer';
     this.socket = socket;
-    socket.addEventListener('open', () => { if (this.socket !== socket) return; this.setState('handshaking'); socket.send(encodeHello(WEB_MULTIMODAL_TRANSIT_PROTOCOL_VERSION)); });
+    socket.addEventListener('open', () => { if (this.socket !== socket) return; this.setState('handshaking'); socket.send(encodeHello(WEB_CURRENT_PROTOCOL_VERSION)); });
     socket.addEventListener('message', (event) => { void this.handleMessage(socket, event.data); });
     socket.addEventListener('error', () => { if (this.socket === socket) this.callbacks.onClientError(new Error('WebSocket transport error.')); });
     socket.addEventListener('close', () => {
@@ -187,7 +198,7 @@ export class MachiVerseConnection {
 export function resolveNegotiatedProtocolVersion(
   frameVersion: ProtocolVersion,
   acknowledgedVersion: ProtocolVersion,
-  supportedVersion: ProtocolVersion = WEB_MULTIMODAL_TRANSIT_PROTOCOL_VERSION,
+  supportedVersion: ProtocolVersion = WEB_CURRENT_PROTOCOL_VERSION,
 ): ProtocolVersion {
   if (!protocolVersionsEqual(frameVersion, acknowledgedVersion)) {
     throw new ProtocolDecodeFailure('HelloAck frame version and payload version do not match.');

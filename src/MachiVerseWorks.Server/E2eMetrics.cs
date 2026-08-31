@@ -12,6 +12,10 @@ internal sealed record E2eMetricsSnapshot(
     double TotalEncodeTimeMs,
     double TotalSendTimeMs,
     int LastAgentCount,
+    int LastPedestrianCount,
+    int LastVehicleCount,
+    int LastTrainCount,
+    int LastEntityCount,
     int LastMessageCount,
     long LastBytes,
     double LastEncodeTimeMs,
@@ -26,6 +30,10 @@ internal sealed class E2eMetrics
     private double _totalEncodeTimeMs;
     private double _totalSendTimeMs;
     private int _lastAgentCount;
+    private int _lastPedestrianCount;
+    private int _lastVehicleCount;
+    private int _lastTrainCount;
+    private int _lastEntityCount;
     private int _lastMessageCount;
     private long _lastBytes;
     private double _lastEncodeTimeMs;
@@ -33,25 +41,25 @@ internal sealed class E2eMetrics
 
     public void RecordSnapshotDelivery(
         int agentCount,
+        int pedestrianCount,
+        int vehicleCount,
+        int trainCount,
         int messageCount,
         long bytes,
         double encodeTimeMs,
         double sendTimeMs)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(agentCount);
+        ArgumentOutOfRangeException.ThrowIfNegative(pedestrianCount);
+        ArgumentOutOfRangeException.ThrowIfNegative(vehicleCount);
+        ArgumentOutOfRangeException.ThrowIfNegative(trainCount);
         ArgumentOutOfRangeException.ThrowIfNegative(messageCount);
         ArgumentOutOfRangeException.ThrowIfNegative(bytes);
 
-        if (!double.IsFinite(encodeTimeMs) || encodeTimeMs < 0d)
-        {
-            throw new ArgumentOutOfRangeException(nameof(encodeTimeMs));
-        }
+        if (!double.IsFinite(encodeTimeMs) || encodeTimeMs < 0d) throw new ArgumentOutOfRangeException(nameof(encodeTimeMs));
+        if (!double.IsFinite(sendTimeMs) || sendTimeMs < 0d) throw new ArgumentOutOfRangeException(nameof(sendTimeMs));
 
-        if (!double.IsFinite(sendTimeMs) || sendTimeMs < 0d)
-        {
-            throw new ArgumentOutOfRangeException(nameof(sendTimeMs));
-        }
-
+        var entityCount = checked(agentCount + pedestrianCount + vehicleCount + trainCount);
         lock (_gate)
         {
             _totalSnapshotDeliveries = checked(_totalSnapshotDeliveries + 1);
@@ -60,6 +68,10 @@ internal sealed class E2eMetrics
             _totalEncodeTimeMs += encodeTimeMs;
             _totalSendTimeMs += sendTimeMs;
             _lastAgentCount = agentCount;
+            _lastPedestrianCount = pedestrianCount;
+            _lastVehicleCount = vehicleCount;
+            _lastTrainCount = trainCount;
+            _lastEntityCount = entityCount;
             _lastMessageCount = messageCount;
             _lastBytes = bytes;
             _lastEncodeTimeMs = encodeTimeMs;
@@ -78,6 +90,10 @@ internal sealed class E2eMetrics
                 _totalEncodeTimeMs,
                 _totalSendTimeMs,
                 _lastAgentCount,
+                _lastPedestrianCount,
+                _lastVehicleCount,
+                _lastTrainCount,
+                _lastEntityCount,
                 _lastMessageCount,
                 _lastBytes,
                 _lastEncodeTimeMs,

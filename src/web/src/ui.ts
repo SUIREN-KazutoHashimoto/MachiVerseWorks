@@ -11,9 +11,7 @@ export class AgentCountFormatter {
   private readonly formatter: Intl.NumberFormat;
   private lastCount: number | null = null;
 
-  public constructor(locale: string) {
-    this.formatter = new Intl.NumberFormat(locale);
-  }
+  public constructor(locale: string) { this.formatter = new Intl.NumberFormat(locale); }
 
   public formatIfChanged(count: number): string | null {
     if (this.lastCount === count) return null;
@@ -37,14 +35,14 @@ export class ClientUi {
   private readonly audioButton = document.createElement('button');
   private readonly personIdInput = document.createElement('input');
   private readonly inspectPersonButton = document.createElement('button');
+  private readonly clearPersonButton = document.createElement('button');
   private readonly personDebugValue = document.createElement('div');
   private readonly agentCountFormatter: AgentCountFormatter;
+  private readonly ownedRoots: HTMLElement[] = [];
+  private readonly eventCleanup: Array<() => void> = [];
+  private disposed = false;
 
-  public constructor(
-    host: HTMLElement,
-    private readonly localizer: Localizer,
-    showPerformanceOverlay = false,
-  ) {
+  public constructor(host: HTMLElement, private readonly localizer: Localizer, showPerformanceOverlay = false) {
     this.agentCountFormatter = new AgentCountFormatter(localizer.locale);
     const panel = document.createElement('section');
     panel.className = 'status-panel';
@@ -76,7 +74,9 @@ export class ClientUi {
     this.personIdInput.placeholder = localizer.t('personDebug.personId');
     this.inspectPersonButton.type = 'button';
     this.inspectPersonButton.textContent = localizer.t('personDebug.inspect');
-    controls.append(this.personIdInput, this.inspectPersonButton);
+    this.clearPersonButton.type = 'button';
+    this.clearPersonButton.textContent = localizer.t('personDebug.clear');
+    controls.append(this.personIdInput, this.inspectPersonButton, this.clearPersonButton);
     this.personDebugValue.className = 'person-debug-value';
     this.personDebugValue.textContent = localizer.t('personDebug.none');
     inspector.append(inspectorTitle, controls, this.personDebugValue);
@@ -111,12 +111,9 @@ export class ClientUi {
       title.textContent = localizer.t('performance.title');
       this.decodeValue = document.createElement('span');
       this.frameValue = document.createElement('span');
-      performancePanel.append(
-        title,
-        this.createStatusRow('status.decode', this.decodeValue),
-        this.createStatusRow('status.frame', this.frameValue),
-      );
+      performancePanel.append(title, this.createStatusRow('status.decode', this.decodeValue), this.createStatusRow('status.frame', this.frameValue));
       host.append(performancePanel);
+      this.ownedRoots.push(performancePanel);
     } else {
       this.decodeValue = null;
       this.frameValue = null;
@@ -126,6 +123,7 @@ export class ClientUi {
     hint.className = 'camera-hint';
     hint.textContent = localizer.t('hint.camera');
     host.append(panel, hint);
+    this.ownedRoots.push(panel, hint);
 
     this.setConnectionState('disconnected');
     this.setProtocol(null);
@@ -138,7 +136,10 @@ export class ClientUi {
     if (this.frameValue !== null) this.frameValue.textContent = '—';
   }
 
-  public onAudioUnlock(handler: () => void): void { this.audioButton.addEventListener('click', handler); }
+  public onAudioUnlock(handler: () => void): void {
+    this.audioButton.addEventListener('click', handler);
+    this.eventCleanup.push(() => this.audioButton.removeEventListener('click', handler));
+  }
 
   public onInspectPerson(handler: (personId: bigint) => void): void {
     const inspect = (): void => {
@@ -150,35 +151,41 @@ export class ClientUi {
       } catch {
       }
     };
+    const keydown = (event: KeyboardEvent): void => { if (event.key === 'Enter') inspect(); };
     this.inspectPersonButton.addEventListener('click', inspect);
-    this.personIdInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') inspect(); });
+    this.personIdInput.addEventListener('keydown', keydown);
+    this.eventCleanup.push(
+      () => this.inspectPersonButton.removeEventListener('click', inspect),
+      () => this.personIdInput.removeEventListener('keydown', keydown),
+    );
   }
 
-  public setConnectionState(state: ConnectionState): void {
-    this.connectionValue.textContent = this.localizer.t(`connection.${state}`);
-    this.connectionValue.dataset.state = state;
+  public onClearPersonInspection(handler: () => void): void {
+    const clear = (): void => {
+      this.personIdInput.value = '';
+      this.personDebugValue.textContent = this.localizer.t('personDebug.none');
+      handler();
+    };
+    this.clearPersonButton.addEventListener('click', clear);
+    this.eventCleanup.push(() => this.clearPersonButton.removeEventListener('click', clear));
   }
 
+  public dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    for (const cleanup of this.eventCleanup.splice(0)) cleanup();
+    for (const root of this.ownedRoots.splice(0)) root.remove();
+  }
+
+  public setConnectionState(state: ConnectionState): void { this.connectionValue.textContent = this.localizer.t(`connection.${state}`); this.connectionValue.dataset.state = state; }
   public setProtocol(version: ProtocolVersion | null): void { this.protocolValue.textContent = version === null ? '—' : protocolVersionToString(version); }
-
-  public setAgentCount(count: number): void {
-    const formatted = this.agentCountFormatter.formatIfChanged(count);
-    if (formatted !== null) this.agentsValue.textContent = formatted;
-  }
+  public setAgentCount(count: number): void { const formatted = this.agentCountFormatter.formatIfChanged(count); if (formatted !== null) this.agentsValue.textContent = formatted; }
 
   public setPopulationStatistics(message: PopulationStatisticsMessage): void {
-    this.populationValue.textContent = this.localizer.t('population.summary', {
-      households: message.householdCount,
-      persons: message.personCount,
-      walking: message.walkingCount,
-      driving: message.drivingCount,
-    });
+    this.populationValue.textContent = this.localizer.t('population.summary', { households: message.householdCount, persons: message.personCount, walking: message.walkingCount, driving: message.drivingCount });
   }
 
-  public clearPopulation(): void {
-    this.populationValue.textContent = '—';
-    this.personDebugValue.textContent = this.localizer.t('personDebug.none');
-  }
+  public clearPopulation(): void { this.populationValue.textContent = '—'; this.personDebugValue.textContent = this.localizer.t('personDebug.none'); }
 
   public setRailwayOperations(message: RailwayOperationsSnapshotMessage): void {
     this.trainsValue.textContent = String(message.trains.length);
@@ -198,7 +205,6 @@ export class ClientUi {
 
   public clearRailwayOperations(): void { this.trainsValue.textContent = '0'; this.railwayDebugValue.textContent = this.localizer.t('railwayDebug.none'); }
 
-
   public setMultimodalTransit(message: MultimodalTransitSnapshotMessage): void {
     const busLines = message.lines.filter((line) => line.mode === TransitMode.Bus).length;
     const railwayLines = message.lines.filter((line) => line.mode === TransitMode.Railway).length;
@@ -207,13 +213,7 @@ export class ClientUi {
     const routes = message.patterns.map((pattern) => `L${pattern.lineId.toString()}:${pattern.stops.map((stop) => stop.stopId.toString()).join('>')}`).join(', ');
     const vehicles = message.vehicles.slice(0, 6).map((vehicle) => `V${vehicle.id.toString()}@(${vehicle.x.toFixed(1)},${vehicle.y.toFixed(1)})`).join(', ');
     const arrivals = message.arrivalEstimates.slice(0, 6).map((arrival) => `S${arrival.stopId.toString()}@${arrival.estimatedArrivalTick.toString()}`).join(', ');
-    this.transitDebugValue.textContent = this.localizer.t('transitDebug.summary', {
-      routes: routes || '—',
-      stops: message.stops.length,
-      busLines, railwayLines, buses, taxis,
-      vehicles: vehicles || '—',
-      arrivals: arrivals || '—',
-    });
+    this.transitDebugValue.textContent = this.localizer.t('transitDebug.summary', { routes: routes || '—', stops: message.stops.length, busLines, railwayLines, buses, taxis, vehicles: vehicles || '—', arrivals: arrivals || '—' });
   }
 
   public clearMultimodalTransit(): void { this.transitDebugValue.textContent = this.localizer.t('transitDebug.none'); }
@@ -222,58 +222,18 @@ export class ClientUi {
     const residence = formatEndpoint(message.residenceBuildingId, message.residencePoiId);
     const current = formatEndpoint(message.currentBuildingId, message.currentPoiId);
     const destination = formatEndpoint(message.destinationBuildingId, message.destinationPoiId);
-    this.personDebugValue.textContent = this.localizer.t('personDebug.summary', {
-      id: message.personId,
-      household: message.householdId,
-      residence,
-      current,
-      destination,
-      activity: activityLabel(this.localizer, message.currentActivity),
-      travel: travelStateLabel(this.localizer, message.travelState),
-    });
+    this.personDebugValue.textContent = this.localizer.t('personDebug.summary', { id: message.personId, household: message.householdId, residence, current, destination, activity: activityLabel(this.localizer, message.currentActivity), travel: travelStateLabel(this.localizer, message.travelState) });
   }
 
-  public setAudioState(state: AudioEngineState): void {
-    this.audioValue.textContent = this.localizer.t(`audio.${state}`);
-    this.audioButton.hidden = state === 'running' || state === 'unavailable';
-  }
-
-  public setPerformanceMetrics(metrics: ClientPerformanceSnapshot): void {
-    if (this.decodeValue !== null) this.decodeValue.textContent = metrics.decodeSampleCount === 0 ? '—' : this.formatTiming(metrics.decodeAverageMs, metrics.decodeP95Ms, metrics.decodeMaximumMs);
-    if (this.frameValue !== null) this.frameValue.textContent = metrics.frameSampleCount === 0 ? '—' : this.formatTiming(metrics.frameAverageMs, metrics.frameP95Ms, metrics.frameMaximumMs);
-  }
-
+  public setAudioState(state: AudioEngineState): void { this.audioValue.textContent = this.localizer.t(`audio.${state}`); this.audioButton.hidden = state === 'running' || state === 'unavailable'; }
+  public setPerformanceMetrics(metrics: ClientPerformanceSnapshot): void { if (this.decodeValue !== null) this.decodeValue.textContent = metrics.decodeSampleCount === 0 ? '—' : this.formatTiming(metrics.decodeAverageMs, metrics.decodeP95Ms, metrics.decodeMaximumMs); if (this.frameValue !== null) this.frameValue.textContent = metrics.frameSampleCount === 0 ? '—' : this.formatTiming(metrics.frameAverageMs, metrics.frameP95Ms, metrics.frameMaximumMs); }
   public showError(message: string): void { this.errorValue.textContent = message; this.errorValue.hidden = false; }
   public clearError(): void { this.errorValue.textContent = ''; this.errorValue.hidden = true; }
 
-  private formatTiming(averageMs: number, p95Ms: number, maximumMs: number): string {
-    return this.localizer.t('metrics.time', { average: averageMs.toFixed(3), p95: p95Ms.toFixed(3), maximum: maximumMs.toFixed(3) });
-  }
-
-  private createStatusRow(labelKey: string, value: HTMLElement): HTMLElement {
-    const row = document.createElement('div');
-    row.className = 'status-row';
-    const label = document.createElement('span');
-    label.className = 'status-label';
-    label.textContent = this.localizer.t(labelKey);
-    value.className = 'status-value';
-    row.append(label, value);
-    return row;
-  }
+  private formatTiming(averageMs: number, p95Ms: number, maximumMs: number): string { return this.localizer.t('metrics.time', { average: averageMs.toFixed(3), p95: p95Ms.toFixed(3), maximum: maximumMs.toFixed(3) }); }
+  private createStatusRow(labelKey: string, value: HTMLElement): HTMLElement { const row = document.createElement('div'); row.className = 'status-row'; const label = document.createElement('span'); label.className = 'status-label'; label.textContent = this.localizer.t(labelKey); value.className = 'status-value'; row.append(label, value); return row; }
 }
 
-function formatEndpoint(buildingId: bigint | null, poiId: bigint | null): string {
-  if (buildingId !== null) return `Building ${buildingId.toString()}`;
-  if (poiId !== null) return `POI ${poiId.toString()}`;
-  return '—';
-}
-
-function activityLabel(localizer: Localizer, activity: ActivityKind): string {
-  const key = ActivityKind[activity]?.toLowerCase() ?? 'unknown';
-  return localizer.t(`activity.${key}`);
-}
-
-function travelStateLabel(localizer: Localizer, state: PersonTravelState): string {
-  const key = PersonTravelState[state]?.toLowerCase() ?? 'unknown';
-  return localizer.t(`personTravel.${key}`);
-}
+function formatEndpoint(buildingId: bigint | null, poiId: bigint | null): string { if (buildingId !== null) return `Building ${buildingId.toString()}`; if (poiId !== null) return `POI ${poiId.toString()}`; return '—'; }
+function activityLabel(localizer: Localizer, activity: ActivityKind): string { const key = ActivityKind[activity]?.toLowerCase() ?? 'unknown'; return localizer.t(`activity.${key}`); }
+function travelStateLabel(localizer: Localizer, state: PersonTravelState): string { const key = PersonTravelState[state]?.toLowerCase() ?? 'unknown'; return localizer.t(`personTravel.${key}`); }

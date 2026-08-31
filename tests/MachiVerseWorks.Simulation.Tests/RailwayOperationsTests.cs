@@ -19,6 +19,88 @@ public sealed class RailwayOperationsTests
     }
 
     [TestMethod]
+    public void FailedRouteCreationDoesNotConsumeStableId()
+    {
+        var world = new SimulationWorld();
+        var a = world.CreateTrackNode(new WorldPoint(0d, 0d, 0d));
+        var b = world.CreateTrackNode(new WorldPoint(10d, 0d, 0d), TrackNodeKind.Junction);
+        var c = world.CreateTrackNode(new WorldPoint(20d, 0d, 0d));
+        var d = world.CreateTrackNode(new WorldPoint(0d, 20d, 0d));
+        var e = world.CreateTrackNode(new WorldPoint(10d, 20d, 0d));
+        var first = world.CreateTrackSegment(a, b);
+        var second = world.CreateTrackSegment(b, c);
+        var disconnected = world.CreateTrackSegment(d, e);
+        world.CreateTrackConnection(first, second, b);
+        var expectedNextId = world.CreateCheckpoint().NextRailwayRouteId;
+
+        Assert.ThrowsExactly<ArgumentException>(() => world.CreateRailwayRoute([new TrackSegmentId(ulong.MaxValue)]));
+        Assert.ThrowsExactly<ArgumentException>(() => world.CreateRailwayRoute([first, disconnected]));
+        Assert.ThrowsExactly<ArgumentException>(() => world.CreateRailwayRoute([first, first]));
+
+        var failed = world.CreateCheckpoint();
+        Assert.AreEqual(expectedNextId, failed.NextRailwayRouteId);
+        Assert.AreEqual(0, failed.RailwayRoutes!.Count);
+
+        var created = world.CreateRailwayRoute([first, second]);
+        Assert.AreEqual(expectedNextId, created.Value);
+        Assert.AreEqual(expectedNextId + 1, world.CreateCheckpoint().NextRailwayRouteId);
+    }
+
+    [TestMethod]
+    public void PreferredPlatformOutsideRouteFallsBackToEligiblePlatform()
+    {
+        var world = new SimulationWorld();
+        var n0 = world.CreateTrackNode(new WorldPoint(-60d, 0d, 0d));
+        var n1 = world.CreateTrackNode(new WorldPoint(-40d, 0d, 0d), TrackNodeKind.Junction);
+        var n2 = world.CreateTrackNode(new WorldPoint(40d, 0d, 0d), TrackNodeKind.Junction);
+        var n3 = world.CreateTrackNode(new WorldPoint(60d, 0d, 0d));
+        var depotOut = world.CreateTrackSegment(n0, n1, TrackDirection.StartToEnd, usage: TrackUsage.Depot);
+        var main = world.CreateTrackSegment(n1, n2, TrackDirection.StartToEnd);
+        var depotIn = world.CreateTrackSegment(n2, n3, TrackDirection.StartToEnd, usage: TrackUsage.Depot);
+        world.CreateTrackConnection(depotOut, main, n1);
+        world.CreateTrackConnection(main, depotIn, n2);
+        world.CreateBlockSection([depotOut]);
+        world.CreateBlockSection([main]);
+        world.CreateBlockSection([depotIn]);
+
+        var offRouteStart = world.CreateTrackNode(new WorldPoint(-20d, 10d, 0d));
+        var offRouteEnd = world.CreateTrackNode(new WorldPoint(20d, 10d, 0d));
+        var offRoute = world.CreateTrackSegment(offRouteStart, offRouteEnd);
+        var station = world.CreateStation(new WorldVolume(-24d, -4d, -1d, 24d, 14d, 4d));
+        var preferred = world.CreatePlatform(station, offRoute, 0.25d, 0.75d, new WorldVolume(-10d, 8d, -1d, 10d, 12d, 3d));
+        var alternate = world.CreatePlatform(station, main, 0.4d, 0.6d, new WorldVolume(-10d, -2d, -1d, 10d, 2d, 3d));
+        var originDepot = world.CreateDepot(new WorldVolume(-64d, -4d, -1d, -36d, 4d, 4d), [depotOut]);
+        var destinationDepot = world.CreateDepot(new WorldVolume(36d, -4d, -1d, 64d, 4d, 4d), [depotIn]);
+
+        var formation = world.CreateTrainFormation(20d, 18d, 1.4d, 1.8d, 100);
+        var route = world.CreateRailwayRoute([depotOut, main, depotIn]);
+        var timetable = world.CreateTimetable([
+            new TimetableStopSnapshot(station, 120, 130, 5, preferred),
+        ]);
+        var service = world.CreateRailwayService(formation, route, timetable, originDepot, destinationDepot, plannedStartTick: 1);
+        var train = world.CreateTrain(service);
+        var observedFallback = false;
+
+        for (var tick = 0; tick < 2400; tick++)
+        {
+            world.Step();
+            var snapshot = world.CreateRailwayOperationsSnapshot();
+            var trainState = snapshot.Trains.Single(item => item.Id == train);
+            if (trainState.AssignedPlatformId is { } assigned)
+            {
+                Assert.AreEqual(alternate, assigned, "A route-external preferred Platform must not block fallback to an eligible Platform.");
+                observedFallback = true;
+            }
+            if (snapshot.Services.Single(item => item.Id == service).State == RailwayServiceState.Completed) break;
+        }
+
+        var completed = world.CreateRailwayOperationsSnapshot();
+        Assert.IsTrue(observedFallback, "The alternate Platform was never assigned.");
+        Assert.AreEqual(RailwayServiceState.Completed, completed.Services.Single(item => item.Id == service).State, Describe(completed));
+        Assert.AreEqual(TrainMovementState.Completed, completed.Trains.Single(item => item.Id == train).State);
+    }
+
+    [TestMethod]
     public void MultipleTrainsNeverOwnTheSameBlockOrPlatform()
     {
         var world = new SimulationWorld();

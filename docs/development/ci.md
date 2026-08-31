@@ -46,7 +46,26 @@ npm test --if-present
 npm run build
 ```
 
-## 2. Benchmarks
+## 2. GitHub Actions supply-chain policy
+
+Repository内のthird-party / GitHub-maintained Actionはmutableな`@vN` tagだけを実行参照にせず、review済みの**full 40-character commit SHA**へ固定する。可読性のため同じ行末にmajor version commentを残す。
+
+```yaml
+uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+```
+
+対象workflow:
+
+- `.github/workflows/ci.yml`
+- `.github/workflows/benchmarks.yml`
+- `.github/workflows/e2e.yml`
+- `.github/workflows/dependency-review.yml`
+
+Action更新時はDependabotのGitHub Actions PR、release notes、upstream tagが指すcommitをreviewし、SHAとversion commentを同時に更新する。major tagを直接実行参照へ戻さない。
+
+SHA pinはAction repositoryの内容差し替えリスクを下げるためのsupply-chain controlであり、Dependabotによる継続更新を止める意図ではない。
+
+## 3. Benchmarks
 
 `.github/workflows/benchmarks.yml`が性能回帰の正規入口。Phaseごとにworkflowを増やさず、機能名をmatrixへ追加する。
 
@@ -68,27 +87,36 @@ npm run build
 
 PRと`develop` merge後に対象path変更で実行し、feature branch push単独では二重実行しない。artifactは原則14日保持する。
 
+Population scenarioは`idle`に加えて`foot-dispatch` / `motor-dispatch`を同じrunnerから出力し、詳細は[`population-benchmark.md`](population-benchmark.md)を参照する。
+
 Railway Infrastructureのscenario / baselineは[`railway-infrastructure-benchmark.md`](railway-infrastructure-benchmark.md)を参照する。
 
-## 3. End-to-end
+## 4. End-to-end
 
-`.github/workflows/e2e.yml`がServer / Protocol / Web接続E2Eの正規入口。Phase 6 / 11 / 13 / 14 / 16 / 17 / 18 / 19の既存scriptをmatrixから呼び出す。
+`.github/workflows/e2e.yml`がServer / Protocol / Web接続E2Eの正規入口。Phase 6 / 11 / 13 / 14 / **15** / 16 / 17 / 18 / 19のscriptをmatrixから呼び出す。
+
+Phase 15 Population E2Eは実Server + WebSocket + headless Browserで次を検証する。
+
+- Protocol 2.9接続と`PopulationStatistics`表示
+- Person inspectorによる`PersonDebug`表示
+- client reconnect後のinspection再送 / UI復元
+- 別WebSocketによるProtocol 2.5 `Hello -> InspectPerson -> PersonDebug`互換
 
 新規E2Eは原則としてPhase専用workflowを増やさず、このmatrixへ機能名 / script / artifactを追加する。
 
-## 4. CodeQL
+## 5. CodeQL
 
 GitHub Code Securityの **Default setup** を正本とする。RepositoryにAdvanced setup用`.github/workflows/codeql.yml`は置かない。
 
 custom query等、Default setupで表現できない要件が生じた場合だけAdvanced setupを再検討する。
 
-## 5. Dependency Review
+## 6. Dependency Review
 
 `.github/workflows/dependency-review.yml`はPull Requestのdependency変更を確認する。現時点ではHigh以上の既知vulnerabilityをmerge blockerとする。
 
 license allow/deny policyは`THIRD_PARTY_NOTICES.txt`運用と合わせて定義する。
 
-## 6. Dependabot
+## 7. Dependabot
 
 `.github/dependabot.yml`は現在、実際に存在する3 ecosystemを週次で監視する。
 
@@ -100,14 +128,14 @@ license allow/deny policyは`THIRD_PARTY_NOTICES.txt`運用と合わせて定義
 
 各ecosystemは`open-pull-requests-limit: 5`で、同ecosystem内updateをgroup化する。
 
-したがって「NuGet / npmはmanifest追加後に有効化する」という旧記述は現行設定ではない。`Directory.Packages.props` / project filesと`src/web/package.json` / lockfileを現在のdependency sourceとして扱う。
+GitHub Actions update PRはfull SHA pinを更新する。NuGet / npmは`Directory.Packages.props` / project filesと`src/web/package.json` / lockfileをdependency sourceとして扱う。
 
 GitHub Code Security側のDependabot alerts / security updates等とは、version update PRを作るDependabot configurationを区別する。
 
-## 7. Release / Deploy
+## 8. Release / Deploy
 
 Release workflowはまだ固定しない。Server binary、Web hosting、configuration、container等の配布単位が確定した時点で設計する。
 
-## 8. Branch protection
+## 9. Branch protection
 
 `main`と`develop`は[`repository-settings.md`](repository-settings.md)の基準で保護する。required checkは`CI / ci-gate`を正本とし、CodeQL / Dependency ReviewをRuleset requiredへ追加するかは運用実績を見て再評価する。

@@ -51,10 +51,11 @@ internal sealed class VehicleStore
 
     public bool Remove(VehicleId id)
     {
-        if (!vehicles.Remove(id)) return false;
-        if (!occupancy.Remove(id)) throw new InvalidOperationException($"Vehicle {id.Value} was missing from Lane occupancy during removal.");
+        if (!vehicles.TryGetValue(id, out var vehicle)) return false;
+        if (vehicle.State != VehicleMovementState.Arrived && !occupancy.Remove(id))
+            throw new InvalidOperationException($"Vehicle {id.Value} was missing from Lane occupancy during removal.");
         if (!orderedIds.Remove(id)) throw new InvalidOperationException($"Vehicle {id.Value} was missing from deterministic iteration order during removal.");
-        return true;
+        return vehicles.Remove(id);
     }
 
     public bool TryGetSnapshot(VehicleId id, ulong tickCount, out VehicleSnapshot snapshot)
@@ -100,9 +101,11 @@ internal sealed class VehicleStore
         foreach (var id in orderedIds)
         {
             var vehicle = vehicles[id];
+            if (vehicle.State == VehicleMovementState.Arrived) continue;
             if (!occupancy.Remove(id)) throw new InvalidOperationException($"Vehicle {id.Value} was missing from Lane occupancy before update.");
             StepVehicle(vehicle, deltaSeconds, topology, occupancy, intersectionControl);
             ValidateState(vehicle, topology);
+            if (vehicle.State == VehicleMovementState.Arrived) continue;
             var laneProgress = topology.GetLaneTravelProgress(vehicle.CurrentStep.LaneId, vehicle.SegmentOffset);
             if (!occupancy.CanOccupy(vehicle.CurrentStep.LaneId, laneProgress, vehicle.Dimensions.LengthMeters, 0d))
                 throw new InvalidOperationException($"Vehicle {id.Value} would overlap another Vehicle after update.");
@@ -175,12 +178,15 @@ internal sealed class VehicleStore
                 checkpoint.SpeedMetersPerSecond,
                 checkpoint.State,
                 topology);
-            var laneProgress = topology.GetLaneTravelProgress(state.CurrentStep.LaneId, state.SegmentOffset);
-            if (!occupancy.CanOccupy(state.CurrentStep.LaneId, laneProgress, state.Dimensions.LengthMeters, 0d))
-                throw new ArgumentException($"Vehicle checkpoint {checkpoint.Id.Value} overlaps another Vehicle.", nameof(checkpoints));
+            if (state.State != VehicleMovementState.Arrived)
+            {
+                var laneProgress = topology.GetLaneTravelProgress(state.CurrentStep.LaneId, state.SegmentOffset);
+                if (!occupancy.CanOccupy(state.CurrentStep.LaneId, laneProgress, state.Dimensions.LengthMeters, 0d))
+                    throw new ArgumentException($"Vehicle checkpoint {checkpoint.Id.Value} overlaps another Vehicle.", nameof(checkpoints));
+                occupancy.Add(state.Id, state.CurrentStep.LaneId, laneProgress, state.Dimensions.LengthMeters, state.SpeedMetersPerSecond);
+            }
             vehicles.Add(state.Id, state);
             orderedIds.Add(state.Id);
-            occupancy.Add(state.Id, state.CurrentStep.LaneId, laneProgress, state.Dimensions.LengthMeters, state.SpeedMetersPerSecond);
         }
         nextId = restoredNextId;
     }

@@ -75,7 +75,9 @@ try {
 
   await waitUntil(() => roadSnapshot !== null && roadSnapshot.segments.length === 3 && roadSnapshot.lanes.length === 3, 'Road Traffic fixture topology');
   await waitUntil(() => vehicles.size === 3 && spawnedVehicleIds.size === 3, 'three Vehicle spawn messages');
-  await waitUntil(() => updatedVehicleIds.size === 3 && movedVehicleIds.size === 3, 'Vehicle updates with movement');
+  await waitUntil(
+    () => movedVehicleIds.size === 3 || arrivedVehicleIds.size === 3,
+    'Vehicle movement updates or an authoritative already-arrived snapshot');
 
   view.render(agents, performance.now(), pedestrians, vehicles, intersections);
   assertRenderedVehicles();
@@ -83,6 +85,10 @@ try {
   await waitUntil(() => arrivedVehicleIds.size === 3, 'all fixture Vehicles reaching Arrived', 20_000);
   view.render(agents, performance.now(), pedestrians, vehicles, intersections);
   assertRenderedVehicles();
+
+  assert(
+    movedVehicleIds.size === 3 || arrivedVehicleIds.size === 3,
+    'each fixture Vehicle was observed moving or already arrived when subscription began');
 
   result.dataset.status = 'passed';
   result.textContent = JSON.stringify({

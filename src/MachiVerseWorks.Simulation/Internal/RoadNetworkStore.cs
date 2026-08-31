@@ -7,6 +7,8 @@ internal sealed class RoadNetworkStore
     private readonly Dictionary<LaneId, LaneSnapshot> lanes = [];
     private readonly Dictionary<LaneConnectionId, LaneConnectionSnapshot> connections = [];
     private readonly Dictionary<RoadAccessPointId, RoadAccessPointSnapshot> accessPoints = [];
+    private readonly Dictionary<BuildingId, List<RoadAccessPointId>> accessPointIdsByBuilding = [];
+    private readonly Dictionary<PoiId, List<RoadAccessPointId>> accessPointIdsByPoi = [];
     private readonly Dictionary<RoadNodeId, int> degreeByNode = [];
     private readonly Dictionary<RoadNodeId, HashSet<RoadSegmentId>> incidentSegmentIdsByNode = [];
     private readonly RoadSpatialIndex spatialIndex;
@@ -48,12 +50,60 @@ internal sealed class RoadNetworkStore
     public bool UpdateConnection(LaneConnectionId id, LaneId from, LaneId to, RoadNodeId via, TurnMovement movement) { if (!connections.ContainsKey(id)) return false; ValidateConnection(from, to, via, movement, id); connections[id] = new(id, from, to, via, movement); return true; }
     public bool RemoveConnection(LaneConnectionId id) => connections.Remove(id);
 
-    public RoadAccessPointId AddAccessPoint(RoadSegmentId segment, double offset, BuildingId? building, PoiId? poi, RoadAccessMode mode) { EnsureCapacity(nextAccessPointId, "Road access point"); ValidateAccessPoint(segment, offset, building, poi, mode); var id = new RoadAccessPointId(nextAccessPointId++); accessPoints.Add(id, new(id, segment, offset, building, poi, mode)); return id; }
-    public bool UpdateAccessPoint(RoadAccessPointId id, RoadSegmentId segment, double offset, BuildingId? building, PoiId? poi, RoadAccessMode mode) { if (!accessPoints.ContainsKey(id)) return false; ValidateAccessPoint(segment, offset, building, poi, mode); accessPoints[id] = new(id, segment, offset, building, poi, mode); return true; }
-    public bool RemoveAccessPoint(RoadAccessPointId id) => accessPoints.Remove(id);
-    public bool ContainsBuildingReference(BuildingId id) => accessPoints.Values.Any(x => x.BuildingId == id);
-    public bool ContainsPoiReference(PoiId id) => accessPoints.Values.Any(x => x.PoiId == id);
+    public RoadAccessPointId AddAccessPoint(RoadSegmentId segment, double offset, BuildingId? building, PoiId? poi, RoadAccessMode mode)
+    {
+        EnsureCapacity(nextAccessPointId, "Road access point"); ValidateAccessPoint(segment, offset, building, poi, mode);
+        var id = new RoadAccessPointId(nextAccessPointId++); var snapshot = new RoadAccessPointSnapshot(id, segment, offset, building, poi, mode); accessPoints.Add(id, snapshot); AttachAccessPoint(snapshot); return id;
+    }
+    public bool UpdateAccessPoint(RoadAccessPointId id, RoadSegmentId segment, double offset, BuildingId? building, PoiId? poi, RoadAccessMode mode)
+    {
+        if (!accessPoints.TryGetValue(id, out var previous)) return false;
+        ValidateAccessPoint(segment, offset, building, poi, mode);
+        var updated = new RoadAccessPointSnapshot(id, segment, offset, building, poi, mode);
+        DetachAccessPoint(previous); accessPoints[id] = updated; AttachAccessPoint(updated); return true;
+    }
+    public bool RemoveAccessPoint(RoadAccessPointId id)
+    {
+        if (!accessPoints.TryGetValue(id, out var previous)) return false;
+        DetachAccessPoint(previous); return accessPoints.Remove(id);
+    }
+    public bool ContainsBuildingReference(BuildingId id) => accessPointIdsByBuilding.ContainsKey(id);
+    public bool ContainsPoiReference(PoiId id) => accessPointIdsByPoi.ContainsKey(id);
     public bool TryGetNode(RoadNodeId id, out RoadNodeSnapshot snapshot) => nodes.TryGetValue(id, out snapshot); public bool TryGetSegment(RoadSegmentId id, out RoadSegmentSnapshot snapshot) => segments.TryGetValue(id, out snapshot); public bool TryGetLane(LaneId id, out LaneSnapshot snapshot) => lanes.TryGetValue(id, out snapshot); public bool TryGetConnection(LaneConnectionId id, out LaneConnectionSnapshot snapshot) => connections.TryGetValue(id, out snapshot); public bool TryGetAccessPoint(RoadAccessPointId id, out RoadAccessPointSnapshot snapshot) => accessPoints.TryGetValue(id, out snapshot);
+
+    public RoadAccessPointSnapshot[] GetAccessPoints(TripEndpoint endpoint, RoadAccessMode mode)
+    {
+        List<RoadAccessPointId>? ids = endpoint.BuildingId is { } buildingId
+            ? accessPointIdsByBuilding.GetValueOrDefault(buildingId)
+            : endpoint.PoiId is { } poiId ? accessPointIdsByPoi.GetValueOrDefault(poiId) : null;
+        if (ids is null || ids.Count == 0) return [];
+        var result = new List<RoadAccessPointSnapshot>(ids.Count);
+        for (var index = 0; index < ids.Count; index++)
+        {
+            var access = accessPoints[ids[index]];
+            if ((access.Mode & mode) != 0) result.Add(access);
+        }
+        return result.ToArray();
+    }
+
+    public bool TryGetAccessPointPosition(RoadAccessPointId id, out WorldPoint position)
+    {
+        if (!accessPoints.TryGetValue(id, out var access)
+            || !segments.TryGetValue(access.SegmentId, out var segment)
+            || !nodes.TryGetValue(segment.StartNodeId, out var start)
+            || !nodes.TryGetValue(segment.EndNodeId, out var end))
+        {
+            position = default;
+            return false;
+        }
+        var offset = access.SegmentOffset;
+        position = new WorldPoint(
+            start.Position.X + ((end.Position.X - start.Position.X) * offset),
+            start.Position.Y + ((end.Position.Y - start.Position.Y) * offset),
+            start.Position.Z + ((end.Position.Z - start.Position.Z) * offset));
+        return true;
+    }
+
     public IEnumerable<RoadSegmentSnapshot> GetIncidentSegments(RoadNodeId id)
     {
         if (!incidentSegmentIdsByNode.TryGetValue(id, out var segmentIds)) yield break;
@@ -69,10 +119,12 @@ internal sealed class RoadNetworkStore
     public IReadOnlyList<SimulationRoadAccessPointCheckpoint> CreateAccessPointCheckpoint() => accessPoints.Values.OrderBy(x => x.Id.Value).Select(static x => new SimulationRoadAccessPointCheckpoint(x.Id, x.SegmentId, x.SegmentOffset, x.BuildingId, x.PoiId, x.Mode)).ToArray();
     public void Restore(SimulationCheckpoint c)
     {
-        nodes.Clear(); segments.Clear(); lanes.Clear(); connections.Clear(); accessPoints.Clear(); degreeByNode.Clear(); incidentSegmentIdsByNode.Clear();
+        nodes.Clear(); segments.Clear(); lanes.Clear(); connections.Clear(); accessPoints.Clear(); accessPointIdsByBuilding.Clear(); accessPointIdsByPoi.Clear(); degreeByNode.Clear(); incidentSegmentIdsByNode.Clear();
         foreach (var n in c.RoadNodes) { nodes.Add(n.Id, new(n.Id, n.Kind, n.Position)); degreeByNode.Add(n.Id, 0); incidentSegmentIdsByNode.Add(n.Id, []); spatialIndex.RegisterNode(n.Id, n.Position); }
         foreach (var s in c.RoadSegments) { segments.Add(s.Id, new(s.Id, s.Kind, s.StartNodeId, s.EndNodeId)); degreeByNode[s.StartNodeId]++; degreeByNode[s.EndNodeId]++; AttachSegment(s.Id, s.StartNodeId, s.EndNodeId); spatialIndex.RegisterSegment(s.Id, nodes[s.StartNodeId].Position, nodes[s.EndNodeId].Position); }
-        foreach (var x in c.Lanes) lanes.Add(x.Id, new(x.Id, x.SegmentId, x.Direction, x.Order, x.WidthMeters, x.SpeedLimitMetersPerSecond)); foreach (var x in c.LaneConnections) connections.Add(x.Id, new(x.Id, x.FromLaneId, x.ToLaneId, x.ViaNodeId, x.Movement)); foreach (var x in c.RoadAccessPoints) accessPoints.Add(x.Id, new(x.Id, x.SegmentId, x.SegmentOffset, x.BuildingId, x.PoiId, x.Mode));
+        foreach (var x in c.Lanes) lanes.Add(x.Id, new(x.Id, x.SegmentId, x.Direction, x.Order, x.WidthMeters, x.SpeedLimitMetersPerSecond));
+        foreach (var x in c.LaneConnections) connections.Add(x.Id, new(x.Id, x.FromLaneId, x.ToLaneId, x.ViaNodeId, x.Movement));
+        foreach (var x in c.RoadAccessPoints) { var access = new RoadAccessPointSnapshot(x.Id, x.SegmentId, x.SegmentOffset, x.BuildingId, x.PoiId, x.Mode); accessPoints.Add(x.Id, access); AttachAccessPoint(access); }
         nextNodeId = c.NextRoadNodeId; nextSegmentId = c.NextRoadSegmentId; nextLaneId = c.NextLaneId; nextConnectionId = c.NextLaneConnectionId; nextAccessPointId = c.NextRoadAccessPointId;
     }
 
@@ -91,5 +143,38 @@ internal sealed class RoadNetworkStore
     private void DetachSegment(RoadSegmentId segmentId, RoadNodeId start, RoadNodeId end) { incidentSegmentIdsByNode[start].Remove(segmentId); incidentSegmentIdsByNode[end].Remove(segmentId); }
     private RoadNodeId GetEntryNode(LaneSnapshot lane) { var s = segments[lane.SegmentId]; return lane.Direction == LaneDirection.Forward ? s.StartNodeId : s.EndNodeId; }
     private RoadNodeId GetExitNode(LaneSnapshot lane) { var s = segments[lane.SegmentId]; return lane.Direction == LaneDirection.Forward ? s.EndNodeId : s.StartNodeId; }
+
+    private void AttachAccessPoint(RoadAccessPointSnapshot access)
+    {
+        if (access.BuildingId is { } buildingId) AddAccessIndex(accessPointIdsByBuilding, buildingId, access.Id);
+        if (access.PoiId is { } poiId) AddAccessIndex(accessPointIdsByPoi, poiId, access.Id);
+    }
+
+    private void DetachAccessPoint(RoadAccessPointSnapshot access)
+    {
+        if (access.BuildingId is { } buildingId) RemoveAccessIndex(accessPointIdsByBuilding, buildingId, access.Id);
+        if (access.PoiId is { } poiId) RemoveAccessIndex(accessPointIdsByPoi, poiId, access.Id);
+    }
+
+    private static void AddAccessIndex<T>(Dictionary<T, List<RoadAccessPointId>> index, T key, RoadAccessPointId id) where T : notnull
+    {
+        if (!index.TryGetValue(key, out var list)) { list = []; index.Add(key, list); }
+        var position = list.BinarySearch(id, RoadAccessPointIdComparer.Instance);
+        if (position < 0) list.Insert(~position, id);
+    }
+
+    private static void RemoveAccessIndex<T>(Dictionary<T, List<RoadAccessPointId>> index, T key, RoadAccessPointId id) where T : notnull
+    {
+        if (!index.TryGetValue(key, out var list)) return;
+        list.Remove(id);
+        if (list.Count == 0) index.Remove(key);
+    }
+
+    private sealed class RoadAccessPointIdComparer : IComparer<RoadAccessPointId>
+    {
+        public static RoadAccessPointIdComparer Instance { get; } = new();
+        public int Compare(RoadAccessPointId left, RoadAccessPointId right) => left.Value.CompareTo(right.Value);
+    }
+
     private static void EnsureCapacity(ulong nextId, string name) { if (nextId == ulong.MaxValue) throw new OverflowException($"{name} ID capacity has been exhausted."); }
 }

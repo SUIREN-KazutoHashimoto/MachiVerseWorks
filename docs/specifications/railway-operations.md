@@ -11,12 +11,12 @@ Track / Station / Platform / Depot topologyはRailway Infrastructureが正本で
 Formation / RailwayRoute / Timetable / RailwayService / Trainはmonotonic `ulong` stable ID。0 invalid。Checkpoint / Saveはnext-ID counterも保存する。
 
 - Formation: length、max speed / acceleration / service deceleration、capacity
-- RailwayRoute: explicit TrackConnection / TrackDirectionに従うordered TrackSegment sequence
-- Timetable: ordered Station stop、planned arrival/departure、minimum dwell、optional preferred Platform
+- RailwayRoute: explicit TrackConnection / TrackDirectionに従うordered TrackSegment sequence。同一TrackSegmentの複数occurrenceは現行route modelでは表現せず、Route作成時にrejectする
+- Timetable: ordered Station stop、planned arrival/departure、minimum dwell、optional preferred Platform。`PreferredPlatformId`はrequired assignmentではなくsoft preferenceとして扱う
 - RailwayService: Formation / Route / Timetable / origin Depot / destination Depot / planned start
 - Train: Serviceを実行するmutable physical state。1 Serviceにつき高々1 Train
 
-Preferred Platformのfallback semantics等、実装変更を伴う未確定事項はこの文書整理では変更せず、既存runtime contractを別Issueで扱う。
+Route作成はvalidation成功後にstable IDをcommitする。missing segment、接続不整合、repeated TrackSegment等で作成が失敗しても`NextRailwayRouteId`を消費しない。TrackSegment geometryはRailway Infrastructure側でnon-zero 3D lengthを保証するため、Operationsへzero-length segmentは到達しない。
 
 ## Fixed-tick movement
 
@@ -26,15 +26,28 @@ Trainはroute distance、3D position/forward、speed、movement state、Block / 
 
 ## Block separation
 
-各TrackSegmentは任意のBlockSectionへ所属する。OperationsはBlockごとに単一Train ownerを持つ。
+各TrackSegmentは任意のBlockSectionへ所属でき、OperationsはBlockごとに単一Train ownerを持つ。ただしPhase 18のBlock modelは**Train全長ではなく`Train.RouteDistanceMeters`が表す1つのroute-pointを基準にする簡略排他model**である。
 
-次Blockへ入る前にreserveし、別Train所有ならboundary前で停止して`WaitingForBlock`。next Block取得後にprevious Blockをreleaseする。2 Trainが同一Blockを同時所有しない。
+Route pointが次のTrackSegment / Blockへ進むときは:
+
+1. 次Blockがある場合はreserveする。
+2. 別TrainがownerならBlock boundaryで停止して`WaitingForBlock`になる。
+3. reserveに成功した、または次TrackSegmentがBlock未所属ならprevious Blockをreleaseする。
+4. `CurrentBlockId`をroute pointが属する新しいBlock、または`null`へ更新する。
+
+このため、Block ownershipは「Train body全体がBlock内にある」ことを意味しない。`TrainFormation.LengthMeters`は現在の加減速definitionや表示用definitionには存在するが、Blockのrear-clearance判定には使用しない。長いFormationの後端がprevious Block内に幾何的に残り得る場合でも、route pointがnext Blockへ入った時点でprevious Blockは別Trainが取得できる。
+
+また、BlockSectionに所属しないTrackSegmentでは`CurrentBlockId == null`となり、**BlockベースのTrain separation保証は存在しない**。複数Trainが同じBlock未所属Track上を同時に走行できる。運行上Block排他が必要なTrackは、Railway Infrastructure authoring側でBlockSectionへ所属させる必要がある。
+
+したがってPhase 18以降が依存してよい安全保証は「同じ非null BlockSection ownerを2 Trainが同時に持たない」ことまでであり、一般的なsignal systemのようなTrain全長/rear clearance、braking overlap、Block未所属区間の衝突回避までを保証しない。rear-clearance modelへ強化する場合はTrain body occupancyを別途authoritative/derived stateとして設計する。
 
 ## Station / Platform
 
 次Timetable stopへ接近するとRoute上のeligible Platformを選び、reserveできなければstop手前で待つ。assignment後はPlatform center distanceへbrakeし、arrivalで`Dwelling`へ遷移する。
 
-Platform ownershipはexclusive。departure時にPlatformをreleaseして次stopへ進む。
+`PreferredPlatformId`は**soft preference**である。preferred Platformが対象StationかつRoute上で、Trainの現在route distanceより前方にあり、reserve可能なら最初に選ぶ。preferredがoccupied、Route外、または既にTrain後方にある場合は、同Stationの残りのeligible Platformをstable Platform ID順で試し、最初にreserveできる前方Platformへfallbackする。preferred指定によって、別の有効Platformが存在するServiceを不必要に成立不能にはしない。
+
+Platform ownershipはexclusive。departure時にPlatformをreleaseして次stopへ進む。現行RailwayRouteは同一TrackSegmentの再出現を禁止するため、Platformのroute distanceは一意に解決できる。
 
 ## Delay semantics
 
@@ -61,7 +74,7 @@ DwellDepartureTick       = max(delayedPlannedDeparture, minimumDwellDeparture)
 
 ## Depot lifecycle
 
-Serviceは`Planned`、Trainはorigin Depotから開始する。planned start以降、first Blockを取得できたらdepartureしてService `Active`。
+Serviceは`Planned`、Trainはorigin Depotから開始する。planned start以降、first Blockが存在する場合は取得できたらdepartureする。first TrackSegmentがBlock未所属ならBlock reservation無しでdepartureする。
 
 全Timetable stop完了後Route endpointまで進み、destination Depotでremaining ownershipをreleaseしてTrain / Serviceを`Completed`へする。
 
@@ -69,7 +82,7 @@ Serviceは`Planned`、Trainはorigin Depotから開始する。planned start以�
 
 Railway OperationsはSave Format 9で導入され、current Format 10でも同じoperations sectionを保持する。Formation / Route / Timetable / Service / Train、next IDs、mutable Train stateを保存する。
 
-restoreはRailway Infrastructureの後。Route topology、Station/Platform/Depot references、Train ownershipを再検証し、Block / Platform owner indexをTrain stateから再構築する。Format 8以前は空operationsへmigrationする。
+restoreはRailway Infrastructureの後。Route topology、Station/Platform/Depot references、Train ownershipを再検証し、Block / Platform owner indexをTrain stateから再構築する。`CurrentBlockId`は上記route-point modelのownershipだけを表し、Formation body occupancyは保存しない。Format 8以前は空operationsへmigrationする。
 
 ## Protocol / Server
 
@@ -98,7 +111,13 @@ Phase 19の[`multimodal-transit.md`](multimodal-transit.md)が提供する`estim
 検証対象:
 
 - explicit Route / direction / connection validation
-- exclusive Block / Platform ownership
+- repeated TrackSegment routeのrejectとfailed Route creationのID非消費
+- Preferred Platformを先に試し、利用不能時はstable Platform ID順にfallbackするsoft-preference semantics
+- Train後方のPlatformをassignment候補から除外すること
+- nonnull Block / Platform ownershipのexclusive性
+- route-pointがBlock boundaryを越えた時点でprevious Blockをreleaseする簡略model
+- Formation lengthがrear-clearanceへ使われないこと
+- Block未所属Trackでは複数TrainにBlock separationを提供しないこと
 - deterministic Train ID processing
 - arrival-only monotonic delay semantics
 - checkpoint / Save continuation

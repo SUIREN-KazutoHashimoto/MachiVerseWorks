@@ -125,6 +125,7 @@ public sealed partial class SimulationWorld
         ValidateVehicleCheckpoint(checkpoint);
         ValidatePopulationCheckpoint(checkpoint);
         ValidateRailwayCheckpoint(checkpoint, config.SpatialCellSize);
+        ValidateRailwayOperationsCheckpoint(checkpoint);
         var expectedElapsedTicks = CalculateExpectedElapsedTicks(checkpoint.TickCount, config.TickRate);
         if (checkpoint.ElapsedTicks != expectedElapsedTicks
             && (!TryCalculateLegacyElapsedTicks(checkpoint.TickCount, config.TickRate, out var legacyElapsedTicks)
