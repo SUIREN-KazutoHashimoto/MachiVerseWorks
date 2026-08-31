@@ -55,6 +55,8 @@ public sealed partial class SimulationWorld
     {
         var nextTime = Time.Advance(Config.TickRate);
         _agents.Step(Config.TickDurationSeconds, _spatialIndex);
+        StepEconomy(nextTime);
+        PlanEconomyCommutes(nextTime);
         PlanPopulationTrips(nextTime);
         StepVehicles(Config.TickDurationSeconds, nextTime.TickCount);
         StepRailwayOperations(Config.TickDurationSeconds, nextTime.TickCount);
@@ -98,7 +100,8 @@ public sealed partial class SimulationWorld
             _railwayOperations?.NextTimetableId ?? 1UL, railwayOperations?.Timetables ?? Array.Empty<TimetableSnapshot>(),
             _railwayOperations?.NextServiceId ?? 1UL, railwayOperations?.Services ?? Array.Empty<RailwayServiceSnapshot>(),
             _railwayOperations?.NextTrainId ?? 1UL, railwayOperations?.Trains ?? Array.Empty<TrainSnapshot>(),
-            _multimodalTransit.CreateCheckpoint(Time.TickCount));
+            _multimodalTransit.CreateCheckpoint(Time.TickCount),
+            CreateEconomyCheckpoint());
     }
 
     public static SimulationWorld RestoreCheckpoint(SimulationCheckpoint checkpoint)
@@ -126,6 +129,7 @@ public sealed partial class SimulationWorld
         ValidatePopulationCheckpoint(checkpoint);
         ValidateRailwayCheckpoint(checkpoint, config.SpatialCellSize);
         ValidateRailwayOperationsCheckpoint(checkpoint);
+        ValidateEconomyCheckpoint(checkpoint);
         var expectedElapsedTicks = CalculateExpectedElapsedTicks(checkpoint.TickCount, config.TickRate);
         if (checkpoint.ElapsedTicks != expectedElapsedTicks
             && (!TryCalculateLegacyElapsedTicks(checkpoint.TickCount, config.TickRate, out var legacyElapsedTicks)
@@ -158,6 +162,7 @@ public sealed partial class SimulationWorld
             checkpoint.Persons ?? Array.Empty<SimulationPersonCheckpoint>(),
             checkpoint.NextPersonId,
             checkpoint.NextTripRequestId);
+        world.RestoreEconomy(checkpoint.Economy);
         world._multimodalTransit.Restore(checkpoint.MultimodalTransit);
         ValidateMultimodalTransitCheckpointReferences(checkpoint);
         return world;
