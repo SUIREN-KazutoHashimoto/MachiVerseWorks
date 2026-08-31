@@ -10,7 +10,7 @@ public sealed class EconomySimulationTests
     {
         var world = CreateEconomicWorld(out var companyId, out var householdId, out _);
 
-        for (var tick = 0; tick < EconomyDefaults.TicksPerEconomicDay * 3; tick++) world.Step();
+        for (ulong tick = 0; tick < EconomyDefaults.TicksPerEconomicDay * 3UL; tick++) world.Step();
 
         Assert.IsTrue(world.TryGetCompanySnapshot(companyId, out var company));
         Assert.IsTrue(world.TryGetHouseholdEconomySnapshot(householdId, out var household));
@@ -28,10 +28,10 @@ public sealed class EconomySimulationTests
     public void EconomyCheckpointPreservesStableIdsAndDeterministicContinuation()
     {
         var original = CreateEconomicWorld(out _, out _, out _);
-        for (var tick = 0; tick < EconomyDefaults.TicksPerEconomicDay * 2 + 127; tick++) original.Step();
+        for (ulong tick = 0; tick < EconomyDefaults.TicksPerEconomicDay * 2UL + 127UL; tick++) original.Step();
 
         var restored = SimulationWorld.RestoreCheckpoint(original.CreateCheckpoint());
-        for (var tick = 0; tick < EconomyDefaults.TicksPerEconomicDay * 2; tick++)
+        for (ulong tick = 0; tick < EconomyDefaults.TicksPerEconomicDay * 2UL; tick++)
         {
             original.Step();
             restored.Step();
@@ -62,7 +62,10 @@ public sealed class EconomySimulationTests
         world.CreateRoadAccessPoint(segment, 0.04, home, mode: RoadAccessMode.Foot);
         world.CreateRoadAccessPoint(segment, 0.80, work, mode: RoadAccessMode.Foot);
         var household = world.CreateHousehold(TripEndpoint.ForBuilding(home));
-        var person = world.CreatePerson(household, new PersonDemographics(30, IsEmployed: true));
+        var person = world.CreatePerson(
+            household,
+            new PersonDemographics(30, IsEmployed: true),
+            [new DailyActivityWindow(ActivityKind.Home, 0, 1440)]);
         var company = world.CreateCompany(IndustrySector.Services, 5_000, 1d);
         var establishment = world.CreateEstablishment(company, buildingId: work);
         var job = world.CreateJob(establishment, requiredWorkerCount: 1, dailyWage: 100);
@@ -95,7 +98,10 @@ public sealed class EconomySimulationTests
         var shop = world.CreateBuilding(new WorldVolume(20, 0, 0, 24, 4, 4), BuildingKind.Commercial);
         var retailPoi = world.CreatePoi(new WorldPoint(22, 2, 0), PoiKind.Retail, shop);
         householdId = world.CreateHousehold(TripEndpoint.ForBuilding(home));
-        personId = world.CreatePerson(householdId, new PersonDemographics(35, IsEmployed: true));
+        personId = world.CreatePerson(
+            householdId,
+            new PersonDemographics(35, IsEmployed: true),
+            [new DailyActivityWindow(ActivityKind.Home, 0, 1440)]);
         world.SetHouseholdCashBalance(householdId, 200);
         companyId = world.CreateCompany(IndustrySector.Retail, initialCashBalance: 10_000, dailyProductionCapacity: 10d);
         var establishment = world.CreateEstablishment(companyId, buildingId: shop, poiId: retailPoi);
