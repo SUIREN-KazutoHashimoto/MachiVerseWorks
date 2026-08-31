@@ -37,7 +37,14 @@ public sealed partial class SimulationWorld
             _roadTrafficTopology);
     }
 
-    public bool RemoveVehicle(VehicleId id) => _vehicles.Remove(id);
+    public bool RemoveVehicle(VehicleId id)
+    {
+        if (_population.ContainsVehicleReference(id))
+            throw new InvalidOperationException($"Vehicle {id.Value} cannot be removed while an active Population trip references it.");
+        return RemoveVehicleCore(id);
+    }
+
+    private bool RemoveVehicleCore(VehicleId id) => _vehicles.Remove(id);
 
     public bool TryGetVehicleSnapshot(VehicleId id, out VehicleSnapshot snapshot) =>
         _vehicles.TryGetSnapshot(id, Time.TickCount, out snapshot);
