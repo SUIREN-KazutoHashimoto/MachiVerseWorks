@@ -140,11 +140,12 @@ public sealed class IntersectionControlRegressionTests
 
     private static void AddBlockedFlows(SimulationWorld world, MultiLaneArm from, MultiLaneArm to, LaneConnectionId[] connections)
     {
+        var blockerPerformance = new VehiclePerformance(0.001d, 0.001d, 1d, 2d, 1.5d);
         for (var index = 0; index < from.Inbound.Length; index++)
         {
             world.CreateVehicle([
-                new RouteLaneStep(to.Outbound[index], to.Segment, 0d, 0d, 0d, 0d, null),
-            ]);
+                new RouteLaneStep(to.Outbound[index], to.Segment, 0d, 1d, 30d, 30_000d, null),
+            ], performance: blockerPerformance);
             world.CreateVehicle([
                 new RouteLaneStep(from.Inbound[index], from.Segment, 1d, 0d, 30d, 3d, connections[index]),
                 new RouteLaneStep(to.Outbound[index], to.Segment, 0d, 1d, 30d, 3d, null),
