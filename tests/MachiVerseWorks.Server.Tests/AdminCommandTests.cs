@@ -1,0 +1,83 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+namespace MachiVerseWorks.Server.Tests;
+
+[TestClass]
+public sealed class AdminCommandTests
+{
+    [TestMethod]
+    public void ParserSupportsQuotedTokensAndOptions()
+    {
+        var parsed = AdminCommandParser.TryParse("world save \"saves/city one.json\" --force=true", out var command, out var error);
+
+        Assert.IsTrue(parsed, error?.Message);
+        Assert.IsNotNull(command);
+        Assert.AreEqual("world", command.Name);
+        CollectionAssert.AreEqual(new[] { "save", "saves/city one.json" }, command.Arguments.ToArray());
+        Assert.AreEqual("true", command.Options["force"]);
+    }
+
+    [TestMethod]
+    public void ParserRejectsUnterminatedQuotedToken()
+    {
+        var parsed = AdminCommandParser.TryParse("world save \"broken", out var command, out var error);
+
+        Assert.IsFalse(parsed);
+        Assert.IsNull(command);
+        Assert.IsNotNull(error);
+        Assert.AreEqual(AdminCommandResultCode.InvalidSyntax, error.Code);
+    }
+
+    [TestMethod]
+    public void BoundedQueueReportsFullWithoutBlockingProducer()
+    {
+        var queue = new AdminCommandQueue();
+        for (var index = 0; index < AdminCommandQueue.Capacity; index++)
+        {
+            var request = Request(new AdminCommand("status", [], new Dictionary<string, string?>(), "status"));
+            Assert.IsTrue(queue.TryWrite(request));
+        }
+
+        Assert.IsFalse(queue.TryWrite(Request(new AdminCommand("status", [], new Dictionary<string, string?>(), "status"))));
+    }
+
+    [TestMethod]
+    public void PauseStepResumeHasDeterministicTickOrdering()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Simulation:InitialAgentCount"] = "0",
+            ["Simulation:TickRate"] = "30",
+        }).Build();
+        var runtime = new SimulationRuntime(ServerOptions.Load(configuration), configuration);
+
+        runtime.Step();
+        Assert.AreEqual(1UL, runtime.TickCount);
+        Assert.IsTrue(runtime.Pause());
+        runtime.Step();
+        Assert.AreEqual(1UL, runtime.TickCount);
+        Assert.AreEqual(3UL, runtime.StepPaused(2));
+        Assert.IsTrue(runtime.Resume());
+        runtime.Step();
+        Assert.AreEqual(4UL, runtime.TickCount);
+    }
+
+    [TestMethod]
+    public void RoadMutationIncrementsPublishedReadModelRevision()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Simulation:InitialAgentCount"] = "0",
+        }).Build();
+        var runtime = new SimulationRuntime(ServerOptions.Load(configuration), configuration);
+        var before = runtime.CapturePublishSnapshot().RoadNetwork.Revision;
+
+        runtime.Mutate(world => world.CreateRoadNode(new Simulation.WorldPoint(1, 2, 3)), roadTopologyChanged: true);
+
+        var after = runtime.CapturePublishSnapshot().RoadNetwork.Revision;
+        Assert.IsGreaterThan(before, after);
+    }
+
+    private static AdminCommandRequest Request(AdminCommand command) => new(command, new TaskCompletionSource<AdminCommandResult>(TaskCreationOptions.RunContinuationsAsynchronously));
+}
