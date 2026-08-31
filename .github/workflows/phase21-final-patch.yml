@@ -1,0 +1,53 @@
+name: Phase21 final patch
+
+on:
+  push:
+    branches: [feature/phase21-economy]
+    paths: [.github/workflows/phase21-final-patch.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/phase21-economy
+      - name: Patch runtime fixture and E2E matrix
+        shell: python
+        run: |
+          from pathlib import Path
+          def replace(path, old, new):
+              p = Path(path); s = p.read_text()
+              if old not in s: raise SystemExit(f'missing anchor in {path}: {old!r}')
+              p.write_text(s.replace(old, new, 1))
+
+          replace('src/MachiVerseWorks.Server/SimulationRuntime.cs',
+              '    private bool _multimodalTransitFixturePending;\n',
+              '    private bool _multimodalTransitFixturePending;\n    private bool _economyFixturePending;\n')
+          replace('src/MachiVerseWorks.Server/SimulationRuntime.cs',
+              '        _multimodalTransitFixturePending = ReadFixture(configuration, "Simulation:MultimodalTransitFixture");\n',
+              '        _multimodalTransitFixturePending = ReadFixture(configuration, "Simulation:MultimodalTransitFixture");\n        _economyFixturePending = ReadFixture(configuration, "Simulation:EconomyFixture");\n')
+          replace('src/MachiVerseWorks.Server/SimulationRuntime.cs',
+              '            _railwayFixturePending = _railwayOperationsFixturePending = _multimodalTransitFixturePending = false;\n',
+              '            _railwayFixturePending = _railwayOperationsFixturePending = _multimodalTransitFixturePending = _economyFixturePending = false;\n')
+          replace('src/MachiVerseWorks.Server/SimulationRuntime.cs',
+              '        if (_multimodalTransitFixturePending) { MultimodalTransitFixtures.SeedDeterministic(_world); _multimodalTransitFixturePending = false; _roadRevision = checked(_roadRevision + 1); _railwayRevision = checked(_railwayRevision + 1); _roadReadModel = null; _railwayReadModel = null; }\n',
+              '        if (_multimodalTransitFixturePending) { MultimodalTransitFixtures.SeedDeterministic(_world); _multimodalTransitFixturePending = false; _roadRevision = checked(_roadRevision + 1); _railwayRevision = checked(_railwayRevision + 1); _roadReadModel = null; _railwayReadModel = null; }\n        if (_economyFixturePending) { SeedEconomyFixture(_world); _economyFixturePending = false; }\n')
+          replace('src/MachiVerseWorks.Server/SimulationRuntime.cs',
+              '    private static void SeedPedestrianFixture(SimulationWorld world)\n',
+              '''    private static void SeedEconomyFixture(SimulationWorld world)\n    {\n        var home = world.CreateBuilding(new WorldVolume(-4d, -4d, 0d, 4d, 4d, 4d), BuildingKind.Residential);\n        var shop = world.CreateBuilding(new WorldVolume(16d, -4d, 0d, 24d, 4d, 4d), BuildingKind.Commercial);\n        var poi = world.CreatePoi(new WorldPoint(20d, 0d, 0d), PoiKind.Retail, shop);\n        var household = world.CreateHousehold(TripEndpoint.ForBuilding(home));\n        var person = world.CreatePerson(household, new PersonDemographics(35, IsEmployed: true), [new DailyActivityWindow(ActivityKind.Home, 0, 1440)]);\n        world.SetHouseholdCashBalance(household, 1_000);\n        var company = world.CreateCompany(IndustrySector.Retail, 100_000, 10d);\n        var establishment = world.CreateEstablishment(company, shop, poi);\n        var job = world.CreateJob(establishment, 2, 500);\n        world.AssignEmployment(person, job);\n    }\n\n    private static void SeedPedestrianFixture(SimulationWorld world)\n''')
+
+          replace('.github/workflows/e2e.yml',
+              '''          - id: administration-console\n            name: administration-console-server-browser\n            script: scripts/run-phase20-e2e.sh\n            artifacts: .artifacts/phase20-e2e\n            timeout: 15\n''',
+              '''          - id: administration-console\n            name: administration-console-server-browser\n            script: scripts/run-phase20-e2e.sh\n            artifacts: .artifacts/phase20-e2e\n            timeout: 15\n          - id: economy\n            name: economy-employment-server-browser\n            script: scripts/run-phase21-e2e.sh\n            artifacts: .artifacts/phase21-e2e\n            timeout: 15\n''')
+          Path('.github/workflows/phase21-final-patch.yml').unlink()
+      - name: Commit patch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "test(e2e): integrate phase21 economy fixture"
+          git push origin HEAD:feature/phase21-economy
