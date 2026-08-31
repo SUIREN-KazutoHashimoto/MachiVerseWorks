@@ -4,7 +4,7 @@ using MachiVerseWorks.Simulation;
 namespace MachiVerseWorks.Benchmarks;
 
 [MemoryDiagnoser]
-public sealed class EconomyBenchmarks
+public class EconomyBenchmarks
 {
     private SimulationWorld _world = null!;
 
