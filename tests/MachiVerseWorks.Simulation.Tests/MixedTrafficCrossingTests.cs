@@ -61,14 +61,14 @@ public sealed class MixedTrafficCrossingTests
     {
         var world = new SimulationWorld(new SimulationConfig(tickRate: 1));
         var center = world.CreateRoadNode(new WorldPoint(0d, 0d, 0d), RoadNodeKind.Intersection);
-        var west = CreateArm(world, center, new WorldPoint(-10d, 0d, 0d));
-        var east = CreateArm(world, center, new WorldPoint(10d, 0d, 0d));
-        var south = CreateArm(world, center, new WorldPoint(0d, -10d, 0d));
+        var west = CreateArm(world, center, new WorldPoint(-20d, 0d, 0d));
+        var east = CreateArm(world, center, new WorldPoint(20d, 0d, 0d));
+        var south = CreateArm(world, center, new WorldPoint(0d, -20d, 0d));
         var westEast = world.CreateLaneConnection(west.InboundLaneId, east.OutboundLaneId, center, TurnMovement.Straight);
         world.CreateLaneConnection(south.InboundLaneId, east.OutboundLaneId, center, TurnMovement.Left);
 
-        var southBuilding = world.CreateBuilding(new WorldVolume(-1d, -11d, 0d, 1d, -9d, 3d), BuildingKind.Residential);
-        var westBuilding = world.CreateBuilding(new WorldVolume(-11d, -1d, 0d, -9d, 1d, 3d), BuildingKind.Commercial);
+        var southBuilding = world.CreateBuilding(new WorldVolume(-1d, -21d, 0d, 1d, -19d, 3d), BuildingKind.Residential);
+        var westBuilding = world.CreateBuilding(new WorldVolume(-21d, -1d, 0d, -19d, 1d, 3d), BuildingKind.Commercial);
         world.CreateRoadAccessPoint(south.SegmentId, 1d, southBuilding, mode: RoadAccessMode.Foot);
         world.CreateRoadAccessPoint(west.SegmentId, 1d, westBuilding, mode: RoadAccessMode.Foot);
 
@@ -82,8 +82,8 @@ public sealed class MixedTrafficCrossingTests
 
         world.CreateVehicle(
         [
-            new RouteLaneStep(west.InboundLaneId, west.SegmentId, 1d, 0d, 10d, 1d, westEast),
-            new RouteLaneStep(east.OutboundLaneId, east.SegmentId, 0d, 1d, 10d, 1d, null),
+            new RouteLaneStep(west.InboundLaneId, west.SegmentId, 1d, 0d, 20d, 2d, westEast),
+            new RouteLaneStep(east.OutboundLaneId, east.SegmentId, 0d, 1d, 20d, 2d, null),
         ], initialSpeedMetersPerSecond: 8d);
         var pedestrian = world.CreatePedestrian(
             new TripRequest(
@@ -94,12 +94,19 @@ public sealed class MixedTrafficCrossingTests
             walkingSpeedMetersPerSecond: 10d);
 
         world.Step();
+        Assert.IsTrue(world.TryGetPedestrianSnapshot(pedestrian, out var approaching));
+        Assert.AreEqual(PedestrianMovementState.Walking, approaching.State);
+        Assert.IsTrue(GetCrossing(world, crossingId).IsOpen);
+
+        world.Step();
 
         var granted = world.CreateIntersectionControlSnapshot().Controllers.Single();
         Assert.IsTrue(granted.MovementStates.Any(static state => state.EntryGrantedThisTick));
         Assert.IsFalse(GetCrossing(world, crossingId).IsOpen);
         Assert.IsTrue(world.TryGetPedestrianSnapshot(pedestrian, out var waiting));
         Assert.AreEqual(PedestrianMovementState.WaitingForCrossing, waiting.State);
+        Assert.AreEqual(0d, waiting.Position.X, 1e-9);
+        Assert.AreEqual(0d, waiting.Position.Y, 1e-9);
 
         world.Step();
 
