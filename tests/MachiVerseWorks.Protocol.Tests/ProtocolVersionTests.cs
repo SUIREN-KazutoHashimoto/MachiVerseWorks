@@ -6,11 +6,13 @@ namespace MachiVerseWorks.Protocol.Tests;
 public sealed class ProtocolVersionTests
 {
     [TestMethod]
-    public void CurrentProtocolIs28AndAdvertisesMultimodalTransit()
+    public void CurrentProtocolIs29AndAdvertisesPersonInspectionClear()
     {
-        Assert.AreEqual(new ProtocolVersion(2, 8), ProtocolVersion.Current);
+        Assert.AreEqual(new ProtocolVersion(2, 9), ProtocolVersion.Current);
         Assert.IsTrue(ProtocolVersion.Current.SupportsMultimodalTransit);
+        Assert.IsTrue(ProtocolVersion.Current.SupportsPersonInspectionClear);
         Assert.IsFalse(new ProtocolVersion(2, 7).SupportsMultimodalTransit);
+        Assert.IsFalse(new ProtocolVersion(2, 8).SupportsPersonInspectionClear);
     }
 
     [TestMethod]
