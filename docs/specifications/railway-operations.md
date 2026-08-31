@@ -2,105 +2,107 @@
 
 ## Purpose
 
-Phase 18 adds deterministic train operation on top of the Phase 17 railway infrastructure. The authoritative scope is Train Formation, Route, Timetable, Service, Train movement, Block ownership, Platform assignment, delay, and Depot lifecycle.
+Phase 18で導入したdeterministic Train operationを定義する。Railway OperationsはFormation、Route、Timetable、Service、Train movement、Block ownership、Platform assignment、delay、Depot lifecycleを所有する。
 
-Static Track / Station / Platform / Depot topology remains owned by Railway Infrastructure. Railway Operations references those entities by stable ID and never infers connectivity from geometry.
+Track / Station / Platform / Depot topologyはRailway Infrastructureが正本で、Operationsはstable ID参照だけを持つ。
 
-## Stable IDs and definitions
+## Stable IDs / definitions
 
-The following operation entities use monotonically allocated unsigned 64-bit stable IDs. Zero is invalid.
+Formation / RailwayRoute / Timetable / RailwayService / Trainはmonotonic `ulong` stable ID。0 invalid。Checkpoint / Saveはnext-ID counterも保存する。
 
-- `TrainFormationId`
-- `RailwayRouteId`
-- `TimetableId`
-- `RailwayServiceId`
-- `TrainId`
+- Formation: length、max speed / acceleration / service deceleration、capacity
+- RailwayRoute: explicit TrackConnection / TrackDirectionに従うordered TrackSegment sequence
+- Timetable: ordered Station stop、planned arrival/departure、minimum dwell、optional preferred Platform
+- RailwayService: Formation / Route / Timetable / origin Depot / destination Depot / planned start
+- Train: Serviceを実行するmutable physical state。1 Serviceにつき高々1 Train
 
-Checkpoint and Save Data preserve both assigned IDs and every next-ID counter.
-
-A `TrainFormation` defines length, maximum speed, maximum acceleration, service deceleration, and passenger capacity. All physical quantities must be finite and positive; capacity must be greater than zero.
-
-A `RailwayRoute` is an ordered TrackSegment sequence. Consecutive segments must be connected by an explicit `TrackConnection`, respect Track direction, and form one continuous traversal. The route stores its derived 3D length.
-
-A `Timetable` is an ordered stop sequence. Each stop defines Station ID, planned arrival tick, planned departure tick, minimum dwell ticks, and an optional preferred Platform. Departure may not precede arrival, and successive stops must be nondecreasing in time.
-
-A `RailwayService` binds one Formation, Route, Timetable, origin Depot, destination Depot, and planned start tick. The route must begin on an origin Depot track and end on a destination Depot track. Timetable stations must appear in route order.
-
-A `Train` is the mutable physical execution state of one Service. A Service owns at most one Train.
+Preferred Platformのfallback semantics等、実装変更を伴う未確定事項はこの文書整理では変更せず、既存runtime contractを別Issueで扱う。
 
 ## Fixed-tick movement
 
-Train movement is advanced only by `SimulationWorld.Step()`. Each tick uses the configured fixed tick duration; wall-clock time is not authoritative.
+Trainは`SimulationWorld.Step()`だけで進行する。wall clockはauthoritativeでない。stable Train ID順に処理するため同じinput/stateではcontention解決もdeterministic。
 
-A running Train stores route distance, 3D world position, forward vector, speed, movement state, Block ownership, Platform assignment/occupancy, Depot state, and dwell departure tick.
-
-Target speed is bounded by both Formation maximum speed and the current TrackSegment speed limit. Acceleration and service braking are applied deterministically from the prior tick state. Position and forward vector are derived from Route Track geometry at the resulting route distance.
-
-Train processing order is stable Train ID order. Therefore contention resolution is deterministic for the same infrastructure, seed, timetable, and prior state.
+Trainはroute distance、3D position/forward、speed、movement state、Block / Platform / Depot reference、dwell departure tickを持つ。target speedはFormation上限とTrackSegment speed limitで制約し、加減速後のRoute distanceから3D poseをsampleする。
 
 ## Block separation
 
-Each TrackSegment may belong to a Phase 17 `BlockSection`. Railway Operations maintains a single Train owner per Block.
+各TrackSegmentは任意のBlockSectionへ所属する。OperationsはBlockごとに単一Train ownerを持つ。
 
-Before a Train enters a different Block it must reserve that Block. If another Train owns it, the Train stops at the boundary and enters `WaitingForBlock`. The previous Block is released only after the next Block has been acquired. Exact Track-step boundary positions use the same ownership transition rule, preventing boundary stalls and double ownership.
+次Blockへ入る前にreserveし、別Train所有ならboundary前で停止して`WaitingForBlock`。next Block取得後にprevious Blockをreleaseする。2 Trainが同一Blockを同時所有しない。
 
-At no time may two Trains own the same Block.
+## Station / Platform
 
-## Station approach and Platform assignment
+次Timetable stopへ接近するとRoute上のeligible Platformを選び、reserveできなければstop手前で待つ。assignment後はPlatform center distanceへbrakeし、arrivalで`Dwelling`へ遷移する。
 
-As a Train approaches the next Timetable stop, the operation store selects a Platform belonging to that Station and lying on the Route. A preferred Platform is attempted first when valid; otherwise eligible platforms are considered by stable Platform ID order.
+Platform ownershipはexclusive。departure時にPlatformをreleaseして次stopへ進む。
 
-A Platform has at most one Train owner. If no eligible Platform is available, the approaching Train brakes to a deterministic wait point before the stop rather than entering an occupied Platform.
+## Delay semantics
 
-After assignment, the Train brakes to the selected Platform stop distance, transitions to `Dwelling`, marks the Platform occupied, and remains stopped until both planned departure constraints and minimum dwell are satisfied. On departure the Platform is released before proceeding to the next stop.
+`RailwayService.DelayTicks`は**arrival時だけ更新する単調非減少値**である。
 
-## Delay
+stopへtick `actualArrivalTick`で到着したとき:
 
-Delay is stored on the Service as nonnegative ticks. At station arrival/departure, actual tick is compared with the corresponding planned Timetable tick. Positive lateness increases Service delay; the same accumulated delay is applied to later stop expectations and is delivered to clients.
+```text
+arrivalDelay = max(0, actualArrivalTick - plannedArrivalTick)
+DelayTicks   = max(previous DelayTicks, arrivalDelay)
+```
 
-Contention for Block or Platform can therefore produce deterministic propagated delay without changing the original Timetable definition.
+つまりPhase 18では遅延回復を表現せず、一度記録した最大arrival delayを後続stopへ持ち越す。
+
+Dwell departure tickは到着時に次で決める。
+
+```text
+delayedPlannedDeparture = plannedDepartureTick + DelayTicks
+minimumDwellDeparture    = actualArrivalTick + minimumDwellTicks
+DwellDepartureTick       = max(delayedPlannedDeparture, minimumDwellDeparture)
+```
+
+**departure時には`DelayTicks`を再計算しない。** minimum dwellやPlatform/Block待ちによってplanned departureよりさらに遅れても、その追加遅延は次のStation arrivalで初めて`DelayTicks`へ反映される。
 
 ## Depot lifecycle
 
-A Service begins in `Planned` state with its Train in the origin Depot. At or after the planned start tick, the Train may depart only after acquiring its first Block. The Service then becomes `Active`.
+Serviceは`Planned`、Trainはorigin Depotから開始する。planned start以降、first Blockを取得できたらdepartureしてService `Active`。
 
-After all Timetable stops are completed, the Train continues to the Route endpoint. At the destination Depot it releases remaining Block/Platform ownership, stops, records the destination Depot, and transitions with the Service to `Completed`.
+全Timetable stop完了後Route endpointまで進み、destination Depotでremaining ownershipをreleaseしてTrain / Serviceを`Completed`へする。
 
-## Checkpoint and Save Data
+## Checkpoint / Save
 
-Simulation checkpoint stores Formation, Route, Timetable, Service, Train and all next-ID counters. Mutable Train state includes route distance, 3D pose, speed, movement state, Block/Platform/Depot references, dwell departure tick, and snapshot tick.
+Railway OperationsはSave Format 9で導入され、current Format 10でも同じoperations sectionを保持する。Formation / Route / Timetable / Service / Train、next IDs、mutable Train stateを保存する。
 
-Save Format 9 adds `simulation.railwayOperations` containing those definitions and mutable states. Format 8 remains readable and migrates to empty Railway Operations while preserving Phase 17 infrastructure.
+restoreはRailway Infrastructureの後。Route topology、Station/Platform/Depot references、Train ownershipを再検証し、Block / Platform owner indexをTrain stateから再構築する。Format 8以前は空operationsへmigrationする。
 
-After save/load, a world stepped with the same subsequent ticks must produce the same Service and Train snapshots as uninterrupted execution.
+## Protocol / Server
 
-## Protocol and Server delivery
+Protocol 2.7 message 710 `RailwayOperationsSnapshot`はtick、visible Train、関連Service、関連Timetableを持つ。Protocol 2.6以下へ送らない。
 
-Protocol 2.7 adds message type `710`, `RailwayOperationsSnapshot`. It carries:
+ServerのTrain visibilityは`TrainSnapshot.Position`という**1点**をClient `WorldVolume`へ照合する。Formation length/body envelopeとの交差判定ではない。長いTrainの一部だけがvolumeに入るケースを現2.7 subscription contractは表現しない。
 
-- authoritative simulation tick
-- visible Train state and 3D pose
-- related Service state and delay
-- related Timetable stop definitions
-- current/assigned Platform, Block, Depot, and dwell state
+message 710はsingle-frame。payloadは1 MiBまでで、Serverが`GetPayloadLength()`でpreflightする。超過時はpartial snapshotを送らず`InvalidRequest` / `railwayOperationsSnapshotTooLarge`を対象subscriptionへ返す。
 
-The Server filters Trains by the client's 3D subscription volume from an immutable publish snapshot. Only Services and Timetables referenced by those visible Trains are included. Protocol 2.6 clients continue to receive static Railway Infrastructure but never receive message 710.
+## Web rendering
 
-message 710はsingle-frame snapshotであり、Protocol 2.7ではchunking / reassembly contractを持たない。payload上限はProtocol共通の1 MiBで、Serverは送信前に`RailwayOperationsProtocolCodec.GetPayloadLength()`で正確なpayload長をpreflightする。1 MiBを超える場合は対象subscriptionに`InvalidRequest` Errorを1件返し、`detailCode=railwayOperationsSnapshotTooLarge`、`field=volume`、`payloadBytes`、`maximumPayloadBytes`を通知する。partial Railway Operations snapshotは送信せず、当該Clientのoversize状態をpublisher全体のfaultへ波及させない。
+WebはTrain position / forwardをsnapshotから直接Three.js meshへ適用する。Protocol 2.7はFormation definition / actual train lengthを配信しないため、現在のTrain meshは**固定18 × 3 × 3のdebug proxy**である。physical Formation lengthを表すvisual contractではない。
 
-## Web rendering and debug view
+## Railway Debug next-arrival semantics
 
-The Web Client negotiates Protocol 2.7, decodes Railway Operations separately from static Railway Infrastructure, and renders each Train as a reusable Three.js mesh. Simulation `(X,Y,Z)` is mapped to Three.js `(X,Z,Y)` so altitude remains the rendering Y axis.
+Railway Debugの次到着表示は、Serviceの次Timetable stopに対して次を表示する。
 
-The Railway Debug view reports Train count, delayed/completed Service counts, and the next Station arrival tick calculated from planned arrival plus current Service delay.
+`projectedArrivalTick = plannedArrivalTick + DelayTicks`
 
-## Determinism and validation
+これはschedule-based projectionで、Train position / speed / braking distance / current Block・Platform waitから連続再計算するrealtime ETAではない。arrival間で新しい待ちが発生しても`DelayTicks`が更新される次arrivalまでprojectionへ現れない場合がある。
 
-The deterministic Phase 18 fixture contains two Trains sharing a single-track sequence, two Stations/Platforms, two Timetables, origin/destination Depots, and intentional contention. Tests verify:
+Phase 19の[`multimodal-transit.md`](multimodal-transit.md)が提供する`estimatedArrivalTick`はBus等のTransit Debug用arrival estimateであり、このRailway timetable projectionとは別contractである。
 
-- no two Trains own the same Block or Platform
-- contention produces delay
-- both Services complete and return to a Depot
-- checkpoint and Save Data continuation match uninterrupted execution
-- Protocol 2.7 preserves Train/Service/Timetable state
-- Server-to-browser E2E observes movement, Platform use, dwell, delay, and completion
+## Determinism / verification
+
+検証対象:
+
+- explicit Route / direction / connection validation
+- exclusive Block / Platform ownership
+- deterministic Train ID processing
+- arrival-only monotonic delay semantics
+- checkpoint / Save continuation
+- Protocol 2.7 roundtrip / oversize preflight
+- Serverのpoint-based Train spatial filtering
+- Web fixed debug mesh / schedule projection
+- E2Eのmovement / dwell / delay / completion
