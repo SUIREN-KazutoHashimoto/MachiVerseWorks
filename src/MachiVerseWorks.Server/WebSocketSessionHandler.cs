@@ -137,6 +137,13 @@ internal sealed class WebSocketSessionHandler(ClientConnectionRegistry connectio
                 }
                 await commandQueue.WriteAsync(new InspectPersonCommand(connection.Id, inspectPerson.PersonId), cancellationToken);
                 return true;
+            case ClearPersonInspectionMessage:
+                if (!connection.NegotiatedVersion.SupportsPersonInspectionClear)
+                {
+                    return await RejectRecoverableAsync(connection, [new ProtocolErrorParameter(ProtocolErrorParameterKeys.MessageType, ((ushort)envelope.Message.Type).ToString(CultureInfo.InvariantCulture))], cancellationToken);
+                }
+                await commandQueue.WriteAsync(new ClearPersonInspectionCommand(connection.Id), cancellationToken);
+                return true;
             default:
                 return await RejectRecoverableAsync(connection, [new ProtocolErrorParameter(ProtocolErrorParameterKeys.MessageType, ((ushort)envelope.Message.Type).ToString(CultureInfo.InvariantCulture))], cancellationToken);
         }
@@ -157,6 +164,8 @@ internal sealed class WebSocketSessionHandler(ClientConnectionRegistry connectio
             envelope = null;
             return false;
         }
+        if (header.MessageType == MessageType.ClearPersonInspection)
+            return PersonInspectionProtocolCodec.TryDeserialize(frame, out envelope, out error);
         return header.MessageType is MessageType.InspectPerson or MessageType.PopulationStatistics or MessageType.PersonDebug
             ? PopulationProtocolCodec.TryDeserialize(frame, out envelope, out error)
             : ProtocolCodec.TryDeserialize(frame, out envelope, out error);
