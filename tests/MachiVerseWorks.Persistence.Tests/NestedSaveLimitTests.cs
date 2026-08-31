@@ -210,8 +210,8 @@ public sealed class NestedSaveLimitTests
         var start = world.CreateTrackNode(new WorldPoint(0, 0, 0));
         var junction = world.CreateTrackNode(new WorldPoint(100, 0, 0), TrackNodeKind.Junction);
         var end = world.CreateTrackNode(new WorldPoint(200, 0, 0));
-        var first = world.CreateTrackSegment(start, junction);
-        var second = world.CreateTrackSegment(junction, end);
+        var first = world.CreateTrackSegment(start, junction, usage: TrackUsage.Depot);
+        var second = world.CreateTrackSegment(junction, end, usage: TrackUsage.Depot);
         world.CreateTrackConnection(first, second, junction);
         world.CreateBlockSection([first, second]);
         world.CreateDepot(new WorldVolume(0, -10, -5, 200, 10, 5), [first, second]);
