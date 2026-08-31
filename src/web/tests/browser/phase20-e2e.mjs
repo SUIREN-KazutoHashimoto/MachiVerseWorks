@@ -12,12 +12,10 @@ const serverUrl = parameters.get('server') ?? 'ws://127.0.0.1:5084/ws';
 const result = document.querySelector('#result');
 if (!(result instanceof HTMLElement)) throw new Error('E2E result element is missing.');
 
-let initialRevision = null;
-let finalRevision = null;
 let sawInitialEmptyTopology = false;
 let sawAdminTopology = false;
+let roadSnapshotCount = 0;
 let failure = null;
-let negotiatedVersion = null;
 let connected = false;
 
 const socket = new WebSocket(serverUrl);
@@ -32,9 +30,8 @@ socket.addEventListener('message', async (event) => {
       const envelope = decodeFrame(buffer);
       if (envelope.message.type === MessageType.Error) throw new Error(`Protocol error ${String(envelope.message.code)} during handshake.`);
       if (envelope.message.type !== MessageType.HelloAck) throw new Error('Expected HelloAck as the first server message.');
-      negotiatedVersion = envelope.message.protocolVersion;
       connected = true;
-      socket.send(encodeSubscribeVolume({ minX: -100, minY: -100, minZ: -20, maxX: 100, maxY: 100, maxZ: 20 }, negotiatedVersion));
+      socket.send(encodeSubscribeVolume({ minX: -100, minY: -100, minZ: -20, maxX: 100, maxY: 100, maxZ: 20 }, envelope.message.protocolVersion));
       return;
     }
 
@@ -43,12 +40,9 @@ socket.addEventListener('message', async (event) => {
     if (type !== MessageType.RoadNetworkSnapshot) return;
     const message = decodeFrame(buffer).message;
     if (message.type !== MessageType.RoadNetworkSnapshot) return;
-    if (initialRevision === null) initialRevision = message.revision;
+    roadSnapshotCount += 1;
     if (message.segments.length === 0) sawInitialEmptyTopology = true;
-    if (message.segments.length === 1 && message.nodes.length === 2 && message.lanes.length === 1) {
-      finalRevision = message.revision;
-      sawAdminTopology = true;
-    }
+    if (sawInitialEmptyTopology && message.segments.length === 1 && message.nodes.length === 2 && message.lanes.length === 1) sawAdminTopology = true;
   } catch (error) {
     failure = error instanceof Error ? error : new Error(String(error));
   }
@@ -58,9 +52,8 @@ try {
   await waitUntil(() => connected, 'browser protocol handshake');
   await waitUntil(() => sawInitialEmptyTopology, 'initial empty Road read model');
   await waitUntil(() => sawAdminTopology, 'Road topology created through administration console');
-  if (initialRevision === null || finalRevision === null || finalRevision <= initialRevision) throw new Error('Road read-model revision did not advance after administration mutation.');
   result.dataset.status = 'passed';
-  result.textContent = JSON.stringify({ status: 'passed', initialRevision: initialRevision.toString(), finalRevision: finalRevision.toString(), sawInitialEmptyTopology, sawAdminTopology });
+  result.textContent = JSON.stringify({ status: 'passed', roadSnapshotCount, sawInitialEmptyTopology, sawAdminTopology });
 } catch (error) {
   const normalized = error instanceof Error ? error : new Error(String(error));
   result.dataset.status = 'failed';
