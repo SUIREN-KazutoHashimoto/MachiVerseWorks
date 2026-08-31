@@ -139,6 +139,7 @@ public static partial class WorldSaveSerializer
             if (reader.ValueTextEquals("blockSections")) return NestedSaveProperty.BlockSections;
             if (reader.ValueTextEquals("depots")) return NestedSaveProperty.Depots;
             if (reader.ValueTextEquals("railwayOperations")) return NestedSaveProperty.RailwayOperations;
+            if (reader.ValueTextEquals("economy")) return NestedSaveProperty.Economy;
         }
         else if (context == NestedSaveContext.Vehicle && reader.ValueTextEquals("routeSteps")) return NestedSaveProperty.RouteSteps;
         else if (context == NestedSaveContext.Person)
@@ -155,6 +156,14 @@ public static partial class WorldSaveSerializer
         }
         else if (context == NestedSaveContext.RailwayRoute && reader.ValueTextEquals("trackSegmentIds")) return NestedSaveProperty.TrackSegmentIds;
         else if (context == NestedSaveContext.Timetable && reader.ValueTextEquals("stops")) return NestedSaveProperty.Stops;
+        else if (context == NestedSaveContext.Economy && reader.ValueTextEquals("logistics")) return NestedSaveProperty.Logistics;
+        else if (context == NestedSaveContext.Logistics)
+        {
+            if (reader.ValueTextEquals("commodities")) return NestedSaveProperty.Commodities;
+            if (reader.ValueTextEquals("inventories")) return NestedSaveProperty.Inventories;
+            if (reader.ValueTextEquals("orders")) return NestedSaveProperty.Orders;
+            if (reader.ValueTextEquals("shipments")) return NestedSaveProperty.Shipments;
+        }
         return NestedSaveProperty.Other;
     }
 
@@ -163,6 +172,8 @@ public static partial class WorldSaveSerializer
         {
             (NestedSaveContext.Root, NestedSaveProperty.Simulation) => NestedSaveContext.Simulation,
             (NestedSaveContext.Simulation, NestedSaveProperty.RailwayOperations) => NestedSaveContext.RailwayOperations,
+            (NestedSaveContext.Simulation, NestedSaveProperty.Economy) => NestedSaveContext.Economy,
+            (NestedSaveContext.Economy, NestedSaveProperty.Logistics) => NestedSaveContext.Logistics,
             _ => NestedSaveContext.Other,
         };
 
@@ -188,6 +199,10 @@ public static partial class WorldSaveSerializer
             (NestedSaveContext.Depot, NestedSaveProperty.TrackSegmentIds) => new(limits.MaximumDepotTrackSegmentCount, "simulation.depots[].trackSegmentIds", NestedArrayKind.None),
             (NestedSaveContext.RailwayRoute, NestedSaveProperty.TrackSegmentIds) => new(limits.MaximumRailwayRouteSegmentCount, "simulation.railwayOperations.routes[].trackSegmentIds", NestedArrayKind.None),
             (NestedSaveContext.Timetable, NestedSaveProperty.Stops) => new(limits.MaximumTimetableStopCount, "simulation.railwayOperations.timetables[].stops", NestedArrayKind.TimetableStops),
+            (NestedSaveContext.Logistics, NestedSaveProperty.Commodities) => new(limits.MaximumBuildingCount, "simulation.economy.logistics.commodities", NestedArrayKind.None),
+            (NestedSaveContext.Logistics, NestedSaveProperty.Inventories) => new(limits.MaximumBuildingCount, "simulation.economy.logistics.inventories", NestedArrayKind.None),
+            (NestedSaveContext.Logistics, NestedSaveProperty.Orders) => new(limits.MaximumPersonCount, "simulation.economy.logistics.orders", NestedArrayKind.None),
+            (NestedSaveContext.Logistics, NestedSaveProperty.Shipments) => new(limits.MaximumVehicleCount, "simulation.economy.logistics.shipments", NestedArrayKind.None),
             _ => new(int.MaxValue, null, NestedArrayKind.None),
         };
 
@@ -212,6 +227,8 @@ public static partial class WorldSaveSerializer
         RailwayOperations,
         RailwayRoute,
         Timetable,
+        Economy,
+        Logistics,
     }
 
     private enum NestedSaveProperty : byte
@@ -231,6 +248,12 @@ public static partial class WorldSaveSerializer
         Routes,
         Timetables,
         Stops,
+        Economy,
+        Logistics,
+        Commodities,
+        Inventories,
+        Orders,
+        Shipments,
     }
 
     private enum NestedArrayKind : byte
