@@ -1,0 +1,3 @@
+[SimulationRuntime.cs]
+# StepPaused intentionally uses the same explicit argument guard style as the existing runtime API.
+dotnet_diagnostic.CA1512.severity = none
