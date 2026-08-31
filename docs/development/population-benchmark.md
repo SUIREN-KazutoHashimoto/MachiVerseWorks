@@ -14,7 +14,9 @@ Phase 15 Population & Daily Activity のplanner / fixed tick / managed memory ba
 
 `idle`は各Household 4 Person、全Personが`Home` activity windowを1日中持つ従来baselineを維持する。交通entity生成やroute searchを混ぜないため、historical Phase 15 baselineとの比較に使う。
 
-`foot-dispatch` / `motor-dispatch`はwarmup中にはTripを発生させず、最初のmeasurement tickで対象Personを一斉にactivity transitionさせる。これによりdispatch spikeをwarmupで消さず、その後のPedestrian / Vehicle継続処理も同じmeasurement windowで観測する。
+`foot-dispatch` / `motor-dispatch`はInfrastructureだけをwarmupした後でPersonを追加し、最初のmeasurement tickで対象Personを一斉にactivity transitionさせる。dispatch fixtureでは各Personを1 Householdに分離し、同一Lane上へ12 m間隔の固有RoadAccessPointを与える。これによりMotor scenarioでspawn位置競合によるwalking fallbackをbenchmark結果へ混入させない。
+
+回帰条件として、`foot-dispatch`はmeasurement中の最大active Pedestrian数がPerson数と一致すること、`motor-dispatch`は最大active Vehicle数がPerson数と一致し、active Pedestrianが0であることを必須とする。1件でもMotor dispatchがwalkingへfallbackした場合はbenchmark自体を失敗させる。
 
 100,000 Person同時dispatchはCIの通常回帰には含めない。大規模rush-hour workloadは専用負荷試験として扱い、標準benchmark jobの時間・メモリbudgetを不必要に膨らませない。
 
@@ -42,7 +44,7 @@ dotnet run \
 CSV列:
 
 ```text
-scenario,persons,households,ticks,average_ms,p50_ms,p95_ms,p99_ms,max_ms,allocated_bytes_per_tick,managed_bytes
+scenario,persons,households,ticks,average_ms,p50_ms,p95_ms,p99_ms,max_ms,allocated_bytes_per_tick,managed_bytes,max_active_pedestrians,max_active_vehicles
 ```
 
 ## Historical idle baseline
