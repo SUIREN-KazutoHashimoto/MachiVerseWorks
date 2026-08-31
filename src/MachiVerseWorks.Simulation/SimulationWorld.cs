@@ -56,8 +56,7 @@ public sealed partial class SimulationWorld
         var nextTime = Time.Advance(Config.TickRate);
         _agents.Step(Config.TickDurationSeconds, _spatialIndex);
         StepEconomy(nextTime);
-        PlanEconomyCommutes(nextTime);
-        PlanPopulationTrips(nextTime);
+        PlanPopulationAndEconomyTrips(nextTime);
         StepVehicles(Config.TickDurationSeconds, nextTime.TickCount);
         StepRailwayOperations(Config.TickDurationSeconds, nextTime.TickCount);
         StepPedestrians(Config.TickDurationSeconds);
