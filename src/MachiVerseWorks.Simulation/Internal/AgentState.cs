@@ -11,10 +11,7 @@ internal struct AgentState
     }
 
     public AgentId Id { get; }
-
     public WorldPoint Position { get; set; }
-
-    public WorldVector Velocity { get; }
-
+    public WorldVector Velocity { get; set; }
     public bool IsActive { get; set; }
 }
