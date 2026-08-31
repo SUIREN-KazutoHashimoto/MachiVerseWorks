@@ -27,6 +27,7 @@ public static class ServerApplication
         builder.Services.AddHostedService<ServerConsoleService>();
         builder.Services.AddHostedService<SnapshotPublishService>();
         builder.Services.AddHostedService<PopulationPublishService>();
+        builder.Services.AddHostedService<EconomyPublishService>();
 
         var app = builder.Build();
         app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30), KeepAliveTimeout = TimeSpan.FromSeconds(15) });
