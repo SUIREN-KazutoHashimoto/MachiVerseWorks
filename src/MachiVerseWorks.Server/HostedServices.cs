@@ -148,7 +148,7 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
             var vehiclePlan = connection.NegotiatedVersion.SupportsVehicles ? VehicleSnapshotMessagePlanner.Create(snapshot.Vehicles, subscription.KnownVehicleIds, snapshot.TickCount) : new VehicleSnapshotMessagePlan([], []);
             var intersectionMessages = connection.NegotiatedVersion.SupportsIntersectionControl ? snapshot.Intersections.Select(IntersectionControlMessageMapper.Create).ToArray() : [];
             IProtocolMessage? railwayOperationsMessage = null;
-            if (connection.NegotiatedVersion.SupportsRailwayOperations && snapshot.Trains.Length > 0)
+            if (connection.NegotiatedVersion.SupportsRailwayOperations)
             {
                 var mappedRailwayOperations = RailwayOperationsMessageMapper.Create(publishSnapshot.RailwayOperations, snapshot.Trains, snapshot.TickCount);
                 railwayOperationsMessage = RailwayOperationsSnapshotMessagePlanner.Create(mappedRailwayOperations);
