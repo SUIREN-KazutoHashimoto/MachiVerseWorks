@@ -111,8 +111,8 @@ public sealed partial class SimulationWorld
             var isOpen = controller.Mode switch
             {
                 IntersectionControlMode.FixedSignal => controller.MovementStates.All(
-                    static state => state.Indication == SignalIndication.Red && !state.EntryGranted),
-                IntersectionControlMode.Unsignalized => controller.MovementStates.All(static state => !state.EntryGranted),
+                    static state => state.Indication == SignalIndication.Red && !state.EntryGrantedThisTick),
+                IntersectionControlMode.Unsignalized => controller.MovementStates.All(static state => !state.EntryGrantedThisTick),
                 _ => false,
             };
             _pedestrianCrossingControlPermissions[pair.Key] = isOpen;
