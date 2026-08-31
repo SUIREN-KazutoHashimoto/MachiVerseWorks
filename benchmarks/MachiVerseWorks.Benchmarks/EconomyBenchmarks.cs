@@ -31,6 +31,9 @@ public class EconomyBenchmarks
     }
 
     [Benchmark]
+    public void Tick() => _world.Step();
+
+    [Benchmark]
     public EconomyStatistics Statistics() => _world.CreateEconomyStatistics();
 
     [Benchmark]
