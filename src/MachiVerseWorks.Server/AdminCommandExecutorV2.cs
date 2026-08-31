@@ -228,35 +228,35 @@ internal sealed class AdminCommandExecutorV2(
 
         if (entity == "node")
         {
-            if (action == "add") { var id = simulation.Mutate(w => w.CreateRoadNode(Point(command, 2), OptionEnum(command, "kind", RoadNodeKind.Endpoint)), roadTopologyChanged: true); return AdminCommandResult.Ok($"Road node {id.Value} created."); }
+            if (action == "add") { var created = simulation.Mutate(w => w.CreateRoadNode(Point(command, 2), OptionEnum(command, "kind", RoadNodeKind.Endpoint)), roadTopologyChanged: true); return AdminCommandResult.Ok($"Road node {created.Value} created."); }
             var id = new RoadNodeId(Id(Arg(command, 2, "id"), "id"));
             if (action == "update") return simulation.Mutate(w => w.UpdateRoadNode(id, Point(command, 3), OptionEnum(command, "kind", RoadNodeKind.Endpoint)), roadTopologyChanged: true) ? AdminCommandResult.Ok($"Road node {id.Value} updated.") : NotFound("Road node", id.Value);
             if (action == "remove") return simulation.Mutate(w => w.RemoveRoadNode(id), roadTopologyChanged: true) ? AdminCommandResult.Ok($"Road node {id.Value} removed.") : NotFound("Road node", id.Value);
         }
         if (entity == "segment")
         {
-            if (action == "add") { var id = simulation.Mutate(w => w.CreateRoadSegment(new RoadNodeId(Id(Arg(command, 2, "startNode"), "startNode")), new RoadNodeId(Id(Arg(command, 3, "endNode"), "endNode")), OptionEnum(command, "kind", RoadKind.Local)), roadTopologyChanged: true); return AdminCommandResult.Ok($"Road segment {id.Value} created."); }
+            if (action == "add") { var created = simulation.Mutate(w => w.CreateRoadSegment(new RoadNodeId(Id(Arg(command, 2, "startNode"), "startNode")), new RoadNodeId(Id(Arg(command, 3, "endNode"), "endNode")), OptionEnum(command, "kind", RoadKind.Local)), roadTopologyChanged: true); return AdminCommandResult.Ok($"Road segment {created.Value} created."); }
             var id = new RoadSegmentId(Id(Arg(command, 2, "id"), "id"));
             if (action == "update") return simulation.Mutate(w => w.UpdateRoadSegment(id, new RoadNodeId(Id(Arg(command, 3, "startNode"), "startNode")), new RoadNodeId(Id(Arg(command, 4, "endNode"), "endNode")), OptionEnum(command, "kind", RoadKind.Local)), roadTopologyChanged: true) ? AdminCommandResult.Ok($"Road segment {id.Value} updated.") : NotFound("Road segment", id.Value);
             if (action == "remove") return simulation.Mutate(w => w.RemoveRoadSegment(id), roadTopologyChanged: true) ? AdminCommandResult.Ok($"Road segment {id.Value} removed.") : NotFound("Road segment", id.Value);
         }
         if (entity == "lane")
         {
-            if (action == "add") { var id = CreateLane(command, 2); return AdminCommandResult.Ok($"Lane {id.Value} created."); }
+            if (action == "add") { var created = CreateLane(command, 2); return AdminCommandResult.Ok($"Lane {created.Value} created."); }
             var id = new LaneId(Id(Arg(command, 2, "id"), "id"));
             if (action == "update") return UpdateLane(command, id) ? AdminCommandResult.Ok($"Lane {id.Value} updated.") : NotFound("Lane", id.Value);
             if (action == "remove") return simulation.Mutate(w => w.RemoveLane(id), roadTopologyChanged: true) ? AdminCommandResult.Ok($"Lane {id.Value} removed.") : NotFound("Lane", id.Value);
         }
         if (entity == "connection")
         {
-            if (action == "add") { var id = CreateLaneConnection(command, 2); return AdminCommandResult.Ok($"Lane connection {id.Value} created."); }
+            if (action == "add") { var created = CreateLaneConnection(command, 2); return AdminCommandResult.Ok($"Lane connection {created.Value} created."); }
             var id = new LaneConnectionId(Id(Arg(command, 2, "id"), "id"));
             if (action == "update") return UpdateLaneConnection(command, id) ? AdminCommandResult.Ok($"Lane connection {id.Value} updated.") : NotFound("Lane connection", id.Value);
             if (action == "remove") return simulation.Mutate(w => w.RemoveLaneConnection(id), roadTopologyChanged: true) ? AdminCommandResult.Ok($"Lane connection {id.Value} removed.") : NotFound("Lane connection", id.Value);
         }
         if (entity == "access")
         {
-            if (action == "add") { var id = CreateRoadAccess(command, 2); return AdminCommandResult.Ok($"Road access point {id.Value} created."); }
+            if (action == "add") { var created = CreateRoadAccess(command, 2); return AdminCommandResult.Ok($"Road access point {created.Value} created."); }
             var id = new RoadAccessPointId(Id(Arg(command, 2, "id"), "id"));
             if (action == "update") return UpdateRoadAccess(command, id) ? AdminCommandResult.Ok($"Road access point {id.Value} updated.") : NotFound("Road access point", id.Value);
             if (action == "remove") return simulation.Mutate(w => w.RemoveRoadAccessPoint(id), roadTopologyChanged: true) ? AdminCommandResult.Ok($"Road access point {id.Value} removed.") : NotFound("Road access point", id.Value);
@@ -283,7 +283,7 @@ internal sealed class AdminCommandExecutorV2(
             {
                 var route = w.FindRoadRoute(new RouteRequest(origin, destination, cost));
                 if (route.Steps.Count == 0) throw new InvalidOperationException("Routing produced an empty vehicle route.");
-                return w.CreateVehicle(route.Steps, length, speed);
+                return w.CreateVehicle(route, new VehicleDimensions(length, 1.8d, 1.5d), initialSpeedMetersPerSecond: speed);
             });
             return AdminCommandResult.Ok($"Vehicle {id.Value} created from a routing result.");
         }
@@ -394,7 +394,7 @@ internal sealed class AdminCommandExecutorV2(
         bool updated;
         if (entity == "node")
         {
-            if (action == "add") { var id = simulation.Mutate(w => w.CreateTrackNode(Point(command, 2), OptionEnum(command, "kind", TrackNodeKind.Endpoint)), railwayTopologyChanged: true); return AdminCommandResult.Ok($"Track node {id.Value} created."); }
+            if (action == "add") { var created = simulation.Mutate(w => w.CreateTrackNode(Point(command, 2), OptionEnum(command, "kind", TrackNodeKind.Endpoint)), railwayTopologyChanged: true); return AdminCommandResult.Ok($"Track node {created.Value} created."); }
             var id = new TrackNodeId(Id(Arg(command, 2, "id"), "id"));
             if (action == "update") updated = simulation.Mutate(w => w.UpdateTrackNode(id, Point(command, 3), OptionEnum(command, "kind", TrackNodeKind.Endpoint)), railwayTopologyChanged: true);
             else if (action == "remove") updated = simulation.Mutate(w => w.RemoveTrackNode(id), railwayTopologyChanged: true);
@@ -405,8 +405,8 @@ internal sealed class AdminCommandExecutorV2(
         {
             if (action == "add")
             {
-                var id = simulation.Mutate(w => w.CreateTrackSegment(new TrackNodeId(Id(Arg(command, 2, "startNode"), "startNode")), new TrackNodeId(Id(Arg(command, 3, "endNode"), "endNode")), OptionEnum(command, "direction", TrackDirection.Bidirectional), OptionDouble(command, "gauge", 1.435d), OptionDouble(command, "speed", 22.2222222222d), OptionEnum(command, "electrification", TrackElectrification.None), OptionEnum(command, "usage", TrackUsage.Mainline)), railwayTopologyChanged: true);
-                return AdminCommandResult.Ok($"Track segment {id.Value} created.");
+                var created = simulation.Mutate(w => w.CreateTrackSegment(new TrackNodeId(Id(Arg(command, 2, "startNode"), "startNode")), new TrackNodeId(Id(Arg(command, 3, "endNode"), "endNode")), OptionEnum(command, "direction", TrackDirection.Bidirectional), OptionDouble(command, "gauge", 1.435d), OptionDouble(command, "speed", 22.2222222222d), OptionEnum(command, "electrification", TrackElectrification.None), OptionEnum(command, "usage", TrackUsage.Mainline)), railwayTopologyChanged: true);
+                return AdminCommandResult.Ok($"Track segment {created.Value} created.");
             }
             var id = new TrackSegmentId(Id(Arg(command, 2, "id"), "id"));
             if (action == "update") updated = simulation.Mutate(w => w.UpdateTrackSegment(id, new TrackNodeId(Id(Arg(command, 3, "startNode"), "startNode")), new TrackNodeId(Id(Arg(command, 4, "endNode"), "endNode")), OptionEnum(command, "direction", TrackDirection.Bidirectional), OptionDouble(command, "gauge", 1.435d), OptionDouble(command, "speed", 22.2222222222d), OptionEnum(command, "electrification", TrackElectrification.None), OptionEnum(command, "usage", TrackUsage.Mainline)), railwayTopologyChanged: true);
@@ -416,7 +416,7 @@ internal sealed class AdminCommandExecutorV2(
         }
         if (entity == "connection")
         {
-            if (action == "add") { var id = simulation.Mutate(w => w.CreateTrackConnection(new TrackSegmentId(Id(Arg(command, 2, "from"), "from")), new TrackSegmentId(Id(Arg(command, 3, "to"), "to")), new TrackNodeId(Id(Arg(command, 4, "via"), "via"))), railwayTopologyChanged: true); return AdminCommandResult.Ok($"Track connection {id.Value} created."); }
+            if (action == "add") { var created = simulation.Mutate(w => w.CreateTrackConnection(new TrackSegmentId(Id(Arg(command, 2, "from"), "from")), new TrackSegmentId(Id(Arg(command, 3, "to"), "to")), new TrackNodeId(Id(Arg(command, 4, "via"), "via"))), railwayTopologyChanged: true); return AdminCommandResult.Ok($"Track connection {created.Value} created."); }
             var id = new TrackConnectionId(Id(Arg(command, 2, "id"), "id"));
             if (action == "update") updated = simulation.Mutate(w => w.UpdateTrackConnection(id, new TrackSegmentId(Id(Arg(command, 3, "from"), "from")), new TrackSegmentId(Id(Arg(command, 4, "to"), "to")), new TrackNodeId(Id(Arg(command, 5, "via"), "via"))), railwayTopologyChanged: true);
             else if (action == "remove") updated = simulation.Mutate(w => w.RemoveTrackConnection(id), railwayTopologyChanged: true);
@@ -425,7 +425,7 @@ internal sealed class AdminCommandExecutorV2(
         }
         if (entity == "block")
         {
-            if (action == "add") { var id = simulation.Mutate(w => w.CreateBlockSection(CsvIds(Arg(command, 2, "segments")).Select(x => new TrackSegmentId(x)).ToArray()), railwayTopologyChanged: true); return AdminCommandResult.Ok($"Block section {id.Value} created."); }
+            if (action == "add") { var created = simulation.Mutate(w => w.CreateBlockSection(CsvIds(Arg(command, 2, "segments")).Select(x => new TrackSegmentId(x)).ToArray()), railwayTopologyChanged: true); return AdminCommandResult.Ok($"Block section {created.Value} created."); }
             var id = new BlockSectionId(Id(Arg(command, 2, "id"), "id"));
             if (action == "update") updated = simulation.Mutate(w => w.UpdateBlockSection(id, CsvIds(Arg(command, 3, "segments")).Select(x => new TrackSegmentId(x)).ToArray()), railwayTopologyChanged: true);
             else if (action == "remove") updated = simulation.Mutate(w => w.RemoveBlockSection(id), railwayTopologyChanged: true);
@@ -434,7 +434,7 @@ internal sealed class AdminCommandExecutorV2(
         }
         if (entity == "station")
         {
-            if (action == "add") { var id = simulation.Mutate(w => w.CreateStation(Volume(command, 2)), railwayTopologyChanged: true); return AdminCommandResult.Ok($"Station {id.Value} created."); }
+            if (action == "add") { var created = simulation.Mutate(w => w.CreateStation(Volume(command, 2)), railwayTopologyChanged: true); return AdminCommandResult.Ok($"Station {created.Value} created."); }
             var id = new StationId(Id(Arg(command, 2, "id"), "id"));
             if (action == "update") updated = simulation.Mutate(w => w.UpdateStation(id, Volume(command, 3)), railwayTopologyChanged: true);
             else if (action == "remove") updated = simulation.Mutate(w => w.RemoveStation(id), railwayTopologyChanged: true);
@@ -443,7 +443,7 @@ internal sealed class AdminCommandExecutorV2(
         }
         if (entity == "platform")
         {
-            if (action == "add") { var id = simulation.Mutate(w => w.CreatePlatform(new StationId(Id(Arg(command, 2, "station"), "station")), new TrackSegmentId(Id(Arg(command, 3, "segment"), "segment")), Double(Arg(command, 4, "startOffset"), "startOffset"), Double(Arg(command, 5, "endOffset"), "endOffset"), Volume(command, 6)), railwayTopologyChanged: true); return AdminCommandResult.Ok($"Platform {id.Value} created."); }
+            if (action == "add") { var created = simulation.Mutate(w => w.CreatePlatform(new StationId(Id(Arg(command, 2, "station"), "station")), new TrackSegmentId(Id(Arg(command, 3, "segment"), "segment")), Double(Arg(command, 4, "startOffset"), "startOffset"), Double(Arg(command, 5, "endOffset"), "endOffset"), Volume(command, 6)), railwayTopologyChanged: true); return AdminCommandResult.Ok($"Platform {created.Value} created."); }
             var id = new PlatformId(Id(Arg(command, 2, "id"), "id"));
             if (action == "update") updated = simulation.Mutate(w => w.UpdatePlatform(id, new StationId(Id(Arg(command, 3, "station"), "station")), new TrackSegmentId(Id(Arg(command, 4, "segment"), "segment")), Double(Arg(command, 5, "startOffset"), "startOffset"), Double(Arg(command, 6, "endOffset"), "endOffset"), Volume(command, 7)), railwayTopologyChanged: true);
             else if (action == "remove") updated = simulation.Mutate(w => w.RemovePlatform(id), railwayTopologyChanged: true);
@@ -452,7 +452,7 @@ internal sealed class AdminCommandExecutorV2(
         }
         if (entity == "access")
         {
-            if (action == "add") { var id = simulation.Mutate(w => w.CreatePlatformAccessPoint(new PlatformId(Id(Arg(command, 2, "platform"), "platform")), new RoadAccessPointId(Id(Arg(command, 3, "roadAccess"), "roadAccess"))), railwayTopologyChanged: true); return AdminCommandResult.Ok($"Platform access point {id.Value} created."); }
+            if (action == "add") { var created = simulation.Mutate(w => w.CreatePlatformAccessPoint(new PlatformId(Id(Arg(command, 2, "platform"), "platform")), new RoadAccessPointId(Id(Arg(command, 3, "roadAccess"), "roadAccess"))), railwayTopologyChanged: true); return AdminCommandResult.Ok($"Platform access point {created.Value} created."); }
             var id = new PlatformAccessPointId(Id(Arg(command, 2, "id"), "id"));
             if (action == "update") updated = simulation.Mutate(w => w.UpdatePlatformAccessPoint(id, new PlatformId(Id(Arg(command, 3, "platform"), "platform")), new RoadAccessPointId(Id(Arg(command, 4, "roadAccess"), "roadAccess"))), railwayTopologyChanged: true);
             else if (action == "remove") updated = simulation.Mutate(w => w.RemovePlatformAccessPoint(id), railwayTopologyChanged: true);
@@ -461,7 +461,7 @@ internal sealed class AdminCommandExecutorV2(
         }
         if (entity == "depot")
         {
-            if (action == "add") { var id = simulation.Mutate(w => w.CreateDepot(Volume(command, 2), CsvIds(Arg(command, 8, "segments")).Select(x => new TrackSegmentId(x)).ToArray()), railwayTopologyChanged: true); return AdminCommandResult.Ok($"Depot {id.Value} created."); }
+            if (action == "add") { var created = simulation.Mutate(w => w.CreateDepot(Volume(command, 2), CsvIds(Arg(command, 8, "segments")).Select(x => new TrackSegmentId(x)).ToArray()), railwayTopologyChanged: true); return AdminCommandResult.Ok($"Depot {created.Value} created."); }
             var id = new DepotId(Id(Arg(command, 2, "id"), "id"));
             if (action == "update") updated = simulation.Mutate(w => w.UpdateDepot(id, Volume(command, 3), CsvIds(Arg(command, 9, "segments")).Select(x => new TrackSegmentId(x)).ToArray()), railwayTopologyChanged: true);
             else if (action == "remove") updated = simulation.Mutate(w => w.RemoveDepot(id), railwayTopologyChanged: true);
