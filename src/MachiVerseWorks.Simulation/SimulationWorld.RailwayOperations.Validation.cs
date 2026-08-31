@@ -86,8 +86,6 @@ public sealed partial class SimulationWorld
                 throw new ArgumentException($"Railway service {service.Id.Value} contains a missing formation, route, timetable, or depot reference.", nameof(checkpoint));
             if (service.NextStopIndex < 0 || service.NextStopIndex > timetable.Stops.Count)
                 throw new ArgumentException($"Railway service {service.Id.Value} has an invalid next stop index.", nameof(checkpoint));
-            if (service.State != RailwayServiceState.Completed && service.NextStopIndex >= timetable.Stops.Count)
-                throw new ArgumentException($"Incomplete Railway service {service.Id.Value} has no remaining timetable stop.", nameof(checkpoint));
         }
 
         var trainById = new Dictionary<TrainId, TrainSnapshot>();
