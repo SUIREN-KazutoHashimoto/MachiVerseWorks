@@ -355,7 +355,7 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 - CI: review対応コードを含むCI run `33450375345`がrepository / .NET build・test / Web lint・typecheck・test・build / CI gateまで成功した。benchmark fixture更新後もCI run `33450666762`でbuild / test成功を確認した。
 - E2E: End-to-end run `33450666785`でPhase 22 Logisticsを含む既存Server→Browser回帰が成功した。benchmark fixture更新はE2E runtime契約を変更しない。
 - Benchmark: Benchmarks run `33450666769`の`logistics-inventory-100-1000`で100 / 1,000 Inventory・Shipment historyのTick / RoutingBatch / Snapshotを全6ケース計測した。baselineは[`docs/development/logistics-freight-benchmark.md`](docs/development/logistics-freight-benchmark.md)を正本とする。
-- Dependency Review: run `33450666753`が成功した。
+- Dependency Review: run `33451262959`が成功した。
 - Specification / Architecture: [`docs/specifications/logistics-freight.md`](docs/specifications/logistics-freight.md)、[`docs/architecture/logistics-freight.md`](docs/architecture/logistics-freight.md)を正本とする。
 - PR #165はreview対応・実装検証済みだが、本ROADMAP更新時点では`develop`未統合である。統合後にPhase 22を正式closeoutし、Phase 23へ現在地を進める。
 
