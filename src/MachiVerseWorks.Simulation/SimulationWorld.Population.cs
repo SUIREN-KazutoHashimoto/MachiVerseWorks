@@ -503,8 +503,8 @@ public sealed partial class SimulationWorld
 
     private static void ValidatePopulationTravelCheckpoint(
         SimulationPersonCheckpoint person,
-        IReadOnlyDictionary<PedestrianId, SimulationPedestrianCheckpoint> pedestrians,
-        IReadOnlySet<VehicleId> vehicleIds,
+        Dictionary<PedestrianId, SimulationPedestrianCheckpoint> pedestrians,
+        HashSet<VehicleId> vehicleIds,
         MultimodalTransitCheckpoint? transit)
     {
         var hasDestination = person.Destination is not null && person.DestinationActivity is not null;
