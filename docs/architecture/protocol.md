@@ -59,7 +59,7 @@ headerのpayload lengthと実frame長が一致しないframe、未知flags、1 M
 | 720 | `MultimodalTransitSnapshot` | Server → Client | 2.8 |
 | 900 | `Error` | Server → Client | 2.0 |
 
-`SubscribeArea`は存在しない。Agent / Road / Pedestrian / Vehicle / Intersection / Railway / Transitは3D `SubscribeVolume`をinterest-management境界として使う。Population statisticsはWorld全体集計、Person debugはstable Person ID指定のdebug contractである。
+`SubscribeArea`は存在しない。Agent / Road / Pedestrian / Vehicle / Intersection / Railwayは3D `SubscribeVolume`をClient別spatial filteringの境界として使う。Protocol 2.8のMultimodal Transitは現行Serverではsubscription volumeで絞らず、subscription済みconnectionへworld-wide snapshotを配信する。Population statisticsはWorld全体集計、Person debugはstable Person ID指定のdebug contractである。
 
 ## Hello / HelloAck
 
@@ -248,9 +248,11 @@ Headerはtick `uint64` + Line / Stop / Pattern / Vehicle / Arrival count `uint32
 
 optional stable IDは0 sentinel。Bus StopはLane、Railway StopはStation（任意Platform）、Railway PatternはRailway Serviceを参照する。Arrival Estimateは同frame内のStop / Line / Vehicleを参照しなければならない。2.7以下へmessage 720を送らない。
 
+現行Serverはmessage 720のLine / Stop / Pattern / Vehicle / Arrival EstimateをClient `SubscribeVolume`でfilterせず、`publishSnapshot.MultimodalTransit`全体からmessageを作成する。したがってProtocol 2.8のTransit deliveryは現時点ではworld-wideであり、volume-based interest managementは将来拡張事項である。
+
 ## Snapshot tick semantics
 
-traffic publish cycle内のAgent / Pedestrian / Vehicle / Intersection / Road / Railway / Transit dataは同じauthoritative captureを基礎にし、Client別volume filterはcapture後のimmutable read modelへ適用する。
+traffic publish cycle内のAgent / Pedestrian / Vehicle / Intersection / Road / Railway / Transit dataは同じauthoritative captureを基礎にする。Agent / Pedestrian / Vehicle / Intersection / Road / Railwayはcapture後のimmutable read modelへClient別volume filterを適用するが、Multimodal Transitは同じcapture tickのworld-wide snapshotをfilterせず配信する。
 
 Population publisherは専用serviceであり、別publish intervalのtickがtraffic snapshotと異なることを許容する。各message自身のtickを観測時点とする。
 

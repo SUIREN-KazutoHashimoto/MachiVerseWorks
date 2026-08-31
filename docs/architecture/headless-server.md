@@ -19,14 +19,11 @@ SimulationTickService ──► SimulationRuntime
                                │ atomic capture
                                ▼
                      SimulationPublishSnapshot
-                        ├─ Agent / Pedestrian / Vehicle
-                        ├─ Intersection Control
-                        ├─ Road read model + revision
-                        ├─ Railway Infrastructure + revision
-                        ├─ Railway Operations
+                        ├─ spatial domains
+                        │    └─ client-volume filtering
                         └─ Multimodal Transit
+                             └─ world-wide mapping
                                │
-                     client-volume filtering
                                ▼
                       SnapshotPublishService
 
@@ -37,7 +34,7 @@ PopulationPublishService ──► statistics / Person debug
 
 `SimulationRuntime`が`SimulationWorld`を所有する。WebSocket session、connection registry、Protocol message、publish read modelはSimulation mutable storeを直接所有しない。
 
-`SimulationRuntime._gate`はauthoritative mutationとatomic captureの境界である。1 publish cycleではClientごとにWorld queryせず、lock内で必要なdetached snapshot/read modelを1回captureする。Client別`WorldVolume` filtering、message planning、encoding、network I/Oはlock外で行う。
+`SimulationRuntime._gate`はauthoritative mutationとatomic captureの境界である。1 publish cycleではClientごとにWorld queryせず、lock内で必要なdetached snapshot/read modelを1回captureする。Agent / Road / Pedestrian / Vehicle / Intersection / RailwayのClient別`WorldVolume` filtering、message planning、encoding、network I/Oはlock外で行う。Multimodal Transitは同じcaptureを使うが、現行2.8ではClient volumeでfilterせずworld-wide messageへmapする。
 
 ## Saveからのruntime configuration
 
@@ -98,7 +95,7 @@ negotiated minorより新しいmessageを送らない。
 
 `SnapshotPublishService`はSimulation tickとは別周期で動く。subscription済み送信対象が0なら不要なcaptureを避ける。
 
-capture対象は同一Simulation lock / tick時点のdetached dataで、少なくともAgent / Pedestrian / Vehicle、Intersection state、Road、Railway Infrastructure、Railway Operations、Multimodal Transitを含む。Train等のdynamic positionもcapture後にClient volumeでfilterする。
+capture対象は同一Simulation lock / tick時点のdetached dataで、少なくともAgent / Pedestrian / Vehicle、Intersection state、Road、Railway Infrastructure、Railway Operations、Multimodal Transitを含む。Agent / Pedestrian / Vehicle / Intersection / Road / Railway Operations / Railway Infrastructureはcapture後にClient volumeでfilterする。Multimodal Transitはcapture全体をconnectionへmapし、volume boundsを適用しない。
 
 Population statistics / Person inspectorは専用`PopulationPublishService` / inspect command boundaryを持ち、traffic snapshot publish intervalと独立してよい。
 
@@ -125,6 +122,8 @@ message 710はsingle-frame。`RailwayOperationsProtocolCodec.GetPayloadLength()`
 ## Multimodal Transit delivery
 
 Protocol 2.8のmessage 720はLine / Stop / Pattern、realtime Bus・Taxi state、arrival estimateを同じpublish captureからmapする。Road TrafficとRailway Operationsのauthoritative movementを複製せず、Multimodal Transitのcross-mode stateだけをwireへ投影する。
+
+現行`PublishConnectionAsync`は`publishSnapshot.MultimodalTransit`全体を`MultimodalTransitMessageMapper`へ渡すため、message 720にはClient `SubscribeVolume`によるspatial filterを適用しない。Clientがsnapshot publisherへ参加するにはsubscription済みである必要があるが、そのvolume boundsはTransitのLine / Stop / Pattern / Vehicle / Arrival Estimate選択には使わない。Protocol 2.8のTransit deliveryはworld-wideで、volume-based interest managementは将来拡張事項である。
 
 2.7以下へmessage 720を送らない。
 
@@ -154,6 +153,6 @@ expected Client delivery停止とunexpected system faultを区別してstructure
 - Roadはsingle-frameでoversize error
 - Railway Infrastructureだけが明示multi-frame chunk contractを持つ
 - Railway Operationsはsingle-frame + structured oversize error
-- Protocol 2.8 Multimodal Transitもversioned aggregateとして扱い、暗黙wire変更を行わない
+- Protocol 2.8 Multimodal Transitは現行world-wide deliveryで、Client volume filteringは未実装
 
 binary layoutは[`protocol.md`](protocol.md)、Web側state適用は[`web-client.md`](web-client.md)を参照する。

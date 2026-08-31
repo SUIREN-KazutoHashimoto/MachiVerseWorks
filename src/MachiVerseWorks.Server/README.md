@@ -27,9 +27,9 @@ negotiated minorに応じて次のread model / messageを配信します。
 - Population statistics / Person debug (2.5、専用publish/inspect boundary)
 - Railway Infrastructure (2.6、static revision、必要ならmulti-frame)
 - Railway Operations (2.7、visible Train + related Service / Timetable)
-- Multimodal Transit (2.8、Line / Stop / Pattern / realtime Bus・Taxi / arrival estimate)
+- Multimodal Transit (2.8、Line / Stop / Pattern / realtime Bus・Taxi / arrival estimate、現行はworld-wide delivery)
 
-1回のtraffic snapshot publishではSimulation lock下でimmutable read modelをcaptureし、Client別の3D volume filteringとnetwork I/Oはlock外で行います。slow Clientはconnection単位のdelivery task / timeoutで隔離します。
+1回のtraffic snapshot publishではSimulation lock下でimmutable read modelをcaptureし、lock外でmessage planning / encoding / network I/Oを行います。Agent / Road / Pedestrian / Vehicle / Intersection / RailwayはClient別`SubscribeVolume`でfilterしますが、Multimodal Transitは現行2.8ではvolume filterせずsnapshot全体を配信します。slow Clientはconnection単位のdelivery task / timeoutで隔離します。
 
 Road snapshotとRailway Operations snapshotが1 MiBのsingle-frame上限を超える場合は、送信前に検出してsubscription-localなstructured Errorへ変換します。Railway Infrastructureはentity境界でchunkできます。
 

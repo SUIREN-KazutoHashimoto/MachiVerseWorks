@@ -16,7 +16,7 @@ SimulationCheckpoint
 Save Format 10 JSON
 ```
 
-loadは逆方向に、byte/resource validation → JSON DTO → checkpoint validation → `SimulationWorld.FromCheckpoint()`の順で行う。失敗時に部分Worldを返さない。
+loadは逆方向に、byte/resource validation → JSON DTO → checkpoint validation → `SimulationWorld.RestoreCheckpoint()`の順で行う。失敗時に部分Worldを返さない。
 
 ## Current format
 
