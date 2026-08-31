@@ -39,8 +39,14 @@ public sealed partial class SimulationWorld
 
     public bool UpdateTrackNode(TrackNodeId id, WorldPoint position, TrackNodeKind kind)
     {
-        ValidatePoint(position); ValidateEnum(kind, nameof(kind)); EnsureRailwayInfrastructureMutable();
-        return MutateRailwayCheckpoint(cp => Replace(cp.TrackNodes ?? [], id, x => x.Id, new SimulationTrackNodeCheckpoint(id, kind, position), out var changed) is var items ? (cp with { TrackNodes = items }, changed) : default);
+        ValidatePoint(position);
+        ValidateEnum(kind, nameof(kind));
+        EnsureRailwayInfrastructureMutable();
+        return MutateRailwayCheckpoint(cp =>
+        {
+            var items = Replace(cp.TrackNodes ?? [], id, static x => x.Id, new SimulationTrackNodeCheckpoint(id, kind, position), out var changed);
+            return (cp with { TrackNodes = items }, changed);
+        });
     }
 
     public bool RemoveTrackNode(TrackNodeId id) => RemoveRailwayItem(id, static x => x.Id, cp => cp.TrackNodes ?? [], (cp, items) => cp with { TrackNodes = items });
@@ -49,7 +55,7 @@ public sealed partial class SimulationWorld
     {
         EnsureRailwayInfrastructureMutable();
         var value = new SimulationTrackSegmentCheckpoint(id, startNodeId, endNodeId, direction, gaugeMeters, speedLimitMetersPerSecond, electrification, usage);
-        return MutateRailwayCheckpoint(cp => (cp with { TrackSegments = Replace(cp.TrackSegments ?? [], id, x => x.Id, value, out var changed) }, changed));
+        return MutateRailwayCheckpoint(cp => (cp with { TrackSegments = Replace(cp.TrackSegments ?? [], id, static x => x.Id, value, out var changed) }, changed));
     }
 
     public bool RemoveTrackSegment(TrackSegmentId id) => RemoveRailwayItem(id, static x => x.Id, cp => cp.TrackSegments ?? [], (cp, items) => cp with { TrackSegments = items });
@@ -58,16 +64,17 @@ public sealed partial class SimulationWorld
     {
         EnsureRailwayInfrastructureMutable();
         var value = new SimulationTrackConnectionCheckpoint(id, fromSegmentId, toSegmentId, viaNodeId);
-        return MutateRailwayCheckpoint(cp => (cp with { TrackConnections = Replace(cp.TrackConnections ?? [], id, x => x.Id, value, out var changed) }, changed));
+        return MutateRailwayCheckpoint(cp => (cp with { TrackConnections = Replace(cp.TrackConnections ?? [], id, static x => x.Id, value, out var changed) }, changed));
     }
 
     public bool RemoveTrackConnection(TrackConnectionId id) => RemoveRailwayItem(id, static x => x.Id, cp => cp.TrackConnections ?? [], (cp, items) => cp with { TrackConnections = items });
 
     public bool UpdateBlockSection(BlockSectionId id, IReadOnlyList<TrackSegmentId> trackSegmentIds)
     {
-        ArgumentNullException.ThrowIfNull(trackSegmentIds); EnsureRailwayInfrastructureMutable();
+        ArgumentNullException.ThrowIfNull(trackSegmentIds);
+        EnsureRailwayInfrastructureMutable();
         var value = new SimulationBlockSectionCheckpoint(id, trackSegmentIds.ToArray());
-        return MutateRailwayCheckpoint(cp => (cp with { BlockSections = Replace(cp.BlockSections ?? [], id, x => x.Id, value, out var changed) }, changed));
+        return MutateRailwayCheckpoint(cp => (cp with { BlockSections = Replace(cp.BlockSections ?? [], id, static x => x.Id, value, out var changed) }, changed));
     }
 
     public bool RemoveBlockSection(BlockSectionId id) => RemoveRailwayItem(id, static x => x.Id, cp => cp.BlockSections ?? [], (cp, items) => cp with { BlockSections = items });
@@ -76,7 +83,7 @@ public sealed partial class SimulationWorld
     {
         EnsureRailwayInfrastructureMutable();
         var value = new SimulationStationCheckpoint(id, bounds);
-        return MutateRailwayCheckpoint(cp => (cp with { Stations = Replace(cp.Stations ?? [], id, x => x.Id, value, out var changed) }, changed));
+        return MutateRailwayCheckpoint(cp => (cp with { Stations = Replace(cp.Stations ?? [], id, static x => x.Id, value, out var changed) }, changed));
     }
 
     public bool RemoveStation(StationId id) => RemoveRailwayItem(id, static x => x.Id, cp => cp.Stations ?? [], (cp, items) => cp with { Stations = items });
@@ -85,7 +92,7 @@ public sealed partial class SimulationWorld
     {
         EnsureRailwayInfrastructureMutable();
         var value = new SimulationPlatformCheckpoint(id, stationId, trackSegmentId, startSegmentOffset, endSegmentOffset, bounds);
-        return MutateRailwayCheckpoint(cp => (cp with { Platforms = Replace(cp.Platforms ?? [], id, x => x.Id, value, out var changed) }, changed));
+        return MutateRailwayCheckpoint(cp => (cp with { Platforms = Replace(cp.Platforms ?? [], id, static x => x.Id, value, out var changed) }, changed));
     }
 
     public bool RemovePlatform(PlatformId id) => RemoveRailwayItem(id, static x => x.Id, cp => cp.Platforms ?? [], (cp, items) => cp with { Platforms = items });
@@ -94,16 +101,17 @@ public sealed partial class SimulationWorld
     {
         EnsureRailwayInfrastructureMutable();
         var value = new SimulationPlatformAccessPointCheckpoint(id, platformId, roadAccessPointId);
-        return MutateRailwayCheckpoint(cp => (cp with { PlatformAccessPoints = Replace(cp.PlatformAccessPoints ?? [], id, x => x.Id, value, out var changed) }, changed));
+        return MutateRailwayCheckpoint(cp => (cp with { PlatformAccessPoints = Replace(cp.PlatformAccessPoints ?? [], id, static x => x.Id, value, out var changed) }, changed));
     }
 
     public bool RemovePlatformAccessPoint(PlatformAccessPointId id) => RemoveRailwayItem(id, static x => x.Id, cp => cp.PlatformAccessPoints ?? [], (cp, items) => cp with { PlatformAccessPoints = items });
 
     public bool UpdateDepot(DepotId id, WorldVolume bounds, IReadOnlyList<TrackSegmentId> trackSegmentIds)
     {
-        ArgumentNullException.ThrowIfNull(trackSegmentIds); EnsureRailwayInfrastructureMutable();
+        ArgumentNullException.ThrowIfNull(trackSegmentIds);
+        EnsureRailwayInfrastructureMutable();
         var value = new SimulationDepotCheckpoint(id, bounds, trackSegmentIds.ToArray());
-        return MutateRailwayCheckpoint(cp => (cp with { Depots = Replace(cp.Depots ?? [], id, x => x.Id, value, out var changed) }, changed));
+        return MutateRailwayCheckpoint(cp => (cp with { Depots = Replace(cp.Depots ?? [], id, static x => x.Id, value, out var changed) }, changed));
     }
 
     public bool RemoveDepot(DepotId id) => RemoveRailwayItem(id, static x => x.Id, cp => cp.Depots ?? [], (cp, items) => cp with { Depots = items });
@@ -131,14 +139,17 @@ public sealed partial class SimulationWorld
         });
     }
 
-    private static IReadOnlyList<T> Replace<T, TId>(IReadOnlyList<T> source, TId id, Func<T, TId> idSelector, T value, out bool changed)
+    private static T[] Replace<T, TId>(IReadOnlyList<T> source, TId id, Func<T, TId> idSelector, T value, out bool changed)
         where TId : struct, IEquatable<TId>
     {
-        var items = source.ToArray(); changed = false;
+        var items = source.ToArray();
+        changed = false;
         for (var index = 0; index < items.Length; index++)
         {
             if (!idSelector(items[index]).Equals(id)) continue;
-            items[index] = value; changed = true; break;
+            items[index] = value;
+            changed = true;
+            break;
         }
         return items;
     }
