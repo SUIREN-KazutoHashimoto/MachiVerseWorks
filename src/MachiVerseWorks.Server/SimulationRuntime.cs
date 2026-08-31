@@ -8,7 +8,8 @@ internal sealed record PopulationPublishSnapshot(PopulationStatistics Statistics
 internal sealed class SimulationRuntime
 {
     private readonly object _gate = new();
-    private readonly SimulationWorld _world;
+    private SimulationWorld _world;
+    private bool _paused;
     private bool _pedestrianFixturePending;
     private bool _roadTrafficFixturePending;
     private bool _trafficFixturePending;
@@ -18,6 +19,8 @@ internal sealed class SimulationRuntime
     private bool _multimodalTransitFixturePending;
     private RoadNetworkReadModel? _roadReadModel;
     private RailwayInfrastructureReadModel? _railwayReadModel;
+    private ulong _roadRevision = 1;
+    private ulong _railwayRevision = 1;
 
     public SimulationRuntime(ServerOptions options, IConfiguration configuration)
     {
@@ -32,22 +35,21 @@ internal sealed class SimulationRuntime
         }
         _world = new SimulationWorld(new SimulationConfig(options.TickRate, options.Seed, options.SpatialCellSize));
         if (options.InitialAgentCount > 0)
-        {
             _world.CreateAgents(options.InitialAgentCount, new WorldVolume(options.SpawnMinX, options.SpawnMinY, options.SpawnMinZ, options.SpawnMaxX, options.SpawnMaxY, options.SpawnMaxZ));
-        }
-        _pedestrianFixturePending = bool.TryParse(configuration["Simulation:PedestrianFixture"], out var pedestrianFixture) && pedestrianFixture;
-        _roadTrafficFixturePending = bool.TryParse(configuration["Simulation:RoadTrafficFixture"], out var roadTrafficFixture) && roadTrafficFixture;
-        _trafficFixturePending = bool.TryParse(configuration["Simulation:TrafficFixture"], out var trafficFixture) && trafficFixture;
-        _populationFixturePending = bool.TryParse(configuration["Simulation:PopulationFixture"], out var populationFixture) && populationFixture;
-        _railwayFixturePending = bool.TryParse(configuration["Simulation:RailwayFixture"], out var railwayFixture) && railwayFixture;
-        _railwayOperationsFixturePending = bool.TryParse(configuration["Simulation:RailwayOperationsFixture"], out var railwayOperationsFixture) && railwayOperationsFixture;
-        _multimodalTransitFixturePending = bool.TryParse(configuration["Simulation:MultimodalTransitFixture"], out var multimodalTransitFixture) && multimodalTransitFixture;
+        _pedestrianFixturePending = ReadFixture(configuration, "Simulation:PedestrianFixture");
+        _roadTrafficFixturePending = ReadFixture(configuration, "Simulation:RoadTrafficFixture");
+        _trafficFixturePending = ReadFixture(configuration, "Simulation:TrafficFixture");
+        _populationFixturePending = ReadFixture(configuration, "Simulation:PopulationFixture");
+        _railwayFixturePending = ReadFixture(configuration, "Simulation:RailwayFixture");
+        _railwayOperationsFixturePending = ReadFixture(configuration, "Simulation:RailwayOperationsFixture");
+        _multimodalTransitFixturePending = ReadFixture(configuration, "Simulation:MultimodalTransitFixture");
     }
 
-    public int TickRate => _world.Config.TickRate;
-    public TimeSpan TickInterval => TimeSpan.FromSeconds(_world.Config.TickDurationSeconds);
-    public double SpatialCellSize => _world.Config.SpatialCellSize;
+    public int TickRate { get { lock (_gate) return _world.Config.TickRate; } }
+    public TimeSpan TickInterval { get { lock (_gate) return TimeSpan.FromSeconds(_world.Config.TickDurationSeconds); } }
+    public double SpatialCellSize { get { lock (_gate) return _world.Config.SpatialCellSize; } }
     public ulong TickCount { get { lock (_gate) return _world.Time.TickCount; } }
+    public bool IsPaused { get { lock (_gate) return _paused; } }
     public int ActiveAgentCount { get { lock (_gate) return _world.ActiveAgentCount; } }
     public int ActivePedestrianCount { get { lock (_gate) return _world.ActivePedestrianCount; } }
     public int ActiveVehicleCount { get { lock (_gate) return _world.ActiveVehicleCount; } }
@@ -56,7 +58,56 @@ internal sealed class SimulationRuntime
     public int HouseholdCount { get { lock (_gate) { EnsureFixtures(); return _world.HouseholdCount; } } }
     public int PersonCount { get { lock (_gate) { EnsureFixtures(); return _world.PersonCount; } } }
 
-    public void Step() { lock (_gate) { EnsureFixtures(); _world.Step(); } }
+    public void Step() { lock (_gate) { EnsureFixtures(); if (!_paused) _world.Step(); } }
+    public bool Pause() { lock (_gate) { if (_paused) return false; _paused = true; return true; } }
+    public bool Resume() { lock (_gate) { if (!_paused) return false; _paused = false; return true; } }
+    public ulong StepPaused(int count)
+    {
+        if (count <= 0) throw new ArgumentOutOfRangeException(nameof(count));
+        lock (_gate)
+        {
+            EnsureFixtures();
+            if (!_paused) throw new InvalidOperationException("Simulation must be paused before manual stepping.");
+            for (var index = 0; index < count; index++) _world.Step();
+            return _world.Time.TickCount;
+        }
+    }
+
+    public T Read<T>(Func<SimulationWorld, T> operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        lock (_gate) { EnsureFixtures(); return operation(_world); }
+    }
+
+    public T Mutate<T>(Func<SimulationWorld, T> operation, bool roadTopologyChanged = false, bool railwayTopologyChanged = false)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        lock (_gate)
+        {
+            EnsureFixtures();
+            var result = operation(_world);
+            if (roadTopologyChanged) { _roadRevision = checked(_roadRevision + 1); _roadReadModel = null; }
+            if (railwayTopologyChanged) { _railwayRevision = checked(_railwayRevision + 1); _railwayReadModel = null; }
+            return result;
+        }
+    }
+
+    public SimulationCheckpoint CaptureCheckpoint() { lock (_gate) { EnsureFixtures(); return _world.CreateCheckpoint(); } }
+    public void ReplaceWorld(SimulationWorld world)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        lock (_gate)
+        {
+            _world = world;
+            _roadRevision = checked(_roadRevision + 1);
+            _railwayRevision = checked(_railwayRevision + 1);
+            _roadReadModel = null;
+            _railwayReadModel = null;
+            _pedestrianFixturePending = _roadTrafficFixturePending = _trafficFixturePending = _populationFixturePending = false;
+            _railwayFixturePending = _railwayOperationsFixturePending = _multimodalTransitFixturePending = false;
+        }
+    }
+
     public AgentSnapshot[] CreateSnapshot(WorldVolume volume) { lock (_gate) return _world.CreateSnapshot(volume); }
     public PedestrianSnapshot[] CreatePedestrianSnapshot(WorldVolume volume) { lock (_gate) { EnsureFixtures(); return _world.CreatePedestrianSnapshot(volume); } }
     public RoadNetworkSnapshot CreateRoadNetworkSnapshot(WorldVolume volume) { lock (_gate) { EnsureFixtures(); return _world.CreateRoadNetworkSnapshot(volume); } }
@@ -73,47 +124,44 @@ internal sealed class SimulationRuntime
             var statistics = _world.CreatePopulationStatistics();
             var persons = new Dictionary<ulong, PersonSnapshot>(inspectedPersonIds.Count);
             foreach (var personId in inspectedPersonIds)
-            {
                 if (_world.TryGetPersonSnapshot(new PersonId(personId), out var person)) persons.Add(personId, person);
-            }
             return new PopulationPublishSnapshot(statistics, persons);
         }
     }
 
     public SimulationPublishSnapshot CapturePublishSnapshot()
     {
-        ulong tickCount; AgentSnapshot[] agents; PedestrianSnapshot[] pedestrians; VehicleSnapshot[] vehicles; TrainSnapshot[] trains; RailwayOperationsSnapshot railwayOperations; MultimodalTransitSnapshot multimodalTransit; IntersectionControlSnapshot intersectionControl; RoadNetworkReadModel roadReadModel; RailwayInfrastructureReadModel railwayReadModel;
+        ulong tickCount; AgentSnapshot[] agents; PedestrianSnapshot[] pedestrians; VehicleSnapshot[] vehicles; TrainSnapshot[] trains; RailwayOperationsSnapshot railwayOperations; MultimodalTransitSnapshot multimodalTransit; IntersectionControlSnapshot intersectionControl; RoadNetworkReadModel roadReadModel; RailwayInfrastructureReadModel railwayReadModel; double spatialCellSize;
         lock (_gate)
         {
             EnsureFixtures();
-            tickCount = _world.Time.TickCount;
+            tickCount = _world.Time.TickCount; spatialCellSize = _world.Config.SpatialCellSize;
             agents = _world.CreateAllAgentSnapshots(); pedestrians = _world.CreateAllPedestrianSnapshots(); vehicles = _world.CreateAllVehicleSnapshots(); trains = _world.CreateTrainSnapshot(); railwayOperations = _world.CreateRailwayOperationsSnapshot(); multimodalTransit = _world.CreateMultimodalTransitSnapshot(); intersectionControl = _world.CreateIntersectionControlSnapshot();
-            _roadReadModel ??= new RoadNetworkReadModel(1, _world.CreateRoadNetworkSnapshot());
-            _railwayReadModel ??= new RailwayInfrastructureReadModel(1, _world.CreateRailwayInfrastructureSnapshot());
+            _roadReadModel ??= new RoadNetworkReadModel(_roadRevision, _world.CreateRoadNetworkSnapshot());
+            _railwayReadModel ??= new RailwayInfrastructureReadModel(_railwayRevision, _world.CreateRailwayInfrastructureSnapshot());
             roadReadModel = _roadReadModel; railwayReadModel = _railwayReadModel;
         }
-        return new SimulationPublishSnapshot(tickCount, SpatialCellSize, agents, pedestrians, vehicles, intersectionControl, roadReadModel, railwayReadModel, trains, railwayOperations, multimodalTransit);
+        return new SimulationPublishSnapshot(tickCount, spatialCellSize, agents, pedestrians, vehicles, intersectionControl, roadReadModel, railwayReadModel, trains, railwayOperations, multimodalTransit);
     }
+
+    private static bool ReadFixture(IConfiguration configuration, string key) => bool.TryParse(configuration[key], out var value) && value;
 
     private void EnsureFixtures()
     {
-        if (_pedestrianFixturePending) { SeedPedestrianFixture(_world); _pedestrianFixturePending = false; _roadReadModel = null; }
-        if (_roadTrafficFixturePending) { SeedRoadTrafficFixture(_world); _roadTrafficFixturePending = false; _roadReadModel = null; }
-        if (_trafficFixturePending) { SeedTrafficFixture(_world); _trafficFixturePending = false; _roadReadModel = null; }
+        if (_pedestrianFixturePending) { SeedPedestrianFixture(_world); _pedestrianFixturePending = false; _roadRevision = checked(_roadRevision + 1); _roadReadModel = null; }
+        if (_roadTrafficFixturePending) { SeedRoadTrafficFixture(_world); _roadTrafficFixturePending = false; _roadRevision = checked(_roadRevision + 1); _roadReadModel = null; }
+        if (_trafficFixturePending) { SeedTrafficFixture(_world); _trafficFixturePending = false; _roadRevision = checked(_roadRevision + 1); _roadReadModel = null; }
         if (_populationFixturePending) { SeedPopulationFixture(_world); _populationFixturePending = false; }
-        if (_railwayFixturePending) { RailwayInfrastructureFixtures.SeedDeterministic(_world); _railwayFixturePending = false; _roadReadModel = null; _railwayReadModel = null; }
-        if (_railwayOperationsFixturePending) { RailwayOperationsFixtures.SeedDeterministic(_world); _railwayOperationsFixturePending = false; _railwayReadModel = null; }
-        if (_multimodalTransitFixturePending) { MultimodalTransitFixtures.SeedDeterministic(_world); _multimodalTransitFixturePending = false; _roadReadModel = null; _railwayReadModel = null; }
+        if (_railwayFixturePending) { RailwayInfrastructureFixtures.SeedDeterministic(_world); _railwayFixturePending = false; _railwayRevision = checked(_railwayRevision + 1); _railwayReadModel = null; }
+        if (_railwayOperationsFixturePending) { RailwayOperationsFixtures.SeedDeterministic(_world); _railwayOperationsFixturePending = false; _railwayRevision = checked(_railwayRevision + 1); _railwayReadModel = null; }
+        if (_multimodalTransitFixturePending) { MultimodalTransitFixtures.SeedDeterministic(_world); _multimodalTransitFixturePending = false; _roadRevision = checked(_roadRevision + 1); _railwayRevision = checked(_railwayRevision + 1); _roadReadModel = null; _railwayReadModel = null; }
     }
 
     private static void SeedPopulationFixture(SimulationWorld world)
     {
         var home = world.CreateBuilding(new WorldVolume(-2d, -2d, 0d, 2d, 2d, 4d), BuildingKind.Residential);
         var household = world.CreateHousehold(TripEndpoint.ForBuilding(home));
-        world.CreatePerson(
-            household,
-            new PersonDemographics(35, IsEmployed: true),
-            [new DailyActivityWindow(ActivityKind.Home, 0, 1440)]);
+        world.CreatePerson(household, new PersonDemographics(35, IsEmployed: true), [new DailyActivityWindow(ActivityKind.Home, 0, 1440)]);
     }
 
     private static void SeedPedestrianFixture(SimulationWorld world)
@@ -132,11 +180,7 @@ internal sealed class SimulationRuntime
         var routes = new IReadOnlyList<RouteLaneStep>[3];
         for (var index = 0; index < routes.Length; index++)
         {
-            var y = (index - 1) * 12d;
-            var start = world.CreateRoadNode(new WorldPoint(startX, y, 0d));
-            var end = world.CreateRoadNode(new WorldPoint(endX, y, 0d));
-            var segment = world.CreateRoadSegment(start, end, RoadKind.Local);
-            var lane = world.CreateLane(segment, LaneDirection.Forward, 0, speedLimitMetersPerSecond: speedLimit);
+            var y = (index - 1) * 12d; var start = world.CreateRoadNode(new WorldPoint(startX, y, 0d)); var end = world.CreateRoadNode(new WorldPoint(endX, y, 0d)); var segment = world.CreateRoadSegment(start, end, RoadKind.Local); var lane = world.CreateLane(segment, LaneDirection.Forward, 0, speedLimitMetersPerSecond: speedLimit);
             routes[index] = [new RouteLaneStep(lane, segment, 0d, 1d, distanceMeters, distanceMeters / speedLimit, null)];
         }
         foreach (var route in routes) world.CreateVehicle(route, initialSpeedMetersPerSecond: 8d);
@@ -147,13 +191,7 @@ internal sealed class SimulationRuntime
         const double armLength = 30d, speedLimit = 10d;
         var center = world.CreateRoadNode(new WorldPoint(0d, 0d, 0d), RoadNodeKind.Intersection);
         var west = CreateTrafficArm(world, center, new WorldPoint(-armLength, 0d, 0d), speedLimit); var east = CreateTrafficArm(world, center, new WorldPoint(armLength, 0d, 0d), speedLimit); var south = CreateTrafficArm(world, center, new WorldPoint(0d, -armLength, 0d), speedLimit); var north = CreateTrafficArm(world, center, new WorldPoint(0d, armLength, 0d), speedLimit);
-        var routes = new[]
-        {
-            CreateTrafficRoute(world, center, west, east, TurnMovement.Straight, speedLimit),
-            CreateTrafficRoute(world, center, east, west, TurnMovement.Straight, speedLimit),
-            CreateTrafficRoute(world, center, south, north, TurnMovement.Straight, speedLimit),
-            CreateTrafficRoute(world, center, north, south, TurnMovement.Straight, speedLimit),
-        };
+        var routes = new[] { CreateTrafficRoute(world, center, west, east, TurnMovement.Straight, speedLimit), CreateTrafficRoute(world, center, east, west, TurnMovement.Straight, speedLimit), CreateTrafficRoute(world, center, south, north, TurnMovement.Straight, speedLimit), CreateTrafficRoute(world, center, north, south, TurnMovement.Straight, speedLimit) };
         foreach (var route in routes) world.CreateVehicle(route, initialSpeedMetersPerSecond: 8d);
     }
 
