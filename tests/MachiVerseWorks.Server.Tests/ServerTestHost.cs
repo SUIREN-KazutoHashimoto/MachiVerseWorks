@@ -70,9 +70,12 @@ internal sealed class ServerTestHost : IAsyncDisposable
     public static Task SendAsync(ClientWebSocket socket, IProtocolMessage message, ProtocolVersion? version = null)
     {
         var resolvedVersion = version ?? ProtocolVersion.Current;
-        var frame = message is InspectPersonMessage inspectPerson
-            ? PopulationProtocolCodec.Serialize(inspectPerson, resolvedVersion)
-            : ProtocolCodec.Serialize(message, resolvedVersion);
+        var frame = message switch
+        {
+            InspectPersonMessage inspectPerson => PopulationProtocolCodec.Serialize(inspectPerson, resolvedVersion),
+            ClearPersonInspectionMessage clearInspection => PersonInspectionProtocolCodec.Serialize(clearInspection, resolvedVersion),
+            _ => ProtocolCodec.Serialize(message, resolvedVersion),
+        };
         return socket.SendAsync(new ArraySegment<byte>(frame), WebSocketMessageType.Binary, true, CancellationToken.None);
     }
 
@@ -104,6 +107,16 @@ internal sealed class ServerTestHost : IAsyncDisposable
         {
             decoded = RailwayInfrastructureProtocolCodec.TryDeserialize(frame, out var railway, out error);
             envelope = decoded ? new ProtocolEnvelope(header.Version, railway) : null;
+        }
+        else if (header.MessageType == MessageType.RailwayOperationsSnapshot)
+        {
+            decoded = RailwayOperationsProtocolCodec.TryDeserialize(frame, out var railwayOperations, out error);
+            envelope = decoded ? new ProtocolEnvelope(header.Version, railwayOperations) : null;
+        }
+        else if (header.MessageType == MessageType.MultimodalTransitSnapshot)
+        {
+            decoded = MultimodalTransitProtocolCodec.TryDeserialize(frame, out var multimodalTransit, out error);
+            envelope = decoded ? new ProtocolEnvelope(header.Version, multimodalTransit) : null;
         }
         else
         {
