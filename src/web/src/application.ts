@@ -16,6 +16,7 @@ import { ClientUi } from './ui.ts';
 import { TrafficMessageType, type TrafficProtocolMessage, type VehicleStateMessage } from './traffic-protocol.ts';
 import { IntersectionControlStore, VehicleStore } from './traffic-store.ts';
 import { WorldView } from './world-view.ts';
+import { ECONOMY_SNAPSHOT_MESSAGE_TYPE, type EconomyProtocolMessage, type EconomySnapshotMessage } from './economy-protocol.ts';
 
 export class Application {
   private readonly localizer = initializeLocalization();
@@ -66,6 +67,7 @@ export class Application {
           this.ui.clearPopulation();
           this.ui.clearRailwayOperations();
           this.ui.clearMultimodalTransit();
+          this.ui.clearEconomy();
           this.ui.setProtocol(null);
         },
         onHelloAck: (version) => { this.ui.clearError(); this.ui.setProtocol(version); },
@@ -129,7 +131,7 @@ export class Application {
     this.lastPerformanceUiAt = now; this.ui.setPerformanceMetrics(metrics.snapshot());
   }
 
-  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage | MultimodalTransitProtocolMessage): void {
+  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage | MultimodalTransitProtocolMessage | EconomyProtocolMessage): void {
     switch (message.type) {
       case MessageType.AgentSpawn: this.applyAgentSpawn(message); return;
       case MessageType.AgentUpdate: this.applyAgentUpdate(message); return;
@@ -147,6 +149,7 @@ export class Application {
       case RailwayMessageType.RailwayInfrastructureSnapshot: this.railway.apply(message); return;
       case RailwayOperationsMessageType.RailwayOperationsSnapshot: this.applyRailwayOperations(message); return;
       case MultimodalTransitMessageType.MultimodalTransitSnapshot: this.applyMultimodalTransit(message); return;
+      case ECONOMY_SNAPSHOT_MESSAGE_TYPE: this.applyEconomy(message); return;
       case MessageType.Hello:
       case MessageType.HelloAck:
       case MessageType.SubscribeVolume:
@@ -165,6 +168,7 @@ export class Application {
   private applyPersonDebug(message: PersonDebugMessage): void { this.ui.setPersonDebug(message); }
   private applyRailwayOperations(message: RailwayOperationsSnapshotMessage): void { this.railwayOperations.apply(message); this.ui.setRailwayOperations(message); }
   private applyMultimodalTransit(message: MultimodalTransitSnapshotMessage): void { this.ui.setMultimodalTransit(message); }
+  private applyEconomy(message: EconomySnapshotMessage): void { this.ui.setEconomy(message); }
   private updateEntityAudioPosition(message: AgentStateMessage): void { if (this.audio.hasEntityEmitters(message.agentId)) this.audio.updateEntityPosition(message.agentId, { x: message.x, y: message.y, z: message.z }); }
 
   private handleProtocolError(message: ProtocolErrorMessage): void {
