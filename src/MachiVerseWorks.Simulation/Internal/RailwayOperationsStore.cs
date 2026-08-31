@@ -77,9 +77,11 @@ internal sealed class RailwayOperationsStore
     public RailwayRouteId CreateRoute(IReadOnlyList<TrackSegmentId> trackSegmentIds)
     {
         ArgumentNullException.ThrowIfNull(trackSegmentIds);
-        var id = new RailwayRouteId(AllocateId(ref _nextRouteId));
+        EnsureIdAvailable(_nextRouteId);
+        var id = new RailwayRouteId(_nextRouteId);
         var route = BuildRoute(id, trackSegmentIds);
         _routes.Add(id, route);
+        _nextRouteId = checked(_nextRouteId + 1);
         return id;
     }
 
@@ -256,7 +258,7 @@ internal sealed class RailwayOperationsStore
             var distanceToStop = nominalStopDistance - train.RouteDistanceMeters;
             if (distanceToStop <= PlatformAssignmentLookAheadMeters && train.AssignedPlatformId is null)
             {
-                if (TryAssignPlatform(route, stop, train.Id, out var platformId, out var assignedDistance))
+                if (TryAssignPlatform(route, stop, train.Id, train.RouteDistanceMeters, out var platformId, out var assignedDistance))
                 {
                     train.AssignedPlatformId = platformId;
                     service.StopRouteDistances[service.NextStopIndex] = assignedDistance;
@@ -387,26 +389,21 @@ internal sealed class RailwayOperationsStore
         return requestedMovement;
     }
 
-    private bool TryAssignPlatform(RouteState route, TimetableStopSnapshot stop, TrainId trainId, out PlatformId platformId, out double stopDistance)
+    private bool TryAssignPlatform(RouteState route, TimetableStopSnapshot stop, TrainId trainId, double minimumRouteDistance, out PlatformId platformId, out double stopDistance)
     {
-        if (stop.PreferredPlatformId is { } preferred)
+        if (stop.PreferredPlatformId is { } preferred
+            && TryReserveCandidatePlatform(route, stop.StationId, preferred, trainId, minimumRouteDistance, out stopDistance))
         {
-            if (TryGetPlatformRouteDistance(route, preferred, stop.StationId, out stopDistance) && TryReservePlatform(preferred, trainId))
-            {
-                platformId = preferred;
-                return true;
-            }
-            platformId = default;
-            stopDistance = 0d;
-            return false;
+            platformId = preferred;
+            return true;
         }
 
         var candidates = _stationPlatforms[stop.StationId];
         for (var index = 0; index < candidates.Count; index++)
         {
             var candidate = candidates[index];
-            if (!TryGetPlatformRouteDistance(route, candidate.Id, stop.StationId, out stopDistance)) continue;
-            if (!TryReservePlatform(candidate.Id, trainId)) continue;
+            if (candidate.Id == stop.PreferredPlatformId) continue;
+            if (!TryReserveCandidatePlatform(route, stop.StationId, candidate.Id, trainId, minimumRouteDistance, out stopDistance)) continue;
             platformId = candidate.Id;
             return true;
         }
@@ -415,12 +412,23 @@ internal sealed class RailwayOperationsStore
         return false;
     }
 
+    private bool TryReserveCandidatePlatform(RouteState route, StationId stationId, PlatformId platformId, TrainId trainId, double minimumRouteDistance, out double stopDistance)
+    {
+        if (!TryGetPlatformRouteDistance(route, platformId, stationId, out stopDistance)
+            || stopDistance + MinimumRemainingDistance < minimumRouteDistance)
+            return false;
+        return TryReservePlatform(platformId, trainId);
+    }
+
     private bool TryFindStopDistance(RouteState route, TimetableStopSnapshot stop, out double distance)
     {
-        if (stop.PreferredPlatformId is { } preferred) return TryGetPlatformRouteDistance(route, preferred, stop.StationId, out distance);
+        if (stop.PreferredPlatformId is { } preferred && TryGetPlatformRouteDistance(route, preferred, stop.StationId, out distance)) return true;
         var platforms = _stationPlatforms[stop.StationId];
         for (var index = 0; index < platforms.Count; index++)
+        {
+            if (platforms[index].Id == stop.PreferredPlatformId) continue;
             if (TryGetPlatformRouteDistance(route, platforms[index].Id, stop.StationId, out distance)) return true;
+        }
         distance = 0d;
         return false;
     }
@@ -449,9 +457,13 @@ internal sealed class RailwayOperationsStore
     {
         if (segmentIds.Count == 0) throw new ArgumentException("A railway route must contain at least one track segment.", nameof(segmentIds));
         var copiedIds = segmentIds.ToArray();
+        var uniqueSegmentIds = new HashSet<TrackSegmentId>();
         var segments = new TrackSegmentSnapshot[copiedIds.Length];
         for (var index = 0; index < copiedIds.Length; index++)
+        {
+            if (!uniqueSegmentIds.Add(copiedIds[index])) throw new ArgumentException($"Track segment {copiedIds[index].Value} is repeated in a railway route; repeated segment occurrences are not supported.", nameof(segmentIds));
             if (!_segments.TryGetValue(copiedIds[index], out segments[index])) throw new ArgumentException($"Track segment {copiedIds[index].Value} does not exist.", nameof(segmentIds));
+        }
 
         var entryNodes = new TrackNodeId?[segments.Length];
         var exitNodes = new TrackNodeId?[segments.Length];
@@ -573,9 +585,14 @@ internal sealed class RailwayOperationsStore
         if (!double.IsFinite(value) || value <= 0d) throw new ArgumentOutOfRangeException(parameterName, value, "Value must be finite and greater than zero.");
     }
 
-    private static ulong AllocateId(ref ulong nextId)
+    private static void EnsureIdAvailable(ulong nextId)
     {
         if (nextId == 0 || nextId == ulong.MaxValue) throw new InvalidOperationException("Railway operation stable ID capacity is exhausted.");
+    }
+
+    private static ulong AllocateId(ref ulong nextId)
+    {
+        EnsureIdAvailable(nextId);
         var value = nextId;
         nextId = checked(value + 1);
         return value;
