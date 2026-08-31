@@ -33,7 +33,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Verify required repository files
         shell: bash
@@ -184,7 +184,7 @@ jobs:
       web: ${{ steps.detect.outputs.web }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Detect implemented components
         id: detect
@@ -212,10 +212,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
 
@@ -246,7 +246,7 @@ jobs:
 
       - name: Upload test results
         if: ${{ always() && hashFiles('TestResults/**/*.trx') != '' }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: dotnet-test-results
           path: TestResults/**/*.trx
@@ -263,7 +263,7 @@ jobs:
         working-directory: src/web
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Require npm lockfile
         shell: bash
@@ -274,7 +274,7 @@ jobs:
           fi
 
       - name: Setup Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version-file: src/web/.node-version
           cache: npm
@@ -297,7 +297,7 @@ jobs:
 
       - name: Upload web build
         if: ${{ hashFiles('src/web/dist/**') != '' }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: web-dist
           path: src/web/dist
