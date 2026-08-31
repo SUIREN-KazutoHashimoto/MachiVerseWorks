@@ -63,6 +63,11 @@ jobs:
             script: scripts/run-phase14-e2e.sh
             artifacts: .artifacts/phase14-e2e
             timeout: 15
+          - id: population
+            name: population-server-browser
+            script: scripts/run-phase15-e2e.sh
+            artifacts: .artifacts/phase15-e2e
+            timeout: 15
           - id: pedestrian
             name: building-to-building-pedestrian
             script: scripts/run-phase16-e2e.sh
