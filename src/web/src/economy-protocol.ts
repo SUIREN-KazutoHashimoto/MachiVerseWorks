@@ -3,7 +3,6 @@ import {
   PROTOCOL_MAGIC,
   PROTOCOL_MAX_PAYLOAD_LENGTH,
   ProtocolDecodeFailure,
-  type ProtocolEnvelope,
   type ProtocolVersion,
 } from './protocol.ts';
 
@@ -64,6 +63,11 @@ export interface EconomySnapshotMessage {
   readonly households: readonly HouseholdEconomy[];
 }
 
+export interface EconomyProtocolEnvelope {
+  readonly version: ProtocolVersion;
+  readonly message: EconomySnapshotMessage;
+}
+
 export type EconomyProtocolMessage = EconomySnapshotMessage;
 
 export function isEconomyFrame(frame: ArrayBuffer): boolean {
@@ -72,7 +76,7 @@ export function isEconomyFrame(frame: ArrayBuffer): boolean {
   return view.getUint32(0, true) === PROTOCOL_MAGIC && view.getUint16(8, true) === ECONOMY_SNAPSHOT_MESSAGE_TYPE;
 }
 
-export function decodeEconomyFrame(frame: ArrayBuffer): ProtocolEnvelope & { readonly message: EconomySnapshotMessage } {
+export function decodeEconomyFrame(frame: ArrayBuffer): EconomyProtocolEnvelope {
   if (frame.byteLength < PROTOCOL_HEADER_SIZE) throw new ProtocolDecodeFailure('Economy frame is shorter than the protocol header.');
   const view = new DataView(frame);
   if (view.getUint32(0, true) !== PROTOCOL_MAGIC) throw new ProtocolDecodeFailure('Economy frame magic is invalid.');
