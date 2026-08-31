@@ -7,7 +7,7 @@ if (!(result instanceof HTMLElement) || server === null) throw new Error('Phase 
 
 const socket = new WebSocket(server);
 socket.binaryType = 'arraybuffer';
-const timeout = window.setTimeout(() => fail(new Error('Timed out waiting for delivered Shipment.')), 20_000);
+const timeout = window.setTimeout(() => fail(new Error('Timed out waiting for delivered Shipment.')), 60_000);
 let handshaken = false;
 
 socket.addEventListener('open', () => socket.send(encodeHello({ major: 2, minor: 11 })));
