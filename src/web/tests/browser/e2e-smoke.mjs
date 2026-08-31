@@ -84,18 +84,20 @@ async function runRoadScenario() {
 async function runPedestrianScenario() {
   connection.setSubscription({ minX: -80, minY: -40, minZ: -20, maxX: 80, maxY: 40, maxZ: 40 });
   await waitUntil(() => pedestrians.size === 1 && firstPedestrianSpawn !== null, 'pedestrian spawn received');
-  const start = firstPedestrianSpawn;
+  const firstObserved = firstPedestrianSpawn;
   await waitUntil(() => sawPedestrianUpdate, 'pedestrian update received');
   await waitUntil(() => [...pedestrians.sample()].some((pedestrian) => pedestrian.state === PedestrianMovementState.Arrived), 'pedestrian arrived at destination building');
-  const arrived = [...pedestrians.sample()].find((pedestrian) => pedestrian.pedestrianId === start.pedestrianId);
+  const arrived = [...pedestrians.sample()].find((pedestrian) => pedestrian.pedestrianId === firstObserved.pedestrianId);
   assert(arrived !== undefined, 'arrived pedestrian remains in client store');
-  const distance = Math.hypot(arrived.x - start.x, arrived.y - start.y, arrived.z - start.z);
-  assert(distance > 20, `pedestrian moved Building-to-Building (${String(distance)}m)`);
+  const observedDistance = Math.hypot(arrived.x - firstObserved.x, arrived.y - firstObserved.y, arrived.z - firstObserved.z);
+  const fixtureJourneyDistance = Math.hypot(arrived.x - (-20), arrived.y, arrived.z);
+  assert(fixtureJourneyDistance > 20, `pedestrian completed the seeded Building-to-Building journey (${String(fixtureJourneyDistance)}m)`);
+  assert(nearlyEqual(arrived.x, 20) && nearlyEqual(arrived.y, 0) && nearlyEqual(arrived.z, 0), 'pedestrian arrived at the seeded destination RoadAccessPoint');
   const sampleTime = performance.now(); view.render(store, sampleTime, pedestrians);
   const mesh = view.scene.getObjectByName('pedestrians');
   assert(mesh instanceof THREE.InstancedMesh, 'WorldView contains the Pedestrian InstancedMesh');
   assert(mesh.count === 1, 'one pedestrian is rendered through instancing');
-  return { pedestrianId: arrived.pedestrianId.toString(), tripRequestId: arrived.tripRequestId.toString(), state: arrived.state, distance, rendererCount: mesh.count };
+  return { pedestrianId: arrived.pedestrianId.toString(), tripRequestId: arrived.tripRequestId.toString(), state: arrived.state, observedDistance, fixtureJourneyDistance, rendererCount: mesh.count };
 }
 function readRenderedAltitudes(expectedCount) { const mesh = view.scene.getObjectByName('agents'); assert(mesh instanceof THREE.InstancedMesh, 'WorldView contains the Agent InstancedMesh'); assert(mesh.count === expectedCount, `InstancedMesh contains ${String(expectedCount)} rendered agents`); const matrix = new THREE.Matrix4(), altitudes = new Set(); for (let index = 0; index < mesh.count; index += 1) { mesh.getMatrixAt(index, matrix); altitudes.add(matrix.elements[13].toFixed(6)); } return altitudes; }
 function readGeometryAltitudes(name) { const object = view.scene.getObjectByName(name), attribute = object?.geometry?.getAttribute('position'); assert(attribute !== undefined, `${name} contains position geometry`); const altitudes = new Set(); for (let index = 0; index < attribute.count; index += 1) altitudes.add(attribute.getY(index).toFixed(6)); return altitudes; }
