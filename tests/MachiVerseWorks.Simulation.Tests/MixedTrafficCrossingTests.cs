@@ -82,7 +82,7 @@ public sealed class MixedTrafficCrossingTests
 
         world.CreateVehicle(
         [
-            new RouteLaneStep(west.InboundLaneId, west.SegmentId, 0.1d, 0d, 1d, 0.1d, westEast),
+            new RouteLaneStep(west.InboundLaneId, west.SegmentId, 1d, 0d, 10d, 1d, westEast),
             new RouteLaneStep(east.OutboundLaneId, east.SegmentId, 0d, 1d, 10d, 1d, null),
         ], initialSpeedMetersPerSecond: 8d);
         var pedestrian = world.CreatePedestrian(
