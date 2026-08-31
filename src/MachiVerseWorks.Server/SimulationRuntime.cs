@@ -129,11 +129,17 @@ internal sealed class SimulationRuntime
     private static void SeedRoadTrafficFixture(SimulationWorld world)
     {
         const double startX = -30d, endX = 30d, distanceMeters = endX - startX, speedLimit = 10d;
-        for (var index = 0; index < 3; index++)
+        var routes = new IReadOnlyList<RouteLaneStep>[3];
+        for (var index = 0; index < routes.Length; index++)
         {
-            var y = (index - 1) * 12d; var start = world.CreateRoadNode(new WorldPoint(startX, y, 0d)); var end = world.CreateRoadNode(new WorldPoint(endX, y, 0d)); var segment = world.CreateRoadSegment(start, end, RoadKind.Local); var lane = world.CreateLane(segment, LaneDirection.Forward, 0, speedLimitMetersPerSecond: speedLimit);
-            world.CreateVehicle([new RouteLaneStep(lane, segment, 0d, 1d, distanceMeters, distanceMeters / speedLimit, null)], initialSpeedMetersPerSecond: 8d);
+            var y = (index - 1) * 12d;
+            var start = world.CreateRoadNode(new WorldPoint(startX, y, 0d));
+            var end = world.CreateRoadNode(new WorldPoint(endX, y, 0d));
+            var segment = world.CreateRoadSegment(start, end, RoadKind.Local);
+            var lane = world.CreateLane(segment, LaneDirection.Forward, 0, speedLimitMetersPerSecond: speedLimit);
+            routes[index] = [new RouteLaneStep(lane, segment, 0d, 1d, distanceMeters, distanceMeters / speedLimit, null)];
         }
+        foreach (var route in routes) world.CreateVehicle(route, initialSpeedMetersPerSecond: 8d);
     }
 
     private static void SeedTrafficFixture(SimulationWorld world)
@@ -141,7 +147,14 @@ internal sealed class SimulationRuntime
         const double armLength = 30d, speedLimit = 10d;
         var center = world.CreateRoadNode(new WorldPoint(0d, 0d, 0d), RoadNodeKind.Intersection);
         var west = CreateTrafficArm(world, center, new WorldPoint(-armLength, 0d, 0d), speedLimit); var east = CreateTrafficArm(world, center, new WorldPoint(armLength, 0d, 0d), speedLimit); var south = CreateTrafficArm(world, center, new WorldPoint(0d, -armLength, 0d), speedLimit); var north = CreateTrafficArm(world, center, new WorldPoint(0d, armLength, 0d), speedLimit);
-        AddTrafficVehicle(world, center, west, east, TurnMovement.Straight, speedLimit); AddTrafficVehicle(world, center, east, west, TurnMovement.Straight, speedLimit); AddTrafficVehicle(world, center, south, north, TurnMovement.Straight, speedLimit); AddTrafficVehicle(world, center, north, south, TurnMovement.Straight, speedLimit);
+        var routes = new[]
+        {
+            CreateTrafficRoute(world, center, west, east, TurnMovement.Straight, speedLimit),
+            CreateTrafficRoute(world, center, east, west, TurnMovement.Straight, speedLimit),
+            CreateTrafficRoute(world, center, south, north, TurnMovement.Straight, speedLimit),
+            CreateTrafficRoute(world, center, north, south, TurnMovement.Straight, speedLimit),
+        };
+        foreach (var route in routes) world.CreateVehicle(route, initialSpeedMetersPerSecond: 8d);
     }
 
     private static TrafficArm CreateTrafficArm(SimulationWorld world, RoadNodeId center, WorldPoint endpointPosition, double speedLimit)
@@ -149,10 +162,10 @@ internal sealed class SimulationRuntime
         var endpoint = world.CreateRoadNode(endpointPosition); var segment = world.CreateRoadSegment(center, endpoint, RoadKind.Local); var outbound = world.CreateLane(segment, LaneDirection.Forward, 0, speedLimitMetersPerSecond: speedLimit); var inbound = world.CreateLane(segment, LaneDirection.Reverse, 0, speedLimitMetersPerSecond: speedLimit); return new TrafficArm(segment, inbound, outbound);
     }
 
-    private static void AddTrafficVehicle(SimulationWorld world, RoadNodeId center, TrafficArm from, TrafficArm to, TurnMovement turnMovement, double speedLimit)
+    private static IReadOnlyList<RouteLaneStep> CreateTrafficRoute(SimulationWorld world, RoadNodeId center, TrafficArm from, TrafficArm to, TurnMovement turnMovement, double speedLimit)
     {
         var connection = world.CreateLaneConnection(from.InboundLaneId, to.OutboundLaneId, center, turnMovement);
-        world.CreateVehicle([new RouteLaneStep(from.InboundLaneId, from.SegmentId, 1d, 0d, 30d, 30d / speedLimit, connection), new RouteLaneStep(to.OutboundLaneId, to.SegmentId, 0d, 1d, 30d, 30d / speedLimit, null)], initialSpeedMetersPerSecond: 8d);
+        return [new RouteLaneStep(from.InboundLaneId, from.SegmentId, 1d, 0d, 30d, 30d / speedLimit, connection), new RouteLaneStep(to.OutboundLaneId, to.SegmentId, 0d, 1d, 30d, 30d / speedLimit, null)];
     }
 
     private readonly record struct TrafficArm(RoadSegmentId SegmentId, LaneId InboundLaneId, LaneId OutboundLaneId);
