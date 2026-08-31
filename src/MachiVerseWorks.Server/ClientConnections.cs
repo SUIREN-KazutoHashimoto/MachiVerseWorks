@@ -54,7 +54,7 @@ internal sealed class ClientConnection : IDisposable
     public bool TryConsumeRequest(int requestsPerSecond, int burst)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(requestsPerSecond);
-        if (burst < requestsPerSecond) throw new ArgumentOutOfRangeException(nameof(burst));
+        ArgumentOutOfRangeException.ThrowIfLessThan(burst, requestsPerSecond);
         lock (_requestGate)
         {
             var now = Stopwatch.GetTimestamp();
@@ -71,7 +71,7 @@ internal sealed class ClientConnection : IDisposable
     public bool RegisterInvalidRequest(int strikeLimit, TimeSpan strikeWindow)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(strikeLimit);
-        if (strikeWindow <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(strikeWindow));
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(strikeWindow, TimeSpan.Zero);
         lock (_requestGate)
         {
             var now = Stopwatch.GetTimestamp();
