@@ -39,11 +39,12 @@ internal static class PopulationBenchmarkRunner
     private static PopulationBenchmarkResult RunDispatchScenario(int personCount, TravelMode mode, BenchmarkOptions options)
     {
         var world = new SimulationWorld(new SimulationConfig(tickRate: 30, seed: 15015, spatialCellSize: 64d));
-        CreateDispatchPopulation(world, personCount, mode);
+        var fixture = CreateDispatchFixture(world, personCount);
 
-        // Warm fixed-tick/JIT paths before Persons are eligible to dispatch.
-        // The dispatch population uses Work windows starting at minute 1 so warmup does not consume the measured departure wave.
+        // Warm infrastructure/JIT paths before creating Persons so the first measured tick remains the departure wave.
         for (var tick = 0; tick < options.WarmupTicks; tick++) world.Step();
+        CreateDispatchPopulation(world, fixture, mode);
+
         return Measure(mode == TravelMode.Motor ? "motor-dispatch" : "foot-dispatch", personCount, world, options);
     }
 
@@ -64,7 +65,7 @@ internal static class PopulationBenchmarkRunner
         }
     }
 
-    private static void CreateDispatchPopulation(SimulationWorld world, int personCount, TravelMode mode)
+    private static DispatchFixture CreateDispatchFixture(SimulationWorld world, int personCount)
     {
         var segmentLengthMeters = (personCount + 3d) * DispatchSpawnSpacingMeters;
         var roadStart = world.CreateRoadNode(new WorldPoint(0d, 0d, 0d));
@@ -79,13 +80,9 @@ internal static class PopulationBenchmarkRunner
             workX / segmentLengthMeters,
             work,
             mode: RoadAccessMode.Motor | RoadAccessMode.Foot);
-        var workEndpoint = TripEndpoint.ForBuilding(work);
-        var workSchedule = new[]
-        {
-            new DailyActivityWindow(SimulationActivityKind.Work, 1, 1440, workEndpoint, ActivityPriority.High),
-        };
 
-        for (var index = 0; index < personCount; index++)
+        var homes = new TripEndpoint[personCount];
+        for (var index = 0; index < homes.Length; index++)
         {
             var homeX = (index + 1d) * DispatchSpawnSpacingMeters;
             var home = world.CreateBuilding(
@@ -96,7 +93,21 @@ internal static class PopulationBenchmarkRunner
                 homeX / segmentLengthMeters,
                 home,
                 mode: RoadAccessMode.Motor | RoadAccessMode.Foot);
-            var household = world.CreateHousehold(TripEndpoint.ForBuilding(home));
+            homes[index] = TripEndpoint.ForBuilding(home);
+        }
+
+        return new DispatchFixture(homes, TripEndpoint.ForBuilding(work));
+    }
+
+    private static void CreateDispatchPopulation(SimulationWorld world, DispatchFixture fixture, TravelMode mode)
+    {
+        var workSchedule = new[]
+        {
+            new DailyActivityWindow(SimulationActivityKind.Work, 0, 1440, fixture.Work, ActivityPriority.High),
+        };
+        for (var index = 0; index < fixture.Homes.Length; index++)
+        {
+            var household = world.CreateHousehold(fixture.Homes[index]);
             world.CreatePerson(
                 household,
                 new PersonDemographics(30, IsEmployed: true, HasPrivateVehicle: mode == TravelMode.Motor),
@@ -161,6 +172,8 @@ internal static class PopulationBenchmarkRunner
         var rank = (int)Math.Ceiling(percentile * sortedValues.Length) - 1;
         return sortedValues[Math.Clamp(rank, 0, sortedValues.Length - 1)];
     }
+
+    private sealed record DispatchFixture(TripEndpoint[] Homes, TripEndpoint Work);
 }
 
 internal sealed record PopulationBenchmarkResult(
