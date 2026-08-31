@@ -19,7 +19,7 @@ public sealed class RailwayInfrastructureSaveTests
         var restored = WorldSaveSerializer.Deserialize(bytes);
         var actual = restored.CreateCheckpoint();
 
-        StringAssert.Contains(json, "\"formatVersion\": 10");
+        StringAssert.Contains(json, "\"formatVersion\": 11");
         Assert.AreEqual(expected.NextTrackNodeId, actual.NextTrackNodeId);
         Assert.AreEqual(expected.NextTrackSegmentId, actual.NextTrackSegmentId);
         Assert.AreEqual(expected.NextTrackConnectionId, actual.NextTrackConnectionId);
@@ -37,7 +37,7 @@ public sealed class RailwayInfrastructureSaveTests
     {
         var world = new SimulationWorld();
         var json = Encoding.UTF8.GetString(WorldSaveSerializer.Serialize(world));
-        json = json.Replace("\"formatVersion\": 10", "\"formatVersion\": 7", StringComparison.Ordinal);
+        json = json.Replace("\"formatVersion\": 11", "\"formatVersion\": 7", StringComparison.Ordinal);
         var railwayProperties = new[]
         {
             "nextTrackNodeId", "trackNodes", "nextTrackSegmentId", "trackSegments", "nextTrackConnectionId", "trackConnections",
