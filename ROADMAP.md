@@ -353,7 +353,7 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 - Protocol / Server / Web: Protocol 2.11 `LogisticsSnapshot` (`MessageType 740`)を追加し、Serverはactive Shipmentを優先したbounded debug entryを配信、Web ClientでInventory / Shipment / Freight Vehicle ID / delayをdebug表示する。
 - Tests: 同一Company複数Supplierの生産量重複防止、Delivered後のFreight Vehicle解放、Save pre-materialization limit、256件超Shipment historyでのactive debug selectionを含む回帰testを追加した。
 - CI: review対応コードを含むCI run `33450375345`がrepository / .NET build・test / Web lint・typecheck・test・build / CI gateまで成功した。benchmark fixture更新後もCI run `33450666762`でbuild / test成功を確認した。
-- E2E: End-to-end run `33450375331`でPhase 22 Logisticsを含む既存Server→Browser回帰が成功した。benchmark fixture更新はE2E runtime契約を変更しない。
+- E2E: End-to-end run `33450666785`でPhase 22 Logisticsを含む既存Server→Browser回帰が成功した。benchmark fixture更新はE2E runtime契約を変更しない。
 - Benchmark: Benchmarks run `33450666769`の`logistics-inventory-100-1000`で100 / 1,000 Inventory・Shipment historyのTick / RoutingBatch / Snapshotを全6ケース計測した。baselineは[`docs/development/logistics-freight-benchmark.md`](docs/development/logistics-freight-benchmark.md)を正本とする。
 - Dependency Review: run `33450666753`が成功した。
 - Specification / Architecture: [`docs/specifications/logistics-freight.md`](docs/specifications/logistics-freight.md)、[`docs/architecture/logistics-freight.md`](docs/architecture/logistics-freight.md)を正本とする。
