@@ -39,6 +39,7 @@ export class Application {
   private lastAudioSyncAt = Number.NEGATIVE_INFINITY;
   private lastPerformanceUiAt = Number.NEGATIVE_INFINITY;
   private audioSyncPending = false;
+  private disposed = false;
 
   public constructor(host: HTMLElement) {
     const performanceMetrics = this.performanceMetrics;
@@ -75,14 +76,27 @@ export class Application {
     this.audio.onStateChanged((state) => this.ui.setAudioState(state));
     this.ui.onAudioUnlock(() => { void this.audio.unlock().catch((error: unknown) => { const detail = error instanceof Error ? error.message : String(error); this.ui.showError(this.localizer.t('error.client', { detail })); }); });
     this.ui.onInspectPerson((personId) => { this.connection.inspectPerson(personId); });
+    this.ui.onClearPersonInspection(() => { this.connection.clearPersonInspection(); });
     window.addEventListener('resize', this.handleResize);
   }
 
-  public start(): void { this.connection.connect(); this.animationFrame = window.requestAnimationFrame(this.animate); }
-  public dispose(): void { window.cancelAnimationFrame(this.animationFrame); window.removeEventListener('resize', this.handleResize); this.connection.disconnect(); this.audio.dispose(); this.railway.dispose(); this.railwayOperations.dispose(); this.view.dispose(); }
+  public start(): void { if (this.disposed) throw new Error('Application is disposed.'); this.connection.connect(); this.animationFrame = window.requestAnimationFrame(this.animate); }
+  public dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    window.cancelAnimationFrame(this.animationFrame);
+    window.removeEventListener('resize', this.handleResize);
+    this.connection.disconnect();
+    this.audio.dispose();
+    this.railway.dispose();
+    this.railwayOperations.dispose();
+    this.view.dispose();
+    this.ui.dispose();
+  }
   private readonly handleResize = (): void => { this.view.resize(); };
 
   private readonly animate = (now: number): void => {
+    if (this.disposed) return;
     const performanceMetrics = this.performanceMetrics;
     if (performanceMetrics !== null) performanceMetrics.recordAnimationFrame(now);
     this.updateSubscription(now);
@@ -107,7 +121,7 @@ export class Application {
     this.lastAudioSyncAt = now; this.audioSyncPending = true;
     const listener = this.view.getListenerPosition();
     void Promise.all([this.audio.syncSpatialVoices(listener), this.ambient.update(listener)])
-      .catch((error: unknown) => { const detail = error instanceof Error ? error.message : String(error); this.ui.showError(this.localizer.t('error.client', { detail })); })
+      .catch((error: unknown) => { if (this.disposed) return; const detail = error instanceof Error ? error.message : String(error); this.ui.showError(this.localizer.t('error.client', { detail })); })
       .finally(() => { this.audioSyncPending = false; });
   }
 
@@ -120,10 +134,7 @@ export class Application {
     switch (message.type) {
       case MessageType.AgentSpawn: this.applyAgentSpawn(message); return;
       case MessageType.AgentUpdate: this.applyAgentUpdate(message); return;
-      case MessageType.AgentRemove: {
-        const removed = this.store.remove(message.agentId); this.audio.removeEntity(message.agentId);
-        if (removed) this.ui.setAgentCount(this.store.size); return;
-      }
+      case MessageType.AgentRemove: { const removed = this.store.remove(message.agentId); this.audio.removeEntity(message.agentId); if (removed) this.ui.setAgentCount(this.store.size); return; }
       case MessageType.PedestrianSpawn: this.applyPedestrianSpawn(message); return;
       case MessageType.PedestrianUpdate: this.applyPedestrianUpdate(message); return;
       case MessageType.PedestrianRemove: this.pedestrians.remove(message.pedestrianId); return;
@@ -145,16 +156,8 @@ export class Application {
     }
   }
 
-  private applyAgentSpawn(message: AgentStateMessage): void {
-    const previousSize = this.store.size; this.store.spawn(message); this.updateEntityAudioPosition(message);
-    if (this.store.size !== previousSize) this.ui.setAgentCount(this.store.size);
-  }
-
-  private applyAgentUpdate(message: AgentStateMessage): void {
-    if (!this.store.update(message)) { this.store.spawn(message); this.ui.setAgentCount(this.store.size); }
-    this.updateEntityAudioPosition(message);
-  }
-
+  private applyAgentSpawn(message: AgentStateMessage): void { const previousSize = this.store.size; this.store.spawn(message); this.updateEntityAudioPosition(message); if (this.store.size !== previousSize) this.ui.setAgentCount(this.store.size); }
+  private applyAgentUpdate(message: AgentStateMessage): void { if (!this.store.update(message)) { this.store.spawn(message); this.ui.setAgentCount(this.store.size); } this.updateEntityAudioPosition(message); }
   private applyPedestrianSpawn(message: PedestrianStateMessage): void { this.pedestrians.spawn(message); }
   private applyPedestrianUpdate(message: PedestrianStateMessage): void { if (!this.pedestrians.update(message)) this.pedestrians.spawn(message); }
   private applyVehicleSpawn(message: VehicleStateMessage): void { this.vehicles.spawn(message); }
@@ -168,15 +171,12 @@ export class Application {
   private handleProtocolError(message: ProtocolErrorMessage): void {
     const parameters: Record<string, string> = {};
     for (const parameter of message.parameters) parameters[parameter.key] = parameter.value;
-    if (message.code === ProtocolErrorCode.InvalidRequest
-      && parameters.detailCode === SUBSCRIPTION_TOO_LARGE_DETAIL_CODE
-      && this.view.zoomInForSubscriptionRetry()) {
+    if (message.code === ProtocolErrorCode.InvalidRequest && parameters.detailCode === SUBSCRIPTION_TOO_LARGE_DETAIL_CODE && this.view.zoomInForSubscriptionRetry()) {
       this.lastSubscription = null;
       this.lastSubscriptionAt = Number.NEGATIVE_INFINITY;
       this.ui.clearError();
       return;
     }
-
     parameters.code = String(message.code);
     const key = `error.protocol.${String(message.code)}`;
     const localized = this.localizer.t(key, parameters as LocaleParameters);
