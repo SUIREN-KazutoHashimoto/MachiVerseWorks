@@ -37,7 +37,14 @@ public sealed partial class SimulationWorld
         return _pedestrians.Add(request, route, walkingSpeedMetersPerSecond, _pedestrianNetwork, _pedestrianSpatialIndex);
     }
 
-    public bool RemovePedestrian(PedestrianId id) => _pedestrians.Remove(id, _pedestrianSpatialIndex);
+    public bool RemovePedestrian(PedestrianId id)
+    {
+        if (_population.ContainsPedestrianReference(id))
+            throw new InvalidOperationException($"Pedestrian {id.Value} cannot be removed while an active Population trip references it.");
+        return RemovePedestrianCore(id);
+    }
+
+    private bool RemovePedestrianCore(PedestrianId id) => _pedestrians.Remove(id, _pedestrianSpatialIndex);
 
     public bool TryGetPedestrianSnapshot(PedestrianId id, out PedestrianSnapshot snapshot) =>
         _pedestrians.TryGetSnapshot(id, Time.TickCount, out snapshot);
@@ -100,6 +107,8 @@ public sealed partial class SimulationWorld
             if (pedestrian.TripRequestId.Value == 0)
                 throw new ArgumentException("Pedestrian Trip Request ID must be greater than zero.", nameof(checkpoint));
             ValidateEnum(pedestrian.Mode, nameof(checkpoint));
+            if (pedestrian.Mode is not (TravelMode.Any or TravelMode.Foot))
+                throw new ArgumentException($"Pedestrian {pedestrian.Id.Value} must use TravelMode.Any or TravelMode.Foot.", nameof(checkpoint));
             ValidateEnum(pedestrian.State, nameof(checkpoint));
             if (!double.IsFinite(pedestrian.WalkingSpeedMetersPerSecond) || pedestrian.WalkingSpeedMetersPerSecond <= 0d)
                 throw new ArgumentException("Pedestrian walking speed must be finite and greater than zero.", nameof(checkpoint));
