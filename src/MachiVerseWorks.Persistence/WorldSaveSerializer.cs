@@ -124,6 +124,7 @@ public static partial class WorldSaveSerializer
         ValidateNestedCheckpointWithinLimits(checkpoint, limits);
         ValidateRailwayOperationsCheckpointWithinLimits(checkpoint, limits);
         ValidateMultimodalTransitCheckpointWithinLimits(checkpoint.MultimodalTransit, limits);
+        ValidateEconomyCheckpointWithinLimits(checkpoint.Economy, limits);
     }
 
     private static SaveDataDocument CreateDocument(SimulationCheckpoint checkpoint)
@@ -404,6 +405,7 @@ public static partial class WorldSaveSerializer
                 Depots = depots,
                 RailwayOperations = CreateRailwayOperationsData(checkpoint),
                 MultimodalTransit = checkpoint.MultimodalTransit,
+                Economy = checkpoint.Economy,
             },
         };
     }
@@ -411,7 +413,7 @@ public static partial class WorldSaveSerializer
     private static SimulationWorld RestoreDocument(SaveDataDocument document, WorldSaveLimits limits)
     {
         var format = Require(document.FormatVersion, "formatVersion");
-        if (format is not (SaveFormatVersion.BuildingPoi or SaveFormatVersion.RoadNetwork or SaveFormatVersion.Pedestrian or SaveFormatVersion.Vehicle or SaveFormatVersion.Population or SaveFormatVersion.RailwayInfrastructure or SaveFormatVersion.RailwayOperations or SaveFormatVersion.MultimodalTransit))
+        if (format is not (SaveFormatVersion.BuildingPoi or SaveFormatVersion.RoadNetwork or SaveFormatVersion.Pedestrian or SaveFormatVersion.Vehicle or SaveFormatVersion.Population or SaveFormatVersion.RailwayInfrastructure or SaveFormatVersion.RailwayOperations or SaveFormatVersion.MultimodalTransit or SaveFormatVersion.Economy))
         {
             throw new InvalidDataException($"Unsupported Save format version {format}. Expected {SaveFormatVersion.Current} or a supported migratable version.");
         }
@@ -427,6 +429,7 @@ public static partial class WorldSaveSerializer
         var hasRailway = format >= SaveFormatVersion.RailwayInfrastructure;
         var hasRailwayOperations = format >= SaveFormatVersion.RailwayOperations;
         var hasMultimodalTransit = format >= SaveFormatVersion.MultimodalTransit;
+        var hasEconomy = format >= SaveFormatVersion.Economy;
         var roadNodesData = hasRoadNetwork ? simulation.RoadNodes ?? throw new InvalidDataException("Save Data is missing RoadNode state.") : [];
         var roadSegmentsData = hasRoadNetwork ? simulation.RoadSegments ?? throw new InvalidDataException("Save Data is missing RoadSegment state.") : [];
         var lanesData = hasRoadNetwork ? simulation.Lanes ?? throw new InvalidDataException("Save Data is missing Lane state.") : [];
@@ -447,6 +450,7 @@ public static partial class WorldSaveSerializer
         var depotData = hasRailway ? simulation.Depots ?? throw new InvalidDataException("Save Data is missing Depot state.") : [];
         var railwayOperationsData = hasRailwayOperations ? simulation.RailwayOperations ?? throw new InvalidDataException("Save Data is missing RailwayOperations state.") : null;
         var multimodalTransitData = hasMultimodalTransit ? simulation.MultimodalTransit ?? throw new InvalidDataException("Save Data is missing Multimodal Transit state.") : null;
+        var economyData = hasEconomy ? simulation.Economy ?? throw new InvalidDataException("Save Data is missing Economy state.") : null;
         ValidateMaterializedCounts(
             savedAgents.Length, savedBuildings.Length, savedPois.Length,
             roadNodesData.Length, roadSegmentsData.Length, lanesData.Length, connectionsData.Length, accessData.Length,
@@ -462,6 +466,7 @@ public static partial class WorldSaveSerializer
         ValidateCount(depotData.Length, limits.MaximumBuildingCount, "Depots");
         ValidateRailwayOperationsDataCounts(railwayOperationsData, hasRailwayOperations, limits);
         ValidateMultimodalTransitCheckpointWithinLimits(multimodalTransitData, limits);
+        ValidateEconomyCheckpointWithinLimits(economyData, limits);
 
         var agents = new SimulationAgentCheckpoint[savedAgents.Length];
         for (var index = 0; index < agents.Length; index++)
@@ -794,7 +799,8 @@ public static partial class WorldSaveSerializer
             railwayOperations.NextTimetableId, railwayOperations.Timetables,
             railwayOperations.NextServiceId, railwayOperations.Services,
             railwayOperations.NextTrainId, railwayOperations.Trains,
-            multimodalTransitData);
+            multimodalTransitData,
+            economyData);
         return SimulationWorld.RestoreCheckpoint(checkpoint);
     }
 

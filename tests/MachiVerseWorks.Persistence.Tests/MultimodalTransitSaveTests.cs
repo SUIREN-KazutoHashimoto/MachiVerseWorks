@@ -20,7 +20,7 @@ public sealed class MultimodalTransitSaveTests
         Assert.AreEqual(PassengerState.Transfer, GetPassenger(original, passengerId).State);
 
         var bytes = WorldSaveSerializer.Serialize(original);
-        StringAssert.Contains(Encoding.UTF8.GetString(bytes), "\"formatVersion\": 10");
+        StringAssert.Contains(Encoding.UTF8.GetString(bytes), "\"formatVersion\": 11");
         StringAssert.Contains(Encoding.UTF8.GetString(bytes), "\"multimodalTransit\"");
         var restored = WorldSaveSerializer.Deserialize(bytes);
         Assert.AreEqual(GetPassenger(original, passengerId), GetPassenger(restored, passengerId));
