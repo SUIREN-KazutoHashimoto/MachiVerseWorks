@@ -60,6 +60,7 @@ internal sealed class SaveSimulationData
     public SaveDepotData?[]? Depots { get; init; }
     public SaveRailwayOperationsData? RailwayOperations { get; init; }
     public MultimodalTransitCheckpoint? MultimodalTransit { get; init; }
+    public EconomyCheckpoint? Economy { get; init; }
 }
 
 internal sealed class SaveAgentData
