@@ -34,11 +34,15 @@ internal static partial class ServerLog
     [LoggerMessage(
         10,
         LogLevel.Debug,
-        "Snapshot delivered to {ConnectionId}: {AgentCount} agents, {MessageCount} messages, {Bytes} bytes, encode {EncodeTimeMs} ms, send {SendTimeMs} ms.")]
+        "Snapshot delivered to {ConnectionId}: {AgentCount} agents, {PedestrianCount} pedestrians, {VehicleCount} vehicles, {TrainCount} trains, {EntityCount} entities, {MessageCount} messages, {Bytes} bytes, encode {EncodeTimeMs} ms, send {SendTimeMs} ms.")]
     public static partial void SnapshotDeliveryMetrics(
         ILogger logger,
         Guid connectionId,
         int agentCount,
+        int pedestrianCount,
+        int vehicleCount,
+        int trainCount,
+        int entityCount,
         int messageCount,
         long bytes,
         double encodeTimeMs,
