@@ -12,6 +12,7 @@ internal sealed class SimulationRuntime
     private bool _pedestrianFixturePending;
     private bool _roadTrafficFixturePending;
     private bool _trafficFixturePending;
+    private bool _populationFixturePending;
     private bool _railwayFixturePending;
     private bool _railwayOperationsFixturePending;
     private bool _multimodalTransitFixturePending;
@@ -37,6 +38,7 @@ internal sealed class SimulationRuntime
         _pedestrianFixturePending = bool.TryParse(configuration["Simulation:PedestrianFixture"], out var pedestrianFixture) && pedestrianFixture;
         _roadTrafficFixturePending = bool.TryParse(configuration["Simulation:RoadTrafficFixture"], out var roadTrafficFixture) && roadTrafficFixture;
         _trafficFixturePending = bool.TryParse(configuration["Simulation:TrafficFixture"], out var trafficFixture) && trafficFixture;
+        _populationFixturePending = bool.TryParse(configuration["Simulation:PopulationFixture"], out var populationFixture) && populationFixture;
         _railwayFixturePending = bool.TryParse(configuration["Simulation:RailwayFixture"], out var railwayFixture) && railwayFixture;
         _railwayOperationsFixturePending = bool.TryParse(configuration["Simulation:RailwayOperationsFixture"], out var railwayOperationsFixture) && railwayOperationsFixture;
         _multimodalTransitFixturePending = bool.TryParse(configuration["Simulation:MultimodalTransitFixture"], out var multimodalTransitFixture) && multimodalTransitFixture;
@@ -51,22 +53,23 @@ internal sealed class SimulationRuntime
     public int ActiveVehicleCount { get { lock (_gate) return _world.ActiveVehicleCount; } }
     public int RoadSegmentCount { get { lock (_gate) return _world.RoadSegmentCount; } }
     public int TrackSegmentCount { get { lock (_gate) return _world.TrackSegmentCount; } }
-    public int HouseholdCount { get { lock (_gate) return _world.HouseholdCount; } }
-    public int PersonCount { get { lock (_gate) return _world.PersonCount; } }
+    public int HouseholdCount { get { lock (_gate) { EnsureFixtures(); return _world.HouseholdCount; } } }
+    public int PersonCount { get { lock (_gate) { EnsureFixtures(); return _world.PersonCount; } } }
 
-    public void Step() { lock (_gate) _world.Step(); }
+    public void Step() { lock (_gate) { EnsureFixtures(); _world.Step(); } }
     public AgentSnapshot[] CreateSnapshot(WorldVolume volume) { lock (_gate) return _world.CreateSnapshot(volume); }
     public PedestrianSnapshot[] CreatePedestrianSnapshot(WorldVolume volume) { lock (_gate) { EnsureFixtures(); return _world.CreatePedestrianSnapshot(volume); } }
     public RoadNetworkSnapshot CreateRoadNetworkSnapshot(WorldVolume volume) { lock (_gate) { EnsureFixtures(); return _world.CreateRoadNetworkSnapshot(volume); } }
     public RailwayInfrastructureSnapshot CreateRailwayInfrastructureSnapshot(WorldVolume volume) { lock (_gate) { EnsureFixtures(); return _world.CreateRailwayInfrastructureSnapshot(volume); } }
-    public PopulationStatistics CreatePopulationStatistics() { lock (_gate) return _world.CreatePopulationStatistics(); }
-    public bool TryGetPersonSnapshot(PersonId id, out PersonSnapshot snapshot) { lock (_gate) return _world.TryGetPersonSnapshot(id, out snapshot); }
+    public PopulationStatistics CreatePopulationStatistics() { lock (_gate) { EnsureFixtures(); return _world.CreatePopulationStatistics(); } }
+    public bool TryGetPersonSnapshot(PersonId id, out PersonSnapshot snapshot) { lock (_gate) { EnsureFixtures(); return _world.TryGetPersonSnapshot(id, out snapshot); } }
 
     public PopulationPublishSnapshot CapturePopulationPublishSnapshot(IReadOnlySet<ulong> inspectedPersonIds)
     {
         ArgumentNullException.ThrowIfNull(inspectedPersonIds);
         lock (_gate)
         {
+            EnsureFixtures();
             var statistics = _world.CreatePopulationStatistics();
             var persons = new Dictionary<ulong, PersonSnapshot>(inspectedPersonIds.Count);
             foreach (var personId in inspectedPersonIds)
@@ -97,9 +100,20 @@ internal sealed class SimulationRuntime
         if (_pedestrianFixturePending) { SeedPedestrianFixture(_world); _pedestrianFixturePending = false; _roadReadModel = null; }
         if (_roadTrafficFixturePending) { SeedRoadTrafficFixture(_world); _roadTrafficFixturePending = false; _roadReadModel = null; }
         if (_trafficFixturePending) { SeedTrafficFixture(_world); _trafficFixturePending = false; _roadReadModel = null; }
+        if (_populationFixturePending) { SeedPopulationFixture(_world); _populationFixturePending = false; }
         if (_railwayFixturePending) { RailwayInfrastructureFixtures.SeedDeterministic(_world); _railwayFixturePending = false; _roadReadModel = null; _railwayReadModel = null; }
         if (_railwayOperationsFixturePending) { RailwayOperationsFixtures.SeedDeterministic(_world); _railwayOperationsFixturePending = false; _railwayReadModel = null; }
         if (_multimodalTransitFixturePending) { MultimodalTransitFixtures.SeedDeterministic(_world); _multimodalTransitFixturePending = false; _roadReadModel = null; _railwayReadModel = null; }
+    }
+
+    private static void SeedPopulationFixture(SimulationWorld world)
+    {
+        var home = world.CreateBuilding(new WorldVolume(-2d, -2d, 0d, 2d, 2d, 4d), BuildingKind.Residential);
+        var household = world.CreateHousehold(TripEndpoint.ForBuilding(home));
+        world.CreatePerson(
+            household,
+            new PersonDemographics(35, IsEmployed: true),
+            [new DailyActivityWindow(ActivityKind.Home, 0, 1440)]);
     }
 
     private static void SeedPedestrianFixture(SimulationWorld world)
