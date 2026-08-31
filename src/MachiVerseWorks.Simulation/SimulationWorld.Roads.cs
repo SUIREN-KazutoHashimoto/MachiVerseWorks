@@ -16,6 +16,7 @@ public sealed partial class SimulationWorld
     {
         ValidatePoint(position);
         ValidateEnum(kind, nameof(kind));
+        EnsureRoadTopologyMutable();
         InvalidatePedestrianNetwork();
         var id = _roads.AddNode(position, kind);
         InvalidateRouting();
@@ -27,6 +28,7 @@ public sealed partial class SimulationWorld
         ValidatePoint(position);
         ValidateEnum(kind, nameof(kind));
         ValidateIncidentRoadSegmentGeometry(id, position);
+        EnsureRoadTopologyMutable();
         InvalidatePedestrianNetwork();
         var updated = _roads.UpdateNode(id, position, kind);
         if (updated) InvalidateRouting();
@@ -35,6 +37,7 @@ public sealed partial class SimulationWorld
 
     public bool RemoveRoadNode(RoadNodeId id)
     {
+        EnsureRoadTopologyMutable();
         InvalidatePedestrianNetwork();
         var removed = _roads.RemoveNode(id);
         if (removed) InvalidateRouting();
@@ -45,6 +48,7 @@ public sealed partial class SimulationWorld
     {
         ValidateEnum(kind, nameof(kind));
         ValidateRoadSegmentGeometry(startNodeId, endNodeId);
+        EnsureRoadTopologyMutable();
         InvalidatePedestrianNetwork();
         var id = _roads.AddSegment(startNodeId, endNodeId, kind);
         InvalidateRouting();
@@ -55,6 +59,7 @@ public sealed partial class SimulationWorld
     {
         ValidateEnum(kind, nameof(kind));
         ValidateRoadSegmentGeometry(startNodeId, endNodeId);
+        EnsureRoadTopologyMutable();
         InvalidatePedestrianNetwork();
         var updated = _roads.UpdateSegment(id, startNodeId, endNodeId, kind);
         if (updated) InvalidateRouting();
@@ -63,6 +68,7 @@ public sealed partial class SimulationWorld
 
     public bool RemoveRoadSegment(RoadSegmentId id)
     {
+        EnsureRoadTopologyMutable();
         InvalidatePedestrianNetwork();
         var removed = _roads.RemoveSegment(id);
         if (removed) InvalidateRouting();
@@ -71,6 +77,7 @@ public sealed partial class SimulationWorld
 
     public LaneId CreateLane(RoadSegmentId segmentId, LaneDirection direction, ushort order, double widthMeters = 3.5d, double speedLimitMetersPerSecond = 13.8888888889d)
     {
+        EnsureRoadTopologyMutable();
         var id = _roads.AddLane(segmentId, direction, order, widthMeters, speedLimitMetersPerSecond);
         InvalidateRouting();
         return id;
@@ -78,6 +85,7 @@ public sealed partial class SimulationWorld
 
     public bool UpdateLane(LaneId id, RoadSegmentId segmentId, LaneDirection direction, ushort order, double widthMeters, double speedLimitMetersPerSecond)
     {
+        EnsureRoadTopologyMutable();
         var updated = _roads.UpdateLane(id, segmentId, direction, order, widthMeters, speedLimitMetersPerSecond);
         if (updated) InvalidateRouting();
         return updated;
@@ -85,6 +93,7 @@ public sealed partial class SimulationWorld
 
     public bool RemoveLane(LaneId id)
     {
+        EnsureRoadTopologyMutable();
         var removed = _roads.RemoveLane(id);
         if (removed) InvalidateRouting();
         return removed;
@@ -92,6 +101,7 @@ public sealed partial class SimulationWorld
 
     public LaneConnectionId CreateLaneConnection(LaneId fromLaneId, LaneId toLaneId, RoadNodeId viaNodeId, TurnMovement movement = TurnMovement.Unspecified)
     {
+        EnsureRoadTopologyMutable();
         var id = _roads.AddConnection(fromLaneId, toLaneId, viaNodeId, movement);
         InvalidateRouting();
         return id;
@@ -99,6 +109,7 @@ public sealed partial class SimulationWorld
 
     public bool UpdateLaneConnection(LaneConnectionId id, LaneId fromLaneId, LaneId toLaneId, RoadNodeId viaNodeId, TurnMovement movement)
     {
+        EnsureRoadTopologyMutable();
         var updated = _roads.UpdateConnection(id, fromLaneId, toLaneId, viaNodeId, movement);
         if (updated) InvalidateRouting();
         return updated;
@@ -106,6 +117,7 @@ public sealed partial class SimulationWorld
 
     public bool RemoveLaneConnection(LaneConnectionId id)
     {
+        EnsureRoadTopologyMutable();
         var removed = _roads.RemoveConnection(id);
         if (removed) InvalidateRouting();
         return removed;
@@ -146,6 +158,12 @@ public sealed partial class SimulationWorld
     public bool TryGetLaneSnapshot(LaneId id, out LaneSnapshot snapshot) => _roads.TryGetLane(id, out snapshot);
     public bool TryGetLaneConnectionSnapshot(LaneConnectionId id, out LaneConnectionSnapshot snapshot) => _roads.TryGetConnection(id, out snapshot);
     public bool TryGetRoadAccessPointSnapshot(RoadAccessPointId id, out RoadAccessPointSnapshot snapshot) => _roads.TryGetAccessPoint(id, out snapshot);
+
+    private void EnsureRoadTopologyMutable()
+    {
+        if (_vehicles.Count > 0)
+            throw new InvalidOperationException("Road topology cannot be changed while stored Vehicles reference derived routes. Remove them before mutating Road nodes, segments, lanes, or lane connections.");
+    }
 
     private void ValidateRoadSegmentGeometry(RoadNodeId startNodeId, RoadNodeId endNodeId)
     {
