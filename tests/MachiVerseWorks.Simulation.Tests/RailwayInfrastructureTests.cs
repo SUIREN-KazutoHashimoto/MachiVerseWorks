@@ -88,6 +88,28 @@ public sealed class RailwayInfrastructureTests
     }
 
     [TestMethod]
+    public void ZeroLengthTrackSegmentIsRejectedAtCreationAndCheckpointRestore()
+    {
+        var world = new SimulationWorld();
+        var first = world.CreateTrackNode(new WorldPoint(0d, 0d, 0d));
+        var samePosition = world.CreateTrackNode(new WorldPoint(0d, 0d, 0d));
+
+        Assert.ThrowsExactly<ArgumentException>(() => world.CreateTrackSegment(first, samePosition));
+
+        var elevated = world.CreateTrackNode(new WorldPoint(0d, 0d, 8d));
+        var elevatedSegment = world.CreateTrackSegment(first, elevated);
+        Assert.AreEqual(1UL, elevatedSegment.Value);
+
+        var checkpoint = world.CreateCheckpoint();
+        var nodes = checkpoint.TrackNodes!.ToArray();
+        var elevatedIndex = Array.FindIndex(nodes, node => node.Id == elevated);
+        nodes[elevatedIndex] = nodes[elevatedIndex] with { Position = new WorldPoint(0d, 0d, 0d) };
+
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            SimulationWorld.RestoreCheckpoint(checkpoint with { TrackNodes = nodes }));
+    }
+
+    [TestMethod]
     public void SpatialCrossingWithoutSharedNodeNeverCreatesConnectivity()
     {
         var world = new SimulationWorld();
