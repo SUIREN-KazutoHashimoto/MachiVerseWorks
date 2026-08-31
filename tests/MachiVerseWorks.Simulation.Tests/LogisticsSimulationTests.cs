@@ -32,6 +32,41 @@ public sealed class LogisticsSimulationTests
     }
 
     [TestMethod]
+    public void CompanyProductionIsAllocatedOnceAcrossMultipleSupplierInventories()
+    {
+        var world = new SimulationWorld(new SimulationConfig(tickRate: 1, seed: 2201));
+        var firstBuilding = world.CreateBuilding(new WorldVolume(-1, -2, 0, 3, 2, 4), BuildingKind.Industrial);
+        var secondBuilding = world.CreateBuilding(new WorldVolume(17, -2, 0, 21, 2, 4), BuildingKind.Industrial);
+        var home = world.CreateBuilding(new WorldVolume(-8, -2, 0, -4, 2, 4), BuildingKind.Residential);
+        var start = world.CreateRoadNode(new WorldPoint(0, 0, 0));
+        var end = world.CreateRoadNode(new WorldPoint(20, 0, 0));
+        var segment = world.CreateRoadSegment(start, end, RoadKind.Local);
+        world.CreateLane(segment, LaneDirection.Forward, 0, speedLimitMetersPerSecond: 12d);
+        var firstAccess = world.CreateRoadAccessPoint(segment, 0.05, firstBuilding, mode: RoadAccessMode.Motor);
+        var secondAccess = world.CreateRoadAccessPoint(segment, 0.95, secondBuilding, mode: RoadAccessMode.Motor);
+
+        var household = world.CreateHousehold(TripEndpoint.ForBuilding(home));
+        var person = world.CreatePerson(household, new PersonDemographics(30, IsEmployed: true), [new DailyActivityWindow(ActivityKind.Home, 0, 1440)]);
+        var company = world.CreateCompany(IndustrySector.Manufacturing, 100_000, 20d);
+        var first = world.CreateEstablishment(company, buildingId: firstBuilding);
+        var second = world.CreateEstablishment(company, buildingId: secondBuilding);
+        var job = world.CreateJob(first, 1, 0);
+        world.AssignEmployment(person, job);
+        var commodity = world.CreateCommodity();
+        world.ConfigureInventory(first, commodity, firstAccess, InventoryRole.Supplier, capacity: 5d);
+        world.ConfigureInventory(second, commodity, secondAccess, InventoryRole.Supplier, capacity: 100d);
+
+        for (var tick = 0; tick < 600; tick++) world.Step();
+
+        Assert.IsTrue(world.TryGetInventorySnapshot(first, commodity, out var firstInventory));
+        Assert.IsTrue(world.TryGetInventorySnapshot(second, commodity, out var secondInventory));
+        Assert.AreEqual(5d, firstInventory.Quantity, 1e-9);
+        Assert.AreEqual(15d, secondInventory.Quantity, 1e-9);
+        Assert.AreEqual(20d, firstInventory.Quantity + secondInventory.Quantity, 1e-9);
+        Assert.AreEqual(20d, world.CreateEconomySnapshot().Companies.Single().ProducedUnits, 1e-9);
+    }
+
+    [TestMethod]
     public void ProductionReplenishmentCreatesShipmentAndRestocksDestination()
     {
         var world = CreateWorld(out var commodity, out _, out var destination);
@@ -47,6 +82,8 @@ public sealed class LogisticsSimulationTests
         var shipment = world.CreateLogisticsSnapshot().Shipments.Single();
         Assert.AreEqual(ShipmentState.Delivered, shipment.State);
         Assert.IsNotNull(shipment.VehicleId);
+        Assert.IsFalse(world.TryGetVehicleSnapshot(shipment.VehicleId.Value, out _));
+        Assert.AreEqual(0, world.VehicleCount);
     }
 
     [TestMethod]
