@@ -1,0 +1,43 @@
+name: Phase21 save limits patch
+
+on:
+  push:
+    branches: [feature/phase21-economy]
+    paths: [.github/workflows/phase21-save-limits-patch.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/phase21-economy
+      - name: Patch Save Data pre-materialization limits
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/MachiVerseWorks.Persistence/WorldSaveSerializer.cs')
+          s = p.read_text()
+          old = '''            else if (reader.ValueTextEquals("depots")) ValidateNamedArrayElementCount(ref reader, limits.MaximumBuildingCount, "Depot");
+            else if (reader.ValueTextEquals("railwayOperations")) ValidateRailwayOperationsArrayCounts(ref reader, limits);
+'''
+          new = '''            else if (reader.ValueTextEquals("depots")) ValidateNamedArrayElementCount(ref reader, limits.MaximumBuildingCount, "Depot");
+            else if (reader.ValueTextEquals("companies")) ValidateNamedArrayElementCount(ref reader, limits.MaximumBuildingCount, "Company");
+            else if (reader.ValueTextEquals("establishments")) ValidateNamedArrayElementCount(ref reader, limits.MaximumBuildingCount, "Establishment");
+            else if (reader.ValueTextEquals("jobs")) ValidateNamedArrayElementCount(ref reader, limits.MaximumPersonCount, "Job");
+            else if (reader.ValueTextEquals("employments")) ValidateNamedArrayElementCount(ref reader, limits.MaximumPersonCount, "Employment");
+            else if (reader.ValueTextEquals("railwayOperations")) ValidateRailwayOperationsArrayCounts(ref reader, limits);
+'''
+          if old not in s: raise SystemExit('missing Save Data limit anchor')
+          p.write_text(s.replace(old, new, 1))
+          Path('.github/workflows/phase21-save-limits-patch.yml').unlink()
+      - name: Commit patch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "fix(persistence): bound economy save collections"
+          git push origin HEAD:feature/phase21-economy
