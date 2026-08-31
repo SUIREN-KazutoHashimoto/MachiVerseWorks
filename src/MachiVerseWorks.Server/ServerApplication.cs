@@ -23,7 +23,7 @@ public static class ServerApplication
         builder.Services.AddSingleton<WebSocketSessionHandler>();
         builder.Services.AddHostedService<SimulationTickService>();
         builder.Services.AddHostedService<ClientCommandProcessor>();
-        builder.Services.AddHostedService<AdminCommandExecutor>();
+        builder.Services.AddHostedService<AdminCommandExecutorV2>();
         builder.Services.AddHostedService<ServerConsoleService>();
         builder.Services.AddHostedService<SnapshotPublishService>();
         builder.Services.AddHostedService<PopulationPublishService>();
