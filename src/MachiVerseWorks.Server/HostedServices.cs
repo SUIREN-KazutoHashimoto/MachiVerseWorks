@@ -185,8 +185,9 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
             connection.TryReplaceKnownEntityIds(subscription.Revision, agentPlan.CurrentAgentIds, pedestrianPlan.CurrentPedestrianIds, vehiclePlan.CurrentVehicleIds);
             if (roadStateHandled) connection.TryMarkRoadSnapshotDelivered(subscription.Revision, publishSnapshot.RoadNetwork.Revision);
             if (railwayStateHandled) connection.TryMarkRailwaySnapshotDelivered(subscription.Revision, publishSnapshot.RailwayInfrastructure.Revision);
-            metrics.RecordSnapshotDelivery(snapshot.Agents.Length + snapshot.Vehicles.Length + snapshot.Trains.Length, messageCount, bytes, encodeTimeMs, sendTimeMs);
-            ServerLog.SnapshotDeliveryMetrics(logger, connection.Id, snapshot.Agents.Length + snapshot.Vehicles.Length + snapshot.Trains.Length, messageCount, bytes, encodeTimeMs, sendTimeMs);
+            metrics.RecordSnapshotDelivery(snapshot.Agents.Length, snapshot.Pedestrians.Length, snapshot.Vehicles.Length, snapshot.Trains.Length, messageCount, bytes, encodeTimeMs, sendTimeMs);
+            var entityCount = checked(snapshot.Agents.Length + snapshot.Pedestrians.Length + snapshot.Vehicles.Length + snapshot.Trains.Length);
+            ServerLog.SnapshotDeliveryMetrics(logger, connection.Id, snapshot.Agents.Length, snapshot.Pedestrians.Length, snapshot.Vehicles.Length, snapshot.Trains.Length, entityCount, messageCount, bytes, encodeTimeMs, sendTimeMs);
         }
         catch (Exception exception) when (SnapshotDeliveryFailurePolicy.IsExpectedClientFailure(exception))
         {
