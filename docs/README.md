@@ -18,7 +18,11 @@ MachiVerseWorks のドキュメント入口です。
 | [`specifications/`](specifications/) | Simulation、交通、公共交通、物流、都市Infrastructureなどの現行仕様 | [`specifications/README.md`](specifications/README.md) |
 | [`development/`](development/) | 開発環境、Git、version、CI、テスト、性能計測などの運用 | [`development/README.md`](development/README.md) |
 | [`decisions/`](decisions/) | ADR（Architecture Decision Record） | [`decisions/README.md`](decisions/README.md) |
-| [`archive/`](archive/) | Legacy資料、完了済みROADMAP、廃止設計、過去の実験記録 | [`archive/README.md`](archive/README.md) |
+| [`roadmap/`](roadmap/) | Phaseを補足する詳細設計・検討資料。進捗状態の正本ではない | [`roadmap/phase38-addon-conflict-resolution.md`](roadmap/phase38-addon-conflict-resolution.md) |
+| [`archive/`](archive/) | Legacy資料、完了済みRoadmap履歴、廃止設計、過去の実験記録 | [`archive/README.md`](archive/README.md) |
+
+> [!NOTE]
+> `docs/roadmap/` は詳細な計画・設計メモの置き場です。実装Phase / Task状態の正本はルートの [`../roadmap/SIMULATION_ROADMAP.md`](../roadmap/SIMULATION_ROADMAP.md) と [`../roadmap/VIEW_ROADMAP.md`](../roadmap/VIEW_ROADMAP.md) です。
 
 ## 管理原則
 
