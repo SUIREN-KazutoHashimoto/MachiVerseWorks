@@ -5,7 +5,8 @@ MachiVerseWorks のドキュメント入口です。
 ## まず読む
 
 - プロジェクト全体の概要: [`../README.md`](../README.md)
-- 現在地と次の作業: [`../ROADMAP.md`](../ROADMAP.md)
+- Simulation側の現在地と次の作業: [`../roadmap/SIMULATION_ROADMAP.md`](../roadmap/SIMULATION_ROADMAP.md)
+- View側の現在地と次の作業: [`../roadmap/VIEW_ROADMAP.md`](../roadmap/VIEW_ROADMAP.md)
 - 共通の開発・文書ルール: [`../AGENTS.md`](../AGENTS.md)
 
 分野別の現行文書は、次の各 README を索引として辿ります。
