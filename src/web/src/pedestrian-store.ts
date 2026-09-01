@@ -57,11 +57,7 @@ export class PedestrianStore implements ReadonlyPedestrianStore {
     if (target.length < requiredValues) throw new RangeError(`Target pedestrian position buffer requires at least ${String(requiredValues)} values.`);
     let offset = 0;
     for (const pedestrianId of this.pedestrians.keys()) {
-      const position = this.interpolation.sample(pedestrianId, now);
-      if (position === undefined) continue;
-      target[offset] = position.x;
-      target[offset + 1] = position.y;
-      target[offset + 2] = position.z;
+      if (!this.interpolation.writeSampledPosition(pedestrianId, now, target, offset)) continue;
       offset += 3;
     }
     return offset / 3;
