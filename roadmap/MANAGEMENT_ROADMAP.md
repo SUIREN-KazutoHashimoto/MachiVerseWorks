@@ -3,6 +3,7 @@
 このファイルは、MachiVerseWorks の **Management側の実装ロードマップ**です。World / City / Serverを人間が明示的に操作・編集・管理するためのUIとcommand clientを対象とします。
 
 - Simulationのauthoritative state / rule / command contract / validationは[`SIMULATION_ROADMAP.md`](SIMULATION_ROADMAP.md)を正本とする。
+- command成功後のauthoritative再観測、Observation Request / subscription / delivery / reconnectは[`GATEWAY_ROADMAP.md`](GATEWAY_ROADMAP.md)を正本とする。
 - 純粋な描画・Camera・Selection・Inspector・Historical viewing・Rendering LOD・View localizationは[`VIEW_ROADMAP.md`](VIEW_ROADMAP.md)を正本とする。
 - Management UIはread-only View componentを再利用してよいが、View module自体へmutation責務を持ち込まない。
 - Population / Economy / Traffic等の分析・統計・trend・heatmapはManagementへ持ち込まず、将来のAnalytics Listener / analysis clientとして別責務にする。
@@ -12,9 +13,9 @@
 
 ## 全体の現在地
 
-| Management Phase | 内容 | 主な必須Simulation依存 | 状態 |
+| Management Phase | 内容 | 主な必須依存 | 状態 |
 | --- | --- | --- | --- |
-| 1 | Management Client Foundation | Simulation Phase 36 common command contract | ⏳ Simulation依存待ち |
+| 1 | Management Client Foundation | Simulation Phase 36 command contract / baseline Gateway observation | ⏳ Simulation依存待ち |
 | 2 | World & Infrastructure Editing | Simulation Phase 36 editing commands | ⏳ Simulation依存待ち |
 | 3 | Runtime & Server Operations | Simulation Phase 36 runtime / config / Save commands | ⏳ Simulation依存待ち |
 | 4 | Management Safety & Production UX | permission / confirmation / stable error contract | ⏳ Simulation依存待ち |
@@ -28,7 +29,7 @@ Management Roadmapでは、依存を次の3種類に分ける。
 - **並行可能依存** — interfaceやshell等は先行できるが、integration / closeoutまでに必要な依存。
 - **統合依存** — 他Roadmapのcomponentを再利用すると有用だが、Management側の基礎責務そのものを開始するための必須条件ではない依存。
 
-ViewのSelection / Inspector / rendererをManagement UIで再利用することは**統合依存**であり、Management command clientそのものの必須依存にはしない。逆に、mutationに必要なserver-authoritative command contractは必須依存とする。
+ViewのSelection / Inspector / rendererをManagement UIで再利用することは**統合依存**であり、Management command clientそのものの必須依存にはしない。mutationに必要なserver-authoritative command contractはSimulationの必須依存、command結果をWorld表示へ反映するauthoritative再観測はGateway依存として分離する。
 
 ## Management Roadmap 運用ルール
 
@@ -36,7 +37,8 @@ ViewのSelection / Inspector / rendererをManagement UIで再利用すること�
 - mutationは必ずSimulation Roadmap側で定義されたserver-authoritative command境界を通す。
 - Client側のoptimistic mutationをauthoritative stateとして扱わない。
 - command pending / resultとauthoritative World observationは別stateとして管理する。
-- command成功後のWorld表示はObservation Gatewayから再取得したauthoritative observationを正とする。
+- command成功後のWorld表示はGatewayから再取得したauthoritative observationを正とする。
+- Observation Request / subscription / reconnect / resyncの変更が必要なら[`GATEWAY_ROADMAP.md`](GATEWAY_ROADMAP.md)へ切り分ける。
 - read-only表示には可能な限りView componentを再利用し、同じEntity描画・Selection・Inspectorを二重実装しない。
 - View componentへcommand clientを注入してmutation可能にする設計は避け、Management shell側で観測とcommandを組み合わせる。
 - Analytics / 統計分析 / trend / heatmap生成はManagementの必須責務に含めない。
@@ -64,20 +66,20 @@ ViewのSelection / Inspector / rendererをManagement UIで再利用すること�
 ## Management Phase 1 — Management Client Foundation
 
 > **状態: ⏳ Simulation依存待ち**  
-> **必須依存:** Simulation Phase 36の共通command request / result / authorization境界、authoritative resultを再観測できるObservation Gateway  
-> **統合依存:** View Phase 7のread-only Selection / Inspector（Management shellへ埋め込む場合）
+> **必須依存:** Simulation Phase 36の共通command request / result / authorization境界、Gateway Phase 1のbaseline read-only observation boundary  
+> **統合依存:** Gateway Phase 3のreconnect / resync強化、View Phase 7のread-only Selection / Inspector（Management shellへ埋め込む場合）
 
-- ⬜ **M1-001** — Management Clientとread-only Viewの責務境界をarchitecture / module dependencyとして固定する
+- ⬜ **M1-001** — Management Clientとread-only View / Gatewayの責務境界をarchitecture / module dependencyとして固定する
 - ⬜ **M1-002** — server-authoritative command request / resultを扱うManagement command clientを実装する
 - ⬜ **M1-003** — command pending / success / failureをViewのauthoritative observation stateと混同しないClient state modelを実装する
-- ⬜ **M1-004** — command成功後にObservation Gatewayから更新済みauthoritative stateを再観測する同期方針を実装する
+- ⬜ **M1-004** — command成功後にGatewayから更新済みauthoritative stateを再観測する同期方針を実装する
 - ⬜ **M1-005** — permission / capability metadataに基づき利用可能なManagement操作だけを表示する基盤を実装する
 - ⬜ **M1-006** — View component未実装 / 未接続でもManagement command clientのcontract testが成立するよう依存を分離する
 - ⬜ **M1-007** — Management Client FoundationのBrowser E2Eとarchitecture documentを同期する
 
 ### Management Phase 1 完了条件
 
-- View moduleをmutation可能にせず、Management shellからだけcommandを送信できる。
+- View / Gatewayをmutation可能にせず、Management shellからだけcommandを送信できる。
 - command結果とWorldのauthoritative observationを別stateとして扱える。
 - command failure時にClientだけWorld stateが進んだように見えない。
 - View Phase 7が未完了でもcommand client / result stateの基礎実装を独立して検証できる。
@@ -88,7 +90,7 @@ ViewのSelection / Inspector / rendererをManagement UIで再利用すること�
 
 > **状態: ⏳ Simulation依存待ち**  
 > **必須依存:** Management Phase 1 / Simulation Phase 36の対象build / edit / remove command  
-> **統合依存:** View Phase 3〜7の対象描画・Selection / Inspector（selection / preview / result確認へ再利用）
+> **統合依存:** Gatewayの対象domain delivery、View Phase 3〜7の対象描画・Selection / Inspector（selection / preview / result確認へ再利用）
 
 - ⬜ **M2-001** — Road / Lane build / edit / remove UIを実装する（旧`P36-005`のUI部分）
 - ⬜ **M2-002** — Building / POI / Parcel / Zone build / edit UIを実装する（旧`P36-006`のUI部分）
@@ -100,7 +102,7 @@ ViewのSelection / Inspector / rendererをManagement UIで再利用すること�
 - ⬜ **M2-008** — Radio Site / Antenna / Spectrum設定UIを実装する（旧`P36-012`のUI部分）
 - ⬜ **M2-009** — Geographic Feature名・Settlement / District / Road名・Road Sign override UIを実装する（旧`P36-013`のUI部分）
 - ⬜ **M2-010** — edit previewをView-local presentationとして表示し、確定前にauthoritative Worldへ混入させない
-- ⬜ **M2-011** — command成功後のauthoritative observationでpreviewを置換し、失敗時はpreviewだけを破棄する同期を実装する
+- ⬜ **M2-011** — command成功後のGateway authoritative observationでpreviewを置換し、失敗時はpreviewだけを破棄する同期を実装する
 - ⬜ **M2-012** — World & Infrastructure EditingのBrowser E2E / usability / performanceを検証する
 
 ### Management Phase 2 完了条件
@@ -116,19 +118,19 @@ ViewのSelection / Inspector / rendererをManagement UIで再利用すること�
 
 > **状態: ⏳ Simulation依存待ち**  
 > **必須依存:** Management Phase 1 / Simulation Phase 36のruntime / configuration / Save command  
-> **統合依存:** Observation Gateway / View Inspectorによるcurrent status表示
+> **統合依存:** Gateway Phase 3のWorld replacement / reconnect / resync、View Inspectorによるcurrent status表示
 
 - ⬜ **M3-001** — Simulation pause / resume / explicit step等の運転control UIを実装する（旧`P36-015`のUI部分）
 - ⬜ **M3-002** — runtime変更可能設定とrestart-required設定を区別するServer configuration UIを実装する（旧`P36-017`のUI部分）
 - ⬜ **M3-003** — current Save formatのSave / Load操作UIを実装する（旧`P36-018`のUI部分）
 - ⬜ **M3-004** — Server / Simulation current statusをread-only observationとして表示し、command操作と分離する
-- ⬜ **M3-005** — Save / LoadやWorld replacement後にObservation Gatewayのrevision / reconnect契約へ従いView / Management表示を再同期する
+- ⬜ **M3-005** — Save / LoadやWorld replacement後にGatewayのrevision / reconnect契約へ従いView / Management表示を再同期する
 - ⬜ **M3-006** — Runtime & Server OperationsのE2Eを追加する
 
 ### Management Phase 3 完了条件
 
 - 運転control、Server設定、Save / LoadをManagement UIから安全に実行できる。
-- 操作結果はServerのstructured resultとObservation Gateway上のauthoritative stateで確認できる。
+- 操作結果はServerのstructured resultとGateway上のauthoritative stateで確認できる。
 - World replacement後にClient-local cacheを正本として残さない。
 
 ---
@@ -137,7 +139,7 @@ ViewのSelection / Inspector / rendererをManagement UIで再利用すること�
 
 > **状態: ⏳ Simulation依存待ち**  
 > **必須依存:** Management Phase 1〜3 / stable error code / confirmation metadata / authorization  
-> **並行・統合依存:** 共通Client localization / formatting基盤（View Phase 10とresource基盤を共有可能）
+> **並行・統合依存:** 共通Client localization / formatting基盤（View Phase 10とresource基盤を共有可能）、Gateway reconnect / error delivery contract
 
 - ⬜ **M4-001** — destructive commandのconfirmation UIを実装する（旧`P36-019`のUI部分）
 - ⬜ **M4-002** — stable error code / structured parameterをManagement向け表示へ変換する
@@ -152,7 +154,7 @@ ViewのSelection / Inspector / rendererをManagement UIで再利用すること�
 
 - destructive / privileged操作を誤操作しにくいUI境界を持つ。
 - failureやreconnectがauthoritative World stateの誤表示へつながらない。
-- Management UIを無効化・未接続にしてもSimulationとViewの観測能力は独立して成立する。
+- Management UIを無効化・未接続にしてもSimulation / Gateway / Viewの観測能力は独立して成立する。
 - Management固有UIを複数localeへ追加してもSimulation / Protocol / Saveの言語非依存契約を壊さない。
 
 ---
@@ -161,7 +163,7 @@ ViewのSelection / Inspector / rendererをManagement UIで再利用すること�
 
 > **状態: ⏳ Simulation依存待ち**  
 > **必須依存:** Management Phase 1 / 4、Simulation Phase 38 Extension Platform  
-> **統合依存:** View Phase 12（View Addonの適用結果・read-only previewをManagementから確認する場合）
+> **統合依存:** GatewayのExtension observation、View Phase 12（View Addonの適用結果・read-only previewをManagementから確認する場合）
 
 Addonの存在・trust・dependency・conflict・設定を人間が管理するUIを提供する。model / material / rendering layer等のread-only View Addon適用そのものはView Roadmap Phase 12の責務とする。
 
@@ -181,8 +183,8 @@ Addonの存在・trust・dependency・conflict・設定を人間が管理するU
 
 - Addonのinstall / uninstall / enable / disable / update /設定変更をManagementから安全に行える。
 - trust / capability / dependency / conflictが操作前に確認できる。
-- Addon管理操作をView moduleへ持ち込まない。
-- Addonの最終状態はExtension Platformのauthoritative resultとObservationから確認する。
+- Addon管理操作をView / Gateway moduleへ持ち込まない。
+- Addonの最終状態はExtension Platformのauthoritative resultとGateway observationから確認する。
 - View Addonのrender / Inspector extension責務とAddon Managerのlifecycle操作責務を混在させない。
 
 ---
@@ -194,4 +196,4 @@ Addonの存在・trust・dependency・conflict・設定を人間が管理するU
 - role-specific management workspace
 - audit log viewer
 
-これらは実装時にSimulation / Security / Extension Platform側の依存を確認してPhase化する。
+これらは実装時にSimulation / Gateway / Security / Extension Platform側の依存を確認してPhase化する。
