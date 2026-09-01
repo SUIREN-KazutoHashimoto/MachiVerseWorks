@@ -53,12 +53,8 @@ export class VehicleStore implements ReadonlyVehicleStore {
     if (positions.length < required || scales.length < required || yawRadians.length < this.vehicles.size) throw new RangeError('Target vehicle transform buffers are too small.');
     let index = 0;
     for (const [vehicleId, vehicle] of this.vehicles) {
-      const position = this.interpolation.sample(vehicleId, now);
-      if (position === undefined) continue;
       const offset = index * 3;
-      positions[offset] = position.x;
-      positions[offset + 1] = position.y;
-      positions[offset + 2] = position.z;
+      if (!this.interpolation.writeSampledPosition(vehicleId, now, positions, offset)) continue;
       scales[offset] = vehicle.widthMeters;
       scales[offset + 1] = vehicle.heightMeters;
       scales[offset + 2] = vehicle.lengthMeters;
