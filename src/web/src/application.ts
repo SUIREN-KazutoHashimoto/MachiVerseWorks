@@ -3,18 +3,15 @@ import { AudioEngine } from './audio-engine.ts';
 import { ClientPerformanceMetrics } from './client-performance.ts';
 import { loadClientConfig } from './config.ts';
 import { MachiVerseConnection } from './connection.ts';
-import { EntityStore } from './entity-store.ts';
 import { initializeLocalization, type LocaleParameters } from './localization.ts';
-import { PedestrianStore } from './pedestrian-store.ts';
 import { MultimodalTransitMessageType, type MultimodalTransitProtocolMessage, type MultimodalTransitSnapshotMessage } from './multimodal-transit.ts';
 import { PopulationMessageType, type PopulationProtocolMessage, type PopulationStatisticsMessage, type PersonDebugMessage } from './population-protocol.ts';
-import { MessageType, ProtocolErrorCode, type AgentStateMessage, type PedestrianStateMessage, type ProtocolErrorMessage, type ProtocolMessage, type WorldVolume } from './protocol.ts';
+import { MessageType, ProtocolErrorCode, type AgentStateMessage, type ProtocolErrorMessage, type ProtocolMessage, type WorldVolume } from './protocol.ts';
 import { RailwayInfrastructureLayer, RailwayMessageType, type RailwayProtocolMessage } from './railway-infrastructure.ts';
 import { RailwayOperationsLayer, RailwayOperationsMessageType, type RailwayOperationsProtocolMessage, type RailwayOperationsSnapshotMessage } from './railway-operations.ts';
 import { isRetryableSubscriptionDetailCode } from './subscription-error-policy.ts';
 import { ClientUi } from './ui.ts';
-import { TrafficMessageType, type TrafficProtocolMessage, type VehicleStateMessage } from './traffic-protocol.ts';
-import { IntersectionControlStore, VehicleStore } from './traffic-store.ts';
+import { TrafficMessageType, type TrafficProtocolMessage } from './traffic-protocol.ts';
 import { WorldView } from './world-view.ts';
 import { ECONOMY_SNAPSHOT_MESSAGE_TYPE, type EconomyProtocolMessage, type EconomySnapshotMessage } from './economy-protocol.ts';
 import { LogisticsDebugOverlay } from './logistics-debug.ts';
@@ -29,14 +26,12 @@ import { OpticalDebugOverlay } from './optical-debug.ts';
 import { OPTICAL_SNAPSHOT_MESSAGE_TYPE, type OpticalProtocolMessage, type OpticalSnapshotMessage } from './optical-protocol.ts';
 import { RadioDebugOverlay } from './radio-debug.ts';
 import { RADIO_SNAPSHOT_MESSAGE_TYPE, SPECTRUM_SNAPSHOT_MESSAGE_TYPE, type RadioProtocolMessage, type RadioSnapshotMessage, type SpectrumSnapshotMessage } from './radio-protocol.ts';
+import { ViewObservationState, type ReadonlyViewObservationState } from './view-observation-state.ts';
 
 export class Application {
   private readonly localizer = initializeLocalization();
   private readonly config = loadClientConfig();
-  private readonly store = new EntityStore();
-  private readonly pedestrians = new PedestrianStore();
-  private readonly vehicles = new VehicleStore();
-  private readonly intersections = new IntersectionControlStore();
+  private readonly observation = new ViewObservationState();
   private readonly audio = new AudioEngine();
   private readonly ambient = new AmbientSystem(this.audio);
   private readonly performanceMetrics = import.meta.env.DEV ? new ClientPerformanceMetrics() : null;
@@ -80,7 +75,7 @@ export class Application {
         onProtocolError: (message) => this.handleProtocolError(message),
         onClientError: (error) => this.ui.showError(this.localizer.t('error.client', { detail: error.message })),
         onDisconnected: () => {
-          this.store.clear(); this.pedestrians.clear(); this.vehicles.clear(); this.intersections.clear(); this.railway.clear(); this.railwayOperations.clear(); this.view.clearRoadNetwork();
+          this.observation.resetConnectionState(); this.railway.clear(); this.railwayOperations.clear(); this.view.clearRoadNetwork();
           this.ui.setAgentCount(0); this.ui.clearPopulation(); this.ui.clearRailwayOperations(); this.ui.clearMultimodalTransit(); this.ui.clearEconomy();
           this.logisticsDebug.clear(); this.powerDebug.clear(); this.waterSewerDebug.clear(); this.gasDebug.clear(); this.opticalDebug.clear(); this.radioDebug.clear(); this.ui.setProtocol(null);
         },
@@ -95,6 +90,8 @@ export class Application {
     window.addEventListener('resize', this.handleResize);
   }
 
+  public get state(): ReadonlyViewObservationState { return this.observation; }
+
   public start(): void { if (this.disposed) throw new Error('Application is disposed.'); this.connection.connect(); this.animationFrame = window.requestAnimationFrame(this.animate); }
   public dispose(): void {
     if (this.disposed) return;
@@ -105,7 +102,7 @@ export class Application {
   private readonly animate = (now: number): void => {
     if (this.disposed) return;
     const performanceMetrics = this.performanceMetrics; if (performanceMetrics !== null) performanceMetrics.recordAnimationFrame(now);
-    this.updateSubscription(now); this.view.render(this.store, now, this.pedestrians, this.vehicles, this.intersections); this.audio.syncListenerFromCamera(this.view.camera); this.updateAudio(now); if (performanceMetrics !== null) this.updatePerformanceUi(now, performanceMetrics); this.animationFrame = window.requestAnimationFrame(this.animate);
+    this.updateSubscription(now); this.view.render(this.observation.entities, now, this.observation.pedestrians, this.observation.vehicles, this.observation.intersections); this.audio.syncListenerFromCamera(this.view.camera); this.updateAudio(now); if (performanceMetrics !== null) this.updatePerformanceUi(now, performanceMetrics); this.animationFrame = window.requestAnimationFrame(this.animate);
   };
 
   private updateSubscription(now: number): void {
@@ -121,17 +118,22 @@ export class Application {
 
   private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage | MultimodalTransitProtocolMessage | EconomyProtocolMessage | LogisticsProtocolMessage | PowerProtocolMessage | WaterSewerProtocolMessage | GasProtocolMessage | OpticalProtocolMessage | RadioProtocolMessage): void {
     switch (message.type) {
-      case MessageType.AgentSpawn: this.applyAgentSpawn(message); return;
-      case MessageType.AgentUpdate: this.applyAgentUpdate(message); return;
-      case MessageType.AgentRemove: { const removed = this.store.remove(message.agentId); this.audio.removeEntity(message.agentId); if (removed) this.ui.setAgentCount(this.store.size); return; }
-      case MessageType.PedestrianSpawn: this.applyPedestrianSpawn(message); return;
-      case MessageType.PedestrianUpdate: this.applyPedestrianUpdate(message); return;
-      case MessageType.PedestrianRemove: this.pedestrians.remove(message.pedestrianId); return;
-      case MessageType.RoadNetworkSnapshot: this.view.applyRoadNetwork(message); return;
-      case TrafficMessageType.VehicleSpawn: this.applyVehicleSpawn(message); return;
-      case TrafficMessageType.VehicleUpdate: this.applyVehicleUpdate(message); return;
-      case TrafficMessageType.VehicleRemove: this.vehicles.remove(message.vehicleId); return;
-      case TrafficMessageType.IntersectionControlSnapshot: this.intersections.apply(message); return;
+      case MessageType.AgentSpawn:
+      case MessageType.AgentUpdate:
+        this.observation.apply(message); this.updateEntityAudioPosition(message); this.ui.setAgentCount(this.observation.entities.size); return;
+      case MessageType.AgentRemove:
+        this.observation.apply(message); this.audio.removeEntity(message.agentId); this.ui.setAgentCount(this.observation.entities.size); return;
+      case MessageType.PedestrianSpawn:
+      case MessageType.PedestrianUpdate:
+      case MessageType.PedestrianRemove:
+        this.observation.apply(message); return;
+      case MessageType.RoadNetworkSnapshot:
+        this.observation.apply(message); this.view.applyRoadNetwork(message); return;
+      case TrafficMessageType.VehicleSpawn:
+      case TrafficMessageType.VehicleUpdate:
+      case TrafficMessageType.VehicleRemove:
+      case TrafficMessageType.IntersectionControlSnapshot:
+        this.observation.apply(message); return;
       case PopulationMessageType.PopulationStatistics: this.applyPopulationStatistics(message); return;
       case PopulationMessageType.PersonDebug: this.applyPersonDebug(message); return;
       case RailwayMessageType.RailwayInfrastructureSnapshot: this.railway.apply(message); return;
@@ -152,12 +154,6 @@ export class Application {
     }
   }
 
-  private applyAgentSpawn(message: AgentStateMessage): void { const previousSize = this.store.size; this.store.spawn(message); this.updateEntityAudioPosition(message); if (this.store.size !== previousSize) this.ui.setAgentCount(this.store.size); }
-  private applyAgentUpdate(message: AgentStateMessage): void { if (!this.store.update(message)) { this.store.spawn(message); this.ui.setAgentCount(this.store.size); } this.updateEntityAudioPosition(message); }
-  private applyPedestrianSpawn(message: PedestrianStateMessage): void { this.pedestrians.spawn(message); }
-  private applyPedestrianUpdate(message: PedestrianStateMessage): void { if (!this.pedestrians.update(message)) this.pedestrians.spawn(message); }
-  private applyVehicleSpawn(message: VehicleStateMessage): void { this.vehicles.spawn(message); }
-  private applyVehicleUpdate(message: VehicleStateMessage): void { if (!this.vehicles.update(message)) this.vehicles.spawn(message); }
   private applyPopulationStatistics(message: PopulationStatisticsMessage): void { this.ui.setPopulationStatistics(message); }
   private applyPersonDebug(message: PersonDebugMessage): void { this.ui.setPersonDebug(message); }
   private applyRailwayOperations(message: RailwayOperationsSnapshotMessage): void { this.railwayOperations.apply(message); this.ui.setRailwayOperations(message); }
