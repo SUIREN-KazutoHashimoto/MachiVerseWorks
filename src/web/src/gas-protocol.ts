@@ -13,7 +13,7 @@ const PIPELINE_PAYLOAD_LENGTH = 33;
 const FACILITY_PAYLOAD_LENGTH = 42;
 const SERVICE_POINT_PAYLOAD_LENGTH = 74;
 
-export enum GasNodeKind { Source = 0, ImportTerminal = 1, Storage = 2, Distribution = 3, Service = 4 }
+export enum GasNodeKind { Source = 0, ImportTerminal = 1, Storage = 2, Distribution = 3, Service = 4, Regulator = 5 }
 export enum GasFacilityKind { Source = 0, ImportTerminal = 1, Storage = 2 }
 export enum GasOperatingState { Online = 0, Offline = 1 }
 export enum GasDeliveryMode { Piped = 0, Delivered = 1 }
@@ -130,7 +130,7 @@ export function decodeGasFrame(frame: ArrayBuffer): GasProtocolEnvelope {
 function validateStatistics(value: GasStatistics): void {
   if ([value.supplyCapacityCubicMetersPerDay, value.demandCubicMetersPerDay, value.servedCubicMetersPerDay, value.unservedCubicMetersPerDay, value.storedCubicMeters].some((item) => !nonNegative(item)) || value.servedCubicMetersPerDay > value.demandCubicMetersPerDay + 1e-9) throw new ProtocolDecodeFailure('Gas statistics are invalid.');
 }
-function validNode(value: GasNode): boolean { return value.nodeId !== 0n && value.kind >= GasNodeKind.Source && value.kind <= GasNodeKind.Service && Number.isFinite(value.x) && Number.isFinite(value.y) && Number.isFinite(value.z); }
+function validNode(value: GasNode): boolean { return value.nodeId !== 0n && value.kind >= GasNodeKind.Source && value.kind <= GasNodeKind.Regulator && Number.isFinite(value.x) && Number.isFinite(value.y) && Number.isFinite(value.z); }
 function validPipeline(value: GasPipeline): boolean { return value.pipelineId !== 0n && value.fromNodeId !== 0n && value.toNodeId !== 0n && value.fromNodeId !== value.toNodeId && positive(value.capacityCubicMetersPerDay); }
 function validFacility(value: GasFacility): boolean { return value.kind >= GasFacilityKind.Source && value.kind <= GasFacilityKind.Storage && value.facilityId !== 0n && value.nodeId !== 0n && positive(value.capacityCubicMetersPerDay) && nonNegative(value.outputCubicMetersPerDay) && nonNegative(value.storedCubicMeters) && value.outputCubicMetersPerDay <= value.capacityCubicMetersPerDay + 1e-9 && (value.operatingState === GasOperatingState.Online || value.operatingState === GasOperatingState.Offline); }
 function validServicePoint(value: GasServicePoint): boolean {
