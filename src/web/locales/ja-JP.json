@@ -60,5 +60,10 @@
   "waterSewerDebug.waiting": "上下水道: スナップショット待機中",
   "waterSewerDebug.summary": "上下水道 Tick {tick} / 上水停止 {waterUnavailable} / 下水停止 {sewerUnavailable} / 越流 {overflow}",
   "waterSewerDebug.water": "上水 {served}/{demand} m3/day / 供給容量 {capacity}",
-  "waterSewerDebug.wastewater": "下水 {processed}/{generated} m3/day / 越流 {overflow} m3/day"
+  "waterSewerDebug.wastewater": "下水 {processed}/{generated} m3/day / 越流 {overflow} m3/day",
+  "gasDebug.ariaLabel": "ガス供給ネットワークのデバッグ表示",
+  "gasDebug.waiting": "ガス: スナップショット待機中",
+  "gasDebug.summary": "ガス Tick {tick} / 供給停止 {unavailable} / 配管 {piped} / 配送 {delivered}",
+  "gasDebug.flow": "供給 {served}/{demand} m3/day / 供給容量 {capacity}",
+  "gasDebug.storage": "貯蔵 {stored} m3 / 未供給 {unserved} m3/day"
 }

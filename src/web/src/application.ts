@@ -23,6 +23,8 @@ import { PowerDebugOverlay } from './power-debug.ts';
 import { POWER_SNAPSHOT_MESSAGE_TYPE, type PowerProtocolMessage, type PowerSnapshotMessage } from './power-protocol.ts';
 import { WaterSewerDebugOverlay } from './water-sewer-debug.ts';
 import { WATER_SEWER_SNAPSHOT_MESSAGE_TYPE, type WaterSewerProtocolMessage, type WaterSewerSnapshotMessage } from './water-sewer-protocol.ts';
+import { GasDebugOverlay } from './gas-debug.ts';
+import { GAS_SNAPSHOT_MESSAGE_TYPE, type GasProtocolMessage, type GasSnapshotMessage } from './gas-protocol.ts';
 
 export class Application {
   private readonly localizer = initializeLocalization();
@@ -41,6 +43,7 @@ export class Application {
   private readonly logisticsDebug: LogisticsDebugOverlay;
   private readonly powerDebug: PowerDebugOverlay;
   private readonly waterSewerDebug: WaterSewerDebugOverlay;
+  private readonly gasDebug: GasDebugOverlay;
   private readonly connection: MachiVerseConnection;
   private animationFrame = 0;
   private lastSubscriptionAt = Number.NEGATIVE_INFINITY;
@@ -59,6 +62,7 @@ export class Application {
     this.logisticsDebug = new LogisticsDebugOverlay(host);
     this.powerDebug = new PowerDebugOverlay(host);
     this.waterSewerDebug = new WaterSewerDebugOverlay(host);
+    this.gasDebug = new GasDebugOverlay(host, this.localizer);
     this.connection = new MachiVerseConnection(
       this.config.serverUrl,
       { minimumDelayMs: this.config.reconnectMinimumDelayMs, maximumDelayMs: this.config.reconnectMaximumDelayMs },
@@ -68,22 +72,9 @@ export class Application {
         onProtocolError: (message) => this.handleProtocolError(message),
         onClientError: (error) => this.ui.showError(this.localizer.t('error.client', { detail: error.message })),
         onDisconnected: () => {
-          this.store.clear();
-          this.pedestrians.clear();
-          this.vehicles.clear();
-          this.intersections.clear();
-          this.railway.clear();
-          this.railwayOperations.clear();
-          this.view.clearRoadNetwork();
-          this.ui.setAgentCount(0);
-          this.ui.clearPopulation();
-          this.ui.clearRailwayOperations();
-          this.ui.clearMultimodalTransit();
-          this.ui.clearEconomy();
-          this.logisticsDebug.clear();
-          this.powerDebug.clear();
-          this.waterSewerDebug.clear();
-          this.ui.setProtocol(null);
+          this.store.clear(); this.pedestrians.clear(); this.vehicles.clear(); this.intersections.clear(); this.railway.clear(); this.railwayOperations.clear(); this.view.clearRoadNetwork();
+          this.ui.setAgentCount(0); this.ui.clearPopulation(); this.ui.clearRailwayOperations(); this.ui.clearMultimodalTransit(); this.ui.clearEconomy();
+          this.logisticsDebug.clear(); this.powerDebug.clear(); this.waterSewerDebug.clear(); this.gasDebug.clear(); this.ui.setProtocol(null);
         },
         onHelloAck: (version) => { this.ui.clearError(); this.ui.setProtocol(version); },
         ...(performanceMetrics === null ? {} : { onFrameDecoded: (metrics: { readonly frameBytes: number; readonly decodeTimeMs: number }) => performanceMetrics.recordDecode(metrics.frameBytes, metrics.decodeTimeMs) }),
@@ -99,59 +90,28 @@ export class Application {
   public start(): void { if (this.disposed) throw new Error('Application is disposed.'); this.connection.connect(); this.animationFrame = window.requestAnimationFrame(this.animate); }
   public dispose(): void {
     if (this.disposed) return;
-    this.disposed = true;
-    window.cancelAnimationFrame(this.animationFrame);
-    window.removeEventListener('resize', this.handleResize);
-    this.connection.disconnect();
-    this.audio.dispose();
-    this.railway.dispose();
-    this.railwayOperations.dispose();
-    this.logisticsDebug.dispose();
-    this.powerDebug.dispose();
-    this.waterSewerDebug.dispose();
-    this.view.dispose();
-    this.ui.dispose();
+    this.disposed = true; window.cancelAnimationFrame(this.animationFrame); window.removeEventListener('resize', this.handleResize); this.connection.disconnect(); this.audio.dispose(); this.railway.dispose(); this.railwayOperations.dispose(); this.logisticsDebug.dispose(); this.powerDebug.dispose(); this.waterSewerDebug.dispose(); this.gasDebug.dispose(); this.view.dispose(); this.ui.dispose();
   }
   private readonly handleResize = (): void => { this.view.resize(); };
 
   private readonly animate = (now: number): void => {
     if (this.disposed) return;
-    const performanceMetrics = this.performanceMetrics;
-    if (performanceMetrics !== null) performanceMetrics.recordAnimationFrame(now);
-    this.updateSubscription(now);
-    this.view.render(this.store, now, this.pedestrians, this.vehicles, this.intersections);
-    this.audio.syncListenerFromCamera(this.view.camera);
-    this.updateAudio(now);
-    if (performanceMetrics !== null) this.updatePerformanceUi(now, performanceMetrics);
-    this.animationFrame = window.requestAnimationFrame(this.animate);
+    const performanceMetrics = this.performanceMetrics; if (performanceMetrics !== null) performanceMetrics.recordAnimationFrame(now);
+    this.updateSubscription(now); this.view.render(this.store, now, this.pedestrians, this.vehicles, this.intersections); this.audio.syncListenerFromCamera(this.view.camera); this.updateAudio(now); if (performanceMetrics !== null) this.updatePerformanceUi(now, performanceMetrics); this.animationFrame = window.requestAnimationFrame(this.animate);
   };
 
   private updateSubscription(now: number): void {
-    if (now - this.lastSubscriptionAt < this.config.subscriptionRefreshMs) return;
-    this.lastSubscriptionAt = now;
-    const volume = this.view.getSubscriptionVolume();
-    if (this.lastSubscription !== null && volumesNearlyEqual(this.lastSubscription, volume)) return;
-    this.connection.setSubscription(volume);
-    this.lastSubscription = volume;
+    if (now - this.lastSubscriptionAt < this.config.subscriptionRefreshMs) return; this.lastSubscriptionAt = now; const volume = this.view.getSubscriptionVolume(); if (this.lastSubscription !== null && volumesNearlyEqual(this.lastSubscription, volume)) return; this.connection.setSubscription(volume); this.lastSubscription = volume;
   }
 
   private updateAudio(now: number): void {
-    if (this.audioSyncPending || now - this.lastAudioSyncAt < 200) return;
-    this.lastAudioSyncAt = now;
-    this.audioSyncPending = true;
-    const listener = this.view.getListenerPosition();
-    void Promise.all([this.audio.syncSpatialVoices(listener), this.ambient.update(listener)])
-      .catch((error: unknown) => { if (this.disposed) return; const detail = error instanceof Error ? error.message : String(error); this.ui.showError(this.localizer.t('error.client', { detail })); })
-      .finally(() => { this.audioSyncPending = false; });
+    if (this.audioSyncPending || now - this.lastAudioSyncAt < 200) return; this.lastAudioSyncAt = now; this.audioSyncPending = true; const listener = this.view.getListenerPosition();
+    void Promise.all([this.audio.syncSpatialVoices(listener), this.ambient.update(listener)]).catch((error: unknown) => { if (this.disposed) return; const detail = error instanceof Error ? error.message : String(error); this.ui.showError(this.localizer.t('error.client', { detail })); }).finally(() => { this.audioSyncPending = false; });
   }
 
-  private updatePerformanceUi(now: number, metrics: ClientPerformanceMetrics): void {
-    if (now - this.lastPerformanceUiAt < 500) return;
-    this.lastPerformanceUiAt = now;
-    this.ui.setPerformanceMetrics(metrics.snapshot());
-  }
+  private updatePerformanceUi(now: number, metrics: ClientPerformanceMetrics): void { if (now - this.lastPerformanceUiAt < 500) return; this.lastPerformanceUiAt = now; this.ui.setPerformanceMetrics(metrics.snapshot()); }
 
-  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage | MultimodalTransitProtocolMessage | EconomyProtocolMessage | LogisticsProtocolMessage | PowerProtocolMessage | WaterSewerProtocolMessage): void {
+  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage | MultimodalTransitProtocolMessage | EconomyProtocolMessage | LogisticsProtocolMessage | PowerProtocolMessage | WaterSewerProtocolMessage | GasProtocolMessage): void {
     switch (message.type) {
       case MessageType.AgentSpawn: this.applyAgentSpawn(message); return;
       case MessageType.AgentUpdate: this.applyAgentUpdate(message); return;
@@ -173,11 +133,11 @@ export class Application {
       case LOGISTICS_SNAPSHOT_MESSAGE_TYPE: this.applyLogistics(message); return;
       case POWER_SNAPSHOT_MESSAGE_TYPE: this.applyPower(message); return;
       case WATER_SEWER_SNAPSHOT_MESSAGE_TYPE: this.applyWaterSewer(message); return;
+      case GAS_SNAPSHOT_MESSAGE_TYPE: this.applyGas(message); return;
       case MessageType.Hello:
       case MessageType.HelloAck:
       case MessageType.SubscribeVolume:
-      case MessageType.Error:
-        return;
+      case MessageType.Error: return;
     }
   }
 
@@ -195,25 +155,16 @@ export class Application {
   private applyLogistics(message: LogisticsSnapshotMessage): void { this.logisticsDebug.apply(message); }
   private applyPower(message: PowerSnapshotMessage): void { this.powerDebug.apply(message); }
   private applyWaterSewer(message: WaterSewerSnapshotMessage): void { this.waterSewerDebug.apply(message); }
+  private applyGas(message: GasSnapshotMessage): void { this.gasDebug.apply(message); }
   private updateEntityAudioPosition(message: AgentStateMessage): void { if (this.audio.hasEntityEmitters(message.agentId)) this.audio.updateEntityPosition(message.agentId, { x: message.x, y: message.y, z: message.z }); }
 
   private handleProtocolError(message: ProtocolErrorMessage): void {
-    const parameters: Record<string, string> = {};
-    for (const parameter of message.parameters) parameters[parameter.key] = parameter.value;
-    if (message.code === ProtocolErrorCode.InvalidRequest && isRetryableSubscriptionDetailCode(parameters.detailCode) && this.view.zoomInForSubscriptionRetry()) {
-      this.lastSubscription = null;
-      this.lastSubscriptionAt = Number.NEGATIVE_INFINITY;
-      this.ui.clearError();
-      return;
-    }
-    parameters.code = String(message.code);
-    const key = `error.protocol.${String(message.code)}`;
-    const localized = this.localizer.t(key, parameters as LocaleParameters);
-    this.ui.showError(localized === key ? this.localizer.t('error.protocol.unknown', { code: message.code }) : localized);
+    const parameters: Record<string, string> = {}; for (const parameter of message.parameters) parameters[parameter.key] = parameter.value;
+    if (message.code === ProtocolErrorCode.InvalidRequest && isRetryableSubscriptionDetailCode(parameters.detailCode) && this.view.zoomInForSubscriptionRetry()) { this.lastSubscription = null; this.lastSubscriptionAt = Number.NEGATIVE_INFINITY; this.ui.clearError(); return; }
+    parameters.code = String(message.code); const key = `error.protocol.${String(message.code)}`; const localized = this.localizer.t(key, parameters as LocaleParameters); this.ui.showError(localized === key ? this.localizer.t('error.protocol.unknown', { code: message.code }) : localized);
   }
 }
 
 function volumesNearlyEqual(left: WorldVolume, right: WorldVolume): boolean {
-  const epsilon = 0.5;
-  return Math.abs(left.minX - right.minX) < epsilon && Math.abs(left.minY - right.minY) < epsilon && Math.abs(left.minZ - right.minZ) < epsilon && Math.abs(left.maxX - right.maxX) < epsilon && Math.abs(left.maxY - right.maxY) < epsilon && Math.abs(left.maxZ - right.maxZ) < epsilon;
+  const epsilon = 0.5; return Math.abs(left.minX - right.minX) < epsilon && Math.abs(left.minY - right.minY) < epsilon && Math.abs(left.minZ - right.minZ) < epsilon && Math.abs(left.maxX - right.maxX) < epsilon && Math.abs(left.maxY - right.maxY) < epsilon && Math.abs(left.maxZ - right.maxZ) < epsilon;
 }
