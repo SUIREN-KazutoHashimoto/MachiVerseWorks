@@ -5,6 +5,7 @@ MachiVerseWorks のドキュメント入口です。
 ## まず読む
 
 - プロジェクト全体の概要: [`../README.md`](../README.md)
+- 3 Roadmapの責務・依存関係の索引: [`../roadmap/README.md`](../roadmap/README.md)
 - Simulation側の現在地と次の作業: [`../roadmap/SIMULATION_ROADMAP.md`](../roadmap/SIMULATION_ROADMAP.md)
 - View側の現在地と次の作業: [`../roadmap/VIEW_ROADMAP.md`](../roadmap/VIEW_ROADMAP.md)
 - Management側の現在地と次の作業: [`../roadmap/MANAGEMENT_ROADMAP.md`](../roadmap/MANAGEMENT_ROADMAP.md)
@@ -23,7 +24,7 @@ MachiVerseWorks のドキュメント入口です。
 | [`archive/`](archive/) | Legacy資料、完了済みRoadmap履歴、廃止設計、過去の実験記録 | [`archive/README.md`](archive/README.md) |
 
 > [!NOTE]
-> `docs/roadmap/` は詳細な計画・設計メモの置き場です。実装Phase / Task状態の正本はルートの [`../roadmap/SIMULATION_ROADMAP.md`](../roadmap/SIMULATION_ROADMAP.md)、[`../roadmap/VIEW_ROADMAP.md`](../roadmap/VIEW_ROADMAP.md)、[`../roadmap/MANAGEMENT_ROADMAP.md`](../roadmap/MANAGEMENT_ROADMAP.md) です。
+> `docs/roadmap/` は詳細な計画・設計メモの置き場です。実装Phase / Task状態の正本はルートの [`../roadmap/SIMULATION_ROADMAP.md`](../roadmap/SIMULATION_ROADMAP.md)、[`../roadmap/VIEW_ROADMAP.md`](../roadmap/VIEW_ROADMAP.md)、[`../roadmap/MANAGEMENT_ROADMAP.md`](../roadmap/MANAGEMENT_ROADMAP.md) です。3 Roadmap間の責務と依存関係の読み方は[`../roadmap/README.md`](../roadmap/README.md)を索引とします。
 
 ## 大きな責務境界
 
