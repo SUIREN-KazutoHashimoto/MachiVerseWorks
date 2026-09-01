@@ -20,6 +20,7 @@ public enum CommodityKind : byte
     GeneralGoods = 0,
     Food = 1,
     IndustrialGoods = 2,
+    Gas = 3,
 }
 
 public enum InventoryRole : byte

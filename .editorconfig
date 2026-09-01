@@ -26,3 +26,8 @@ csharp_new_line_before_open_brace = all
 csharp_indent_case_contents = true
 csharp_indent_switch_labels = true
 csharp_space_after_cast = false
+
+[src/MachiVerseWorks.Simulation/SimulationWorld.Gas.cs]
+dotnet_diagnostic.CA1512.severity = none
+# IGasSupplySolver is an intentional substitution boundary; keep the field interface-typed.
+dotnet_diagnostic.CA1859.severity = none

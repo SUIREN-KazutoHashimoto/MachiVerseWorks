@@ -113,6 +113,11 @@ jobs:
             script: scripts/run-phase24-e2e.sh
             artifacts: .artifacts/phase24-e2e
             timeout: 15
+          - id: gas
+            name: gas-pipeline-delivery-server-browser
+            script: scripts/run-phase25-e2e.sh
+            artifacts: .artifacts/phase25-e2e
+            timeout: 15
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

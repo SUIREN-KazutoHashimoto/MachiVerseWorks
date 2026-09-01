@@ -139,6 +139,7 @@ public static partial class WorldSaveSerializer
             if (reader.ValueTextEquals("logistics")) return NestedSaveProperty.Logistics;
             if (reader.ValueTextEquals("power")) return NestedSaveProperty.Power;
             if (reader.ValueTextEquals("waterSewer")) return NestedSaveProperty.WaterSewer;
+            if (reader.ValueTextEquals("gas")) return NestedSaveProperty.Gas;
         }
         else if (context == NestedSaveContext.Logistics)
         {
@@ -166,6 +167,15 @@ public static partial class WorldSaveSerializer
             if (reader.ValueTextEquals("treatmentPlants")) return NestedSaveProperty.TreatmentPlants;
             if (reader.ValueTextEquals("servicePoints")) return NestedSaveProperty.ServicePoints;
         }
+        else if (context == NestedSaveContext.Gas)
+        {
+            if (reader.ValueTextEquals("nodes")) return NestedSaveProperty.GasNodes;
+            if (reader.ValueTextEquals("pipelines")) return NestedSaveProperty.GasPipelines;
+            if (reader.ValueTextEquals("sources")) return NestedSaveProperty.GasSources;
+            if (reader.ValueTextEquals("importTerminals")) return NestedSaveProperty.GasImportTerminals;
+            if (reader.ValueTextEquals("storages")) return NestedSaveProperty.GasStorages;
+            if (reader.ValueTextEquals("servicePoints")) return NestedSaveProperty.GasServicePoints;
+        }
         return NestedSaveProperty.Other;
     }
 
@@ -178,6 +188,7 @@ public static partial class WorldSaveSerializer
             (NestedSaveContext.Economy, NestedSaveProperty.Logistics) => NestedSaveContext.Logistics,
             (NestedSaveContext.Economy, NestedSaveProperty.Power) => NestedSaveContext.Power,
             (NestedSaveContext.Economy, NestedSaveProperty.WaterSewer) => NestedSaveContext.WaterSewer,
+            (NestedSaveContext.Economy, NestedSaveProperty.Gas) => NestedSaveContext.Gas,
             _ => NestedSaveContext.Other,
         };
 
@@ -220,6 +231,12 @@ public static partial class WorldSaveSerializer
             (NestedSaveContext.WaterSewer, NestedSaveProperty.Pumps) => new(limits.MaximumBuildingCount, "simulation.economy.waterSewer.pumps", NestedArrayKind.None),
             (NestedSaveContext.WaterSewer, NestedSaveProperty.TreatmentPlants) => new(limits.MaximumBuildingCount, "simulation.economy.waterSewer.treatmentPlants", NestedArrayKind.None),
             (NestedSaveContext.WaterSewer, NestedSaveProperty.ServicePoints) => new(limits.MaximumBuildingCount, "simulation.economy.waterSewer.servicePoints", NestedArrayKind.None),
+            (NestedSaveContext.Gas, NestedSaveProperty.GasNodes) => new(limits.MaximumRoadNodeCount, "simulation.economy.gas.nodes", NestedArrayKind.None),
+            (NestedSaveContext.Gas, NestedSaveProperty.GasPipelines) => new(limits.MaximumRoadSegmentCount, "simulation.economy.gas.pipelines", NestedArrayKind.None),
+            (NestedSaveContext.Gas, NestedSaveProperty.GasSources) => new(limits.MaximumBuildingCount, "simulation.economy.gas.sources", NestedArrayKind.None),
+            (NestedSaveContext.Gas, NestedSaveProperty.GasImportTerminals) => new(limits.MaximumBuildingCount, "simulation.economy.gas.importTerminals", NestedArrayKind.None),
+            (NestedSaveContext.Gas, NestedSaveProperty.GasStorages) => new(limits.MaximumBuildingCount, "simulation.economy.gas.storages", NestedArrayKind.None),
+            (NestedSaveContext.Gas, NestedSaveProperty.GasServicePoints) => new(limits.MaximumBuildingCount, "simulation.economy.gas.servicePoints", NestedArrayKind.None),
             _ => new(int.MaxValue, null, NestedArrayKind.None),
         };
 
@@ -228,7 +245,7 @@ public static partial class WorldSaveSerializer
 
     private enum NestedSaveContext : byte
     {
-        Other, Root, Simulation, Vehicle, Person, BlockSection, Depot, RailwayOperations, RailwayRoute, Timetable, Economy, Logistics, Power, WaterSewer,
+        Other, Root, Simulation, Vehicle, Person, BlockSection, Depot, RailwayOperations, RailwayRoute, Timetable, Economy, Logistics, Power, WaterSewer, Gas,
     }
 
     private enum NestedSaveProperty : byte
@@ -236,6 +253,7 @@ public static partial class WorldSaveSerializer
         Other, Simulation, Vehicles, Persons, BlockSections, Depots, RailwayOperations, RouteSteps, Schedule, Needs, SegmentIds, TrackSegmentIds, Routes, Timetables, Stops,
         Economy, Logistics, Commodities, Inventories, Orders, Shipments, Power, PowerNodes, PowerLines, Generators, PowerLoads,
         WaterSewer, WaterNodes, WaterPipes, SewerNodes, SewerPipes, WaterSources, Reservoirs, Pumps, TreatmentPlants, ServicePoints,
+        Gas, GasNodes, GasPipelines, GasSources, GasImportTerminals, GasStorages, GasServicePoints,
     }
 
     private enum NestedArrayKind : byte { None, TimetableStops }

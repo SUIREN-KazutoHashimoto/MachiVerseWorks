@@ -29,7 +29,8 @@ public sealed partial class SimulationWorld
                 var weight = Math.Max(1, _economyJobs.Where(item => item.EstablishmentId == establishment.Id).Sum(static item => item.RequiredWorkerCount));
                 var powerAvailability = GetEstablishmentPowerAvailabilityFactor(establishment.Id);
                 var waterSewerAvailability = GetEstablishmentWaterSewerAvailabilityFactor(establishment.Id);
-                weightedAvailability += Math.Min(powerAvailability, waterSewerAvailability) * weight;
+                var gasAvailability = GetEstablishmentGasAvailabilityFactor(establishment.Id);
+                weightedAvailability += Math.Min(Math.Min(powerAvailability, waterSewerAvailability), gasAvailability) * weight;
                 totalWeight += weight;
             }
 

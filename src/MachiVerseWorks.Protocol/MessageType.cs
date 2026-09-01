@@ -27,5 +27,6 @@ public enum MessageType : ushort
     LogisticsSnapshot = 740,
     PowerSnapshot = 750,
     WaterSewerSnapshot = 760,
+    GasSnapshot = 770,
     Error = 900,
 }

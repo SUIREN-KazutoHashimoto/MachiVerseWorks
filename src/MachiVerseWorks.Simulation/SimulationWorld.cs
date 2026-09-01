@@ -12,7 +12,8 @@ public sealed partial class SimulationWorld
         SimulationConfig? config = null,
         IPowerDispatchSolver? powerDispatchSolver = null,
         IWaterSupplySolver? waterSupplySolver = null,
-        ISewerSolver? sewerSolver = null)
+        ISewerSolver? sewerSolver = null,
+        IGasSupplySolver? gasSupplySolver = null)
     {
         Config = config ?? new SimulationConfig();
         _spatialIndex = new SpatialIndex(Config.SpatialCellSize);
@@ -22,6 +23,7 @@ public sealed partial class SimulationWorld
         _powerDispatchSolver = powerDispatchSolver ?? new CapacityPowerDispatchSolver();
         _waterSupplySolver = waterSupplySolver ?? new CapacityWaterSupplySolver();
         _sewerSolver = sewerSolver ?? new CapacitySewerSolver();
+        _gasSupplySolver = new ValidatingGasSupplySolver(gasSupplySolver ?? new CapacityGasSupplySolver());
         _random = new DeterministicRandom(Config.Seed);
         Time = default;
     }
@@ -65,6 +67,7 @@ public sealed partial class SimulationWorld
         CapturePowerProductionBaselines();
         StepPower(nextTime);
         StepWaterSewer(nextTime);
+        StepGas(nextTime);
         StepEconomy(nextTime);
         ApplyPowerOperationalConstraints();
         StepLogistics(nextTime);
@@ -112,7 +115,7 @@ public sealed partial class SimulationWorld
             _railwayOperations?.NextServiceId ?? 1UL, railwayOperations?.Services ?? Array.Empty<RailwayServiceSnapshot>(),
             _railwayOperations?.NextTrainId ?? 1UL, railwayOperations?.Trains ?? Array.Empty<TrainSnapshot>(),
             _multimodalTransit.CreateCheckpoint(Time.TickCount),
-            CreateEconomyCheckpointWithWaterSewer());
+            CreateEconomyCheckpointWithGas());
     }
 
     public static SimulationWorld RestoreCheckpoint(SimulationCheckpoint checkpoint)
@@ -144,6 +147,8 @@ public sealed partial class SimulationWorld
         ValidateLogisticsCheckpoint(checkpoint);
         ValidatePowerCheckpoint(checkpoint);
         ValidateWaterSewerCheckpoint(checkpoint);
+        ValidateGasCheckpoint(checkpoint);
+        ValidateDeliveredGasCheckpointInvariants(checkpoint);
         var expectedElapsedTicks = CalculateExpectedElapsedTicks(checkpoint.TickCount, config.TickRate);
         if (checkpoint.ElapsedTicks != expectedElapsedTicks
             && (!TryCalculateLegacyElapsedTicks(checkpoint.TickCount, config.TickRate, out var legacyElapsedTicks)
@@ -180,6 +185,7 @@ public sealed partial class SimulationWorld
         world.RestoreLogistics(checkpoint.Economy?.Logistics);
         world.RestorePower(checkpoint.Economy?.Power);
         world.RestoreWaterSewer(checkpoint.Economy?.WaterSewer);
+        world.RestoreGas(checkpoint.Economy?.Gas);
         world._multimodalTransit.Restore(checkpoint.MultimodalTransit);
         ValidateMultimodalTransitCheckpointReferences(checkpoint);
         return world;

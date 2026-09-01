@@ -219,6 +219,7 @@ internal sealed class ClientConnection : IDisposable
                 LogisticsSnapshotMessage logistics => LogisticsProtocolCodec.Serialize(logistics, version),
                 PowerSnapshotMessage power => PowerProtocolCodec.Serialize(power, version),
                 WaterSewerSnapshotMessage waterSewer => WaterSewerProtocolCodec.Serialize(waterSewer, version),
+                GasSnapshotMessage gas => GasProtocolCodec.Serialize(gas, version),
                 InspectPersonMessage or PopulationStatisticsMessage or PersonDebugMessage => PopulationProtocolCodec.Serialize(message, version),
                 _ => ProtocolCodec.Serialize(message, version),
             };

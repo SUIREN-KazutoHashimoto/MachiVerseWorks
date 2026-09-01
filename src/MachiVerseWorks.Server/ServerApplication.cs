@@ -24,6 +24,7 @@ public static class ServerApplication
         builder.Services.AddHostedService<LogisticsFixtureHostedService>();
         builder.Services.AddHostedService<PowerFixtureHostedService>();
         builder.Services.AddHostedService<WaterSewerFixtureHostedService>();
+        builder.Services.AddHostedService<GasFixtureHostedService>();
         builder.Services.AddHostedService<SimulationTickService>();
         builder.Services.AddHostedService<ClientCommandProcessor>();
         builder.Services.AddHostedService<AdminCommandExecutorV2>();
@@ -34,6 +35,7 @@ public static class ServerApplication
         builder.Services.AddHostedService<LogisticsPublishService>();
         builder.Services.AddHostedService<PowerPublishService>();
         builder.Services.AddHostedService<WaterSewerPublishService>();
+        builder.Services.AddHostedService<GasPublishService>();
 
         var app = builder.Build();
         app.UseWebSockets(new WebSocketOptions
