@@ -1,3 +1,4 @@
+import { Localizer, initializeLocalization } from './localization.ts';
 import {
   SewerServiceState,
   UtilityFacilityKind,
@@ -15,7 +16,7 @@ export class WaterSewerDebugOverlay {
   private readonly summary: HTMLPreElement;
   private readonly svg: SVGSVGElement;
 
-  public constructor(host: HTMLElement) {
+  public constructor(host: HTMLElement, private readonly localizer: Localizer = initializeLocalization()) {
     this.element = document.createElement('div');
     this.element.dataset.waterSewerDebug = 'true';
     Object.assign(this.element.style, {
@@ -37,7 +38,7 @@ export class WaterSewerDebugOverlay {
     this.svg.setAttribute('viewBox', '0 0 360 160');
     this.svg.setAttribute('width', '360');
     this.svg.setAttribute('height', '160');
-    this.svg.setAttribute('aria-label', 'Water and sewer network debug view');
+    this.svg.setAttribute('aria-label', this.localizer.t('waterSewerDebug.ariaLabel'));
     this.element.append(this.summary, this.svg);
     host.append(this.element);
     this.clear();
@@ -46,15 +47,28 @@ export class WaterSewerDebugOverlay {
   public apply(message: WaterSewerSnapshotMessage): void {
     const s = message.statistics;
     this.summary.textContent = [
-      `Water/Sewer tick=${s.tickCount.toString()} water-unavailable=${String(s.waterUnavailableCount)} sewer-unavailable=${String(s.sewerUnavailableCount)} overflow=${String(s.sewerOverflowCount)}`,
-      `water=${s.waterServedCubicMetersPerDay.toFixed(2)}/${s.waterDemandCubicMetersPerDay.toFixed(2)} m3/day capacity=${s.waterSupplyCapacityCubicMetersPerDay.toFixed(2)}`,
-      `wastewater=${s.wastewaterProcessedCubicMetersPerDay.toFixed(2)}/${s.wastewaterGeneratedCubicMetersPerDay.toFixed(2)} overflow=${s.wastewaterOverflowCubicMetersPerDay.toFixed(2)} m3/day`,
+      this.localizer.t('waterSewerDebug.summary', {
+        tick: s.tickCount,
+        waterUnavailable: s.waterUnavailableCount,
+        sewerUnavailable: s.sewerUnavailableCount,
+        overflow: s.sewerOverflowCount,
+      }),
+      this.localizer.t('waterSewerDebug.water', {
+        served: s.waterServedCubicMetersPerDay.toFixed(2),
+        demand: s.waterDemandCubicMetersPerDay.toFixed(2),
+        capacity: s.waterSupplyCapacityCubicMetersPerDay.toFixed(2),
+      }),
+      this.localizer.t('waterSewerDebug.wastewater', {
+        processed: s.wastewaterProcessedCubicMetersPerDay.toFixed(2),
+        generated: s.wastewaterGeneratedCubicMetersPerDay.toFixed(2),
+        overflow: s.wastewaterOverflowCubicMetersPerDay.toFixed(2),
+      }),
     ].join('\n');
     this.renderNetwork(message);
   }
 
   public clear(): void {
-    this.summary.textContent = 'Water/Sewer: waiting for snapshot';
+    this.summary.textContent = this.localizer.t('waterSewerDebug.waiting');
     this.svg.replaceChildren();
   }
 
