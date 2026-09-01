@@ -2,9 +2,9 @@
 
 ## 目的
 
-Phase 25の標準Pipeline Gas capacity solverについて、大規模Gas node / pipeline / service pointを含むtick処理とstatistics snapshotの基準値を継続取得する。Delivered Gasは既存Logisticsのinventory / shipment benchmarkを再利用し、Gas側では追加の供給状態変換が既存tickを阻害しないことをCIで確認する。
+Phase 25のPipeline Gas capacity solverとDelivered Gasのinventory / Shipment処理について、規模増加時のtick・snapshot負荷を継続取得する。Delivered GasはPhase 22 Logisticsの正本実装を再利用しつつ、`CommodityKind.Gas`とGasServicePointを含む専用scenarioで統合負荷も測定する。
 
-## BenchmarkDotNet scenario
+## Pipeline Gas scenario
 
 `GasBenchmarks.StepAndSnapshotStatistics`を使用する。
 
@@ -17,10 +17,17 @@ Phase 25の標準Pipeline Gas capacity solverについて、大規模Gas node / 
 
 測定対象は1 tickの`SimulationWorld.Step()`と`CreateGasStatistics()`であり、`MemoryDiagnoser`でallocationも記録する。
 
-## Delivered Gas coverage
+## Delivered Gas scenario
 
-Delivered Gasのorder / inventory / shipment / road freightはPhase 22のLogistics modelを直接利用するため、専用の重複benchmarkは作らない。既存`LogisticsBenchmarks`に加えてPhase 25 E2Eで`CommodityKind.Gas`のconsumer inventoryがreorder・shipment・deliveryによって回復し、Gas service stateへ反映されることを確認する。
+`DeliveredGasBenchmarks`は100 / 1,000 consumer inventoryを作成し、すべてを`CommodityKind.Gas`とDelivered GasServicePointへ接続する。consumer inventoryを空で開始し、既存Logisticsのreorder ruleによって同数のShipmentを生成した状態をbenchmark baselineとする。
+
+測定対象は次の2つ。
+
+- `Tick`: Gas service state、Economy、Logistics / Freightを含む1 tick
+- `Snapshots`: Gas snapshotとLogistics snapshotの組み合わせ
+
+Shipmentの積載・道路輸送・配送処理そのものはPhase 22 Logisticsの正本を利用するため、別実装をbenchmark用に複製しない。
 
 ## CI
 
-Benchmarks workflowに`gas-loads-1k-5k` jobを追加し、short jobのMarkdown / JSON / CSV artifactを14日保存する。特定の絶対時間をhard gateにはせず、同一workflowの継続artifactを性能回帰のbaselineとする。
+Benchmarks workflowの`gas-loads-1k-5k` jobは`*GasBenchmarks*` filterでPipeline GasとDelivered Gasの両benchmark classを実行し、Markdown / JSON / CSV artifactを14日保存する。特定の絶対時間をhard gateにはせず、同一workflowの継続artifactを性能回帰のbaselineとする。
