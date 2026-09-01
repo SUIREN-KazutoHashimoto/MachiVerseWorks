@@ -27,7 +27,7 @@ public sealed class DeterministicRadioPropagationSolver(IRadioPathCorrection? pa
         var effectiveNoiseDbm = CombinePowersDbm(request.NoiseFloorDbm, request.InterferenceDbm);
         var sinrDb = receivedPowerDbm - effectiveNoiseDbm;
         var minimumReceiveDbm = request.LinkBudget.ReceiverSensitivityDbm + request.LinkBudget.FadeMarginDb;
-        var reachable = receivedPowerDbm >= minimumReceiveDbm && sinrDb >= RadioDefaults.MinimumSinrDb;
+        var reachable = receivedPowerDbm >= minimumReceiveDbm;
         return new RadioPropagationResult(distanceMeters, pathLossDb, receivedPowerDbm, request.InterferenceDbm, sinrDb, reachable);
     }
 
@@ -41,8 +41,6 @@ public sealed class DeterministicRadioPropagationSolver(IRadioPathCorrection? pa
 
     private static double CalculateFrequencyDependentAttenuationDb(double frequencyMegahertz, double distanceKilometers)
     {
-        // Deterministic MVP correction. Higher microwave/mmWave frequencies receive a small
-        // additional distance-proportional atmospheric penalty while sub-6 GHz remains neutral.
         if (frequencyMegahertz <= 6_000d) return 0d;
         var normalized = Math.Min(1d, (frequencyMegahertz - 6_000d) / 54_000d);
         return normalized * distanceKilometers * 0.8d;
