@@ -2,7 +2,7 @@
 
 MachiVerseWorks は初期段階では日本語を主言語として開発しますが、将来の多言語対応で Simulation / Protocol / Save Data / UI の契約を壊さないよう、最初から言語境界を定義します。
 
-この文書は翻訳作業そのものではなく、国際化（i18n）のアーキテクチャを定めます。
+この文書は翻訳作業そのものではなく、国際化（i18n）のアーキテクチャを定めます。Localization機能の実装計画・進捗は [`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md) の **View Phase 5 — Localization** を正本とします。
 
 ## 1. 基本原則
 
@@ -209,4 +209,4 @@ RTL 対応そのものは初期実装の必須要件ではありません。
 7. resource schema / type safety
 8. 最初の追加 locale
 
-具体的なライブラリ選定は Web Client の実装開始時に行い、この文書では固定しません。
+具体的なライブラリ選定は Web Client の実装開始時に行い、この文書では固定しません。これらをTaskへ分解するときは [`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md) を更新します。
