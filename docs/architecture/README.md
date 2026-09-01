@@ -8,9 +8,9 @@ MachiVerseWorks の現行技術アーキテクチャを管理します。
 
 - [`overview.md`](overview.md): 全体アーキテクチャと主要コンポーネント境界
 - [`simulation-core.md`](simulation-core.md): Simulation Coreのstate ownershipとhot path
-- [`observation-gateway.md`](observation-gateway.md): Simulationとread-only ViewのObservation Gateway、cache、request境界
+- [`observation-gateway.md`](observation-gateway.md): Simulationとread-only consumerのGateway、cache、request / delivery境界
 - [`protocol.md`](protocol.md): Server / Client間binary protocolのversioningとwire layout
-- [`headless-server.md`](headless-server.md): Headless Serverのlifecycle、Observation Gateway、command queue、snapshot publish
+- [`headless-server.md`](headless-server.md): Headless Serverのlifecycle、Gateway、command queue、snapshot publish
 - [`server-administration-console.md`](server-administration-console.md): Admin command queue、authoritative runtime境界、Remote Administration再利用境界
 - [`remote-mcp-administration.md`](remote-mcp-administration.md): HTTPS Streamable HTTP `/mcp`、scope、request isolation、Admin command再利用境界
 - [`web-client.md`](web-client.md): read-only Web Viewのconnection、EntityStore、subscription、rendering
@@ -42,4 +42,4 @@ MachiVerseWorks の現行技術アーキテクチャを管理します。
 
 現行仕様との対応を変更した場合は、関連する `docs/specifications/` と必要な ADR も同時に同期します。
 
-将来実装のTask状態はarchitecture文書へ持ち込まず、Simulation側は[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)、read-only View側は[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)、World / City / Server操作UIは[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)を正本とします。Phase固有の補足検討資料を`docs/roadmap/`へ置く場合も、Task状態はルートRoadmapへ同期します。
+将来実装のTask状態はarchitecture文書へ持ち込まず、Simulation側は[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)、Gateway側は[`../../roadmap/GATEWAY_ROADMAP.md`](../../roadmap/GATEWAY_ROADMAP.md)、read-only View側は[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)、World / City / Server操作UIは[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)を正本とします。4 Roadmapの責務・依存関係の索引は[`../../roadmap/README.md`](../../roadmap/README.md)です。Phase固有の補足検討資料を`docs/roadmap/`へ置く場合も、Task状態はルートRoadmapへ同期します。
