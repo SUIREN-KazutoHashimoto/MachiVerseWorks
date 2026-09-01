@@ -23,7 +23,7 @@ public sealed partial class SimulationWorld
         _powerDispatchSolver = powerDispatchSolver ?? new CapacityPowerDispatchSolver();
         _waterSupplySolver = waterSupplySolver ?? new CapacityWaterSupplySolver();
         _sewerSolver = sewerSolver ?? new CapacitySewerSolver();
-        _gasSupplySolver = gasSupplySolver ?? new CapacityGasSupplySolver();
+        _gasSupplySolver = new ValidatingGasSupplySolver(gasSupplySolver ?? new CapacityGasSupplySolver());
         _random = new DeterministicRandom(Config.Seed);
         Time = default;
     }
@@ -148,6 +148,7 @@ public sealed partial class SimulationWorld
         ValidatePowerCheckpoint(checkpoint);
         ValidateWaterSewerCheckpoint(checkpoint);
         ValidateGasCheckpoint(checkpoint);
+        ValidateDeliveredGasCheckpointInvariants(checkpoint);
         var expectedElapsedTicks = CalculateExpectedElapsedTicks(checkpoint.TickCount, config.TickRate);
         if (checkpoint.ElapsedTicks != expectedElapsedTicks
             && (!TryCalculateLegacyElapsedTicks(checkpoint.TickCount, config.TickRate, out var legacyElapsedTicks)
@@ -191,7 +192,7 @@ public sealed partial class SimulationWorld
     }
 
     private double NextCoordinate(double minimum, double maximum) => minimum == maximum ? minimum : _random.NextDouble(minimum, maximum);
-    private WorldVector NextVelocity() => new(_random.NextDouble(-1d, 1d), _random.NextDouble(-1d, 1d), 0d);
+    private WorldVector NextVelocity() => new(_random.NextDouble(-1d, 1d), _random.NextDouble(1d, 1d), 0d);
 
     private static long CalculateExpectedElapsedTicks(ulong tickCount, int tickRate)
     {
