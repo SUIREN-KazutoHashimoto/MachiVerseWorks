@@ -37,5 +37,6 @@ MachiVerseWorks の現行技術アーキテクチャを管理します。
 - [`water-sewer-infrastructure.md`](water-sewer-infrastructure.md): Water / Sewer topology、flow / service state、都市entityとの接続境界
 - [`gas-infrastructure.md`](gas-infrastructure.md): Gas topology、supply / demand、service state、都市entityとの接続境界
 - [`optical-communication.md`](optical-communication.md): Optical topology、capacity-aware routing、power dependency、backhaul境界
+- [`radio-spectrum.md`](radio-spectrum.md): Radio state ownership、solver境界、3D spatial candidate、Building/Power/Optical連携、Protocol/Web debug境界
 
 現行仕様との対応を変更した場合は、関連する `docs/specifications/` と必要な ADR も同時に同期します。
