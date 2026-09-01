@@ -10,7 +10,7 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 
 > **現在:** Phase 29 — World & Physical Environment Generation  
 > **次の実装タスク:** `P29-001` — `WorldEnvironmentConfig` / world seed / geographic north / latitude・hemisphere・sea level等の正本契約を仕様化する  
-> **並行可能な横断基盤:** Observation Gateway Foundation（View Phase 1の前提）
+> **並行可能な横断基盤:** Observation Gateway Foundation（View Phase 1と並行して境界整理可能）
 
 ## 全体の現在地
 
@@ -18,7 +18,7 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | --- | --- | --- |
 | 0〜27 | Foundation / Simulation / Infrastructure / Remote Administration | ✅ 完了 |
 | 28 | Radio & Spectrum Foundation | ✅ 完了 |
-| Cross-cutting | Observation Gateway Foundation | ▶️ Phase 29と並行可能 |
+| Cross-cutting | Observation Gateway Foundation | ▶️ Phase 29 / View Phase 1と並行可能 |
 | 29 | World & Physical Environment Generation | ▶️ 次 |
 | 30 | Regional & Urban Generation | ⏳ 待機 |
 | 31 | Persistent Regional & Settlement Evolution | ⏳ 待機 |
@@ -32,6 +32,16 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 旧Phase 34を含むread-only描画計画は[`VIEW_ROADMAP.md`](VIEW_ROADMAP.md)、旧Phase 36に混在していたmutation / administration UIは[`MANAGEMENT_ROADMAP.md`](MANAGEMENT_ROADMAP.md)へ移管済みです。旧Task IDと移管先の対応は各Roadmap側にも記録します。
 
 Phase 0〜24 の詳細 Task・closeout 証跡・当時の計画状態は、履歴として[`docs/archive/roadmap-through-phase24-closeout.md`](../docs/archive/roadmap-through-phase24-closeout.md)に保存しています。Phase 13〜16 の正式 closeout 時点の詳細は[`docs/archive/roadmap-phase13-through-phase16-closeout.md`](../docs/archive/roadmap-phase13-through-phase16-closeout.md)も参照してください。
+
+## 依存関係の読み方
+
+Simulation Roadmapでは依存を次のように扱う。
+
+- 各Phase見出しの **`依存:` はPhase closeoutの必須依存** とする。依存Phaseのauthoritative contractが成立しない限り、そのPhase全体を完了扱いにしない。
+- Phase内の一部Taskが安定した既存contractだけで先行できる場合は並行実装してよい。ただし未完成の依存を仮実装や別正本で補完しない。
+- **Cross-cutting** は特定Phaseの直列後続ではなく、複数Phase / Clientと並行して進める横断基盤とする。必要なTask IDだけを利用側の必須依存として指定する。
+- 後述の「推奨closeout順」は全体の実装・統合順を示す。矢印すべてが直接のhard dependencyを意味するわけではなく、正確なhard dependencyは各Phase見出しとTask記述を正本とする。
+- View / Managementの依存はそれぞれのRoadmapを正本とし、Simulation Phase番号へ無理に同期させない。
 
 ## Simulation Roadmap 運用ルール
 
@@ -90,8 +100,8 @@ Phase 29以降の広域World・都市成長・最適化では、以下を設計�
 
 ## Observation Gateway Foundation — Cross-cutting
 
-> **状態: ▶️ Phase 29と並行可能**  
-> **依存:** 現行SimulationRuntime / Server publish / Protocol 2.x  
+> **状態: ▶️ Phase 29 / View Phase 1と並行可能**  
+> **必須依存:** 現行SimulationRuntime / Server publish / Protocol 2.x  
 > Viewを含むread-only clientがSimulation内部Storeへ直接依存せず、同じauthoritative observationを効率良く共有できる境界を確立する。詳細設計は[`docs/architecture/observation-gateway.md`](../docs/architecture/observation-gateway.md)を正本とする。
 
 - ⬜ **OBS-001** — Observation Requestとauthoritative mutation commandをProtocol / Server責務として明示的に分離する
@@ -101,7 +111,7 @@ Phase 29以降の広域World・都市成長・最適化では、以下を設計�
 - ⬜ **OBS-005** — 同一revisionの同一Observation Requestを重複生成しないrequest deduplicationを実装する
 - ⬜ **OBS-006** — negotiated Protocol versionとobservation revisionが一致する再利用可能payloadのencoded cache境界を実装する
 - ⬜ **OBS-007** — cache invalidation / eviction / World replacement / reconnect / resyncをauthoritative revisionと整合させる
-- ⬜ **OBS-008** — View向けgeneric Entity inspectionでCurrent / Recent Past / Planned Future / Relationsを意味生成なしに配信できるcontractを設計する
+- ⬜ **OBS-008** — generic Entity inspectionでCurrent / Recent Past / Planned Future / Relationsを意味生成なしに配信できるcontractを設計する
 - ⬜ **OBS-009** — View未接続 / 単一View / 複数View / Camera・Selection・cache差でSimulation state digestが一致するinvariance E2Eを追加する
 - ⬜ **OBS-010** — cache hit / miss / eviction / deduplicationのequivalenceとServer側CPU / allocation / encoding benchmarkを記録する
 - ⬜ **OBS-011** — Observation Gateway architecture / Protocol / Server README / Roadmapを同期する
@@ -114,7 +124,7 @@ Phase 29以降の広域World・都市成長・最適化では、以下を設計�
 - 同一revisionのcache hit / miss / rebuildで同一Observation結果を得られる。
 - Viewの接続状態・Camera・Selection・LOD・cache状態によってSimulation state digestが変化しない。
 
-## Phase 10以降の依存順
+## Phase 10以降の推奨closeout順
 
 ```text
 3D Simulation Foundation
@@ -148,7 +158,7 @@ Phase 29以降の広域World・都市成長・最適化では、以下を設計�
   -> Extension Platform
 ```
 
-Observation Gatewayは特定domain Phaseの意味的依存ではなく、read-only配信の横断基盤としてPhase 29以降と並行実装できる。View側の依存順は[`VIEW_ROADMAP.md`](VIEW_ROADMAP.md)、Management側は[`MANAGEMENT_ROADMAP.md`](MANAGEMENT_ROADMAP.md)で独立管理する。先行mergeを行っても、Simulation Phaseの正式closeout順は依存関係に従う。Phase 27はServer横断のRemote Administration境界として実装順に挿入したが、Phase 28以降のSimulation domainがMCP実装へ直接依存することを意味しない。
+Observation Gatewayは特定domain Phaseの意味的依存ではなく、read-only配信の横断基盤としてPhase 29以降と並行実装できる。上記は推奨closeout順であり、全矢印を直接hard dependencyとはみなさない。正確な必須依存は各Phase見出しを正本とする。View側の依存順は[`VIEW_ROADMAP.md`](VIEW_ROADMAP.md)、Management側は[`MANAGEMENT_ROADMAP.md`](MANAGEMENT_ROADMAP.md)で独立管理する。先行mergeを行っても、Simulation Phaseの正式closeoutは各Phaseの必須依存に従う。Phase 27はServer横断のRemote Administration境界として実装順に挿入したが、Phase 28以降のSimulation domainがMCP実装へ直接依存することを意味しない。
 
 Phase 28 完了後の詳細Task・closeout証跡は当面このSimulation Roadmapに残し、Phase 29以降の進行に合わせて`docs/archive/`へ整理する。
 
@@ -581,7 +591,7 @@ Phase 28 完了後の詳細Task・closeout証跡は当面このSimulation Roadma
 
 > **状態: ⬜ 未着手**  
 > **依存:** Phase 20 / 30 / 31 / 35  
-> World・地域・都市・Serverを明示的に編集・管理するためのserver-authoritative command / validation / authorization境界を整える。Browserのread-only Selection / InspectorはView Roadmap、mutation / administration UIはManagement Roadmapで扱う。
+> World・地域・都市・Serverを明示的に編集・管理するためのserver-authoritative command / validation / authorization境界を整える。Phase 35を必須依存にするのは、Management mutationによるBuilding / Settlement / Network変更もHistorical Event / Replayの正本契約へ記録し、履歴を迂回する第二のmutation経路を作らないためである。Browserのread-only Selection / InspectorはView Roadmap、mutation / administration UIはManagement Roadmapで扱う。
 
 - ⬜ **P36-001** — Build / Edit commandの認可・validation・ack / error契約を仕様化する
 - ⬜ **P36-002** — Protocolへserver-authoritative command request / resultの共通枠組みを追加する
@@ -608,6 +618,7 @@ Phase 28 完了後の詳細Task・closeout証跡は当面このSimulation Roadma
 - build / edit操作は必ずServer-authoritative commandを経由し、Clientが正本状態を直接変更できない。
 - 自動生成された名称・標識を由来情報を保持したまま明示的にoverrideできるcommand境界を持つ。
 - Management Clientがstable command result / error / permission / confirmation metadataを利用できる。
+- World mutationがPhase 35のHistorical Event / Replay契約を迂回しない。
 - read-only Viewへmutation command責務を持ち込まない。
 
 ---
@@ -616,7 +627,7 @@ Phase 28 完了後の詳細Task・closeout証跡は当面このSimulation Roadma
 
 > **状態: ⬜ 未着手**  
 > **依存:** Phase 36  
-> Save migrationと配布物を整備し、開発環境外でもversion付き成果物として起動・更新・復元できる状態にする。
+> Save migrationと配布物を整備し、開発環境外でもversion付き成果物として起動・更新・復元できる状態にする。artifact packaging等の一部Taskは安定した既存境界だけで先行できるが、Phase closeoutはManagement commandを含む対象Client / Server境界が揃った後とする。
 
 ### Save互換性
 
@@ -653,7 +664,7 @@ Phase 28 完了後の詳細Task・closeout証跡は当面このSimulation Roadma
 
 > **状態: ⬜ 未着手**  
 > **依存:** Phase 37  
-> 正本Simulationと互換性境界を壊さず、外部拡張・高精度solverを導入できる公開拡張基盤を作る。read-only View localizationはView Roadmap Phase 10で管理する。
+> 正本Simulationと互換性境界を壊さず、外部拡張・高精度solverを導入できる公開拡張基盤を作る。package / distribution / compatibility policyをPhase 37へ依存し、read-only View extensionはView Roadmap Phase 12、Addon管理UIはManagement Roadmap Phase 5、read-only View localizationはView Roadmap Phase 10で管理する。
 
 ### Extension Platform
 
@@ -681,6 +692,7 @@ Phase 28 完了後の詳細Task・closeout証跡は当面このSimulation Roadma
 - 既存Simulation内部実装へ直接依存せず、versionedな公開境界からExtensionを追加できる。
 - 標準の軽量Infrastructure / Terrain solverを維持したまま、Extensionが高精度な物理solverや追加Regional ruleを安全に差し替えられる。
 - Extension固有stateがSave Dataと衝突せず、missing / incompatible extensionを安全に扱える。
+- View Addon / Management AddonがSimulation内部APIではなく同じExtension Platform contractへ依存できる。
 
 ---
 
@@ -706,8 +718,11 @@ Phase 9以降で未割当だったterrain系項目はPhase 29へ正式移管す�
 | Historical replay | Phase 35 |
 | Historical timeline / time slider | View Roadmap Phase 9 |
 | World / City Management UI | Management Roadmap |
+| Management localization / command UX | Management Roadmap Phase 4 |
+| Addon management UI | Management Roadmap Phase 5 |
+| View Addon / rendering extension | View Roadmap Phase 12 |
 | Dashboard / statistics analysis | 将来Analytics Listener / analysis client |
-| Web Client localization | View Roadmap Phase 10 |
+| Web View localization | View Roadmap Phase 10 |
 | Geographic Feature / natural toponym | Phase 29.2 |
 | Human place naming / road / bridge / tunnel / station naming | Phase 30.1 / 30.2 |
 | Terrain-aware road signage | Phase 30.2 |
