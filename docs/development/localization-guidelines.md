@@ -2,11 +2,11 @@
 
 この文書は MachiVerseWorks の多言語対応を将来追加しやすくするため、実装時に守るルールを定めます。
 
-現時点では日本語のみで開発して構いません。ただし、後から翻訳対応するときに Simulation / Protocol / Save Data の互換性を壊さないことを優先します。Localizationの実装計画・Task状態は [`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md) の **View Phase 5 — Localization** を正本とします。
+現時点では日本語のみで開発して構いません。ただし、後から翻訳対応するときに Simulation / Protocol / Save Data の互換性を壊さないことを優先します。read-only ViewのLocalization実装計画・Task状態は[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)の **View Phase 10 — Localization** を正本とします。Management UI固有のlocalization Taskは必要になった時点で[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)へ追加します。
 
 ## 1. ユーザー向け文字列
 
-Web Client の実装開始後、ユーザーへ表示する固定文言は原則として locale resource key 経由で参照します。
+Web presentation の実装開始後、ユーザーへ表示する固定文言は原則として locale resource key 経由で参照します。
 
 例:
 
@@ -100,7 +100,7 @@ code + structured parameters
 
 数値・日時・単位は locale-aware formatter を経由します。
 
-Web Client では Web 標準の `Intl` API を第一候補とします。
+Web presentation では Web 標準の `Intl` API を第一候補とします。
 
 同じ値でも locale によって次が変わることを前提にしてください。
 
@@ -147,8 +147,9 @@ unused key 検出は false positive が多い場合があるため、導入時�
 初期セットアップ中は次だけを必須とします。
 
 1. Simulation / Protocol / Save Data を言語非依存に保つ。
-2. Web Client の locale resource 置き場を `src/web/locales/` に固定する。
+2. Web presentation の locale resource 置き場を `src/web/locales/` に固定する。
 3. default locale を `ja-JP` とする。
 4. i18n library はまだ固定しない。
+5. ViewとManagementが共通i18n基盤を再利用しても、責務境界はRoadmapどおり分離する。
 
-Web Client の実装開始時に、この文書を基準として実際の i18n service を構築します。計画や完了状態を変更する場合は [`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md) も同期します。
+read-only Viewの実装開始時に、この文書を基準として実際の i18n service を構築します。View計画や完了状態を変更する場合は[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)、Management固有UIへ広げる場合は[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)も同期します。
