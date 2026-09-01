@@ -2,6 +2,8 @@
 
 MachiVerseWorks は、都市シミュレーション本体と表示クライアントを明確に分離します。
 
+実装計画・Task状態も同じ責務境界に合わせ、Server-authoritativeなSimulation側は[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)、描画・Camera・UI / UX・View performance・localizationは[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)を正本とします。
+
 ## 全体構成
 
 ```text
@@ -16,7 +18,7 @@ MachiVerseWorks.Simulation
 MachiVerseWorks.Persistence
 ```
 
-`MachiVerseWorks.Persistence` は実行ループを所有せず、Simulation checkpointとversioned Save Dataの変換境界としてSimulationを参照します。将来のServer save/load機能は、この境界を実行ホストから呼び出します。
+`MachiVerseWorks.Persistence` は実行ループを所有せず、Simulation checkpointとversioned Save Dataの変換境界としてSimulationを参照します。Server save/load機能は、この境界を実行ホストから呼び出します。
 
 ## Simulation Core
 
@@ -61,6 +63,7 @@ PersistenceはSimulation内部Storeを正本として所有せず、file path、
 - subscription / interest management
 - snapshot / delta / statistics の配信
 - save / load 等の外部 I/O 境界
+- Remote Administration等からauthoritative command境界を安全に再利用するhost機能
 
 Network I/O と Simulation の可変 state を直接共有し続けず、明示的な command / snapshot 境界を使います。
 
@@ -76,7 +79,7 @@ Network I/O と Simulation の可変 state を直接共有し続けず、明示�
 - binary layout
 - compatibility rule
 
-Simulation 内部の class や object graph を、そのまま network contract にしません。
+Simulation 内部の class や object graph を、そのまま network contract にしません。現行versionとbinary layoutの正本は[`protocol.md`](protocol.md)です。
 
 ## Web Client
 
@@ -86,9 +89,9 @@ Web Client は表示と入力を担当します。
 - snapshot / delta を受信
 - spawn / update / remove をローカル描画 state へ反映
 - Simulation tick 間を補間して描画
-- UI / Inspector から command を送信
+- UI / Inspector から server-authoritative command 境界へ入力する
 
-Client のローカル state は描画・UX用のキャッシュであり、都市世界の正本ではありません。
+Client のローカル state は描画・UX用のキャッシュであり、都市世界の正本ではありません。Camera / Rendering LOD / View cacheをSimulation Fidelityやworkloadの判定条件に使用しません。
 
 ## Tick と Snapshot
 
@@ -110,7 +113,7 @@ Snapshot は network thread が Simulation の mutable storage を直接読む�
 
 大規模都市全体を全 Client へ送信しません。
 
-Client は camera / inspection target 等から必要範囲を Server へ通知し、Server は空間 index を用いて対象 entity を選択します。
+Client は camera / inspection target 等から必要範囲を Server へ通知し、Server は空間 index を用いて対象 entity を選択します。domainによってaggregate / world-wide read modelが必要な場合は、各Protocol contractで明示します。
 
 基本イベント:
 
@@ -144,6 +147,6 @@ MachiVerseWorks では以下を変更します。
 - Worker / SharedArrayBuffer 中心 → C# Simulation Core
 - runtime patch accumulation → 明示的な責務と contract
 - rendering requirement と simulation data ownership を分離
-- whole-world client state → spatial subscription
+- whole-world client state → spatial / explicit read-model subscription
 
 Legacyから引き継ぐ知見は [`../archive/legacy-machi-sim/README.md`](../archive/legacy-machi-sim/README.md) を参照してください。
