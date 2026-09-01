@@ -98,3 +98,11 @@ Establishmentのproduction availabilityは既存Power、Water/Sewer、Gas availa
 `EconomyCheckpoint.Gas`はoptional extensionとしてSave Format 11へ追加し、既存Format 11との後方互換を維持する。Gasを持たないSaveは空Gas stateとしてrestoreする。nested collectionはdeserialize前後で既存WorldSaveLimitsに基づいて上限検証する。
 
 Protocol 2.14で`GasSnapshot(770)`を追加する。Node / Pipeline / Facility / ServicePointとaggregate statisticsを送信し、Protocol 2.13以下にはGas snapshotを配信しない。
+
+Delivered GasのServicePointには、既存Logistics snapshotをServer側で結合して次の観測値も含める。
+
+- consumer inventory quantity / capacity
+- active Shipmentの合計quantity
+- active Shipment count
+
+Order / Shipmentのstable ID、詳細state、vehicle参照等の完全な正本はPhase 22の`LogisticsSnapshot`に残す。Gas Protocolは配送供給状態をdebug・E2Eで追跡するための集約read modelだけを持ち、Logistics stateを二重管理しない。
