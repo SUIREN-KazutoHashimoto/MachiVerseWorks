@@ -65,5 +65,6 @@
   "gasDebug.waiting": "ガス: スナップショット待機中",
   "gasDebug.summary": "ガス Tick {tick} / 供給停止 {unavailable} / 配管 {piped} / 配送 {delivered}",
   "gasDebug.flow": "供給 {served}/{demand} m3/day / 供給容量 {capacity}",
-  "gasDebug.storage": "貯蔵 {stored} m3 / 未供給 {unserved} m3/day"
+  "gasDebug.storage": "貯蔵 {stored} m3 / 未供給 {unserved} m3/day",
+  "gasDebug.delivery": "配送在庫 {inventory}/{capacity} m3 / 配送中 {inFlight} m3 / Shipment {shipments}"
 }
