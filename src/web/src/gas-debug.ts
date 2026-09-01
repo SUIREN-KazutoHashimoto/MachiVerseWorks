@@ -1,5 +1,5 @@
 import { initializeLocalization, type Localizer } from './localization.ts';
-import { GasFacilityKind, GasOperatingState, GasServiceState, type GasSnapshotMessage } from './gas-protocol.ts';
+import { GasDeliveryMode, GasFacilityKind, GasOperatingState, GasServiceState, type GasSnapshotMessage } from './gas-protocol.ts';
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
@@ -21,10 +21,16 @@ export class GasDebugOverlay {
 
   public apply(message: GasSnapshotMessage): void {
     const s = message.statistics;
+    const delivered = message.servicePoints.filter((point) => point.deliveryMode === GasDeliveryMode.Delivered);
+    const inventory = delivered.reduce((total, point) => total + point.deliveredInventoryCubicMeters, 0);
+    const capacity = delivered.reduce((total, point) => total + point.deliveredInventoryCapacityCubicMeters, 0);
+    const inFlight = delivered.reduce((total, point) => total + point.activeShipmentCubicMeters, 0);
+    const shipments = delivered.reduce((total, point) => total + point.activeShipmentCount, 0);
     this.summary.textContent = [
       this.localizer.t('gasDebug.summary', { tick: s.tickCount, unavailable: s.unavailableServicePointCount, piped: s.pipedServicePointCount, delivered: s.deliveredServicePointCount }),
       this.localizer.t('gasDebug.flow', { served: s.servedCubicMetersPerDay.toFixed(2), demand: s.demandCubicMetersPerDay.toFixed(2), capacity: s.supplyCapacityCubicMetersPerDay.toFixed(2) }),
       this.localizer.t('gasDebug.storage', { stored: s.storedCubicMeters.toFixed(2), unserved: s.unservedCubicMetersPerDay.toFixed(2) }),
+      this.localizer.t('gasDebug.delivery', { inventory: inventory.toFixed(2), capacity: capacity.toFixed(2), inFlight: inFlight.toFixed(2), shipments }),
     ].join('\n');
     this.renderNetwork(message);
   }
