@@ -16,7 +16,7 @@ MachiVerseWorks では、旧実装を局所最適化し続けるのではなく�
 
 都市 Simulation の authoritative state と tick を C# 製の `MachiVerseWorks.Simulation` に置き、`MachiVerseWorks.Server` からヘッドレスで実行します。
 
-Browser Client は network protocol を通じて必要な範囲の snapshot / delta を受信し、描画・入力・補間を担当します。
+Browser Client は network protocol を通じて必要な範囲の snapshot / delta を受信し、描画・Client-local入力・補間を担当します。ここでいうClient-local入力はCamera / Selection等の観測操作を含みます。World mutationを伴う操作は後続のADRでManagement command境界へ分離します。
 
 依存方向は次を基本とします。
 
@@ -54,7 +54,10 @@ Simulation Core は HTTP / WebSocket / ASP.NET Core / Browser / Three.js に依�
 
 旧 Machi-Sim のドメイン仕様や視覚表現は参考にしますが、Browser-owned state、Worker pool、SharedArrayBuffer、runtime patch を新アーキテクチャの前提として移植しません。
 
+ADR-0001でいう`Browser Client`は当初の大分類です。その後、観測Clientを完全read-onlyなView、authoritative mutationを行う操作ClientをManagementへ分離し、Server側にObservation Gatewayとcommand boundaryを置く詳細境界を[`ADR-0007`](ADR-0007-read-only-view-observation-management-boundary.md)で確定しています。ADR-0007は本ADRの「SimulationをServer authoritativeに分離する」判断を変更せず、Client側責務をさらに分解するものです。
+
 関連資料:
 
 - [`../architecture/overview.md`](../architecture/overview.md)
+- [`ADR-0007-read-only-view-observation-management-boundary.md`](ADR-0007-read-only-view-observation-management-boundary.md)
 - [`../archive/legacy-machi-sim/README.md`](../archive/legacy-machi-sim/README.md)
