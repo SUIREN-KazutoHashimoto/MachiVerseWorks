@@ -205,6 +205,7 @@ internal sealed class ClientConnection : IDisposable
                 OpticalSnapshotMessage optical => OpticalProtocolCodec.Serialize(optical, version),
                 RadioSnapshotMessage radio => RadioProtocolCodec.Serialize(radio, version),
                 SpectrumSnapshotMessage spectrum => RadioProtocolCodec.Serialize(spectrum, version),
+                WorldEnvironmentSnapshotMessage worldEnvironment => WorldEnvironmentProtocolCodec.Serialize(worldEnvironment, version),
                 InspectPersonMessage or PopulationStatisticsMessage or PersonDebugMessage => PopulationProtocolCodec.Serialize(message, version),
                 _ => ProtocolCodec.Serialize(message, version),
             };
