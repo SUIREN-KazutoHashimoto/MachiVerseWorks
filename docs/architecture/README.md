@@ -40,3 +40,5 @@ MachiVerseWorks の現行技術アーキテクチャを管理します。
 - [`radio-spectrum.md`](radio-spectrum.md): Radio state ownership、solver境界、3D spatial candidate、Building/Power/Optical連携、Protocol/Web debug境界
 
 現行仕様との対応を変更した場合は、関連する `docs/specifications/` と必要な ADR も同時に同期します。
+
+将来実装のTask状態はarchitecture文書へ持ち込まず、Simulation側は[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)、View側は[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)を正本とします。Phase固有の補足検討資料を`docs/roadmap/`へ置く場合も、Task状態はルートRoadmapへ同期します。
