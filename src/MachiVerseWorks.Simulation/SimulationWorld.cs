@@ -56,8 +56,10 @@ public sealed partial class SimulationWorld
     {
         var nextTime = Time.Advance(Config.TickRate);
         _agents.Step(Config.TickDurationSeconds, _spatialIndex);
+        CapturePowerProductionBaselines();
         StepPower(nextTime);
         StepEconomy(nextTime);
+        ApplyPowerOperationalConstraints();
         StepLogistics(nextTime);
         PlanPopulationAndEconomyTrips(nextTime);
         StepVehicles(Config.TickDurationSeconds, nextTime.TickCount);
