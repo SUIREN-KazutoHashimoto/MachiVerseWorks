@@ -80,7 +80,7 @@ public sealed class PowerSimulationTests
         Assert.IsTrue(world.TryGetPowerLoadSnapshot(load, out var first));
         Assert.IsTrue(first.DemandMegawatts > 0d);
 
-        for (var tick = 1; tick < 225; tick++) world.Step();
+        for (var tick = 1; tick < 21_601; tick++) world.Step();
         Assert.IsTrue(world.TryGetPowerLoadSnapshot(load, out var later));
         Assert.AreNotEqual(first.DemandMegawatts, later.DemandMegawatts, 1e-9);
     }
