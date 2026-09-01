@@ -39,7 +39,7 @@ MachiVerseWorks は、市民・道路交通・公共交通・物流・産業・�
 - Phase 19 Multimodal Transit: ✅ 完了
 - Phase 20 Server Administration Console: ⏭️ 次
 
-詳細なPhase / Task状態は[`ROADMAP.md`](ROADMAP.md)だけを進捗の正本とし、READMEへ全Task一覧を複製しません。
+詳細なSimulation Phase / Task状態は[`roadmap/SIMULATION_ROADMAP.md`](roadmap/SIMULATION_ROADMAP.md)だけを進捗の正本とし、READMEへ全Task一覧を複製しません。
 
 ## Architecture
 
@@ -113,12 +113,13 @@ MachiVerseWorks/
 │  ├─ development/
 │  ├─ decisions/
 │  └─ archive/
+├─ roadmap/
+│  └─ SIMULATION_ROADMAP.md
 ├─ scripts/
 ├─ tools/
 ├─ .github/
 ├─ global.json
 ├─ VERSION
-├─ ROADMAP.md
 ├─ AGENTS.md
 └─ README.md
 ```
