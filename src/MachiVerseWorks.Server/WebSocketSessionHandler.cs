@@ -5,7 +5,7 @@ using MachiVerseWorks.Simulation;
 
 namespace MachiVerseWorks.Server;
 
-internal sealed class WebSocketSessionHandler(ClientConnectionRegistry connections, ClientCommandQueue commandQueue, SimulationRuntime simulation, ServerOptions options, ILogger<WebSocketSessionHandler> logger)
+internal sealed class WebSocketSessionHandler(ClientConnectionRegistry connections, ObservationRequestQueue observationRequests, SimulationRuntime simulation, ServerOptions options, ILogger<WebSocketSessionHandler> logger)
 {
     private const int ReceiveBufferSize = 8192;
     private const int MaximumFrameLength = ProtocolFrameHeader.Size + (int)ProtocolFrameHeader.MaxPayloadLength;
@@ -104,6 +104,11 @@ internal sealed class WebSocketSessionHandler(ClientConnectionRegistry connectio
             return await RejectRecoverableAsync(connection, [new ProtocolErrorParameter(ProtocolErrorParameterKeys.DetailCode, "rateLimited")], cancellationToken);
         }
 
+        if (envelope.Message is not IObservationRequestMessage)
+        {
+            return await RejectRecoverableAsync(connection, [new ProtocolErrorParameter(ProtocolErrorParameterKeys.MessageType, ((ushort)envelope.Message.Type).ToString(CultureInfo.InvariantCulture))], cancellationToken);
+        }
+
         switch (envelope.Message)
         {
             case SubscribeVolumeMessage subscribeVolume:
@@ -115,7 +120,7 @@ internal sealed class WebSocketSessionHandler(ClientConnectionRegistry connectio
                         return await RejectRecoverableAsync(connection,
                             [new ProtocolErrorParameter(ProtocolErrorParameterKeys.Field, "volume"), new ProtocolErrorParameter(ProtocolErrorParameterKeys.DetailCode, detailCode ?? SubscriptionVolumePolicy.OutsideSpatialGridDetailCode)], cancellationToken);
                     }
-                    await commandQueue.WriteAsync(new SubscribeVolumeCommand(connection.Id, volume), cancellationToken);
+                    await observationRequests.WriteAsync(new SubscribeVolumeObservationRequest(connection.Id, volume), cancellationToken);
                     return true;
                 }
                 catch (ArgumentOutOfRangeException)
@@ -135,14 +140,14 @@ internal sealed class WebSocketSessionHandler(ClientConnectionRegistry connectio
                 {
                     return await RejectRecoverableAsync(connection, [new ProtocolErrorParameter(ProtocolErrorParameterKeys.Field, "personId"), new ProtocolErrorParameter(ProtocolErrorParameterKeys.DetailCode, "personNotFound")], cancellationToken);
                 }
-                await commandQueue.WriteAsync(new InspectPersonCommand(connection.Id, inspectPerson.PersonId), cancellationToken);
+                await observationRequests.WriteAsync(new InspectPersonObservationRequest(connection.Id, inspectPerson.PersonId), cancellationToken);
                 return true;
             case ClearPersonInspectionMessage:
                 if (!connection.NegotiatedVersion.SupportsPersonInspectionClear)
                 {
                     return await RejectRecoverableAsync(connection, [new ProtocolErrorParameter(ProtocolErrorParameterKeys.MessageType, ((ushort)envelope.Message.Type).ToString(CultureInfo.InvariantCulture))], cancellationToken);
                 }
-                await commandQueue.WriteAsync(new ClearPersonInspectionCommand(connection.Id), cancellationToken);
+                await observationRequests.WriteAsync(new ClearPersonInspectionObservationRequest(connection.Id), cancellationToken);
                 return true;
             default:
                 return await RejectRecoverableAsync(connection, [new ProtocolErrorParameter(ProtocolErrorParameterKeys.MessageType, ((ushort)envelope.Message.Type).ToString(CultureInfo.InvariantCulture))], cancellationToken);
