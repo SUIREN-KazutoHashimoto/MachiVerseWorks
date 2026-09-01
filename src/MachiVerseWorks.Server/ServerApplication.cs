@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MachiVerseWorks.Server;
@@ -23,6 +23,7 @@ public static class ServerApplication
         builder.Services.AddSingleton<WebSocketSessionHandler>();
         builder.Services.AddHostedService<LogisticsFixtureHostedService>();
         builder.Services.AddHostedService<PowerFixtureHostedService>();
+        builder.Services.AddHostedService<WaterSewerFixtureHostedService>();
         builder.Services.AddHostedService<SimulationTickService>();
         builder.Services.AddHostedService<ClientCommandProcessor>();
         builder.Services.AddHostedService<AdminCommandExecutorV2>();
@@ -32,9 +33,14 @@ public static class ServerApplication
         builder.Services.AddHostedService<EconomyPublishService>();
         builder.Services.AddHostedService<LogisticsPublishService>();
         builder.Services.AddHostedService<PowerPublishService>();
+        builder.Services.AddHostedService<WaterSewerPublishService>();
 
         var app = builder.Build();
-        app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30), KeepAliveTimeout = TimeSpan.FromSeconds(15) });
+        app.UseWebSockets(new WebSocketOptions
+        {
+            KeepAliveInterval = TimeSpan.FromSeconds(30),
+            KeepAliveTimeout = TimeSpan.FromSeconds(15),
+        });
         app.MapGet("/health", (SimulationRuntime simulation, ClientConnectionRegistry connections) =>
         {
             if (!options.DetailedDiagnosticsAvailable) return Results.Ok(new { status = "ok" });
@@ -53,17 +59,32 @@ public static class ServerApplication
                 connections = connections.Count,
             });
         });
-        app.MapGet("/metrics/e2e", (E2eMetrics metrics) => options.DetailedDiagnosticsAvailable ? Results.Ok(metrics.Capture()) : Results.NotFound());
+        app.MapGet("/metrics/e2e", (E2eMetrics metrics) =>
+            options.DetailedDiagnosticsAvailable ? Results.Ok(metrics.Capture()) : Results.NotFound());
         app.Map("/ws", async context =>
         {
-            if (!context.WebSockets.IsWebSocketRequest) { context.Response.StatusCode = StatusCodes.Status400BadRequest; return; }
+            if (!context.WebSockets.IsWebSocketRequest)
+            {
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                return;
+            }
             var originPolicy = context.RequestServices.GetRequiredService<WebSocketOriginPolicy>();
             var origin = context.Request.Headers["Origin"].ToString();
-            if (!originPolicy.IsAllowed(origin)) { context.Response.StatusCode = StatusCodes.Status403Forbidden; return; }
+            if (!originPolicy.IsAllowed(origin))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return;
+            }
             var connections = context.RequestServices.GetRequiredService<ClientConnectionRegistry>();
-            if (connections.Count >= options.MaximumWebSocketConnections) { context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable; return; }
+            if (connections.Count >= options.MaximumWebSocketConnections)
+            {
+                context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                return;
+            }
             using var socket = await context.WebSockets.AcceptWebSocketAsync();
-            using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, app.Lifetime.ApplicationStopping);
+            using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                context.RequestAborted,
+                app.Lifetime.ApplicationStopping);
             var handler = context.RequestServices.GetRequiredService<WebSocketSessionHandler>();
             await handler.HandleAsync(socket, linkedCancellation.Token);
         });
