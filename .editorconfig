@@ -31,3 +31,8 @@ csharp_space_after_cast = false
 dotnet_diagnostic.CA1512.severity = none
 # IGasSupplySolver is an intentional substitution boundary; keep the field interface-typed.
 dotnet_diagnostic.CA1859.severity = none
+
+[src/MachiVerseWorks.Simulation/SimulationWorld.Optical.cs]
+dotnet_diagnostic.CA1512.severity = none
+# IOpticalRoutingSolver is an intentional substitution boundary; keep the field interface-typed.
+dotnet_diagnostic.CA1859.severity = none
