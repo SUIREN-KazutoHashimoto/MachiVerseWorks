@@ -1,84 +1,13 @@
 namespace MachiVerseWorks.Simulation;
 
-public enum WorldHemisphere : byte
-{
-    Northern = 0,
-    Southern = 1,
-}
-
-public enum GlobalLandformKind : byte
-{
-    Ocean = 0,
-    Continent = 1,
-    Island = 2,
-}
-
-public enum SurfaceWaterKind : byte
-{
-    None = 0,
-    Ocean = 1,
-    Lake = 2,
-    River = 3,
-    Tributary = 4,
-    Floodplain = 5,
-}
-
-public enum TerrainMaterialKind : byte
-{
-    Water = 0,
-    Sand = 1,
-    Soil = 2,
-    Rock = 3,
-    Snow = 4,
-    Gravel = 5,
-}
-
-public enum TerrainMatterKind : byte
-{
-    Air = 0,
-    Water = 1,
-    Soil = 2,
-    Rock = 3,
-    Void = 4,
-}
-
-public enum GeographicFeatureType : byte
-{
-    Mountain = 0,
-    MountainRange = 1,
-    River = 2,
-    Tributary = 3,
-    Lake = 4,
-    Valley = 5,
-    Basin = 6,
-    Plain = 7,
-    Plateau = 8,
-    Pass = 9,
-    Cape = 10,
-    Bay = 11,
-    Coast = 12,
-    Island = 13,
-    Peninsula = 14,
-    Cave = 15,
-}
-
-public enum ToponymProvenanceKind : byte
-{
-    GeneratedNaturalFeature = 0,
-    InheritedNaturalFeature = 1,
-}
-
-public enum SettlementEnvironmentKind : byte
-{
-    Coastal = 0,
-    River = 1,
-    Basin = 2,
-    Mountain = 3,
-    Cold = 4,
-    Dry = 5,
-    Island = 6,
-    InlandPlain = 7,
-}
+public enum WorldHemisphere : byte { Northern = 0, Southern = 1 }
+public enum GlobalLandformKind : byte { Ocean = 0, Continent = 1, Island = 2 }
+public enum SurfaceWaterKind : byte { None = 0, Ocean = 1, Lake = 2, River = 3, Tributary = 4, Floodplain = 5 }
+public enum TerrainMaterialKind : byte { Water = 0, Sand = 1, Soil = 2, Rock = 3, Snow = 4, Gravel = 5 }
+public enum TerrainMatterKind : byte { Air = 0, Water = 1, Soil = 2, Rock = 3, Void = 4 }
+public enum GeographicFeatureType : byte { Mountain = 0, MountainRange = 1, River = 2, Tributary = 3, Lake = 4, Valley = 5, Basin = 6, Plain = 7, Plateau = 8, Pass = 9, Cape = 10, Bay = 11, Coast = 12, Island = 13, Peninsula = 14, Cave = 15 }
+public enum ToponymProvenanceKind : byte { GeneratedNaturalFeature = 0, InheritedNaturalFeature = 1 }
+public enum SettlementEnvironmentKind : byte { Coastal = 0, River = 1, Basin = 2, Mountain = 3, Cold = 4, Dry = 5, Island = 6, InlandPlain = 7 }
 
 public readonly record struct GeographicFeatureId(ulong Value)
 {
@@ -189,65 +118,14 @@ public sealed record WorldEnvironmentConfig
     }
 }
 
-public readonly record struct ClimateSample(
-    double LatitudeDegrees,
-    double MeanAnnualTemperatureCelsius,
-    double SeasonalAmplitudeCelsius,
-    double AnnualPrecipitationMillimeters,
-    double MaritimeInfluence,
-    double Continentality);
-
-public readonly record struct HydrologySample(
-    SurfaceWaterKind SurfaceWater,
-    double Drainage,
-    double RiverStrength,
-    double FloodRisk,
-    WorldVector FlowDirection);
-
-public readonly record struct RegionalEnvironmentSample(
-    WorldPoint Position,
-    GlobalLandformKind Landform,
-    double ElevationMeters,
-    double CoastlineDistanceMeters,
-    ClimateSample Climate,
-    HydrologySample Hydrology,
-    double TerrainRuggedness,
-    double Buildability,
-    double SettlementScore);
-
-public readonly record struct SettlementCandidateRegion(
-    WorldPoint Center,
-    SettlementEnvironmentKind Environment,
-    double NaturalScore,
-    double TransportScore,
-    double WaterScore,
-    double TotalScore);
-
-public readonly record struct TerrainSurfaceSample(
-    WorldPoint Position,
-    WorldVector Normal,
-    double SlopeDegrees,
-    double Roughness,
-    TerrainMaterialKind Material,
-    SurfaceWaterKind SurfaceWater);
-
-public readonly record struct TerrainSurfaceIntersection(
-    double Z,
-    WorldVector Normal,
-    TerrainMaterialKind Material,
-    bool IsPrimaryGroundSurface,
-    bool IsWaterSurface,
-    bool IsCavityBoundary);
-
+public readonly record struct ClimateSample(double LatitudeDegrees, double MeanAnnualTemperatureCelsius, double SeasonalAmplitudeCelsius, double AnnualPrecipitationMillimeters, double MaritimeInfluence, double Continentality);
+public readonly record struct HydrologySample(SurfaceWaterKind SurfaceWater, double Drainage, double RiverStrength, double FloodRisk, WorldVector FlowDirection);
+public readonly record struct RegionalEnvironmentSample(WorldPoint Position, GlobalLandformKind Landform, double ElevationMeters, double CoastlineDistanceMeters, ClimateSample Climate, HydrologySample Hydrology, double TerrainRuggedness, double Buildability, double SettlementScore);
+public readonly record struct SettlementCandidateRegion(WorldPoint Center, SettlementEnvironmentKind Environment, double NaturalScore, double TransportScore, double WaterScore, double TotalScore);
+public readonly record struct TerrainSurfaceSample(WorldPoint Position, WorldVector Normal, double SlopeDegrees, double Roughness, TerrainMaterialKind Material, SurfaceWaterKind SurfaceWater);
+public readonly record struct TerrainSurfaceIntersection(double Z, WorldVector Normal, TerrainMaterialKind Material, bool IsPrimaryGroundSurface, bool IsWaterSurface, bool IsCavityBoundary);
 public readonly record struct TerrainVolumeSample(WorldPoint Position, TerrainMatterKind Matter, double SignedDistanceToGroundMeters);
-
-public readonly record struct TerrainConstraintResult(
-    bool IsAllowed,
-    double MaximumSlopeDegrees,
-    double ElevationRangeMeters,
-    bool IntersectsWater,
-    bool IntersectsVoid,
-    string Reason);
+public readonly record struct TerrainConstraintResult(bool IsAllowed, double MaximumSlopeDegrees, double ElevationRangeMeters, bool IntersectsWater, bool IntersectsVoid, string Reason);
 
 public sealed record GeographicFeature(
     GeographicFeatureId Id,
@@ -256,29 +134,12 @@ public sealed record GeographicFeature(
     IReadOnlyList<WorldPoint> Geometry,
     GeographicFeatureId? ParentId,
     double MinimumElevationMeters,
-    double MaximumElevationMeters);
+    double MaximumElevationMeters)
+{
+    public double AreaSquareMeters => Bounds.Width * Bounds.Depth;
+}
 
-public sealed record ToponymProvenance(
-    ToponymProvenanceKind Kind,
-    GeographicFeatureId SourceFeatureId,
-    ToponymId? ParentToponymId,
-    string GeneratorKey);
-
-public sealed record NaturalToponym(
-    ToponymId Id,
-    GeographicFeatureId FeatureId,
-    string Name,
-    ToponymProvenance Provenance);
-
-public sealed record WorldEnvironmentCheckpoint(
-    WorldEnvironmentConfig Config,
-    IReadOnlyList<GeographicFeature> Features,
-    IReadOnlyList<NaturalToponym> Toponyms);
-
-public sealed record WorldEnvironmentSnapshot(
-    WorldEnvironmentConfig Config,
-    WorldVolume Volume,
-    IReadOnlyList<RegionalEnvironmentSample> Samples,
-    IReadOnlyList<GeographicFeature> Features,
-    IReadOnlyList<NaturalToponym> Toponyms,
-    ulong TickCount);
+public sealed record ToponymProvenance(ToponymProvenanceKind Kind, GeographicFeatureId SourceFeatureId, ToponymId? ParentToponymId, string GeneratorKey);
+public sealed record NaturalToponym(ToponymId Id, GeographicFeatureId FeatureId, string Name, ToponymProvenance Provenance);
+public sealed record WorldEnvironmentCheckpoint(WorldEnvironmentConfig Config, IReadOnlyList<GeographicFeature> Features, IReadOnlyList<NaturalToponym> Toponyms);
+public sealed record WorldEnvironmentSnapshot(WorldEnvironmentConfig Config, WorldVolume Volume, IReadOnlyList<RegionalEnvironmentSample> Samples, IReadOnlyList<GeographicFeature> Features, IReadOnlyList<NaturalToponym> Toponyms, ulong TickCount);
