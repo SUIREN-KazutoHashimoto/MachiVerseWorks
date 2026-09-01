@@ -114,9 +114,9 @@ public sealed class CapacityOpticalRoutingSolver : IOpticalRoutingSolver
     private static FiberCableId[]? FindShortestPath(
         OpticalNodeId source,
         OpticalNodeId target,
-        IReadOnlyDictionary<OpticalNodeId, OpticalRoutingNode> nodes,
-        IReadOnlyDictionary<OpticalNodeId, List<OpticalRoutingCable>> adjacency,
-        IReadOnlyDictionary<FiberCableId, double> residualCable)
+        Dictionary<OpticalNodeId, OpticalRoutingNode> nodes,
+        Dictionary<OpticalNodeId, List<OpticalRoutingCable>> adjacency,
+        Dictionary<FiberCableId, double> residualCable)
     {
         if (source == target) return [];
         var queue = new Queue<OpticalNodeId>();
