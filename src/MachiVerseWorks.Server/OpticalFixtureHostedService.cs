@@ -5,6 +5,7 @@ namespace MachiVerseWorks.Server;
 internal sealed class OpticalFixtureHostedService(SimulationRuntime simulation, IConfiguration configuration) : BackgroundService
 {
     private FiberCableId _primaryCableId;
+    private FiberCableId _alternateCableId;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -15,8 +16,13 @@ internal sealed class OpticalFixtureHostedService(SimulationRuntime simulation, 
         {
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
-                var tick = simulation.TickCount;
-                simulation.Mutate(world => { world.SetFiberCableInService(_primaryCableId, tick % 120UL is < 70UL or >= 90UL); return true; });
+                var phase = simulation.TickCount % 120UL;
+                simulation.Mutate(world =>
+                {
+                    world.SetFiberCableInService(_primaryCableId, phase < 60UL || phase >= 95UL);
+                    world.SetFiberCableInService(_alternateCableId, phase < 80UL || phase >= 95UL);
+                    return true;
+                });
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
@@ -31,7 +37,7 @@ internal sealed class OpticalFixtureHostedService(SimulationRuntime simulation, 
         var access = world.CreateOpticalNode(new WorldPoint(117d, 47d, 2d), OpticalNodeKind.Endpoint);
         _primaryCableId = world.CreateFiberCable(backbone, central, 10d);
         world.CreateFiberCable(central, access, 10d);
-        world.CreateFiberCable(backbone, alternate, 10d);
+        _alternateCableId = world.CreateFiberCable(backbone, alternate, 10d);
         world.CreateFiberCable(alternate, access, 10d);
         world.CreateOpticalBackhaul(backbone, 10d);
         world.CreateOpticalEquipment(backbone, OpticalEquipmentKind.Router, 10d, requiresPower: false);
