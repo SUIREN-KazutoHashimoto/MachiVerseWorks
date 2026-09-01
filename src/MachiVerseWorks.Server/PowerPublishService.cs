@@ -23,7 +23,16 @@ internal sealed class PowerPublishService(
                     && connection.Socket.State == WebSocketState.Open).ToArray();
                 if (targets.Length == 0) continue;
 
-                var message = PowerMessageMapper.Create(simulation.Read(static world => world.CreatePowerSnapshot()));
+                var snapshot = simulation.Read(static world => world.CreatePowerSnapshot());
+                if (snapshot.Nodes.Count == 0
+                    && snapshot.Lines.Count == 0
+                    && snapshot.Generators.Count == 0
+                    && snapshot.Loads.Count == 0)
+                {
+                    continue;
+                }
+
+                var message = PowerMessageMapper.Create(snapshot);
                 foreach (var connection in targets)
                 {
                     try
