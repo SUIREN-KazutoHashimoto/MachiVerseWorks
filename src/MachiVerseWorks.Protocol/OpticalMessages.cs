@@ -15,7 +15,7 @@ public readonly record struct ProtocolOpticalNode(ulong NodeId, ProtocolOpticalN
 public readonly record struct ProtocolFiberCable(ulong CableId, ulong FromNodeId, ulong ToNodeId, double CapacityGigabitsPerSecond, double LoadGigabitsPerSecond, double Utilization, bool IsInService, bool IsCongested);
 public readonly record struct ProtocolOpticalEquipment(ulong EquipmentId, ulong NodeId, ProtocolOpticalEquipmentKind Kind, ulong BuildingId, ulong EstablishmentId, double CapacityGigabitsPerSecond, bool RequiresPower, bool IsInService, bool IsPowered, bool IsOperational);
 public readonly record struct ProtocolOpticalBackhaul(ulong BackhaulId, ulong NodeId, double CapacityGigabitsPerSecond, double AllocatedGigabitsPerSecond, double Utilization, bool IsInService, bool IsOperational);
-public readonly record struct ProtocolOpticalDemand(ulong DemandId, ulong NodeId, ProtocolOpticalDemandKind Kind, ulong BuildingId, ulong EstablishmentId, double BaseDemandGigabitsPerSecond, double DemandGigabitsPerSecond, double AllocatedGigabitsPerSecond, ProtocolOpticalQualityState QualityState, ulong BackhaulId);
+public readonly record struct ProtocolOpticalDemand(ulong DemandId, ulong NodeId, ProtocolOpticalDemandKind Kind, ulong BuildingId, ulong EstablishmentId, double BaseDemandGigabitsPerSecond, double DemandGigabitsPerSecond, double AllocatedGigabitsPerSecond, ProtocolOpticalQualityState QualityState, ulong BackhaulId, double EstimatedLatencyMilliseconds);
 
 public sealed record OpticalSnapshotMessage(
     ProtocolOpticalStatistics Statistics,
