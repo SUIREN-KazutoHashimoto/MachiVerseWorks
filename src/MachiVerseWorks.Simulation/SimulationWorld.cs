@@ -192,7 +192,7 @@ public sealed partial class SimulationWorld
     }
 
     private double NextCoordinate(double minimum, double maximum) => minimum == maximum ? minimum : _random.NextDouble(minimum, maximum);
-    private WorldVector NextVelocity() => new(_random.NextDouble(-1d, 1d), _random.NextDouble(1d, 1d), 0d);
+    private WorldVector NextVelocity() => new(_random.NextDouble(-1d, 1d), _random.NextDouble(-1d, 1d), 0d);
 
     private static long CalculateExpectedElapsedTicks(ulong tickCount, int tickRate)
     {
