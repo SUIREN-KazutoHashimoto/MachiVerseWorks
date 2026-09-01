@@ -1,7 +1,7 @@
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 23 — Power Infrastructure
-> **次の実装タスク:** P23-001 Generator / Substation / PowerLine / Loadの正本契約を仕様化する
+> **現在:** Phase 25 — Gas Infrastructure
+> **次の実装タスク:** P25-001 Pipeline Gas / Delivered Gasの責務、単位、需要・在庫・簡易solver境界を仕様化する
 
 ## 全体の現在地
 
@@ -30,9 +30,9 @@ MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** 
 | 20 | Server Administration Console | ✅ 完了 |
 | 21 | Industry / Jobs / Economy | ✅ 完了 |
 | 22 | Logistics / Freight | ✅ 完了 |
-| 23 | Power Infrastructure | ▶️ 次 |
-| 24 | Water & Sewer Infrastructure | ⏳ 待機 |
-| 25 | Gas Infrastructure | ⏳ 待機 |
+| 23 | Power Infrastructure | ✅ 完了 |
+| 24 | Water & Sewer Infrastructure | ✅ 完了 |
+| 25 | Gas Infrastructure | ▶️ 次 |
 | 26 | Optical Communication Infrastructure | ⏳ 待機 |
 | 27 | Radio & Spectrum Foundation | ⏳ 待機 |
 | 28 | Urban Growth & City Generation | ⏳ 待機 |
@@ -371,24 +371,24 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 
 ## Phase 23 — Power Infrastructure
 
-> **状態: ⬜ 未着手**
+> **状態: ✅ 完了**
 > **依存:** Phase 10 / 21
 > 発電・送配電・需要を都市Entityと接続し、電力供給状態をSimulationへ導入する。標準Simulationは接続・capacity・需要による簡易計算とし、高精度な潮流・電圧等の物理計算は交換可能なsolver境界の外側へ分離する。
 
-- ⬜ **P23-001** — Generator / Substation / PowerLine / Loadの正本契約を仕様化する
-- ⬜ **P23-002** — PowerNode / PowerLine topologyとstable IDを実装する
-- ⬜ **P23-003** — Generator capacity / output / operating stateの最小モデルを実装する
-- ⬜ **P23-004** — Building / EstablishmentをPower Loadへ関連付ける契約を実装する
-- ⬜ **P23-005** — 時刻・用途・activityからload demandを計算する最小ruleを実装する
-- ⬜ **P23-006** — network接続とcapacityを考慮する交換可能な簡易power balance / dispatch solver境界を実装する
-- ⬜ **P23-007** — insufficient supply時のunserved demand / outage stateを実装する
-- ⬜ **P23-008** — outageをBuilding / Industryの稼働状態へ反映する最小連携を実装する
-- ⬜ **P23-009** — Power stateをcheckpoint / Save Dataへ含める
-- ⬜ **P23-010** — Power topology / supply / demand / outageをProtocol / Serverで配信する
-- ⬜ **P23-011** — Web ClientでPower networkと供給状態をdebug可視化する
-- ⬜ **P23-012** — 需要変動・generator停止・outage復旧を検証するdeterministic E2Eを追加する
-- ⬜ **P23-013** — 大規模Power node/loadのtick・topology benchmarkを記録する
-- ⬜ **P23-014** — Power Infrastructureのspecification / architecture / ROADMAPを同期する
+- ✅ **P23-001** — Generator / Substation / PowerLine / Loadの正本契約を仕様化する
+- ✅ **P23-002** — PowerNode / PowerLine topologyとstable IDを実装する
+- ✅ **P23-003** — Generator capacity / output / operating stateの最小モデルを実装する
+- ✅ **P23-004** — Building / EstablishmentをPower Loadへ関連付ける契約を実装する
+- ✅ **P23-005** — 時刻・用途・activityからload demandを計算する最小ruleを実装する
+- ✅ **P23-006** — network接続とcapacityを考慮する交換可能な簡易power balance / dispatch solver境界を実装する
+- ✅ **P23-007** — insufficient supply時のunserved demand / outage stateを実装する
+- ✅ **P23-008** — outageをBuilding / Industryの稼働状態へ反映する最小連携を実装する
+- ✅ **P23-009** — Power stateをcheckpoint / Save Dataへ含める
+- ✅ **P23-010** — Power topology / supply / demand / outageをProtocol / Serverで配信する
+- ✅ **P23-011** — Web ClientでPower networkと供給状態をdebug可視化する
+- ✅ **P23-012** — 需要変動・generator停止・outage復旧を検証するdeterministic E2Eを追加する
+- ✅ **P23-013** — 大規模Power node/loadのtick・topology benchmarkを記録する
+- ✅ **P23-014** — Power Infrastructureのspecification / architecture / ROADMAPを同期する
 
 ### Phase 23 完了条件
 
@@ -397,36 +397,54 @@ Phase 10から後続へ委譲した計画済み項目は現在も次のPhaseを�
 - Power Simulationが他domainと疎結合な明確な境界を持つ。
 - 標準の簡易solverを維持したまま、将来のExtensionが詳細な物理solverを提供できる責務境界が存在する。
 
+### Phase 23 closeout evidence
+
+- Simulation / Persistence: stable ID付きPower topology、Generator / Load、capacity-awareな交換可能`IPowerDispatchSolver`、outage state、Economy production連携を実装し、Save Format 11へoptional Power checkpointとして後方互換追加した。
+- Protocol / Server / Web: Protocol 2.12 `PowerSnapshot`を追加し、Server配信とWeb debug overlayでnetwork・demand・supply・outageを観測できる。
+- CI run `33459184156`、End-to-end run `33459184155`、Benchmarks run `33459184151`、Dependency Review run `33459184160`が成功した。
+- specification / architecture / benchmark文書を同期済み。
+- PR #167を`develop`へ統合済み（merge commit `5b785b2330ceb6f5b81482cf668664c83b81d5b3`）。Phase 23を正式closeoutする。
+
 ---
 
 ## Phase 24 — Water & Sewer Infrastructure
 
-> **状態: ⬜ 未着手**
+> **状態: ✅ 完了**
 > **依存:** Phase 10 / 21 / 23
 > 上水道と下水道の3D topology、需要・排水、施設capacity、供給/処理状態を都市Entityへ接続する。標準Simulationは接続とcapacity中心の簡易計算とし、水圧・流量・管内流等の詳細水理計算は交換可能なsolver境界の外側へ分離する。
 
-- ⬜ **P24-001** — Water / Sewerの責務、単位、流向、簡易solverと高精度水理solverの境界を仕様化する
-- ⬜ **P24-002** — WaterNode / WaterPipe / SewerNode / SewerPipeのstable IDと3D topologyを実装する
-- ⬜ **P24-003** — WaterSource / Reservoir / Pump / SewageTreatmentPlantのcapacity・operating state最小モデルを実装する
-- ⬜ **P24-004** — Building / EstablishmentをWater / Sewer service pointへ関連付ける契約を実装する
-- ⬜ **P24-005** — Building用途・Population / Industry activityからwater demandとwastewater generationを計算する最小ruleを実装する
-- ⬜ **P24-006** — network接続とcapacityを考慮する交換可能な簡易Water Supply solverを実装する
-- ⬜ **P24-007** — treatment到達性とnetwork capacityを考慮する交換可能な簡易Sewer solverを実装する
-- ⬜ **P24-008** — unserved water / sewer unavailable / overflow等のservice stateを実装する
-- ⬜ **P24-009** — pump / treatment facilityの停止や停電をBuilding / Industryのservice stateへ反映する最小連携を実装する
-- ⬜ **P24-010** — Water / Sewer topologyの3D spatial queryと参照整合性validationを実装する
-- ⬜ **P24-011** — Water / Sewer stateをcheckpoint / Save Dataへ含める
-- ⬜ **P24-012** — Water / Sewer topology・demand・capacity・service stateをProtocol / Serverで配信する
-- ⬜ **P24-013** — Web Clientで配管・施設・供給/排水状態をdebug可視化する
-- ⬜ **P24-014** — 需要変動・施設停止・network切断・復旧を検証するdeterministic E2Eを追加する
-- ⬜ **P24-015** — 大規模Water / Sewer node・pipe・loadのtick・topology benchmarkを記録する
-- ⬜ **P24-016** — Water & Sewer Infrastructureのspecification / architecture / ROADMAPを同期する
+- ✅ **P24-001** — Water / Sewerの責務、単位、流向、簡易solverと高精度水理solverの境界を仕様化する
+- ✅ **P24-002** — WaterNode / WaterPipe / SewerNode / SewerPipeのstable IDと3D topologyを実装する
+- ✅ **P24-003** — WaterSource / Reservoir / Pump / SewageTreatmentPlantのcapacity・operating state最小モデルを実装する
+- ✅ **P24-004** — Building / EstablishmentをWater / Sewer service pointへ関連付ける契約を実装する
+- ✅ **P24-005** — Building用途・Population / Industry activityからwater demandとwastewater generationを計算する最小ruleを実装する
+- ✅ **P24-006** — network接続とcapacityを考慮する交換可能な簡易Water Supply solverを実装する
+- ✅ **P24-007** — treatment到達性とnetwork capacityを考慮する交換可能な簡易Sewer solverを実装する
+- ✅ **P24-008** — unserved water / sewer unavailable / overflow等のservice stateを実装する
+- ✅ **P24-009** — pump / treatment facilityの停止や停電をBuilding / Industryのservice stateへ反映する最小連携を実装する
+- ✅ **P24-010** — Water / Sewer topologyの3D spatial queryと参照整合性validationを実装する
+- ✅ **P24-011** — Water / Sewer stateをcheckpoint / Save Dataへ含める
+- ✅ **P24-012** — Water / Sewer topology・demand・capacity・service stateをProtocol / Serverで配信する
+- ✅ **P24-013** — Web Clientで配管・施設・供給/排水状態をdebug可視化する
+- ✅ **P24-014** — 需要変動・施設停止・network切断・復旧を検証するdeterministic E2Eを追加する
+- ✅ **P24-015** — 大規模Water / Sewer node・pipe・loadのtick・topology benchmarkを記録する
+- ✅ **P24-016** — Water & Sewer Infrastructureのspecification / architecture / ROADMAPを同期する
 
 ### Phase 24 完了条件
 
 - Building / Industryが上水道と下水道へ接続され、需要・排水量とnetwork / facility capacityに応じてservice stateが変化する。
 - Water / Sewer topologyとservice stateを保存・配信・可視化できる。
 - 標準Simulationの完了に詳細な水圧・流量・管内流計算を要求せず、将来のExtensionが高精度solverを差し替えられる境界を持つ。
+
+### Phase 24 closeout evidence
+
+- Simulation: Water / Sewerのstable ID・3D topology、WaterSource / Reservoir / Pump / SewageTreatmentPlant、Building / Establishment向けServicePoint、需要・排水・service stateを実装した。Water / Sewer solverは交換可能なcapacity solver境界を持ち、深いnetworkでも再帰stackへ依存しない。
+- Power / Economy: pump / treatmentのPower outageと、Water / Sewer availabilityによるEconomy production制約を最小連携した。
+- Persistence: Save Format 11を維持したままoptional WaterSewer checkpointを追加し、facility capacity、ServicePoint参照整合性をrestore時に検証する。
+- Protocol / Server / Web: Protocol 2.13 `WaterSewerSnapshot`を追加し、Server配信とlocale resource経由のWeb debug overlayで状態を観測できる。
+- CI run `33463256652`、End-to-end run `33463256645`、Benchmarks run `33463256670`、Dependency Review run `33463256641`が成功した。
+- specification / architecture / benchmark文書と専用E2E・benchmark workflowを同期済み。
+- PR #169を`develop`へ統合済み（merge commit `0ee179952f629ef6147ddf95f243c2fef5aa3e74`）。Phase 24を正式closeoutする。
 
 ---
 
