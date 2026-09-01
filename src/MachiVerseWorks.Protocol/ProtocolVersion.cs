@@ -2,7 +2,7 @@ namespace MachiVerseWorks.Protocol;
 
 public readonly record struct ProtocolVersion(ushort Major, ushort Minor)
 {
-    public static ProtocolVersion Current => new(2, 15);
+    public static ProtocolVersion Current => new(2, 16);
     public bool SupportsRoadNetwork => Major == 2 && Minor >= 1;
     public bool SupportsPedestrians => Major == 2 && Minor >= 2;
     public bool SupportsVehicles => Major == 2 && Minor >= 3;
@@ -18,6 +18,7 @@ public readonly record struct ProtocolVersion(ushort Major, ushort Minor)
     public bool SupportsWaterSewer => Major == 2 && Minor >= 13;
     public bool SupportsGas => Major == 2 && Minor >= 14;
     public bool SupportsOptical => Major == 2 && Minor >= 15;
+    public bool SupportsRadio => Major == 2 && Minor >= 16;
     public bool CanAccept(ProtocolVersion requestedVersion) => requestedVersion.Major == Major && requestedVersion.Minor <= Minor;
     public bool TryNegotiate(ProtocolVersion requestedVersion, out ProtocolVersion negotiatedVersion)
     {
