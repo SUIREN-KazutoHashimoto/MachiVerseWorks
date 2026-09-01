@@ -75,7 +75,7 @@ export class Application {
         onProtocolError: (message) => this.handleProtocolError(message),
         onClientError: (error) => this.ui.showError(this.localizer.t('error.client', { detail: error.message })),
         onDisconnected: () => {
-          this.observation.resetConnectionState(); this.railway.clear(); this.railwayOperations.clear(); this.view.clearRoadNetwork();
+          this.observation.resetConnectionState(); this.railway.clear(); this.railwayOperations.clear();
           this.ui.setAgentCount(0); this.ui.clearPopulation(); this.ui.clearRailwayOperations(); this.ui.clearMultimodalTransit(); this.ui.clearEconomy();
           this.logisticsDebug.clear(); this.powerDebug.clear(); this.waterSewerDebug.clear(); this.gasDebug.clear(); this.opticalDebug.clear(); this.radioDebug.clear(); this.ui.setProtocol(null);
         },
@@ -102,7 +102,7 @@ export class Application {
   private readonly animate = (now: number): void => {
     if (this.disposed) return;
     const performanceMetrics = this.performanceMetrics; if (performanceMetrics !== null) performanceMetrics.recordAnimationFrame(now);
-    this.updateSubscription(now); this.view.render(this.observation.entities, now, this.observation.pedestrians, this.observation.vehicles, this.observation.intersections); this.audio.syncListenerFromCamera(this.view.camera); this.updateAudio(now); if (performanceMetrics !== null) this.updatePerformanceUi(now, performanceMetrics); this.animationFrame = window.requestAnimationFrame(this.animate);
+    this.updateSubscription(now); this.view.render(this.observation.entities, now, this.observation.pedestrians, this.observation.vehicles, this.observation.intersections, this.observation.roadNetwork); this.audio.syncListenerFromCamera(this.view.camera); this.updateAudio(now); if (performanceMetrics !== null) this.updatePerformanceUi(now, performanceMetrics); this.animationFrame = window.requestAnimationFrame(this.animate);
   };
 
   private updateSubscription(now: number): void {
@@ -128,7 +128,7 @@ export class Application {
       case MessageType.PedestrianRemove:
         this.observation.apply(message); return;
       case MessageType.RoadNetworkSnapshot:
-        this.observation.apply(message); this.view.applyRoadNetwork(message); return;
+        this.observation.apply(message); return;
       case TrafficMessageType.VehicleSpawn:
       case TrafficMessageType.VehicleUpdate:
       case TrafficMessageType.VehicleRemove:
