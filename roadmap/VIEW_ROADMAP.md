@@ -1,194 +1,312 @@
 # View Roadmap
 
-このファイルは、MachiVerseWorks の **View 側の実装ロードマップ**です。Web Client の描画、カメラ、表示表現、UI / UX、可視化、描画最適化、localizationなど、Simulation の正本状態を利用してユーザーへ提示・操作する機能を対象とします。
+このファイルは、MachiVerseWorks の **View側の実装ロードマップ**です。ViewはSimulationが生成したWorldを忠実に観測・描画するための完全read-only clientとし、Simulation stateを変更する責務を持ちません。
 
-Simulation Core、authoritative World、Simulation rule、determinism、Simulation workload 最適化、Server-authoritative command / Protocol / Save Dataなどは [`SIMULATION_ROADMAP.md`](SIMULATION_ROADMAP.md) で管理します。
+- Simulation Core、authoritative World、Simulation rule、意味的state、予定、履歴、Observation read model / Protocol / Server境界は[`SIMULATION_ROADMAP.md`](SIMULATION_ROADMAP.md)で管理します。
+- World / City / Serverを変更するeditor・運転control・Save / Load・configuration等は[`MANAGEMENT_ROADMAP.md`](MANAGEMENT_ROADMAP.md)で管理します。
+- 人口統計、経済分析、交通分析、heatmap、trend等の分析処理はViewへ含めず、将来のAnalytics Listener / analysis clientとして別途設計します。
+- Observation Gatewayのarchitectureは[`../docs/architecture/observation-gateway.md`](../docs/architecture/observation-gateway.md)を正本とします。
 
-MachiVerseWorks の View 開発を、**実際に完了判定できる小さな Task** に分けて管理します。
+> **現在:** View Phase 1 — Read-Only View Foundation  
+> **進め方:** View固有の基盤はPhase 1から進め、Simulationから移管された描画Taskは依存するSimulation Phase / read modelが実装できた時点で順次着手する
 
-> **現在:** View Phase 1 — World & Regional Visualization Foundation  
-> **次の実装タスク:** Simulation側の依存Phase進行に合わせて着手
+## 最上位原則
+
+- **Viewは完全read-onlyである。** Viewからauthoritative Simulation stateを変更しない。
+- **意味的処理はSimulationで完結する。** ViewはActivity、ETA、分類、予定、状態遷移、semantic event等を推測・補完・再計算しない。
+- **Viewは受け取った意味を視覚表現へ変換するだけである。**
+- Viewが所有してよいのはCamera、Selection、renderer resource、描画cache、LOD、interpolation等のPresentation stateだけとする。
+- Viewの存在・非存在、接続数、Camera位置、Selection、描画FPS、Rendering LOD、View cache状態によってSimulation結果が変化してはならない。
+- ViewはSimulation内部Storeへ直接アクセスせず、Observation Gateway / Protocolから提供されるread-only contractだけを使用する。
+- `SubscribeVolume`、Inspect系request等は「何を見るか」を指定するObservation Requestであり、World mutation commandとは分離する。
+- View moduleにManagement command clientを注入してmutation可能にしない。Management ClientがView componentを再利用する場合もcommand責務はManagement shell側に置く。
 
 ## 全体の現在地
 
-| View Phase | 内容 | 状態 |
-| --- | --- | --- |
-| 1 | World & Regional Visualization Foundation | ⏳ Simulation依存待ち |
-| 2 | World Rendering & Rendering LOD | ⏳ Simulation依存待ち |
-| 3 | Historical World View | ⏳ Simulation依存待ち |
-| 4 | World & City Management UI | ⏳ Simulation依存待ち |
-| 5 | Localization | ⏳ 待機 |
+| View Phase | 内容 | 主なSimulation依存 | 状態 |
+| --- | --- | --- | --- |
+| 1 | Read-Only View Foundation | Observation Gateway基盤 / 現行Protocol | ▶️ 基盤着手可能 |
+| 2 | Camera & Observation Navigation | Observation subscription | ⏳ 待機 |
+| 3 | Physical World Rendering | Simulation Phase 29 | ⏳ Simulation依存待ち |
+| 4 | Settlement & Structure Rendering | Simulation Phase 30 / 31 | ⏳ Simulation依存待ち |
+| 5 | Infrastructure & Dynamic Entity Fidelity | Simulation Phase 10〜28等 | ⏳ View基盤待ち |
+| 6 | Large World Rendering & Rendering LOD | Simulation Phase 29〜33 | ⏳ Simulation依存待ち |
+| 7 | Object Selection & Inspector | Observation Inspector read model | ⏳ View基盤待ち |
+| 8 | Temporal Observation | Simulationが公開するrecent / planned state | ⏳ Simulation依存待ち |
+| 9 | Historical World View | Simulation Phase 35 | ⏳ Simulation依存待ち |
+| 10 | Localization | stable observation/error contract | ⏳ 待機 |
+| 11 | Fidelity & Performance | View Phase 1〜10 | ⏳ 待機 |
+
+## Simulation Roadmap追従ルール
+
+View RoadmapはSimulation RoadmapとPhase番号を一致させない。View自身の技術的依存順でPhase 1から積み上げる。
+
+一方、Simulationから移管されたTaskや特定domainの描画Taskには**依存Simulation Phase / read model**を明示する。
+
+実装可能条件は原則として次の両方を満たすこととする。
+
+1. View側の前提Phase / Taskが完了している。
+2. 対象を意味的に表現するSimulation側のauthoritative state / observation contractが実装済みである。
+
+Simulation側の依存が未完成ならViewが仮の意味を生成して先行実装しない。必要ならgeometry / renderer等の意味を持たないView基盤だけを先行する。
+
+Simulation Phaseがcloseoutした際は、対応する未着手View Taskが実装可能になったかを確認し、View Roadmapの状態を更新する。
 
 ## View Roadmap 運用ルール
 
 - 状態記号を付けるのは、単独で完了判定できる作業だけとする。
-- 未完了Taskは `⬜`、必要な検証まで済んだ完了Taskは `✅` で表す。
-- 1タスクは原則として「1つの観測可能な成果」を持つ。
-- 1タスク内に独立した成果が複数ある場合は分割する。
-- 描画、UI、UX、操作性、performance、accessibility、localization等を必要に応じて独立Taskへ分割する。
-- Simulation の正本状態やruleをView都合で変更しない。
-- View cache / LOD / culling / Camera / selection状態をSimulationのauthoritative stateへフィードバックしない。
-- Simulation側の仕様変更が必要になった場合は、[`SIMULATION_ROADMAP.md`](SIMULATION_ROADMAP.md) と関連仕様・設計へ切り分ける。
-- 実装だけでなく、必要なBrowser確認、test、performance計測、docs同期まで含めて完了判定する。
-- 未実装の大テーマはTaskへ詰め込まず、PhaseまたはBacklogとして整理してから分解する。
+- 未完了Taskは`⬜`、必要な検証まで済んだ完了Taskは`✅`で表す。
+- 1 Taskは原則として1つの観測可能な成果を持つ。
+- Rendering / Camera / Selection / Inspector / performance / accessibility / localization等を必要に応じて分割する。
+- Simulation側の仕様変更が必要なら[`SIMULATION_ROADMAP.md`](SIMULATION_ROADMAP.md)へ切り分ける。
+- mutation UIが必要なら[`MANAGEMENT_ROADMAP.md`](MANAGEMENT_ROADMAP.md)へ切り分ける。
+- 分析・集計が必要ならView内へ実装せず、Analytics系の別境界として設計する。
+- Browser確認、test、performance計測、docs同期まで含めて完了判定する。
 
 ## Simulation Roadmapからの移管対応
 
-既存のSimulation Roadmapに混在していた未着手のView項目を以下へ移管する。旧Task IDは履歴・Issue・PRから追跡できるよう移管元として記録する。
-
-| 移管元 | 移管先 |
+| 移管元 | View側の扱い |
 | --- | --- |
-| 旧 `P29-026` | `V1-001` |
-| 旧 `P30-028` のWeb Client 3D可視化部分 | `V1-002` |
-| 旧 Phase 34 `P34-001`〜`P34-015` | View Phase 2 `V2-001`〜`V2-015` |
-| 旧 `P35-010` / `P35-015` のtimeline rendering部分 | View Phase 3 |
-| 旧 Phase 36 のselection / Inspector / editor UI / dashboard / management UI / Browser E2E / rendering performance | View Phase 4 |
-| 旧 Phase 38 Localization `P38-010`〜`P38-015` とlocalization関連closeout | View Phase 5 |
+| 旧`P29-026` | View Phase 3 `V3-001` |
+| 旧`P30-028`のWeb Client 3D可視化部分 | View Phase 4 `V4-001` |
+| 旧Phase 34 `P34-001`〜`P34-015` | 主にView Phase 6へ再整理 |
+| 旧`P35-010` / `P35-015`のtimeline rendering部分 | View Phase 9 |
+| 旧`P36-003` / `P36-004`のSelection / Inspector | View Phase 7 |
+| 旧Phase 36のeditor / command / operation UI | Management Roadmapへ移管 |
+| 旧`P36-016` Dashboard / statistics分析系 | Viewへ移管せず将来Analytics系へ分離 |
+| 旧Phase 38 Localization `P38-010`〜`P38-015`等 | View Phase 10 |
 
-完了済みの `P25-014`、`P26-013`、`P28-016` 等のdebug可視化は、各Simulation PhaseのE2E・closeout証跡として既に完了履歴へ組み込まれているため移動しない。
+完了済みの`P25-014`、`P26-013`、`P28-016`等のdebug可視化は各Simulation PhaseのE2E / closeout証跡として履歴に残す。View Roadmapでは、それらをproduction Viewへ昇格する作業だけを必要に応じて新Task化する。
 
 ---
 
-## View Phase 1 — World & Regional Visualization Foundation
+## View Phase 1 — Read-Only View Foundation
 
-> **状態: ⏳ Simulation依存待ち**  
-> **依存:** Simulation Phase 29 / 30 のProtocol / Server read model  
-> 物理世界・地形・地理Feature・Settlement・都市生成結果をWeb Client上で観測するための基礎描画を整える。
+> **状態: ▶️ 基盤着手可能**  
+> **依存:** 現行Server / Protocol、Simulation RoadmapのObservation Gateway横断基盤
 
-- ⬜ **V1-001** — Web Clientのflat `GridHelper`依存を置換し、terrain mesh・water・主要Geographic Feature・地名を3D描画する（旧 `P29-026`）
-- ⬜ **V1-002** — Settlement network / Parcel / Zone / development / urban naming / Road SignをServer read modelから3D可視化する（旧 `P30-028` のView部分）
-- ⬜ **V1-003** — World / Regional visualizationのBrowser E2Eを追加し、Terrain・Feature・Settlement・Parcel・Road Signの表示を検証する
-- ⬜ **V1-004** — World / Regional visualizationの基本frame time・draw call・memory基準を記録する
-- ⬜ **V1-005** — World & Regional Visualization Foundationのarchitecture / UX / performance guideline / View Roadmapを同期する
+Viewを完全read-onlyなPresentation clientとして固定し、Observation Gatewayから受け取ったread modelだけで描画できる基盤を作る。
+
+- ⬜ **V1-001** — View / Observation Gateway / Managementの責務境界と禁止事項をWeb Client architectureへ反映する
+- ⬜ **V1-002** — Protocol messageをView-local rendering stateへ一方向適用する共通state boundaryを整理する
+- ⬜ **V1-003** — View-local stateをCamera / Selection / rendering resource / cache / interpolationへ限定する契約を実装・testする
+- ⬜ **V1-004** — authoritative observationとprevious/current visual interpolation stateを型・module境界で分離する
+- ⬜ **V1-005** — reconnect / resync時にconnection-local View stateを安全に破棄し、新authoritative observationから再構築する
+- ⬜ **V1-006** — Viewからmutation Protocol / Administration APIへ到達しないことをdependency / E2Eで検証する
+- ⬜ **V1-007** — View未接続 / 単一View / 複数View接続でSimulation state digestが一致する基礎E2Eを整備する
+- ⬜ **V1-008** — Read-Only View Foundationのarchitecture / test / Roadmapを同期する
 
 ### View Phase 1 完了条件
 
-- flat gridを物理世界の表示正本として扱わず、Simulationから配信されたTerrain / Water / GeographicFeatureを3D表示できる。
-- Settlement / Parcel / Zone / Building / naming / Road Sign等の地域生成結果をSimulationの正本状態から可視化できる。
-- View側の状態がSimulationのauthoritative stateへ影響しない。
+- ViewがObservation contractだけから成立する。
+- View codeからauthoritative mutation APIへ到達する経路がない。
+- View接続数や描画状態がSimulation結果へ影響しない。
 
 ---
 
-## View Phase 2 — World Rendering & Rendering LOD
+## View Phase 2 — Camera & Observation Navigation
 
-> **状態: ⏳ Simulation依存待ち**  
-> **依存:** View Phase 1 / Simulation Phase 29〜33  
-> 同一のauthoritative World stateを、広域WorldからSettlement・街区・建物・Agentまで連続的に観測できるViewへ展開する。LOD / culling / streamingは描画にのみ適用し、Simulation workloadや結果へ一切フィードバックしない。
+> **状態: ⏳ 待機**  
+> **依存:** View Phase 1 / Observation Gateway subscription
 
-- ⬜ **V2-001** — Simulation read model / Rendering state / Camera stateの一方向境界とRendering LOD契約を仕様化する（旧 `P34-001`）
-- ⬜ **V2-002** — World / Region / Settlement / District / Streetの複数scaleを連続ズームできるCamera / coordinate strategyを実装する（旧 `P34-002`）
-- ⬜ **V2-003** — Terrain / Water / GeographicFeatureのdistance-based mesh LODとcullingを実装する（旧 `P34-003`）
-- ⬜ **V2-004** — 遠距離Settlementを市街地shape・population / role indicator等のView aggregateとして描画し、Simulation Entity自体は集約しない（旧 `P34-004`）
-- ⬜ **V2-005** — Road / Railway / Utility corridorをscaleに応じたgeometry / line representationへ切り替えるRendering LODを実装する（旧 `P34-005`）
-- ⬜ **V2-006** — Buildingをindividual model / block mass / urban footprintへ切り替えるRendering LODを実装する（旧 `P34-006`）
-- ⬜ **V2-007** — Person / Vehicle等の大量Agentについてfrustum / distance culling・instancing・virtualizationを実装する（旧 `P34-007`）
-- ⬜ **V2-008** — View data streaming / cache / evictionを実装し、evictionがSimulation Entity lifecycleへ影響しないようにする（旧 `P34-008`）
-- ⬜ **V2-009** — Settlement / District / GeographicFeature / Road等のlabel hierarchyとcollision回避を実装する（旧 `P34-009`）
-- ⬜ **V2-010** — Population / land use / traffic / economy / utility等のregional overlay表示基盤を実装する（旧 `P34-010`）
-- ⬜ **V2-011** — Dynamic Urban Region / Settlement influence / service catchmentを広域map overlayとして可視化する（旧 `P34-011`）
-- ⬜ **V2-012** — World scaleから一軒のBuildingまで移動しても座標精度・selection精度を維持するfloating-origin等の必要なprecision対策を実装する（旧 `P34-012`）
-- ⬜ **V2-013** — Rendering有無・Camera位置・LOD levelを変更してもSimulation state digestが一致するE2Eを追加する（旧 `P34-013`）
-- ⬜ **V2-014** — 都市中心・郊外・農村・World overviewそれぞれのframe time / draw call / memory benchmarkを記録する（旧 `P34-014`）
-- ⬜ **V2-015** — World Rendering & Rendering LODのarchitecture / UX / performance guideline / View Roadmapを同期する（旧 `P34-015`）
+- ⬜ **V2-001** — pan / zoom / rotate / altitudeを含むWorld navigationを整理する
+- ⬜ **V2-002** — View frustum / focus targetからread-only `SubscribeVolume`等のObservation Requestを生成する
+- ⬜ **V2-003** —ほぼ同一subscriptionの再送抑制とCamera移動時の安定した更新を実装する
+- ⬜ **V2-004** — Entity / Settlement / GeographicFeatureへのfocus / follow / jumpをView-local navigationとして実装する
+- ⬜ **V2-005** — reconnect後に最新desired observationだけを再要求する
+- ⬜ **V2-006** — Camera操作・subscription変更でSimulation state digestが変化しないE2Eを追加する
 
 ### View Phase 2 完了条件
 
-- 巨大World上の複数Settlementを広域mapとして確認し、任意Settlementへズームして建物・道路・Agentまで観測できる。
-- 遠距離描画を大胆に簡略化してもauthoritative Simulation stateは変化しない。
-- Camera位置・LOD・View cache状態がSimulation結果へ影響しないことをE2Eで保証する。
+- 大規模WorldをCameraで自由に観測できる。
+- Observation Requestは配送対象だけを変え、Simulation workload / fidelity / resultを変えない。
 
 ---
 
-## View Phase 3 — Historical World View
+## View Phase 3 — Physical World Rendering
 
 > **状態: ⏳ Simulation依存待ち**  
-> **依存:** View Phase 2 / Simulation Phase 35  
-> Simulation側が提供するread-only Historical projectionを使い、現在と過去のWorldを安全に閲覧できる時間軸UIを実装する。
+> **依存:** View Phase 1 / 2、Simulation Phase 29のWorld / Terrain / GeographicFeature / Toponym observation contract
 
-- ⬜ **V3-001** — Web ClientへWorld timeline / time sliderを実装し、現在と過去のmap / 3D Viewを切り替えられるようにする（旧 `P35-010`）
-- ⬜ **V3-002** — timeline操作中もlive Simulationを変更せず、Historical read-only projectionだけをViewへ適用する
-- ⬜ **V3-003** — 100年以上の履歴を対象にtimeline移動・Entity lifetime表示・現在復帰を検証するBrowser E2Eを追加する
-- ⬜ **V3-004** — historical timeline renderingのframe time / memory / cache benchmarkを記録する（旧 `P35-015` のView部分）
-- ⬜ **V3-005** — Historical World ViewのUX / architecture / View Roadmapを同期する
+- ⬜ **V3-001** — flat `GridHelper`依存を置換し、Terrain / Water / GeographicFeature / 自然地名を3D描画する（旧`P29-026`）
+- ⬜ **V3-002** — Simulationから提供されたsurface / material / feature typeをView側で意味付けし直さずvisual resolverへmappingする
+- ⬜ **V3-003** — Cave / overhang / multi-surface等の3D terrain observationを表現できるgeometry境界を整える
+- ⬜ **V3-004** — Physical World RenderingのBrowser E2Eを追加する
+- ⬜ **V3-005** — Terrain renderingのframe time / draw call / memory baselineを記録する
 
 ### View Phase 3 完了条件
 
-- 指定時点のHistorical Worldをmap / 3D Viewで閲覧できる。
-- 過去閲覧中もlive Simulationを停止・巻き戻し・変更しない。
-- 長期間timelineの表示性能を継続計測できる。
+- Simulation Phase 29が公開した物理Worldをflat gridへ簡略化せず観測できる。
+- GeographicFeatureや地名の意味をView独自ruleで生成しない。
 
 ---
 
-## View Phase 4 — World & City Management UI
+## View Phase 4 — Settlement & Structure Rendering
 
 > **状態: ⏳ Simulation依存待ち**  
-> **依存:** View Phase 2 / 3 / Simulation Phase 36 のserver-authoritative command境界  
-> BrowserからWorld・地域・都市状態を選択・調査し、Simulation側が提供するcommand境界を通して安全に編集・管理するUIを整える。
+> **依存:** View Phase 3、Simulation Phase 30 / 31のSettlement / Parcel / Zone / Building / naming read model
 
-- ⬜ **V4-001** — Web ClientでMap / 3D Entityを選択するpicking / selection基盤を実装する（旧 `P36-003`）
-- ⬜ **V4-002** — Region / Settlement / Building / Parcel / POI / Person / Vehicle / GeographicFeature / RoadSign等をServer read modelから表示するInspector基盤を実装する（旧 `P36-004`）
-- ⬜ **V4-003** — Road / Laneのbuild / edit / remove commandを操作するeditor UIを実装する（旧 `P36-005` のView部分）
-- ⬜ **V4-004** — Building / POI / Parcel / Zoneのbuild / edit commandを操作するeditor UIを実装する（旧 `P36-006` のView部分）
-- ⬜ **V4-005** — Railway track / station / platformのbuild / edit commandを操作するeditor UIを実装する（旧 `P36-007` のView部分）
-- ⬜ **V4-006** — Power Infrastructureのbuild / edit commandを操作するeditor UIを実装する（旧 `P36-008` のView部分）
-- ⬜ **V4-007** — Water / Sewer Infrastructureのbuild / edit commandを操作するeditor UIを実装する（旧 `P36-009` のView部分）
-- ⬜ **V4-008** — Gas Infrastructureのbuild / edit commandを操作するeditor UIを実装する（旧 `P36-010` のView部分）
-- ⬜ **V4-009** — Optical Communication Infrastructureのbuild / edit commandを操作するeditor UIを実装する（旧 `P36-011` のView部分）
-- ⬜ **V4-010** — Radio Site / Antenna / Spectrum設定のbuild / edit commandを操作するeditor UIを実装する（旧 `P36-012` のView部分）
-- ⬜ **V4-011** — Geographic Feature名・Settlement / 地区 / 道路名・Road Signのoverride UIを実装する
-- ⬜ **V4-012** — command失敗時にClient側だけ状態が進まないoptimistic-state禁止またはrollback方針を実装する（旧 `P36-014`）
-- ⬜ **V4-013** — Simulation speed / pause / resume等のServer commandを操作する運転control UIを実装する
-- ⬜ **V4-014** — Population / Traffic / Transit / Economy / Logistics / Power / Utility / Communication / Radio / Regional dynamicsのDashboardを実装する（旧 `P36-016` のView部分）
-- ⬜ **V4-015** — Server configurationの変更可能項目・restart必要項目を区別して操作できる設定UIを実装する（旧 `P36-017` のView部分）
-- ⬜ **V4-016** — current Save formatのsave / load commandをServer経由で実行する管理UIを追加する（旧 `P36-018` のView部分）
-- ⬜ **V4-017** — destructive commandのconfirmation UIとstable error codeのlocalized表示を実装する（旧 `P36-019` のView部分）
-- ⬜ **V4-018** — Inspector / build / edit / naming / signage / config / save操作のBrowser E2Eを追加する（旧 `P36-020`）
-- ⬜ **V4-019** — 大規模Worldでselection・terrain・overlay・dashboardが描画hot pathを阻害しないperformance testを追加する（旧 `P36-021`）
-- ⬜ **V4-020** — World & City Management UIのarchitecture / UX contract / View Roadmapを同期する（旧 `P36-022` のView部分）
+- ⬜ **V4-001** — Settlement network / Parcel / Zone / development / urban naming / Road Signを3D可視化する（旧`P30-028`のView部分）
+- ⬜ **V4-002** — City / Town / Village / Hamlet等の分類はSimulation提供値だけを使用して表示する
+- ⬜ **V4-003** — Building / POI / Parcel / District / Settlement relationをstable ID参照に基づき表示する
+- ⬜ **V4-004** — 建設・用途変更・vacancy・demolition等のSimulation state transitionを描画へ反映する
+- ⬜ **V4-005** — 複数Settlement・郊外・農村・遠隔集落の表示E2Eを追加する
+- ⬜ **V4-006** — Settlement / Structure rendering baselineを記録する
 
 ### View Phase 4 完了条件
 
-- World / Region / Settlementの主要Entity・Terrain・Geographic Feature・Road SignをBrowserから選択・調査できる。
-- build / edit操作は必ずSimulation側のServer-authoritative commandを経由し、Clientだけで正本状態を変更しない。
-- 自動生成された名称・標識を由来情報を保持したまま明示的にoverrideできる。
-- 主要statistics・運転設定・Server設定・Save操作を管理UIから扱える。
+- Simulationが生成・進化させた複数Settlementを忠実に観測できる。
+- 人口や位置からViewが都市分類・土地利用・成長状態を推測しない。
 
 ---
 
-## View Phase 5 — Localization
+## View Phase 5 — Infrastructure & Dynamic Entity Fidelity
 
-> **状態: ⬜ 未着手**  
-> **依存:** View Phase 4 / stable error code・structured parameter契約  
-> Protocol / Save / Simulationへ翻訳済み文言を持ち込まず、Web Clientの表示層でlocale resource・formatting・fallback・localized errorを管理する。
+> **状態: ⏳ View基盤待ち**  
+> **依存:** View Phase 1〜4、各Simulation domainの既存 / 将来observation contract
 
-- ⬜ **V5-001** — `ja-JP`をdefaultにしたlocale discovery / fallback policyを再確認・固定する（旧 `P38-010`）
-- ⬜ **V5-002** — 追加locale resource packを導入できるWeb Client loading境界を実装する（旧 `P38-011`）
-- ⬜ **V5-003** — 数値・日時・単位・plural等のlocale formattingを共通化する（旧 `P38-012`）
-- ⬜ **V5-004** — stable error code / structured parameterから各localeの表示文を生成するcoverageを拡張する（旧 `P38-013`）
-- ⬜ **V5-005** — translation key欠落・未使用key・parameter不一致をCIで検出する（旧 `P38-014`）
-- ⬜ **V5-006** — 少なくとも1つの追加localeで主要UI / Inspector / Dashboard / error表示をE2E確認する（旧 `P38-015`）
-- ⬜ **V5-007** — localization resource loading / formattingのstartup / memory costをbenchmarkする（旧 `P38-017` のView部分）
-- ⬜ **V5-008** — localization guide / compatibility policy / View Roadmapを同期する（旧 `P38-018` のView部分）
+- ⬜ **V5-001** — Road / Lane / Intersectionをproduction View representationへ整理する
+- ⬜ **V5-002** — Railway Infrastructure / Train / Serviceをauthoritative geometry / stateに忠実な表示へ整理する
+- ⬜ **V5-003** — Person / Pedestrian / Vehicle / Bus / Taxi / Freightのdynamic renderingを統一する
+- ⬜ **V5-004** — Power / Water / Sewer / Gas / Optical / Radio等を観測可能なView layerとして整理する
+- ⬜ **V5-005** — snapshot間interpolation / animationをvisual smoothingだけに限定し、Client predictionを意味的stateとして扱わない
+- ⬜ **V5-006** — spawn / update / removeとstatic revision更新のdomain横断整合性E2Eを追加する
 
 ### View Phase 5 完了条件
 
-- `ja-JP`以外のlocaleを主要UIへ追加できる。
-- Protocol / Save / Simulationへ翻訳済み文言を持ち込まない。
-- locale resource欠落・parameter不一致をCIで検出できる。
-- 追加localeでも主要UI・Inspector・Dashboard・error表示をE2E検証できる。
+- 主要Simulation Entityを一貫したstable ID / observation contractから表示できる。
+- debug proxyがproduction Viewで誤った意味を表す場合は、Simulation observation contractまたはasset resolverを明示して解消する。
+
+---
+
+## View Phase 6 — Large World Rendering & Rendering LOD
+
+> **状態: ⏳ Simulation依存待ち**  
+> **依存:** View Phase 3〜5、Simulation Phase 29〜33
+
+旧Phase 34のWorld Rendering / Rendering LOD計画を、read-only原則に合わせて再構成する。
+
+- ⬜ **V6-001** — Simulation observation / Rendering state / Camera state / LODの一方向契約を固定する（旧`P34-001`）
+- ⬜ **V6-002** — World / Region / Settlement / District / Streetを連続ズームできるCamera / coordinate strategyを実装する（旧`P34-002`）
+- ⬜ **V6-003** — Terrain / Water / GeographicFeatureのdistance-based mesh LOD / cullingを実装する（旧`P34-003`）
+- ⬜ **V6-004** — 遠距離SettlementをSimulation提供の観測値から意味を変えない簡略representationで描画する（旧`P34-004`）
+- ⬜ **V6-005** — Road / Railway / Utility corridorのscale別geometry representationを実装する（旧`P34-005`）
+- ⬜ **V6-006** — Buildingのindividual / block mass / footprint rendering LODを実装する（旧`P34-006`）
+- ⬜ **V6-007** — Person / Vehicle等のfrustum / distance culling・instancing・visual virtualizationを実装する（旧`P34-007`）
+- ⬜ **V6-008** — View data streaming / cache / evictionを実装し、Simulation Entity lifecycleと独立させる（旧`P34-008`）
+- ⬜ **V6-009** — label hierarchy / collision回避を実装する（旧`P34-009`）
+- ⬜ **V6-010** — World scaleから単一Buildingまでselection精度を維持するfloating-origin等のprecision対策を実装する（旧`P34-012`）
+- ⬜ **V6-011** — Camera / LOD / View cache変更時もSimulation state digestが一致するE2Eを追加する（旧`P34-013`）
+- ⬜ **V6-012** — 都市中心・郊外・農村・World overviewのframe time / draw call / memory benchmarkを記録する（旧`P34-014`）
+- ⬜ **V6-013** — World Rendering / LOD architecture / guideline / Roadmapを同期する（旧`P34-015`）
+
+旧`P34-010` / `P34-011`のPopulation / economy / influence / catchment等の分析overlayはViewから除外する。Simulationが直接持つ状態をそのまま表示するvisual layerが必要になった場合だけ、意味的処理なしのTaskとして再追加する。
+
+### View Phase 6 完了条件
+
+- 巨大Worldを広域から個別Entityまで連続して観測できる。
+- LOD / culling / cache / streamingがSimulation結果やEntity lifecycleへ影響しない。
+
+---
+
+## View Phase 7 — Object Selection & Inspector
+
+> **状態: ⏳ View基盤待ち**  
+> **依存:** View Phase 1 / 2、Observation Gatewayのgeneric inspection contract
+
+- ⬜ **V7-001** — Map / 3D Entityを選択するpicking / selection基盤を実装する（旧`P36-003`）
+- ⬜ **V7-002** — Entity kindに依存しすぎない共通Inspector shellを実装する（旧`P36-004`）
+- ⬜ **V7-003** — Region / Settlement / Building / Parcel / POI / Person / Vehicle / Infrastructure / GeographicFeature等のCurrent stateを表示する
+- ⬜ **V7-004** — related Entityをstable ID relationから辿るnavigationを実装する
+- ⬜ **V7-005** — focus / follow targetとSelectionをView-local stateとして管理する
+- ⬜ **V7-006** — Inspector request / clear / reconnect / missing EntityのBrowser E2Eを追加する
+
+### View Phase 7 完了条件
+
+- 主要Objectを選択してauthoritative Current stateを詳細表示できる。
+- InspectorはWorldを変更する操作を提供しない。
+
+---
+
+## View Phase 8 — Temporal Observation
+
+> **状態: ⏳ Simulation依存待ち**  
+> **依存:** View Phase 7、Simulationが公開するrecent state / semantic event / planned future contract
+
+- ⬜ **V8-001** — InspectorにCurrent / Recent Past / Planned Futureの3軸を持つ共通表示contractを実装する
+- ⬜ **V8-002** — Recent PastはSimulationが公開したstate / eventだけを表示する
+- ⬜ **V8-003** — Planned FutureはSimulationが公開したschedule / planned action / estimated valueだけを表示する
+- ⬜ **V8-004** — View側でposition差分等からsemantic eventを生成しないことをtestする
+- ⬜ **V8-005** — trajectory等の純粋なvisual historyをsemantic historyと区別して表示する
+- ⬜ **V8-006** — Person / Vehicle / Train / Building等の代表Entityでtemporal Inspector E2Eを追加する
+
+### View Phase 8 完了条件
+
+- 選択Objectについて現在、少し過去、予定を観測できる。
+- 過去・予定の意味をViewが生成しない。
+
+---
+
+## View Phase 9 — Historical World View
+
+> **状態: ⏳ Simulation依存待ち**  
+> **依存:** View Phase 6〜8、Simulation Phase 35
+
+- ⬜ **V9-001** — World timeline / time sliderからHistorical read-only projectionを選択できるようにする（旧`P35-010`）
+- ⬜ **V9-002** — Historical projectionをlive Viewと同じrendering pipelineへ適用する
+- ⬜ **V9-003** — 過去時点のEntity Selection / Inspectorを実装する
+- ⬜ **V9-004** — timeline操作中もlive Simulationを停止・巻き戻し・変更しないE2Eを追加する
+- ⬜ **V9-005** — 100年以上のtimeline rendering / cache / memory benchmarkを記録する（旧`P35-015`のView部分）
+
+### View Phase 9 完了条件
+
+- 指定時点のWorldを観測し、その時点のObjectを選択・詳細表示できる。
+- Historical viewingがlive Simulationへ一切干渉しない。
+
+---
+
+## View Phase 10 — Localization
+
+> **状態: ⏳ 待機**  
+> **依存:** stable observation / error contract、主要Inspector UI
+
+- ⬜ **V10-001** — `ja-JP` defaultのlocale discovery / fallback policyを固定する（旧`P38-010`）
+- ⬜ **V10-002** — 追加locale resource pack loading境界を実装する（旧`P38-011`）
+- ⬜ **V10-003** — 数値・日時・単位・plural等のlocale formattingを共通化する（旧`P38-012`）
+- ⬜ **V10-004** — stable code / structured parameterから表示文を生成するcoverageを拡張する（旧`P38-013`）
+- ⬜ **V10-005** — translation key欠落・未使用key・parameter不一致をCIで検出する（旧`P38-014`）
+- ⬜ **V10-006** — 追加localeで主要View / InspectorをE2E確認する（旧`P38-015`）
+- ⬜ **V10-007** — localization resource loading / formattingのstartup / memory costをbenchmarkする
+
+### View Phase 10 完了条件
+
+- Protocol / Save / Simulationへ翻訳済み文言を持ち込まず、read-only Viewを複数localeで表示できる。
+
+---
+
+## View Phase 11 — Fidelity & Performance
+
+> **状態: ⏳ 待機**  
+> **依存:** View Phase 1〜10
+
+- ⬜ **V11-001** — Simulation observationとView表示のmissing / stale / wrong-revision検出testを整備する
+- ⬜ **V11-002** — long-running Viewでspawn / remove / reconnect / cache eviction後の整合性を検証する
+- ⬜ **V11-003** — large World / large Entity countでframe time / memory / draw call / decode costを継続計測する
+- ⬜ **V11-004** — low / standard / high rendering quality profileを意味的stateを変えずに定義する
+- ⬜ **V11-005** — View無効 / quality差 / FPS差 / Camera差 / Client数差でSimulation state digestが一致する最終E2Eを追加する
+- ⬜ **V11-006** — View production architecture / performance guideline / Roadmapをcloseout同期する
+
+### View Phase 11 完了条件
+
+- 表示品質を変えても同じauthoritative Worldを意味的に同一として観測できる。
+- 長時間・大規模WorldでもView cacheやdelivery stateがSimulationと混同されない。
 
 ---
 
 ## 継続Backlog
 
-現時点では未定。
+- View Addon: model / material / rendering layer / Inspector section等のread-only extension
+- advanced lighting / weather / atmosphere等、Simulation stateを忠実に表現するproduction visual polish
+- accessibility / UI scale / keyboard navigation
 
-## 新規Backlogの扱い
-
-View 開発中に新しい大テーマが見つかった場合は、既存Phaseへ無理に詰め込まない。
-
-1. 既存Phaseの完了に必須なら、そのPhaseへ独立Taskとして追加する。
-2. 完了に必須でない大テーマなら、このView Roadmap末尾へBacklogとして記録する。
-3. 着手時に必要な仕様・設計・UX方針を関連文書へ切り分ける。
-4. 実装・描画・操作・検証・performanceのどこまでをPhase完了条件とするか明示する。
-5. Phase完了時に、残件が暗黙に持ち越されていないことを確認する。
+Management操作やAnalytics処理はこのBacklogへ入れない。
