@@ -14,7 +14,7 @@ public sealed class GasValidationTests
             [],
             [new GasLoadDispatch(request.Loads[0].Id, 0d)])));
 
-        Assert.ThrowsException<InvalidOperationException>(() => world.Step());
+        AssertThrows<InvalidOperationException>(() => world.Step());
         Assert.AreEqual(0d, world.CreateGasSnapshot().Sources.Single().OutputCubicMetersPerDay, 1e-9);
     }
 
@@ -23,17 +23,17 @@ public sealed class GasValidationTests
     {
         var unknown = CreatePipedWorld(new DelegateGasSolver(request => new GasSupplyResult(
             [new GasSourceDispatch(new GasSourceId(999), 1d)], [], [], [])));
-        Assert.ThrowsException<InvalidOperationException>(() => unknown.Step());
+        AssertThrows<InvalidOperationException>(() => unknown.Step());
 
         var duplicate = CreatePipedWorld(new DelegateGasSolver(request => new GasSupplyResult(
             [], [], [],
             [new GasLoadDispatch(request.Loads[0].Id, 1d), new GasLoadDispatch(request.Loads[0].Id, 1d)])));
-        Assert.ThrowsException<InvalidOperationException>(() => duplicate.Step());
+        AssertThrows<InvalidOperationException>(() => duplicate.Step());
 
         var overBound = CreatePipedWorld(new DelegateGasSolver(request => new GasSupplyResult(
             [new GasSourceDispatch(request.Sources[0].Id, request.Sources[0].AvailableCapacityCubicMetersPerDay + 1d)],
             [], [], [])));
-        Assert.ThrowsException<InvalidOperationException>(() => overBound.Step());
+        AssertThrows<InvalidOperationException>(() => overBound.Step());
     }
 
     [TestMethod]
@@ -43,7 +43,7 @@ public sealed class GasValidationTests
         var logistics = checkpoint.Economy!.Logistics! with { Inventories = Array.Empty<SimulationInventoryCheckpoint>() };
         var invalid = checkpoint with { Economy = checkpoint.Economy with { Logistics = logistics } };
 
-        Assert.ThrowsException<ArgumentException>(() => SimulationWorld.RestoreCheckpoint(invalid));
+        AssertThrows<ArgumentException>(() => SimulationWorld.RestoreCheckpoint(invalid));
     }
 
     [TestMethod]
@@ -54,7 +54,21 @@ public sealed class GasValidationTests
         var logistics = checkpoint.Economy.Logistics with { Inventories = [inventory with { Role = InventoryRole.Supplier }] };
         var invalid = checkpoint with { Economy = checkpoint.Economy with { Logistics = logistics } };
 
-        Assert.ThrowsException<ArgumentException>(() => SimulationWorld.RestoreCheckpoint(invalid));
+        AssertThrows<ArgumentException>(() => SimulationWorld.RestoreCheckpoint(invalid));
+    }
+
+    private static void AssertThrows<TException>(Action action) where TException : Exception
+    {
+        try
+        {
+            action();
+        }
+        catch (TException)
+        {
+            return;
+        }
+
+        Assert.Fail($"Expected {typeof(TException).Name} to be thrown.");
     }
 
     private static SimulationWorld CreatePipedWorld(IGasSupplySolver solver)
