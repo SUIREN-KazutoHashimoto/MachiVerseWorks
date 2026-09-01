@@ -16,6 +16,12 @@ public sealed class RemoteMcpTests
     private const string ReadToken = "read-token-0123456789-0123456789-abcdef";
     private const string WriteToken = "write-token-0123456789-0123456789-abcdef";
     private const string DestructiveToken = "destroy-token-0123456789-0123456789-abcdef";
+    private static readonly string[] InjectionArguments = ["0", "0", "0\nstop"];
+    private static readonly string[] RemoveOneArguments = ["1"];
+    private static readonly Action<ILogger, int, string, Exception?> LongLog = LoggerMessage.Define<int, string>(
+        LogLevel.Information,
+        new EventId(2701, nameof(LongLog)),
+        "entry-{Index} {Payload}");
 
     [TestMethod]
     public async Task McpEndpointIsAbsentByDefault()
@@ -147,7 +153,7 @@ public sealed class RemoteMcpTests
         {
             ["entity"] = "agent",
             ["operation"] = "add",
-            ["arguments"] = new[] { "0", "0", "0\nstop" },
+            ["arguments"] = InjectionArguments,
         }, cancellationToken: CancellationToken.None);
         AssertStructuredRejection(injection, "invalid_argument");
         Assert.AreEqual(0, simulation.ActiveAgentCount);
@@ -167,7 +173,7 @@ public sealed class RemoteMcpTests
         var unconfirmed = await destructiveClient.CallToolAsync("entity_remove", new Dictionary<string, object?>
         {
             ["entity"] = "agent",
-            ["arguments"] = new[] { "1" },
+            ["arguments"] = RemoveOneArguments,
             ["confirm"] = false,
         }, cancellationToken: CancellationToken.None);
         AssertStructuredRejection(unconfirmed, "confirmation_required");
@@ -204,7 +210,8 @@ public sealed class RemoteMcpTests
         await using var host = await StartMcpHostAsync(new Dictionary<string, string?> { ["Server:Mcp:MaxResultBytes"] = "1024" });
         var loggerFactory = host.App.Services.GetRequiredService<ILoggerFactory>();
         var logger = loggerFactory.CreateLogger("RemoteMcpTests.LongLog");
-        for (var index = 0; index < 50; index++) logger.LogInformation("entry-{Index} {Payload}", index, new string('x', 200));
+        var payload = new string('x', 200);
+        for (var index = 0; index < 50; index++) LongLog(logger, index, payload, null);
 
         await using var readClient = await CreateMcpClientAsync(host, ReadToken);
         var result = await readClient.CallToolAsync("logs_query", new Dictionary<string, object?> { ["limit"] = 50 }, cancellationToken: CancellationToken.None);
@@ -277,7 +284,7 @@ public sealed class RemoteMcpTests
             TransportMode = HttpTransportMode.StreamableHttp,
             AdditionalHeaders = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
         });
-        return McpClient.CreateAsync(transport).AsTask();
+        return McpClient.CreateAsync(transport);
     }
 
     private static void AssertStructuredRejection(CallToolResult result, string expectedCode)
