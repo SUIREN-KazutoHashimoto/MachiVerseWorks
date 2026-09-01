@@ -13,6 +13,7 @@ Headless ServerはASP.NET Core / Kestrel上で1つの`SimulationWorld`をserver-
 - `Server:MaximumSubscriptionCellCount`でsubscription cell数を制限する
 - Save起動時は復元した`SimulationWorld.Config`をscheduler / HelloAck / subscription guardの正本にする
 - stdin管理Consoleはtransport-independentな`AdminCommand`境界を経由し、Simulation tickと同じauthoritative lockで直列化する
+- Remote MCPは明示設定時だけ`/mcp`を公開し、同じ`AdminCommandQueue` / executorを再利用する
 
 既定では`127.0.0.1:5080`をlistenし、Vite開発用の`http://127.0.0.1:5173`と`http://localhost:5173`をBrowser Originとして許可します。
 
@@ -46,6 +47,32 @@ exit
 `world save`はSimulation lock中にcheckpointだけをcaptureし、serializationとfile I/Oはlock外で行います。`world load`はfile I/Oとdeserializeを先に終えてからworldをatomicに差し替えます。world差し替えやtopology mutationはRoad/Railway read-model revisionを進め、接続中Clientへ新しいread modelを再配信できる状態にします。
 
 詳細は[`../../docs/specifications/server-administration-console.md`](../../docs/specifications/server-administration-console.md)と[`../../docs/decisions/ADR-0005-server-administration-boundary.md`](../../docs/decisions/ADR-0005-server-administration-boundary.md)を参照してください。
+
+## Remote MCP administration
+
+Remote MCPは既定で無効です。有効化すると公式C# MCP SDKのStreamable HTTP transportを`/mcp`へ登録し、Bearer credentialごとに`read` / `write` / `destructive`のToolを分離します。Remote MCP adapterは`SimulationRuntime`を直接変更せず、authoritative操作を既存`AdminCommandParser` / `AdminCommandQueue` / `AdminCommandExecutorV2`へ渡します。
+
+開発・閉域環境での最小設定例:
+
+```bash
+export Server__Mcp__Enabled=true
+export Server__Mcp__ReadToken='replace-with-at-least-32-random-characters'
+export Server__Mcp__WriteToken='replace-with-a-different-32-char-token'
+export Server__Mcp__DestructiveToken='replace-with-another-distinct-token'
+dotnet run --project src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj
+```
+
+Browser由来のMCP Clientだけを許可する場合はexact Originを設定します。通常のnon-browser MCP Clientは`Origin`を送らないため、この設定は必須ではありません。
+
+```bash
+export Server__Mcp__AllowedOrigins='https://admin.example.com;https://ops.example.com'
+```
+
+Internet越しではClientからKestrelのHTTP originを直接公開せず、Cloudflare Tunnel等のtrusted reverse proxyでTLSを終端し、公開URLを`https://server.example.com/mcp`のようなHTTPS endpointにします。origin側はloopback/private network/firewallで保護し、proxyは`Authorization`、`Content-Type`、`Accept`、`MCP-Protocol-Version`等を転送し、`/mcp`をcacheしない設定にします。Bearer tokenは`appsettings.json`へ書かず、環境変数またはsecret storeから注入してください。
+
+主なRemote MCP制限は`Server:Mcp`配下の`MaxRequestBytes`、`MaxConcurrentRequests`、`RequestsPerMinute`、`RequestTimeoutMilliseconds`、`MaxResultBytes`、`MaxLogEntries`、`MaxQueryItems`で調整できます。`simulation_save`は任意pathを受け取らず、`SaveDirectory`配下のsafe slotだけを使用します。server shutdown、`world load`、任意shell/process、任意Administration commandはRemote MCPへ公開しません。
+
+詳細契約は[`../../docs/specifications/remote-mcp-administration.md`](../../docs/specifications/remote-mcp-administration.md)、実装境界は[`../../docs/architecture/remote-mcp-administration.md`](../../docs/architecture/remote-mcp-administration.md)、判断理由は[`../../docs/decisions/ADR-0006-remote-mcp-through-administration-boundary.md`](../../docs/decisions/ADR-0006-remote-mcp-through-administration-boundary.md)を参照してください。
 
 ## Published domains
 
