@@ -11,23 +11,24 @@
 
 ## 全体の現在地
 
-| Management Phase | 内容 | 状態 |
-| --- | --- | --- |
-| 1 | Management Client Foundation | ⏳ Simulation依存待ち |
-| 2 | World & Infrastructure Editing | ⏳ Simulation依存待ち |
-| 3 | Runtime & Server Operations | ⏳ Simulation依存待ち |
-| 4 | Management Safety & Production UX | ⏳ Simulation依存待ち |
+| Management Phase | 内容 | 主なSimulation依存 | 状態 |
+| --- | --- | --- | --- |
+| 1 | Management Client Foundation | Simulation Phase 36共通command境界 | ⏳ Simulation依存待ち |
+| 2 | World & Infrastructure Editing | Simulation Phase 36 editing command | ⏳ Simulation依存待ち |
+| 3 | Runtime & Server Operations | Simulation Phase 36 runtime / config / Save command | ⏳ Simulation依存待ち |
+| 4 | Management Safety & Production UX | permission / confirmation / error contract | ⏳ Simulation依存待ち |
+| 5 | Addon & Extension Management | Simulation Phase 38 Extension Platform | ⏳ Simulation依存待ち |
 
 ## Management Roadmap 運用ルール
 
-- ManagementはSimulationを変更できる唯一の一般GUI系Clientとして扱い、Viewとは別責務にする。
+- ManagementはSimulationを変更できる一般GUI系Clientとして扱い、Viewとは別責務にする。
 - mutationは必ずSimulation Roadmap側で定義されたserver-authoritative command境界を通す。
 - Client側のoptimistic mutationをauthoritative stateとして扱わない。
 - command成功後のWorld表示はObservation Gatewayから再取得したauthoritative observationを正とする。
 - read-only表示には可能な限りView componentを再利用し、同じEntity描画・Selection・Inspectorを二重実装しない。
 - View componentへcommand clientを注入してmutation可能にする設計は避け、Management shell側で観測とcommandを組み合わせる。
 - Analytics / 統計分析 / trend / heatmap生成はManagementの必須責務に含めない。
-- destructive操作、権限、confirmation、auditabilityを通常のView UXとは別に扱う。
+- destructive操作、権限、confirmation、trust、auditabilityを通常のView UXとは別に扱う。
 
 ## Simulation Roadmapからの移管対応
 
@@ -43,7 +44,7 @@
 | 旧 `P36-019` のconfirmation / error UI | Management Phase 4 |
 | 旧 `P36-020` / `P36-021` のManagement UI検証部分 | Management Phase 4 |
 
-旧`P36-003` / `P36-004`のSelection / Inspectorはread-only観測機能としてView Roadmapへ置く。旧`P36-016`のDashboard / statistics分析系はView/Managementの必須責務へ移さず、将来のAnalytics Listener / analysis clientとして別途設計する。
+旧`P36-003` / `P36-004`のSelection / Inspectorはread-only観測機能としてView Roadmapへ置く。旧`P36-016`のDashboard / statistics分析系はView / Managementの必須責務へ移さず、将来のAnalytics Listener / analysis clientとして別途設計する。
 
 ---
 
@@ -130,9 +131,36 @@
 
 ---
 
+## Management Phase 5 — Addon & Extension Management
+
+> **状態: ⏳ Simulation依存待ち**  
+> **依存:** Management Phase 1 / 4、Simulation Phase 38 Extension Platform
+
+Addonの存在・trust・dependency・conflict・設定を人間が管理するUIを提供する。model / material / rendering layer等のread-only View Addon適用そのものはView Roadmap側で扱う。
+
+- ⬜ **M5-001** — Installed / Official / Community / Updatesを表示するAddon Manager shellを実装する
+- ⬜ **M5-002** — `.mvaddon`のinstall / uninstall / update UIを実装する
+- ⬜ **M5-003** — enable / disable操作をExtension Platformのauthoritative lifecycle境界へ接続する
+- ⬜ **M5-004** — publisher / requested capability / code-vs-data-only / trust informationを表示する
+- ⬜ **M5-005** — dependency不足・version incompatibility・conflictをstructured metadataから表示する
+- ⬜ **M5-006** — exclusive provider / override conflictの解決候補を表示し、明示選択をExtension Platformへ送るUIを実装する
+- ⬜ **M5-007** — Addon固有settings schemaから設定画面を構築し、runtime-changeable / restart-requiredを区別する
+- ⬜ **M5-008** — Developer Modeのlocal Addon link / unlink UIを明示的な開発機能として実装する
+- ⬜ **M5-009** — Addon install / enable / conflict / settings / failureのBrowser E2Eを追加する
+- ⬜ **M5-010** — Addon & Extension Managementのsecurity / trust / UX / Roadmapを同期する
+
+### Management Phase 5 完了条件
+
+- Addonのinstall / uninstall / enable / disable / update /設定変更をManagementから安全に行える。
+- trust / capability / dependency / conflictが操作前に確認できる。
+- Addon管理操作をView moduleへ持ち込まない。
+- Addonの最終状態はExtension Platformのauthoritative resultとObservationから確認する。
+
+---
+
 ## 継続Backlog
 
-- Management Addon / custom tool contribution
+- Management Addon / custom command tool contribution
 - multi-user operation / conflict UX
 - role-specific management workspace
 - audit log viewer
