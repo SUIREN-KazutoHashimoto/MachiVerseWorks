@@ -31,11 +31,11 @@ const connection = new MachiVerseConnection(serverUrl, { minimumDelayMs: 100, ma
 
 try {
   connection.connect();
-  await waitUntil(() => state === 'connected', 'Protocol 2.12 connection');
+  await waitUntil(() => state === 'connected', 'Protocol 2.13 connection');
   connection.setSubscription({ minX: -100, minY: -60, minZ: -20, maxX: 100, maxY: 60, maxZ: 20 });
   await waitUntil(() => snapshot !== null && snapshot.segments.length === 5, 'railway snapshot from Save fixture');
 
-  assert(negotiatedVersion?.major === 2 && negotiatedVersion?.minor === 12, 'Protocol 2.12 was negotiated');
+  assert(negotiatedVersion?.major === 2 && negotiatedVersion?.minor === 13, 'Protocol 2.13 was negotiated');
   assert(snapshot.nodes.length === 10, 'ten TrackNodes were restored from Save');
   assert(snapshot.blocks.length === 5, 'five BlockSections were restored from Save');
   assert(snapshot.stations.length === 1, 'Station was restored from Save');
