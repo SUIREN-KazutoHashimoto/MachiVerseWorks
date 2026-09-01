@@ -60,7 +60,7 @@ Security機能の提供条件や名称がGitHub側で変わる場合は、その
 - Issues: ON
 - Discussions: 必要に応じてON。現在の公開コミュニケーション用途ではONでよい。
 - Wiki: docsをRepository内で正本管理するため原則OFF。
-- Projects: `ROADMAP.md` を正本とする間は必須ではない。
+- Projects: `roadmap/SIMULATION_ROADMAP.md` をSimulation側の進捗正本とする間は必須ではない。
 - Pages: Web Clientのdeploy方針が決まるまでOFF。
 
 Topicsは実装が始まった時点で、実態に合うものだけ追加します。候補は `csharp`, `dotnet`, `threejs`, `city-simulation`, `simulation` です。
