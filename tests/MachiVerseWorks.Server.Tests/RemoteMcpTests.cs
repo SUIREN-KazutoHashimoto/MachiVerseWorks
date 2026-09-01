@@ -68,16 +68,16 @@ public sealed class RemoteMcpTests
     public async Task OversizedAndMalformedRequestsAreRejectedWithoutStoppingServer()
     {
         await using var host = await StartMcpHostAsync(new Dictionary<string, string?> { ["Server:Mcp:MaxRequestBytes"] = "4096" });
-        using var client = host.CreateHttpClient();
         var simulation = host.App.Services.GetRequiredService<SimulationRuntime>();
         var initialTick = simulation.TickCount;
 
+        using (var oversizedClient = host.CreateHttpClient())
         using (var oversized = new HttpRequestMessage(HttpMethod.Post, "/mcp") { Content = new StringContent(new string('x', 5000)) })
         {
             oversized.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ReadToken);
             try
             {
-                using var response = await client.SendAsync(oversized);
+                using var response = await oversizedClient.SendAsync(oversized);
                 Assert.AreEqual(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
             }
             catch (HttpRequestException)
@@ -86,11 +86,12 @@ public sealed class RemoteMcpTests
             }
         }
 
+        using (var malformedClient = host.CreateHttpClient())
         using (var malformed = new HttpRequestMessage(HttpMethod.Post, "/mcp") { Content = new StringContent("{not-json") })
         {
             malformed.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ReadToken);
             malformed.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-            using var response = await client.SendAsync(malformed);
+            using var response = await malformedClient.SendAsync(malformed);
             Assert.IsTrue((int)response.StatusCode is >= 400 and < 500);
         }
 
