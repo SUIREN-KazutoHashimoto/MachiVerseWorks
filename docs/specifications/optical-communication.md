@@ -16,7 +16,7 @@ All IDs remain stable through checkpoint/save/restore. References to missing nod
 
 ## Demand and capacity
 
-Bandwidth is measured in Gbit/s. Base demand is multiplied by deterministic city activity rules derived from Building use and Establishment/Industry state. Radio backhaul is represented as a generic demand kind so Phase 27 can reference Phase 26 without coupling Phase 26 to a specific radio technology.
+Bandwidth is measured in Gbit/s. Base demand is multiplied by deterministic city activity rules derived from Building use and Establishment/Industry state. Radio backhaul is represented as a generic demand kind so Phase 28 can reference Phase 26 without coupling Phase 26 to a specific radio technology.
 
 The default solver reserves capacity at the endpoint, each traversed FiberCable, and the selected external backhaul. Demands are processed deterministically by priority then stable ID. A route with no positive residual bottleneck is unavailable.
 

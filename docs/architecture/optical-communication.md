@@ -18,7 +18,7 @@ Fiber utilization at or above `0.85` is considered congested. Demand quality is 
 
 Active optical equipment can reference a Building or Establishment and can require power. The optical step reads the existing Power Infrastructure availability boundary; an unpowered OLT/ONU/router/switch becomes non-operational and therefore removes its node capacity from routing. Passive splitters can be configured without a power requirement.
 
-Building and Establishment references reuse existing city entity IDs. Building use and establishment activity provide the deterministic demand multiplier used by the default demand rule. `RadioBackhaul` demand intentionally has no Phase 27 radio-type dependency, providing a stable boundary for future radio sites and base stations.
+Building and Establishment references reuse existing city entity IDs. Building use and establishment activity provide the deterministic demand multiplier used by the default demand rule. `RadioBackhaul` demand intentionally has no Phase 28 radio-type dependency, providing a stable boundary for future radio sites and base stations.
 
 ## Persistence and protocol
 
