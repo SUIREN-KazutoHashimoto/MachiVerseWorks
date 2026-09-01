@@ -67,10 +67,11 @@ versioned Save Data と Simulation checkpoint の変換・検証を担当しま�
 - `docs/development/`: 開発・テスト・Git 運用
 - `docs/decisions/`: ADR
 - `docs/archive/`: 廃止済み資料・Legacy 資料・実験記録
+- `roadmap/`: 領域別の実装ロードマップ。Simulation の正本は `roadmap/SIMULATION_ROADMAP.md`
 - `scripts/`: 開発・CI 補助スクリプト
 - `tools/`: 独立した開発支援ツール
 
-ドキュメントをルートへ無秩序に追加しない。ルートへ置くのは、`README.md`、`ROADMAP.md`、ライセンス・貢献・開発ルールなど、リポジトリ全体の入口として必要なファイルに限定する。
+ドキュメントをルートへ無秩序に追加しない。ルートへ置くのは、`README.md`、ライセンス・貢献・開発ルールなど、リポジトリ全体の入口として必要なファイルに限定する。
 
 ## 4. ドキュメントルール
 
@@ -80,7 +81,7 @@ versioned Save Data と Simulation checkpoint の変換・検証を担当しま�
 - 採用理由を将来説明する必要がある設計判断は `docs/decisions/` に ADR を作成する。
 - 廃止した資料は削除ではなく、参照価値がある場合のみ `docs/archive/` へ移す。
 - `archive` を未整理ファイルの一時置き場として使わない。
-- 将来の予定や作業状態は仕様書へ混ぜず、`ROADMAP.md` で管理する。
+- 将来の予定や作業状態は仕様書へ混ぜず、`roadmap/` 配下の領域別ロードマップで管理する。Simulation の正本は `roadmap/SIMULATION_ROADMAP.md` とする。
 
 ## 5. Git 運用
 
@@ -148,7 +149,7 @@ PR に伴う A / B の更新コミットは、PR 作成のためのバージョ�
 - 仕様を変更した場合は関連ドキュメントが更新されている。
 - 新しい設計判断が重要な場合は ADR が追加または更新されている。
 - 一時的なデバッグコード、不要なログ、実験用フラグが本流に残っていない。
-- `ROADMAP.md` の対象タスクがある場合は、実際の完了状態と状態記号が一致している。
+- `roadmap/SIMULATION_ROADMAP.md` の対象タスクがある場合は、実際の完了状態と状態記号が一致している。
 
 ## 8. エージェント向け注意
 
@@ -175,17 +176,17 @@ PR に伴う A / B の更新コミットは、PR 作成のためのバージョ�
 
 詳細は `docs/architecture/localization.md`、`docs/development/localization-guidelines.md`、`docs/decisions/ADR-0002-localization-boundary.md` を参照する。
 
-## 10. ROADMAP 運用
+## 10. Simulation Roadmap 運用
 
-`ROADMAP.md` は、現在および将来の実装を小さな完了可能タスクとして追跡する正本とする。
+`roadmap/SIMULATION_ROADMAP.md` は、現在および将来の Simulation 側実装を小さな完了可能タスクとして追跡する正本とする。純粋な View 表現・見た目・UX 改善は別の View ロードマップで管理し、Simulation の成立や determinism の検証に必要な描画・UI境界のみ Simulation Roadmap に含める。
 
 - 未完了Taskは `⬜`、必要な検証まで済んだ完了Taskは `✅` で表す。
 - 作業開始前に、依頼内容に対応する既存 Task ID があるか確認する。
-- 対応タスクが存在しない計画済み作業は、必要に応じて小さなタスクへ分解して `ROADMAP.md` に追加する。
+- 対応タスクが存在しない計画済み作業は、必要に応じて小さなタスクへ分解して `roadmap/SIMULATION_ROADMAP.md` に追加する。
 - 1つのTaskへ複数の独立した成果を詰め込まない。
 - 「交通を完成」「UIを完成」など長期間閉じられない粒度のTaskを作らない。
 - 作業中に想定より大きいことが分かった場合は、元タスクを無理に完了させず残作業を新しい Task ID へ分割する。
 - 実装だけ終わって検証が残っている項目は `✅` にしない。
 - 完了報告をする前に、対象 Task ID の状態記号を `⬜` から `✅` へ同期する。
 - 未実装の大テーマはTaskではなく Backlog として置き、着手時に分解する。
-- ROADMAP は仕様書ではない。仕様の正本は `docs/specifications/`、設計の正本は `docs/architecture/` とする。
+- Simulation Roadmap は仕様書ではない。仕様の正本は `docs/specifications/`、設計の正本は `docs/architecture/` とする。
