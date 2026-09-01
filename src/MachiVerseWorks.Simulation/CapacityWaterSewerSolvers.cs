@@ -198,6 +198,9 @@ internal sealed class DirectedCapacityGraph(int vertexCount)
     private readonly List<Edge>[] _edges = Enumerable.Range(0, vertexCount).Select(static _ => new List<Edge>()).ToArray();
     private readonly int[] _levels = new int[vertexCount];
     private readonly int[] _nextEdges = new int[vertexCount];
+    private readonly int[] _pathVertices = new int[vertexCount];
+    private readonly int[] _pathEdgeIndexes = new int[vertexCount];
+    private readonly double[] _pathCapacities = new double[vertexCount];
 
     public int AddEdge(int from, int to, double capacity)
     {
@@ -245,19 +248,52 @@ internal sealed class DirectedCapacityGraph(int vertexCount)
         return _levels[sink] >= 0;
     }
 
-    private double SendFlow(int current, int sink, double available)
+    private double SendFlow(int source, int sink, double available)
     {
-        if (current == sink) return available;
-        for (; _nextEdges[current] < _edges[current].Count; _nextEdges[current]++)
+        _pathVertices[0] = source;
+        _pathCapacities[0] = available;
+        var depth = 0;
+
+        while (depth >= 0)
         {
-            var edge = _edges[current][_nextEdges[current]];
-            if (edge.Capacity <= WaterSewerDefaults.FlowEpsilonCubicMetersPerDay || _levels[edge.To] != _levels[current] + 1) continue;
-            var sent = SendFlow(edge.To, sink, Math.Min(available, edge.Capacity));
-            if (sent <= WaterSewerDefaults.FlowEpsilonCubicMetersPerDay) continue;
-            edge.Capacity -= sent;
-            _edges[edge.To][edge.ReverseIndex].Capacity += sent;
-            return sent;
+            var current = _pathVertices[depth];
+            if (current == sink)
+            {
+                var sent = _pathCapacities[depth];
+                for (var pathIndex = 0; pathIndex < depth; pathIndex++)
+                {
+                    var from = _pathVertices[pathIndex];
+                    var edge = _edges[from][_pathEdgeIndexes[pathIndex]];
+                    edge.Capacity -= sent;
+                    _edges[edge.To][edge.ReverseIndex].Capacity += sent;
+                }
+                return sent;
+            }
+
+            var advanced = false;
+            while (_nextEdges[current] < _edges[current].Count)
+            {
+                var edgeIndex = _nextEdges[current];
+                var edge = _edges[current][edgeIndex];
+                if (edge.Capacity > WaterSewerDefaults.FlowEpsilonCubicMetersPerDay
+                    && _levels[edge.To] == _levels[current] + 1)
+                {
+                    _pathEdgeIndexes[depth] = edgeIndex;
+                    _pathVertices[depth + 1] = edge.To;
+                    _pathCapacities[depth + 1] = Math.Min(_pathCapacities[depth], edge.Capacity);
+                    depth++;
+                    advanced = true;
+                    break;
+                }
+                _nextEdges[current]++;
+            }
+
+            if (advanced) continue;
+            if (depth == 0) return 0d;
+            depth--;
+            _nextEdges[_pathVertices[depth]]++;
         }
+
         return 0d;
     }
 
