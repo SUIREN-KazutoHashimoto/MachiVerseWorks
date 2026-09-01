@@ -148,6 +148,7 @@ internal sealed class ClientConnection : IDisposable
                 MultimodalTransitSnapshotMessage multimodalTransit => MultimodalTransitProtocolCodec.Serialize(multimodalTransit, version),
                 EconomySnapshotMessage economy => EconomyProtocolCodec.Serialize(economy, version),
                 LogisticsSnapshotMessage logistics => LogisticsProtocolCodec.Serialize(logistics, version),
+                PowerSnapshotMessage power => PowerProtocolCodec.Serialize(power, version),
                 InspectPersonMessage or PopulationStatisticsMessage or PersonDebugMessage => PopulationProtocolCodec.Serialize(message, version),
                 _ => ProtocolCodec.Serialize(message, version),
             };
