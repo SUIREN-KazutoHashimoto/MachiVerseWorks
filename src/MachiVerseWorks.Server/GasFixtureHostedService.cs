@@ -27,10 +27,10 @@ internal sealed class GasFixtureHostedService(SimulationRuntime simulation, ICon
     private void Seed(SimulationWorld world)
     {
         var supplierBuilding = world.CreateBuilding(new WorldVolume(0d, 20d, 0d, 10d, 30d, 8d), BuildingKind.Industrial);
-        var consumerBuilding = world.CreateBuilding(new WorldVolume(395d, 20d, 0d, 405d, 30d, 8d), BuildingKind.Commercial);
+        var consumerBuilding = world.CreateBuilding(new WorldVolume(115d, 20d, 0d, 125d, 30d, 8d), BuildingKind.Commercial);
         var sourceNode = world.CreateGasNode(new WorldPoint(5d, 15d, 0d), GasNodeKind.Source);
-        var regulatorNode = world.CreateGasNode(new WorldPoint(200d, 20d, 0d), GasNodeKind.Regulator);
-        var serviceNode = world.CreateGasNode(new WorldPoint(400d, 25d, 0d), GasNodeKind.Service);
+        var regulatorNode = world.CreateGasNode(new WorldPoint(60d, 20d, 0d), GasNodeKind.Regulator);
+        var serviceNode = world.CreateGasNode(new WorldPoint(120d, 25d, 0d), GasNodeKind.Service);
         world.CreateGasPipeline(sourceNode, regulatorNode, 30d);
         _pipelineId = world.CreateGasPipeline(regulatorNode, serviceNode, 30d);
         world.CreateGasSource(sourceNode, 30d);
@@ -38,7 +38,7 @@ internal sealed class GasFixtureHostedService(SimulationRuntime simulation, ICon
         world.CreatePipedGasServicePoint(serviceNode, 12d, buildingId: consumerBuilding);
 
         var roadStart = world.CreateRoadNode(new WorldPoint(5d, 35d, 0d));
-        var roadEnd = world.CreateRoadNode(new WorldPoint(400d, 35d, 0d));
+        var roadEnd = world.CreateRoadNode(new WorldPoint(120d, 35d, 0d));
         var segment = world.CreateRoadSegment(roadStart, roadEnd, RoadKind.Local);
         world.CreateLane(segment, LaneDirection.Forward, 0, speedLimitMetersPerSecond: 12d);
         var supplierAccess = world.CreateRoadAccessPoint(segment, 0.02d, supplierBuilding, mode: RoadAccessMode.Motor);
