@@ -43,6 +43,7 @@ jobs:
             README.md
             roadmap/SIMULATION_ROADMAP.md
             roadmap/VIEW_ROADMAP.md
+            roadmap/MANAGEMENT_ROADMAP.md
             AGENTS.md
             CONTRIBUTING.md
             SECURITY.md
