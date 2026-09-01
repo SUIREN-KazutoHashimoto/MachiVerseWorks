@@ -7,4 +7,7 @@
     <ProjectReference Include="../MachiVerseWorks.Protocol/MachiVerseWorks.Protocol.csproj" />
     <ProjectReference Include="../MachiVerseWorks.Persistence/MachiVerseWorks.Persistence.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol.AspNetCore" />
+  </ItemGroup>
 </Project>

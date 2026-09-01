@@ -11,6 +11,7 @@ MachiVerseWorks の現行技術アーキテクチャを管理します。
 - [`protocol.md`](protocol.md): Server / Web Client間binary protocolのversioningとwire layout
 - [`headless-server.md`](headless-server.md): Headless Serverのlifecycle、WebSocket、command queue、snapshot publish
 - [`server-administration-console.md`](server-administration-console.md): Admin command queue、authoritative runtime境界、Remote Administration再利用境界
+- [`remote-mcp-administration.md`](remote-mcp-administration.md): HTTPS Streamable HTTP `/mcp`、scope、request isolation、Admin command再利用境界
 - [`web-client.md`](web-client.md): Web Clientのconnection、EntityStore、subscription、rendering
 - [`audio.md`](audio.md): AudioEngine、mixer、positional audio、Ambient Zone、voice virtualization
 - [`persistence.md`](persistence.md): Simulation checkpoint、Save Data serializer、validation、format evolution
