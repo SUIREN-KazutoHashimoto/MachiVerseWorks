@@ -1,105 +1,140 @@
-# Remote MCP Administration Specification
+# Remote MCP Administration 仕様
 
-## Scope
+## 対象範囲
 
-Phase 27 provides authenticated remote inspection and bounded administration of a running MachiVerseWorks Server through Model Context Protocol (MCP) Streamable HTTP.
+Phase 27では、稼働中のMachiVerseWorks ServerをModel Context Protocol（MCP）のStreamable HTTP経由で安全に参照・管理するRemote Administration境界を提供する。
 
-The public endpoint is `/mcp`. MCP is disabled by default and has no anonymous mode when enabled.
+公開endpointは`/mcp`とする。MCPは既定で無効であり、有効化した場合も匿名アクセスは提供しない。
 
-## Configuration
+Remote MCPはPhase 20で確立したAdministration境界を再利用する。MCP adapterが`SimulationRuntime`やSimulation内部Storeを直接変更してはならない。
 
-Configuration keys are under `Server:Mcp` and use normal ASP.NET Core configuration mapping, so production credentials should normally be supplied as environment variables such as `Server__Mcp__ReadToken`.
+## 設定
 
-| Key | Default | Contract |
+設定は`Server:Mcp`配下に置き、通常のASP.NET Core configuration mappingを利用する。本番credentialは設定ファイルへ書き込まず、`Server__Mcp__ReadToken`のような環境変数またはsecret管理機構から注入する。
+
+| Key | 既定値 | 契約 |
 | --- | --- | --- |
-| `Enabled` | `false` | Explicit opt-in to register and map MCP |
-| `ReadToken` | unset | read credential, minimum 32 characters |
-| `WriteToken` | unset | read + write credential, minimum 32 characters |
-| `DestructiveToken` | unset | read + write + destructive credential, minimum 32 characters |
-| `AllowedOrigins` | empty | semicolon-separated exact HTTP(S) origins for requests that send `Origin` |
-| `MaxRequestBytes` | `262144` | MCP request-body ceiling |
-| `MaxConcurrentRequests` | `8` | global MCP in-flight request ceiling |
-| `RequestsPerMinute` | `120` | fixed-window ceiling per configured credential |
-| `RequestTimeoutMilliseconds` | `30000` | request cancellation timeout |
-| `MaxResultBytes` | `65536` | bounded tool result target |
-| `MaxLogEntries` | `512` | bounded in-memory log tail capacity |
-| `MaxQueryItems` | `200` | maximum entity/log items requested by one tool call |
-| `SaveDirectory` | `data/mcp-saves` | server-controlled root for MCP saves |
+| `Enabled` | `false` | MCP serviceと`/mcp`を明示的に有効化する |
+| `ReadToken` | 未設定 | read credential。32文字以上 |
+| `WriteToken` | 未設定 | read + write credential。32文字以上 |
+| `DestructiveToken` | 未設定 | read + write + destructive credential。32文字以上 |
+| `AllowedOrigins` | 空 | `Origin`を送信するClient向けのHTTP(S) Origin完全一致allowlist。`;`区切り |
+| `MaxRequestBytes` | `262144` | MCP request body上限 |
+| `MaxConcurrentRequests` | `8` | MCP全体の同時処理request上限 |
+| `RequestsPerMinute` | `120` | credential単位の固定window rate limit |
+| `RequestTimeoutMilliseconds` | `30000` | request timeout / cancellation上限 |
+| `MaxResultBytes` | `65536` | Tool resultの最大サイズ |
+| `MaxLogEntries` | `512` | memory上のlog tail保持件数 |
+| `MaxQueryItems` | `200` | log query等の1回あたり最大件数 |
+| `SaveDirectory` | `data/mcp-saves` | MCP save先としてServerが管理するroot |
 
-If MCP is enabled, at least one credential is required. Configured credentials must be distinct.
+MCPを有効化する場合、最低1つのcredentialを設定する。複数scopeのtokenを設定する場合は相互に異なる値でなければならない。
 
-## Authorization
+## 認証・認可
 
-MCP requests use `Authorization: Bearer <token>`.
+MCP requestは`Authorization: Bearer <token>`を使用する。
 
-A read credential may discover and invoke only read tools. A write credential also receives write tools. A destructive credential receives all tools. Authorization is checked both during MCP discovery and invocation.
+権限は次の3段階に分離する。
 
-## Read tools
+- read: read-only Toolのみ
+- write: readに加えて運転操作および許可済みmutation
+- destructive: writeに加えて明示的に許可したremove操作
+
+認可はTool実行時だけでなくMCP discoveryにも適用する。read credentialからwrite/destructive Toolを`tools/list`で見せず、非表示Tool名を直接`tools/call`しても認可を迂回できないことを契約とする。
+
+## Browser / CORS
+
+`Origin` headerを送らない通常のMCP ClientはCORS処理を必要としない。
+
+Browserから別Originの`/mcp`へ接続する場合、`Authorization`を伴うrequestの前にCORS preflightが発生する。`Server:Mcp:AllowedOrigins`に完全一致するOriginについてのみ、認証前の`OPTIONS` preflightを許可し、必要なMCP headerとHTTP methodを返す。
+
+許可されていないOriginはpreflightを含めて`403`とする。`Access-Control-Allow-Origin: *`は使用しない。
+
+## Read Tool
 
 ### `server_status`
 
-Returns the existing administration `status` result, including authoritative tick/pause and summary counts.
+既存Administrationの`status`を呼び出し、authoritative tick / pause stateと主要countを返す。
 
 ### `server_version`
 
-Returns the running application version through the existing `version` command.
+既存`version` commandを通じて実行中application versionを返す。
 
 ### `simulation_status`
 
-Returns authoritative tick, pause state, and tick rate through `simulation status`.
+`simulation status`を通じてtick、pause state、tick rateを返す。
 
 ### `diagnostics_metrics`
 
-Returns the existing bounded E2E metrics snapshot.
+既存のbounded `E2eMetrics` snapshotを返す。serialization後の結果が`MaxResultBytes`を超える場合、途中でJSONを切断せずstableな`result_too_large` rejectionを返す。
 
 ### `logs_query`
 
-Returns a bounded in-memory tail. Parameters:
+memory上のbounded log tailのみを検索する。
 
-- `limit`: 1 through `MaxQueryItems`
-- `contains`: optional case-insensitive category/message filter
+- `limit`: 1から`MaxQueryItems`
+- `contains`: categoryまたはmessageへのcase-insensitive filter
 
-It cannot read arbitrary log files.
+任意log fileの読み取りは提供しない。結果が`MaxResultBytes`を超える場合はentry数を減らして再serializationし、常に完全なJSONを返す。
 
 ### `entity_query`
 
-Accepts an allowlisted entity type and optional ID. Without ID it maps to `list`; with ID it maps to `show`.
+allowlist済みEntity typeとstable IDを受け取り、既存Administrationの`show`へmappingする。
 
-The allowlist includes current Phase 20 administration entities for agents, buildings, POIs, road infrastructure, railway infrastructure/operations, vehicles for inspection, formations, rail routes, timetables, services, and trains.
+Remote MCPからの無制限な`list`は提供しない。大規模worldでread credentialのみから全Entity snapshot生成・sort・formattingを誘発できないよう、Remote MCPのEntity queryは1 Entityのinspectに限定する。
 
-## Write tools
+対象にはAgent、Building、POI、Road Infrastructure、Railway Infrastructure / Operations、Vehicleのread、Formation、Rail Route、Timetable、Service、Trainを含む。
+
+## Write Tool
 
 ### `simulation_pause`
 
-Maps to `simulation pause`.
+`simulation pause`へmappingする。
 
 ### `simulation_step`
 
-Maps to `simulation step <count>`, with count restricted to 1-10000.
+`simulation step <count>`へmappingし、`count`は1〜10000に制限する。
 
 ### `simulation_resume`
 
-Maps to `simulation resume`.
+`simulation resume`へmappingする。
 
 ### `simulation_save`
 
-Accepts a safe slot name and maps it to `world save <SaveDirectory>/<slot>.mvw`. Arbitrary paths and `world load` are not exposed.
+任意pathではなく安全なslot名のみを受け取る。実pathは`<SaveDirectory>/<slot>.mvw`としてServer側で生成し、既存`world save`へmappingする。
+
+slotは1〜64文字のASCII英数字、`.`, `_`, `-`のみとし、`.`と`..`は禁止する。`world load`はRemote MCPへ公開しない。
+
+SaveDirectory作成・アクセスに失敗した場合はSDK例外をそのまま返さず、stable code `io_error`へ変換する。
 
 ### `entity_write`
 
-Accepts an allowlisted entity, operation `add` or `update`, and at most 32 bounded arguments. Each argument is encoded as exactly one quoted administration command token before parsing.
+allowlist済みEntity、operation、最大32個のbounded argumentを受け取る。各argumentは1つのquoted Administration tokenへ変換してから既存Parserへ渡す。
 
-Vehicle spawning and connection controls are not part of the generic writable allowlist.
+operation allowlistはEntity単位ではなくoperation単位で定義する。
 
-## Destructive tool
+- `add`: Administration側にcreate/addが存在するEntityのみ
+- `update`: Administration側にupdateが存在するEntityのみ
+
+Formation / Rail Route / Timetable / Service / Trainは現行Administration境界では`add`のみのため、Remote MCPから`update`を許可しない。Vehicle spawnおよびconnection controlはgeneric mutation allowlistへ含めない。
+
+## Destructive Tool
 
 ### `entity_remove`
 
-Requires the destructive credential and `confirm=true`. The entity must be in the writable allowlist, and arguments receive the same token count/length controls as `entity_write`.
+`destructive` scopeと`confirm=true`の両方を必須とする。remove allowlistはAdministration側にremoveが実装されているEntityだけで構成し、`entity_write`と同じargument数・長さ・control character制約を適用する。
+
+## Queue cancellation
+
+Remote request timeoutまたはClient disconnectによりrequestのcancellation tokenがcancelされた場合、まだ`AdminCommandQueue`で実行待ちのcommandは実行しない。
+
+特にmutationについて、Clientへtimeoutを返した後から遅延実行される状態を禁止する。これによりClient retryによる二重create/removeを防止する。
+
+すでにexecutorがcommand実行を開始した後のatomic operationを途中でrollbackする契約ではない。cancellationは「実行開始前のqueued commandを破棄する」境界として扱う。
 
 ## Stable MCP result
 
-Administration-backed tools return:
+Administration-backed Toolは次のstructured resultを返す。
 
 ```json
 {
@@ -109,21 +144,26 @@ Administration-backed tools return:
 }
 ```
 
-Stable codes include `ok`, `invalid_syntax`, `unknown_command`, `invalid_argument`, `not_found`, `conflict`, `invalid_state`, `queue_full`, `io_error`, `internal_error`, and MCP-specific `confirmation_required`.
+stable codeには`ok`, `invalid_syntax`, `unknown_command`, `invalid_argument`, `not_found`, `conflict`, `invalid_state`, `queue_full`, `io_error`, `internal_error`を含む。MCP固有のcodeとして`confirmation_required`, `result_too_large`を使用する。
 
-## Security requirements
+validationで拒否したTool callはMCP transport errorへ変換せず、`success=false`とstable codeを持つstructured resultとして返す。
 
-The following capabilities must remain unavailable through MCP:
+## セキュリティ要件
 
-- arbitrary shell or process execution
-- arbitrary administration command execution
-- server shutdown
-- arbitrary filesystem reads/writes
-- authoritative world load/replacement
-- mutation that bypasses `AdminCommandQueue` / `AdminCommandExecutorV2`
+Remote MCPから次の能力を公開してはならない。
 
-Raw bearer token values must not appear in server logs, MCP result payloads, or source-controlled default configuration.
+- 任意shell / executable / process実行
+- 任意Administration command実行
+- Server shutdown
+- 任意filesystem read/write path
+- authoritative world load / replacement
+- `AdminCommandQueue` / `AdminCommandExecutorV2`を迂回するmutation
+- 制限なしのEntity全件列挙
 
-## Deployment requirements
+Bearer tokenのraw値をServer log、MCP result、source-controlled default configurationへ記録しない。
 
-The client-facing MCP URL must use HTTPS. If TLS terminates at Cloudflare or another reverse proxy, the Kestrel origin must be private or otherwise inaccessible to untrusted networks. The reverse proxy must forward authorization and MCP protocol headers and must not cache `/mcp`.
+## Deployment要件
+
+Client-facing MCP URLはHTTPSとする。Cloudflare等のreverse proxyでTLS terminationする場合、Kestrel originをprivate networkまたはfirewallで保護し、untrusted networkから直接到達できない構成とする。
+
+reverse proxyは`Authorization`およびMCP protocol headerを保持し、`/mcp`をcacheしてはならない。proxy側のbody size / timeout制限はapplication側と同等以上に厳しく設定する。
