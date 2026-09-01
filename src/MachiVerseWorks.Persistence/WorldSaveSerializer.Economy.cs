@@ -14,6 +14,7 @@ public static partial class WorldSaveSerializer
         ValidateCount(economy.Households.Count, limits.MaximumHouseholdCount, "EconomyHouseholds");
         ValidateLogisticsCheckpointWithinLimits(economy.Logistics, limits);
         ValidatePowerCheckpointWithinLimits(economy.Power, limits);
+        ValidateWaterSewerCheckpointWithinLimits(economy.WaterSewer, limits);
     }
 
     private static void ValidateLogisticsCheckpointWithinLimits(LogisticsCheckpoint? logistics, WorldSaveLimits limits)
@@ -32,5 +33,19 @@ public static partial class WorldSaveSerializer
         ValidateCount(power.Lines.Count, limits.MaximumRoadSegmentCount, "PowerLines");
         ValidateCount(power.Generators.Count, limits.MaximumBuildingCount, "Generators");
         ValidateCount(power.Loads.Count, limits.MaximumBuildingCount, "PowerLoads");
+    }
+
+    private static void ValidateWaterSewerCheckpointWithinLimits(WaterSewerCheckpoint? waterSewer, WorldSaveLimits limits)
+    {
+        if (waterSewer is null) return;
+        ValidateCount(waterSewer.WaterNodes.Count, limits.MaximumRoadNodeCount, "WaterNodes");
+        ValidateCount(waterSewer.WaterPipes.Count, limits.MaximumRoadSegmentCount, "WaterPipes");
+        ValidateCount(waterSewer.SewerNodes.Count, limits.MaximumRoadNodeCount, "SewerNodes");
+        ValidateCount(waterSewer.SewerPipes.Count, limits.MaximumRoadSegmentCount, "SewerPipes");
+        ValidateCount(waterSewer.WaterSources.Count, limits.MaximumBuildingCount, "WaterSources");
+        ValidateCount(waterSewer.Reservoirs.Count, limits.MaximumBuildingCount, "Reservoirs");
+        ValidateCount(waterSewer.Pumps.Count, limits.MaximumBuildingCount, "WaterSewerPumps");
+        ValidateCount(waterSewer.TreatmentPlants.Count, limits.MaximumBuildingCount, "SewageTreatmentPlants");
+        ValidateCount(waterSewer.ServicePoints.Count, limits.MaximumBuildingCount, "WaterSewerServicePoints");
     }
 }
