@@ -107,7 +107,7 @@ internal sealed class ClientConnection : IDisposable
         lock (_stateGate) _inspectedPersonId = personId;
     }
 
-    public void ClearInspectedPerson()
+    public void ClearPersonInspection()
     {
         lock (_stateGate) _inspectedPersonId = null;
     }
@@ -135,20 +135,14 @@ internal sealed class ClientConnection : IDisposable
                 state = default;
                 return false;
             }
-            state = new ClientSubscriptionState(
-                volume,
-                _subscriptionRevision,
-                new HashSet<ulong>(_knownAgentIds),
-                new HashSet<ulong>(_knownPedestrianIds),
-                new HashSet<ulong>(_knownVehicleIds));
+            state = new ClientSubscriptionState(volume, _subscriptionRevision, new HashSet<ulong>(_knownAgentIds), new HashSet<ulong>(_knownPedestrianIds), new HashSet<ulong>(_knownVehicleIds));
             return true;
         }
     }
 
     public bool NeedsRoadSnapshot(long subscriptionRevision, ulong roadRevision)
     {
-        lock (_stateGate)
-            return _lastRoadSubscriptionRevision != subscriptionRevision || _lastRoadRevision != roadRevision;
+        lock (_stateGate) return _lastRoadSubscriptionRevision != subscriptionRevision || _lastRoadRevision != roadRevision;
     }
 
     public bool TryMarkRoadSnapshotDelivered(long subscriptionRevision, ulong roadRevision)
@@ -164,8 +158,7 @@ internal sealed class ClientConnection : IDisposable
 
     public bool NeedsRailwaySnapshot(long subscriptionRevision, ulong railwayRevision)
     {
-        lock (_stateGate)
-            return _lastRailwaySubscriptionRevision != subscriptionRevision || _lastRailwayRevision != railwayRevision;
+        lock (_stateGate) return _lastRailwaySubscriptionRevision != subscriptionRevision || _lastRailwayRevision != railwayRevision;
     }
 
     public bool TryMarkRailwaySnapshotDelivered(long subscriptionRevision, ulong railwayRevision)
@@ -179,26 +172,15 @@ internal sealed class ClientConnection : IDisposable
         }
     }
 
-    public bool TryReplaceKnownAgentIds(long revision, HashSet<ulong> agentIds) =>
-        TryReplaceKnownEntityIds(revision, agentIds, new HashSet<ulong>(_knownPedestrianIds), new HashSet<ulong>(_knownVehicleIds));
+    public bool TryReplaceKnownAgentIds(long revision, HashSet<ulong> agentIds) => TryReplaceKnownEntityIds(revision, agentIds, new HashSet<ulong>(_knownPedestrianIds), new HashSet<ulong>(_knownVehicleIds));
+    public bool TryReplaceKnownEntityIds(long revision, HashSet<ulong> agentIds, HashSet<ulong> pedestrianIds) => TryReplaceKnownEntityIds(revision, agentIds, pedestrianIds, new HashSet<ulong>(_knownVehicleIds));
 
-    public bool TryReplaceKnownEntityIds(long revision, HashSet<ulong> agentIds, HashSet<ulong> pedestrianIds) =>
-        TryReplaceKnownEntityIds(revision, agentIds, pedestrianIds, new HashSet<ulong>(_knownVehicleIds));
-
-    public bool TryReplaceKnownEntityIds(
-        long revision,
-        HashSet<ulong> agentIds,
-        HashSet<ulong> pedestrianIds,
-        HashSet<ulong> vehicleIds)
+    public bool TryReplaceKnownEntityIds(long revision, HashSet<ulong> agentIds, HashSet<ulong> pedestrianIds, HashSet<ulong> vehicleIds)
     {
-        ArgumentNullException.ThrowIfNull(agentIds);
-        ArgumentNullException.ThrowIfNull(pedestrianIds);
-        ArgumentNullException.ThrowIfNull(vehicleIds);
+        ArgumentNullException.ThrowIfNull(agentIds); ArgumentNullException.ThrowIfNull(pedestrianIds); ArgumentNullException.ThrowIfNull(vehicleIds);
         lock (_stateGate)
         {
-            _knownAgentIds = agentIds;
-            _knownPedestrianIds = pedestrianIds;
-            _knownVehicleIds = vehicleIds;
+            _knownAgentIds = agentIds; _knownPedestrianIds = pedestrianIds; _knownVehicleIds = vehicleIds;
             return _subscriptionRevision == revision;
         }
     }
@@ -220,6 +202,7 @@ internal sealed class ClientConnection : IDisposable
                 PowerSnapshotMessage power => PowerProtocolCodec.Serialize(power, version),
                 WaterSewerSnapshotMessage waterSewer => WaterSewerProtocolCodec.Serialize(waterSewer, version),
                 GasSnapshotMessage gas => GasProtocolCodec.Serialize(gas, version),
+                OpticalSnapshotMessage optical => OpticalProtocolCodec.Serialize(optical, version),
                 InspectPersonMessage or PopulationStatisticsMessage or PersonDebugMessage => PopulationProtocolCodec.Serialize(message, version),
                 _ => ProtocolCodec.Serialize(message, version),
             };
@@ -232,15 +215,9 @@ internal sealed class ClientConnection : IDisposable
                 await Socket.SendAsync(new ArraySegment<byte>(frame), WebSocketMessageType.Binary, endOfMessage: true, cancellationToken);
                 return new ProtocolSendMetrics(frame.Length, encodeTimeMs, Stopwatch.GetElapsedTime(sendStarted).TotalMilliseconds);
             }
-            finally
-            {
-                _sendGate.Release();
-            }
+            finally { _sendGate.Release(); }
         }
-        finally
-        {
-            EndSend();
-        }
+        finally { EndSend(); }
     }
 
     public void Abort() => Socket.Abort();
@@ -252,11 +229,7 @@ internal sealed class ClientConnection : IDisposable
         {
             if (_disposeRequested) return;
             _disposeRequested = true;
-            if (_activeSendCount == 0 && !_sendGateDisposed)
-            {
-                _sendGateDisposed = true;
-                disposeSendGate = true;
-            }
+            if (_activeSendCount == 0 && !_sendGateDisposed) { _sendGateDisposed = true; disposeSendGate = true; }
         }
         if (disposeSendGate) _sendGate.Dispose();
         GC.SuppressFinalize(this);
@@ -264,11 +237,7 @@ internal sealed class ClientConnection : IDisposable
 
     private void BeginSend()
     {
-        lock (_lifetimeGate)
-        {
-            ObjectDisposedException.ThrowIf(_disposeRequested, this);
-            _activeSendCount = checked(_activeSendCount + 1);
-        }
+        lock (_lifetimeGate) { ObjectDisposedException.ThrowIf(_disposeRequested, this); _activeSendCount = checked(_activeSendCount + 1); }
     }
 
     private void EndSend()
@@ -277,70 +246,37 @@ internal sealed class ClientConnection : IDisposable
         lock (_lifetimeGate)
         {
             _activeSendCount--;
-            if (_disposeRequested && _activeSendCount == 0 && !_sendGateDisposed)
-            {
-                _sendGateDisposed = true;
-                disposeSendGate = true;
-            }
+            if (_disposeRequested && _activeSendCount == 0 && !_sendGateDisposed) { _sendGateDisposed = true; disposeSendGate = true; }
         }
         if (disposeSendGate) _sendGate.Dispose();
     }
 }
 
-internal readonly record struct ClientSubscriptionState(
-    WorldVolume Volume,
-    long Revision,
-    HashSet<ulong> KnownAgentIds,
-    HashSet<ulong> KnownPedestrianIds,
-    HashSet<ulong> KnownVehicleIds)
+internal readonly record struct ClientSubscriptionState(WorldVolume Volume, long Revision, HashSet<ulong> KnownAgentIds, HashSet<ulong> KnownPedestrianIds, HashSet<ulong> KnownVehicleIds)
 {
-    public ClientSubscriptionState(WorldVolume volume, long revision, HashSet<ulong> knownAgentIds)
-        : this(volume, revision, knownAgentIds, [], []) { }
-
-    public ClientSubscriptionState(
-        WorldVolume volume,
-        long revision,
-        HashSet<ulong> knownAgentIds,
-        HashSet<ulong> knownPedestrianIds)
-        : this(volume, revision, knownAgentIds, knownPedestrianIds, []) { }
+    public ClientSubscriptionState(WorldVolume volume, long revision, HashSet<ulong> knownAgentIds) : this(volume, revision, knownAgentIds, [], []) { }
+    public ClientSubscriptionState(WorldVolume volume, long revision, HashSet<ulong> knownAgentIds, HashSet<ulong> knownPedestrianIds) : this(volume, revision, knownAgentIds, knownPedestrianIds, []) { }
 }
 
 internal sealed class ClientConnectionRegistry
 {
     private readonly ConcurrentDictionary<Guid, ClientConnection> _connections = new();
     private int _connectionCount;
-
     public int Count => Volatile.Read(ref _connectionCount);
-
     public ClientConnection Register(WebSocket socket) => Register(socket, int.MaxValue);
 
     public ClientConnection Register(WebSocket socket, int maximumConnections)
     {
-        ArgumentNullException.ThrowIfNull(socket);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumConnections);
+        ArgumentNullException.ThrowIfNull(socket); ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumConnections);
         var count = Interlocked.Increment(ref _connectionCount);
-        if (count > maximumConnections)
-        {
-            Interlocked.Decrement(ref _connectionCount);
-            throw new ConnectionLimitExceededException(maximumConnections);
-        }
-
+        if (count > maximumConnections) { Interlocked.Decrement(ref _connectionCount); throw new ConnectionLimitExceededException(maximumConnections); }
         var connection = new ClientConnection(Guid.NewGuid(), socket);
         if (_connections.TryAdd(connection.Id, connection)) return connection;
-        Interlocked.Decrement(ref _connectionCount);
-        connection.Dispose();
-        throw new InvalidOperationException("Failed to register a unique client connection.");
+        Interlocked.Decrement(ref _connectionCount); connection.Dispose(); throw new InvalidOperationException("Failed to register a unique client connection.");
     }
 
     public bool TryGet(Guid id, out ClientConnection? connection) => _connections.TryGetValue(id, out connection);
-
-    public bool Remove(Guid id)
-    {
-        if (!_connections.TryRemove(id, out _)) return false;
-        Interlocked.Decrement(ref _connectionCount);
-        return true;
-    }
-
+    public bool Remove(Guid id) { if (!_connections.TryRemove(id, out _)) return false; Interlocked.Decrement(ref _connectionCount); return true; }
     public ClientConnection[] CreateSnapshot() => _connections.Values.ToArray();
 }
 
@@ -352,28 +288,12 @@ internal sealed record ClearPersonInspectionCommand(Guid ConnectionId) : ClientC
 internal sealed class ClientCommandQueue
 {
     private const int Capacity = 1024;
-    private readonly Channel<ClientCommand> _channel = Channel.CreateBounded<ClientCommand>(
-        new BoundedChannelOptions(Capacity)
-        {
-            SingleReader = true,
-            SingleWriter = false,
-            FullMode = BoundedChannelFullMode.Wait,
-        });
-
-    public ValueTask WriteAsync(ClientCommand command, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(command);
-        return _channel.Writer.WriteAsync(command, cancellationToken);
-    }
-
-    public IAsyncEnumerable<ClientCommand> ReadAllAsync(CancellationToken cancellationToken) =>
-        _channel.Reader.ReadAllAsync(cancellationToken);
+    private readonly Channel<ClientCommand> _channel = Channel.CreateBounded<ClientCommand>(new BoundedChannelOptions(Capacity) { SingleReader = true, SingleWriter = false, FullMode = BoundedChannelFullMode.Wait });
+    public ValueTask WriteAsync(ClientCommand command, CancellationToken cancellationToken) { ArgumentNullException.ThrowIfNull(command); return _channel.Writer.WriteAsync(command, cancellationToken); }
+    public IAsyncEnumerable<ClientCommand> ReadAllAsync(CancellationToken cancellationToken) => _channel.Reader.ReadAllAsync(cancellationToken);
 }
 
-internal sealed class ClientCommandProcessor(
-    ClientCommandQueue queue,
-    ClientConnectionRegistry connections,
-    ILogger<ClientCommandProcessor> logger) : BackgroundService
+internal sealed class ClientCommandProcessor(ClientCommandQueue queue, ClientConnectionRegistry connections, ILogger<ClientCommandProcessor> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -384,23 +304,13 @@ internal sealed class ClientCommandProcessor(
                 if (!connections.TryGet(command.ConnectionId, out var connection) || connection is null) continue;
                 switch (command)
                 {
-                    case SubscribeVolumeCommand subscribe:
-                        connection.SetSubscription(subscribe.Volume);
-                        break;
-                    case InspectPersonCommand inspect:
-                        connection.SetInspectedPerson(inspect.PersonId);
-                        break;
-                    case ClearPersonInspectionCommand:
-                        connection.ClearInspectedPerson();
-                        break;
-                    default:
-                        ServerLog.UnsupportedClientCommand(logger, command.GetType().Name);
-                        break;
+                    case SubscribeVolumeCommand subscribe: connection.SetSubscription(subscribe.Volume); break;
+                    case InspectPersonCommand inspect: connection.SetInspectedPerson(inspect.PersonId); break;
+                    case ClearPersonInspectionCommand: connection.ClearPersonInspection(); break;
+                    default: ServerLog.UnsupportedClientCommand(logger, command.GetType().Name); break;
                 }
             }
         }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-        {
-        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
     }
 }
