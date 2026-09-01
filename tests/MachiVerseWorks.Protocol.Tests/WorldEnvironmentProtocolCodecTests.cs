@@ -17,7 +17,50 @@ public sealed class WorldEnvironmentProtocolCodecTests
         Assert.AreEqual(ProtocolDecodeError.None, error);
         Assert.IsNotNull(envelope);
         Assert.AreEqual(ProtocolVersion.Current, envelope.Version);
-        Assert.AreEqual(message, envelope.Message);
+        var actual = envelope.Message as WorldEnvironmentSnapshotMessage;
+        Assert.IsNotNull(actual);
+        Assert.AreEqual(message.TickCount, actual.TickCount);
+        Assert.AreEqual(message.Config, actual.Config);
+        Assert.AreEqual(message.MinX, actual.MinX);
+        Assert.AreEqual(message.MinY, actual.MinY);
+        Assert.AreEqual(message.MinZ, actual.MinZ);
+        Assert.AreEqual(message.MaxX, actual.MaxX);
+        Assert.AreEqual(message.MaxY, actual.MaxY);
+        Assert.AreEqual(message.MaxZ, actual.MaxZ);
+        CollectionAssert.AreEqual(message.Samples.ToArray(), actual.Samples.ToArray());
+        CollectionAssert.AreEqual(message.TerrainSamples.ToArray(), actual.TerrainSamples.ToArray());
+        Assert.AreEqual(message.Features.Count, actual.Features.Count);
+        for (var index = 0; index < message.Features.Count; index++)
+        {
+            var expectedFeature = message.Features[index];
+            var actualFeature = actual.Features[index];
+            Assert.AreEqual(expectedFeature.FeatureId, actualFeature.FeatureId);
+            Assert.AreEqual(expectedFeature.FeatureType, actualFeature.FeatureType);
+            Assert.AreEqual(expectedFeature.MinX, actualFeature.MinX);
+            Assert.AreEqual(expectedFeature.MinY, actualFeature.MinY);
+            Assert.AreEqual(expectedFeature.MinZ, actualFeature.MinZ);
+            Assert.AreEqual(expectedFeature.MaxX, actualFeature.MaxX);
+            Assert.AreEqual(expectedFeature.MaxY, actualFeature.MaxY);
+            Assert.AreEqual(expectedFeature.MaxZ, actualFeature.MaxZ);
+            Assert.AreEqual(expectedFeature.AreaSquareMeters, actualFeature.AreaSquareMeters);
+            Assert.AreEqual(expectedFeature.ParentFeatureId, actualFeature.ParentFeatureId);
+            Assert.AreEqual(expectedFeature.MinimumElevationMeters, actualFeature.MinimumElevationMeters);
+            Assert.AreEqual(expectedFeature.MaximumElevationMeters, actualFeature.MaximumElevationMeters);
+            CollectionAssert.AreEqual(expectedFeature.Geometry.ToArray(), actualFeature.Geometry.ToArray());
+        }
+        Assert.AreEqual(message.Toponyms.Count, actual.Toponyms.Count);
+        for (var index = 0; index < message.Toponyms.Count; index++)
+        {
+            var expectedToponym = message.Toponyms[index];
+            var actualToponym = actual.Toponyms[index];
+            Assert.AreEqual(expectedToponym.ToponymId, actualToponym.ToponymId);
+            Assert.AreEqual(expectedToponym.FeatureId, actualToponym.FeatureId);
+            Assert.AreEqual(expectedToponym.Name, actualToponym.Name);
+            Assert.AreEqual(expectedToponym.ProvenanceKind, actualToponym.ProvenanceKind);
+            Assert.AreEqual(expectedToponym.SourceFeatureId, actualToponym.SourceFeatureId);
+            Assert.AreEqual(expectedToponym.ParentToponymId, actualToponym.ParentToponymId);
+            Assert.AreEqual(expectedToponym.GeneratorKey, actualToponym.GeneratorKey);
+        }
     }
 
     [TestMethod]
