@@ -37,7 +37,7 @@ public sealed class GasProtocolCodecTests
     public void DecoderRejectsInvalidServiceState()
     {
         var frame = GasProtocolCodec.Serialize(CreateMessage(), ProtocolVersion.Current);
-        frame[^1] = byte.MaxValue;
+        frame[^29] = byte.MaxValue;
 
         Assert.IsFalse(GasProtocolCodec.TryDeserialize(frame, out _, out var error));
         Assert.AreEqual(ProtocolDecodeError.InvalidPayload, error);
@@ -63,7 +63,7 @@ public sealed class GasProtocolCodecTests
         },
         new[]
         {
-            new ProtocolGasServicePoint(1, 2, 42, 0, ProtocolGasDeliveryMode.Piped, 0, 10d, 10d, 10d, 0d, ProtocolGasServiceState.Supplied),
-            new ProtocolGasServicePoint(2, 0, 43, 7, ProtocolGasDeliveryMode.Delivered, 3, 8d, 8d, 8d, 0d, ProtocolGasServiceState.Supplied),
+            new ProtocolGasServicePoint(1, 2, 42, 0, ProtocolGasDeliveryMode.Piped, 0, 10d, 10d, 10d, 0d, ProtocolGasServiceState.Supplied, 0d, 0d, 0d, 0),
+            new ProtocolGasServicePoint(2, 0, 43, 7, ProtocolGasDeliveryMode.Delivered, 3, 8d, 8d, 8d, 0d, ProtocolGasServiceState.Supplied, 6d, 20d, 12d, 1),
         });
 }
