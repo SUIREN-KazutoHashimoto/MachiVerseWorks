@@ -294,8 +294,9 @@ public sealed partial class SimulationWorld
 
     private void StepWaterSewer(SimulationTime nextTime)
     {
+        var demandContext = CreateWaterDemandContext();
         foreach (var point in _waterSewerServicePoints)
-            point.WaterDemandCubicMetersPerDay = CalculateWaterDemand(point, nextTime);
+            point.WaterDemandCubicMetersPerDay = CalculateWaterDemand(point, nextTime, demandContext);
 
         var waterResult = _waterSupplySolver.Solve(new WaterSupplyRequest(
             _waterNodes.Select(static item => new WaterSupplyNode(item.Id)).ToArray(),
@@ -358,7 +359,33 @@ public sealed partial class SimulationWorld
         }
     }
 
-    private double CalculateWaterDemand(WaterSewerServicePointStateData point, SimulationTime time)
+    private WaterDemandContext CreateWaterDemandContext()
+    {
+        var residentsByBuilding = new Dictionary<BuildingId, int>();
+        for (var index = 0; index < _population.PersonCount; index++)
+        {
+            if (_population.GetPersonAt(index).Residence.BuildingId is not { } buildingId) continue;
+            residentsByBuilding[buildingId] = residentsByBuilding.GetValueOrDefault(buildingId) + 1;
+        }
+
+        var requiredWorkersByEstablishment = new Dictionary<EstablishmentId, int>();
+        foreach (var job in _economyJobs)
+        {
+            requiredWorkersByEstablishment[job.EstablishmentId] = checked(
+                requiredWorkersByEstablishment.GetValueOrDefault(job.EstablishmentId) + job.RequiredWorkerCount);
+        }
+
+        var filledWorkersByEstablishment = new Dictionary<EstablishmentId, int>();
+        foreach (var employment in _economyEmployments.Values)
+        {
+            if (!_economyJobIndex.TryGetValue(employment.JobId, out var job)) continue;
+            filledWorkersByEstablishment[job.EstablishmentId] = filledWorkersByEstablishment.GetValueOrDefault(job.EstablishmentId) + 1;
+        }
+
+        return new WaterDemandContext(residentsByBuilding, requiredWorkersByEstablishment, filledWorkersByEstablishment);
+    }
+
+    private double CalculateWaterDemand(WaterSewerServicePointStateData point, SimulationTime time, WaterDemandContext context)
     {
         var hour = time.Elapsed.TotalHours % 24d;
         if (hour < 0d) hour += 24d;
@@ -383,11 +410,7 @@ public sealed partial class SimulationWorld
                 BuildingKind.MixedUse => 1.1d,
                 _ => 1d,
             };
-            var residents = 0;
-            for (var index = 0; index < _population.PersonCount; index++)
-            {
-                if (_population.GetPersonAt(index).Residence.BuildingId == buildingId) residents++;
-            }
+            var residents = context.ResidentsByBuilding.GetValueOrDefault(buildingId);
             if (residents > 0) useFactor *= Math.Min(5d, 1d + (residents * 0.2d));
         }
 
@@ -404,11 +427,10 @@ public sealed partial class SimulationWorld
                 IndustrySector.Public => 1.15d,
                 _ => 1d,
             };
-            var jobs = _economyJobs.Where(item => item.EstablishmentId == establishmentId).ToArray();
-            var required = jobs.Sum(static item => item.RequiredWorkerCount);
+            var required = context.RequiredWorkersByEstablishment.GetValueOrDefault(establishmentId);
             if (required > 0)
             {
-                var filled = jobs.Sum(item => GetFilledWorkerCount(item.Id));
+                var filled = context.FilledWorkersByEstablishment.GetValueOrDefault(establishmentId);
                 useFactor *= 0.6d + (0.4d * Math.Min(1d, (double)filled / required));
             }
         }
@@ -603,18 +625,24 @@ public sealed partial class SimulationWorld
         ValidateFacilities(utility, waterNodes, sewerNodes, powerLoads);
 
         var buildings = checkpoint.Buildings.Select(static item => item.Id).ToHashSet();
-        var establishments = (checkpoint.Economy?.Establishments ?? []).Select(static item => item.Id).ToHashSet();
+        var establishments = (checkpoint.Economy?.Establishments ?? []).ToDictionary(static item => item.Id);
         var ids = new HashSet<WaterSewerServicePointId>();
         var maximumId = 0UL;
         foreach (var item in utility.ServicePoints)
         {
+            var mismatchedPlacement = item.BuildingId is { } serviceBuildingId
+                && item.EstablishmentId is { } serviceEstablishmentId
+                && establishments.TryGetValue(serviceEstablishmentId, out var savedEstablishment)
+                && savedEstablishment.BuildingId is { } establishmentBuildingId
+                && serviceBuildingId != establishmentBuildingId;
             if (item.Id.Value == 0
                 || !ids.Add(item.Id)
                 || !waterNodes.Contains(item.WaterNodeId)
                 || !sewerNodes.Contains(item.SewerNodeId)
                 || (item.BuildingId is null && item.EstablishmentId is null)
                 || (item.BuildingId is { } buildingId && !buildings.Contains(buildingId))
-                || (item.EstablishmentId is { } establishmentId && !establishments.Contains(establishmentId))
+                || (item.EstablishmentId is { } establishmentId && !establishments.ContainsKey(establishmentId))
+                || mismatchedPlacement
                 || !IsPositiveFinite(item.BaseWaterDemandCubicMetersPerDay)
                 || !double.IsFinite(item.WastewaterReturnRatio)
                 || item.WastewaterReturnRatio < 0d
@@ -625,6 +653,8 @@ public sealed partial class SimulationWorld
                 || !IsNonNegativeFinite(item.WastewaterGeneratedCubicMetersPerDay)
                 || !IsNonNegativeFinite(item.WastewaterProcessedCubicMetersPerDay)
                 || !IsNonNegativeFinite(item.WastewaterOverflowCubicMetersPerDay)
+                || item.WaterServedCubicMetersPerDay > item.WaterDemandCubicMetersPerDay + WaterSewerDefaults.FlowEpsilonCubicMetersPerDay
+                || item.WastewaterProcessedCubicMetersPerDay > item.WastewaterGeneratedCubicMetersPerDay + WaterSewerDefaults.FlowEpsilonCubicMetersPerDay
                 || !Enum.IsDefined(item.WaterState)
                 || !Enum.IsDefined(item.SewerState))
             {
@@ -717,6 +747,7 @@ public sealed partial class SimulationWorld
             if (!waterNodes.Contains(item.NodeId)
                 || !IsPositiveFinite(item.CapacityCubicMetersPerDay)
                 || !IsNonNegativeFinite(item.OutputCubicMetersPerDay)
+                || item.OutputCubicMetersPerDay > item.CapacityCubicMetersPerDay + WaterSewerDefaults.FlowEpsilonCubicMetersPerDay
                 || !Enum.IsDefined(item.OperatingState))
             {
                 throw new ArgumentException("Invalid Water source.");
@@ -729,6 +760,7 @@ public sealed partial class SimulationWorld
             if (!waterNodes.Contains(item.NodeId)
                 || !IsPositiveFinite(item.ReleaseCapacityCubicMetersPerDay)
                 || !IsNonNegativeFinite(item.OutputCubicMetersPerDay)
+                || item.OutputCubicMetersPerDay > item.ReleaseCapacityCubicMetersPerDay + WaterSewerDefaults.FlowEpsilonCubicMetersPerDay
                 || !Enum.IsDefined(item.OperatingState))
             {
                 throw new ArgumentException("Invalid Reservoir.");
@@ -748,6 +780,7 @@ public sealed partial class SimulationWorld
                 || (item.PowerLoadId is { } powerLoadId && !powerLoads.Contains(powerLoadId))
                 || !IsPositiveFinite(item.CapacityCubicMetersPerDay)
                 || !IsNonNegativeFinite(item.ThroughputCubicMetersPerDay)
+                || item.ThroughputCubicMetersPerDay > item.CapacityCubicMetersPerDay + WaterSewerDefaults.FlowEpsilonCubicMetersPerDay
                 || !Enum.IsDefined(item.OperatingState))
             {
                 throw new ArgumentException("Invalid Pump.");
@@ -761,6 +794,7 @@ public sealed partial class SimulationWorld
                 || (item.PowerLoadId is { } powerLoadId && !powerLoads.Contains(powerLoadId))
                 || !IsPositiveFinite(item.CapacityCubicMetersPerDay)
                 || !IsNonNegativeFinite(item.ProcessedCubicMetersPerDay)
+                || item.ProcessedCubicMetersPerDay > item.CapacityCubicMetersPerDay + WaterSewerDefaults.FlowEpsilonCubicMetersPerDay
                 || !Enum.IsDefined(item.OperatingState))
             {
                 throw new ArgumentException("Invalid Treatment plant.");
@@ -945,6 +979,11 @@ public sealed partial class SimulationWorld
             state.WastewaterProcessedCubicMetersPerDay,
             state.WastewaterOverflowCubicMetersPerDay,
             state.SewerState);
+
+    private readonly record struct WaterDemandContext(
+        IReadOnlyDictionary<BuildingId, int> ResidentsByBuilding,
+        IReadOnlyDictionary<EstablishmentId, int> RequiredWorkersByEstablishment,
+        IReadOnlyDictionary<EstablishmentId, int> FilledWorkersByEstablishment);
 
     private sealed class WaterNodeState(WaterNodeId id, WaterNodeKind kind, WorldPoint position)
     {
