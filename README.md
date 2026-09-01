@@ -32,12 +32,11 @@ MachiVerseWorks は、市民・道路交通・公共交通・物流・産業・�
 ## Current baseline
 
 - Application version: ルート[`VERSION`](VERSION)を正本とする
-- Protocol: **2.9**
-- Save format: **10**
-- Phase 17 Railway Infrastructure: ✅ 完了
-- Phase 18 Railway Operations: ✅ 完了
-- Phase 19 Multimodal Transit: ✅ 完了
-- Phase 20 Server Administration Console: ⏭️ 次
+- Protocol: **2.16**（正本: [`ProtocolVersion.Current`](src/MachiVerseWorks.Protocol/ProtocolVersion.cs)）
+- Save format: **11**（正本: [`SaveFormatVersion.Current`](src/MachiVerseWorks.Persistence/SaveFormatVersion.cs)）
+- Simulation Phase 28 Radio & Spectrum Foundation: ✅ 完了
+- Simulation Phase 29 World & Physical Environment Generation: ▶️ 次
+- View Roadmap: View Phase 1以降をSimulation側の依存進行に合わせて並行管理
 
 詳細なPhase / Task状態は、Simulation側を[`roadmap/SIMULATION_ROADMAP.md`](roadmap/SIMULATION_ROADMAP.md)、View側を[`roadmap/VIEW_ROADMAP.md`](roadmap/VIEW_ROADMAP.md)で管理し、READMEへ全Task一覧は複製しません。
 
@@ -48,7 +47,7 @@ MachiVerseWorks は、市民・道路交通・公共交通・物流・産業・�
 │      Browser 3D Client       │
 │  TypeScript / Three.js       │
 └──────────────┬───────────────┘
-               │ Protocol 2.9 / WebSocket
+               │ Protocol 2.16 / WebSocket
 ┌──────────────▼───────────────┐
 │     MachiVerseWorks.Server   │
 │ lifecycle / command / I/O    │
@@ -61,7 +60,7 @@ MachiVerseWorks は、市民・道路交通・公共交通・物流・産業・�
                │ checkpoint mapping
 ┌──────────────┴───────────────┐
 │ MachiVerseWorks.Persistence  │
-│ Save Format 10 / validation  │
+│ Save Format 11 / validation  │
 └──────────────────────────────┘
 
 MachiVerseWorks.Protocol = Client / Server binary contract
@@ -69,7 +68,7 @@ MachiVerseWorks.Protocol = Client / Server binary contract
 
 | Component | Responsibility |
 | --- | --- |
-| **Simulation** | fixed-tick authoritative world、Agent / Road / Traffic / Population / Railway / Multimodal Transit |
+| **Simulation** | fixed-tick authoritative world、Agent / Road / Traffic / Population / Transit / Economy / Infrastructure / Communication |
 | **Persistence** | Simulation checkpointとversioned Save Dataのmapping、外部Save validation |
 | **Server** | 実行lifecycle、接続、command、3D subscription、snapshot配信、I/O境界 |
 | **Protocol** | Client / Server間のstable ID・version negotiation・binary layout |
@@ -89,7 +88,7 @@ MachiVerseWorks.Protocol = Client / Server binary contract
 
 ## Implemented simulation domains
 
-現在の基盤には、3D Agent / Building / POI、Road Network / Routing / Road Traffic / Intersection Control、Pedestrian、Population daily activity、Railway Infrastructure、Railway Operations、Multimodal Transit（Walk / Bus / Taxi / Railway）が含まれます。
+現在の基盤には、3D Agent / Building / POI、Road Network / Routing / Road Traffic / Intersection Control、Pedestrian、Population daily activity、Railway Infrastructure / Operations、Multimodal Transit、Industry / Jobs / Economy、Logistics / Freight、Power、Water / Sewer、Gas、Optical Communication、Radio / Spectrum、およびServer Administration / Remote MCP境界が含まれます。
 
 仕様入口は[`docs/specifications/README.md`](docs/specifications/README.md)、実装境界は[`docs/architecture/README.md`](docs/architecture/README.md)を参照してください。
 
@@ -112,6 +111,7 @@ MachiVerseWorks/
 │  ├─ specifications/
 │  ├─ development/
 │  ├─ decisions/
+│  ├─ roadmap/          # Phase補足設計・検討資料
 │  └─ archive/
 ├─ roadmap/
 │  ├─ SIMULATION_ROADMAP.md
@@ -147,9 +147,10 @@ MachiVerseWorks/
 | [`docs/specifications/`](docs/specifications/) | Simulationの振る舞い — **What / Why** |
 | [`docs/development/`](docs/development/) | 開発・テスト・Git・CI・version運用 |
 | [`docs/decisions/`](docs/decisions/) | Architecture Decision Record |
+| [`docs/roadmap/`](docs/roadmap/) | Roadmapを補足するPhase設計・検討資料。進捗の正本ではない |
 | [`docs/archive/`](docs/archive/) | Legacy資料・廃止済み設計・実験記録 |
 
-Roadmapは[`roadmap/SIMULATION_ROADMAP.md`](roadmap/SIMULATION_ROADMAP.md)と[`roadmap/VIEW_ROADMAP.md`](roadmap/VIEW_ROADMAP.md)、ドキュメント全体の索引は[`docs/README.md`](docs/README.md)を参照してください。
+進捗の正本は[`roadmap/SIMULATION_ROADMAP.md`](roadmap/SIMULATION_ROADMAP.md)と[`roadmap/VIEW_ROADMAP.md`](roadmap/VIEW_ROADMAP.md)、ドキュメント全体の索引は[`docs/README.md`](docs/README.md)を参照してください。
 
 ## Legacy
 
