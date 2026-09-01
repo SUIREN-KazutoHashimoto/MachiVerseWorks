@@ -59,7 +59,7 @@ GitHub Repository 側で設定する値は [`repository-settings.md`](repository
 4. 関連する仕様 (`docs/specifications/`)
 5. 関連する設計 (`docs/architecture/`)
 6. 重要な採用理由がある場合は ADR (`docs/decisions/`)
-7. 対応する `roadmap/SIMULATION_ROADMAP.md` の Task ID
+7. 対応する `roadmap/SIMULATION_ROADMAP.md` または `roadmap/VIEW_ROADMAP.md` の Task ID
 
 ファイル名や古い資料だけで現在の挙動を決めつけず、実効コードと test を確認します。
 
@@ -77,6 +77,8 @@ GitHub Repository 側で設定する値は [`repository-settings.md`](repository
 - performance / scalability
 - documentation
 - test / benchmark
+
+SimulationとViewにまたがる機能では、Server-authoritative state / rule / command / Protocol / Save Dataと、描画 / Camera / UI / UX / View performanceを同一Taskへまとめず、対応するRoadmapへ分割します。
 
 ### 状態の所有者
 
@@ -174,6 +176,8 @@ PR本文には最低限、可能な範囲で次を含めます。
 - 開発・テスト・運用 → `docs/development/`
 - 長期的な設計判断と理由 → `docs/decisions/`
 - 廃止済み・Legacy・実験履歴 → `docs/archive/`
+- Simulation側の実装計画 → `roadmap/SIMULATION_ROADMAP.md`
+- View側の実装計画 → `roadmap/VIEW_ROADMAP.md`
 
 過去資料を現行仕様の根拠へ戻さないようにします。
 
@@ -185,5 +189,5 @@ PR本文には最低限、可能な範囲で次を含めます。
 - 必要な test / build / benchmark が成功している
 - runtime 確認が必要な項目は確認済み、または未確認と明記している
 - 不要な debug code / experiment flag が残っていない
-- `roadmap/SIMULATION_ROADMAP.md` の Task 状態が同期されている
+- 対応する `roadmap/SIMULATION_ROADMAP.md` / `roadmap/VIEW_ROADMAP.md` の Task 状態が同期されている
 - 通常開発期間では `AGENTS.md` と `versioning.md` の version 規則へ従っている
