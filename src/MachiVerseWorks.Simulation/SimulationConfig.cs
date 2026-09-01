@@ -28,8 +28,6 @@ public sealed class SimulationConfig
                 "Spatial cell size must be finite and greater than zero.");
         }
 
-        if (seed == 0) throw new ArgumentOutOfRangeException(nameof(seed), seed, "Simulation seed must be greater than zero.");
-
         TickRate = tickRate;
         Seed = seed;
         SpatialCellSize = spatialCellSize;
@@ -37,14 +35,9 @@ public sealed class SimulationConfig
     }
 
     public int TickRate { get; }
-
     public ulong Seed { get; }
-
     public double SpatialCellSize { get; }
-
     public WorldEnvironmentConfig WorldEnvironment { get; }
-
     public double TickDurationSeconds => 1d / TickRate;
-
     public TimeSpan TickDuration => TimeSpan.FromTicks(SimulationTime.CalculateElapsedTicks(1, TickRate));
 }
