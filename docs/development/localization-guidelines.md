@@ -2,7 +2,7 @@
 
 この文書は MachiVerseWorks の多言語対応を将来追加しやすくするため、実装時に守るルールを定めます。
 
-現時点では日本語のみで開発して構いません。ただし、後から翻訳対応するときに Simulation / Protocol / Save Data の互換性を壊さないことを優先します。read-only ViewのLocalization実装計画・Task状態は[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)の **View Phase 10 — Localization** を正本とします。Management UI固有のlocalization Taskは必要になった時点で[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)へ追加します。
+現時点では日本語のみで開発して構いません。ただし、後から翻訳対応するときに Simulation / Protocol / Save Data の互換性を壊さないことを優先します。read-only ViewのLocalization実装計画・Task状態は[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)の **View Phase 10 — Localization** を正本とします。Management固有のcommand / confirmation / permission / failure表示は[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)の **Management Phase 4 — Management Safety & Production UX** で管理します。
 
 ## 1. ユーザー向け文字列
 
@@ -14,6 +14,7 @@ Web presentation の実装開始後、ユーザーへ表示する固定文言は
 menu.settings.title
 inspector.vehicle.speed
 simulation.status.running
+management.command.confirm
 ```
 
 プロトタイプ段階で一時的に hard-code した場合も、本実装へ残す前に resource 化します。
@@ -34,9 +35,12 @@ common.cancel
 menu.settings.title
 error.network.disconnected
 traffic.vehicle.state.waitingSignal
+management.permission.denied
 ```
 
 番号だけの key や表示文そのものを key にしません。
+
+ViewとManagementは共通i18n service / formatterを再利用して構いませんが、feature固有keyは責務を持つRoadmap側で追加・testします。
 
 ## 3. 値の埋め込み
 
@@ -139,6 +143,7 @@ UI review では、日本語だけでなく「翻訳後に1.5〜2倍程度長く
 - resource key の重複がない。
 - placeholder 名が locale 間で一致している。
 - locale manifest と実ファイルが一致している。
+- View固有resourceとManagement固有resourceが同じkeyを異なる意味で定義していない。
 
 unused key 検出は false positive が多い場合があるため、導入時に運用を判断します。
 
@@ -150,6 +155,7 @@ unused key 検出は false positive が多い場合があるため、導入時�
 2. Web presentation の locale resource 置き場を `src/web/locales/` に固定する。
 3. default locale を `ja-JP` とする。
 4. i18n library はまだ固定しない。
-5. ViewとManagementが共通i18n基盤を再利用しても、責務境界はRoadmapどおり分離する。
+5. ViewとManagementが共通i18n基盤を再利用しても、feature固有Taskと責務境界はRoadmapどおり分離する。
+6. Management固有のcommand / confirmation / permission / failure文言はManagement Phase 4でcoverageを持つ。
 
-read-only Viewの実装開始時に、この文書を基準として実際の i18n service を構築します。View計画や完了状態を変更する場合は[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)、Management固有UIへ広げる場合は[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)も同期します。
+read-only Viewの実装開始時に、この文書を基準として実際の i18n service を構築します。View計画や完了状態を変更する場合は[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)、Management固有UIを変更する場合は[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)も同期します。
