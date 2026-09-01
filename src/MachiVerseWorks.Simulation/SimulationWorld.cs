@@ -8,13 +8,14 @@ public sealed partial class SimulationWorld
     private readonly SpatialIndex _spatialIndex;
     private DeterministicRandom _random;
 
-    public SimulationWorld(SimulationConfig? config = null)
+    public SimulationWorld(SimulationConfig? config = null, IPowerDispatchSolver? powerDispatchSolver = null)
     {
         Config = config ?? new SimulationConfig();
         _spatialIndex = new SpatialIndex(Config.SpatialCellSize);
         _pedestrianSpatialIndex = new PedestrianSpatialIndex(Config.SpatialCellSize);
         _roads = new RoadNetworkStore(Config.SpatialCellSize);
         _railway = new RailwayInfrastructureStore();
+        _powerDispatchSolver = powerDispatchSolver ?? new CapacityPowerDispatchSolver();
         _random = new DeterministicRandom(Config.Seed);
         Time = default;
     }
@@ -55,7 +56,10 @@ public sealed partial class SimulationWorld
     {
         var nextTime = Time.Advance(Config.TickRate);
         _agents.Step(Config.TickDurationSeconds, _spatialIndex);
+        CapturePowerProductionBaselines();
+        StepPower(nextTime);
         StepEconomy(nextTime);
+        ApplyPowerOperationalConstraints();
         StepLogistics(nextTime);
         PlanPopulationAndEconomyTrips(nextTime);
         StepVehicles(Config.TickDurationSeconds, nextTime.TickCount);
@@ -101,7 +105,7 @@ public sealed partial class SimulationWorld
             _railwayOperations?.NextServiceId ?? 1UL, railwayOperations?.Services ?? Array.Empty<RailwayServiceSnapshot>(),
             _railwayOperations?.NextTrainId ?? 1UL, railwayOperations?.Trains ?? Array.Empty<TrainSnapshot>(),
             _multimodalTransit.CreateCheckpoint(Time.TickCount),
-            CreateEconomyCheckpointWithLogistics());
+            CreateEconomyCheckpointWithExtensions());
     }
 
     public static SimulationWorld RestoreCheckpoint(SimulationCheckpoint checkpoint)
@@ -131,6 +135,7 @@ public sealed partial class SimulationWorld
         ValidateRailwayOperationsCheckpoint(checkpoint);
         ValidateEconomyCheckpoint(checkpoint);
         ValidateLogisticsCheckpoint(checkpoint);
+        ValidatePowerCheckpoint(checkpoint);
         var expectedElapsedTicks = CalculateExpectedElapsedTicks(checkpoint.TickCount, config.TickRate);
         if (checkpoint.ElapsedTicks != expectedElapsedTicks
             && (!TryCalculateLegacyElapsedTicks(checkpoint.TickCount, config.TickRate, out var legacyElapsedTicks)
@@ -165,6 +170,7 @@ public sealed partial class SimulationWorld
             checkpoint.NextTripRequestId);
         world.RestoreEconomy(checkpoint.Economy);
         world.RestoreLogistics(checkpoint.Economy?.Logistics);
+        world.RestorePower(checkpoint.Economy?.Power);
         world._multimodalTransit.Restore(checkpoint.MultimodalTransit);
         ValidateMultimodalTransitCheckpointReferences(checkpoint);
         return world;

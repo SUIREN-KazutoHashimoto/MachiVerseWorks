@@ -25,5 +25,6 @@ public enum MessageType : ushort
     MultimodalTransitSnapshot = 720,
     EconomySnapshot = 730,
     LogisticsSnapshot = 740,
+    PowerSnapshot = 750,
     Error = 900,
 }

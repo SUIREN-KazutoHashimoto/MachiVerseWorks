@@ -2,6 +2,7 @@ namespace MachiVerseWorks.Simulation;
 
 public readonly record struct WorldPoint
 {
+    [System.Text.Json.Serialization.JsonConstructor]
     public WorldPoint(double x, double y, double z)
     {
         ValidateFinite(x, nameof(x));

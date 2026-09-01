@@ -13,6 +13,7 @@ public static partial class WorldSaveSerializer
         ValidateCount(economy.Employments.Count, limits.MaximumPersonCount, "Employments");
         ValidateCount(economy.Households.Count, limits.MaximumHouseholdCount, "EconomyHouseholds");
         ValidateLogisticsCheckpointWithinLimits(economy.Logistics, limits);
+        ValidatePowerCheckpointWithinLimits(economy.Power, limits);
     }
 
     private static void ValidateLogisticsCheckpointWithinLimits(LogisticsCheckpoint? logistics, WorldSaveLimits limits)
@@ -22,5 +23,14 @@ public static partial class WorldSaveSerializer
         ValidateCount(logistics.Inventories.Count, limits.MaximumBuildingCount, "Inventories");
         ValidateCount(logistics.Orders.Count, limits.MaximumPersonCount, "LogisticsOrders");
         ValidateCount(logistics.Shipments.Count, limits.MaximumVehicleCount, "Shipments");
+    }
+
+    private static void ValidatePowerCheckpointWithinLimits(PowerCheckpoint? power, WorldSaveLimits limits)
+    {
+        if (power is null) return;
+        ValidateCount(power.Nodes.Count, limits.MaximumRoadNodeCount, "PowerNodes");
+        ValidateCount(power.Lines.Count, limits.MaximumRoadSegmentCount, "PowerLines");
+        ValidateCount(power.Generators.Count, limits.MaximumBuildingCount, "Generators");
+        ValidateCount(power.Loads.Count, limits.MaximumBuildingCount, "PowerLoads");
     }
 }

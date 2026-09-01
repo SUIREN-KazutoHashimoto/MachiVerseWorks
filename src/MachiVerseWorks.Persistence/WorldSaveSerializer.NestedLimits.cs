@@ -156,13 +156,24 @@ public static partial class WorldSaveSerializer
         }
         else if (context == NestedSaveContext.RailwayRoute && reader.ValueTextEquals("trackSegmentIds")) return NestedSaveProperty.TrackSegmentIds;
         else if (context == NestedSaveContext.Timetable && reader.ValueTextEquals("stops")) return NestedSaveProperty.Stops;
-        else if (context == NestedSaveContext.Economy && reader.ValueTextEquals("logistics")) return NestedSaveProperty.Logistics;
+        else if (context == NestedSaveContext.Economy)
+        {
+            if (reader.ValueTextEquals("logistics")) return NestedSaveProperty.Logistics;
+            if (reader.ValueTextEquals("power")) return NestedSaveProperty.Power;
+        }
         else if (context == NestedSaveContext.Logistics)
         {
             if (reader.ValueTextEquals("commodities")) return NestedSaveProperty.Commodities;
             if (reader.ValueTextEquals("inventories")) return NestedSaveProperty.Inventories;
             if (reader.ValueTextEquals("orders")) return NestedSaveProperty.Orders;
             if (reader.ValueTextEquals("shipments")) return NestedSaveProperty.Shipments;
+        }
+        else if (context == NestedSaveContext.Power)
+        {
+            if (reader.ValueTextEquals("nodes")) return NestedSaveProperty.PowerNodes;
+            if (reader.ValueTextEquals("lines")) return NestedSaveProperty.PowerLines;
+            if (reader.ValueTextEquals("generators")) return NestedSaveProperty.Generators;
+            if (reader.ValueTextEquals("loads")) return NestedSaveProperty.PowerLoads;
         }
         return NestedSaveProperty.Other;
     }
@@ -174,6 +185,7 @@ public static partial class WorldSaveSerializer
             (NestedSaveContext.Simulation, NestedSaveProperty.RailwayOperations) => NestedSaveContext.RailwayOperations,
             (NestedSaveContext.Simulation, NestedSaveProperty.Economy) => NestedSaveContext.Economy,
             (NestedSaveContext.Economy, NestedSaveProperty.Logistics) => NestedSaveContext.Logistics,
+            (NestedSaveContext.Economy, NestedSaveProperty.Power) => NestedSaveContext.Power,
             _ => NestedSaveContext.Other,
         };
 
@@ -203,6 +215,10 @@ public static partial class WorldSaveSerializer
             (NestedSaveContext.Logistics, NestedSaveProperty.Inventories) => new(limits.MaximumBuildingCount, "simulation.economy.logistics.inventories", NestedArrayKind.None),
             (NestedSaveContext.Logistics, NestedSaveProperty.Orders) => new(limits.MaximumPersonCount, "simulation.economy.logistics.orders", NestedArrayKind.None),
             (NestedSaveContext.Logistics, NestedSaveProperty.Shipments) => new(limits.MaximumVehicleCount, "simulation.economy.logistics.shipments", NestedArrayKind.None),
+            (NestedSaveContext.Power, NestedSaveProperty.PowerNodes) => new(limits.MaximumRoadNodeCount, "simulation.economy.power.nodes", NestedArrayKind.None),
+            (NestedSaveContext.Power, NestedSaveProperty.PowerLines) => new(limits.MaximumRoadSegmentCount, "simulation.economy.power.lines", NestedArrayKind.None),
+            (NestedSaveContext.Power, NestedSaveProperty.Generators) => new(limits.MaximumBuildingCount, "simulation.economy.power.generators", NestedArrayKind.None),
+            (NestedSaveContext.Power, NestedSaveProperty.PowerLoads) => new(limits.MaximumBuildingCount, "simulation.economy.power.loads", NestedArrayKind.None),
             _ => new(int.MaxValue, null, NestedArrayKind.None),
         };
 
@@ -229,6 +245,7 @@ public static partial class WorldSaveSerializer
         Timetable,
         Economy,
         Logistics,
+        Power,
     }
 
     private enum NestedSaveProperty : byte
@@ -254,6 +271,11 @@ public static partial class WorldSaveSerializer
         Inventories,
         Orders,
         Shipments,
+        Power,
+        PowerNodes,
+        PowerLines,
+        Generators,
+        PowerLoads,
     }
 
     private enum NestedArrayKind : byte
