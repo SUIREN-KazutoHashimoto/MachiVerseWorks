@@ -16,7 +16,7 @@ public sealed class DeterministicRadioPropagationSolver(IRadioPathCorrection? pa
         if (!double.IsFinite(correctionDb) || correctionDb < 0d)
             throw new InvalidOperationException("Radio path correction must return a finite non-negative loss.");
 
-        var pathLossDb = freeSpacePathLossDb + frequencyDependentLossDb + correctionDb;
+        var pathLossDb = freeSpacePathLossDb + frequencyDependentLossDb + request.ObstructionLossDb + correctionDb;
         var transmitter = request.LinkBudget.Transmitter;
         var receivedPowerDbm = transmitter.EffectiveRadiatedPower.Dbm
             - transmitter.FeederLossDb
