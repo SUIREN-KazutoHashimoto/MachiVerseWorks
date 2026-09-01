@@ -1,14 +1,14 @@
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
 > **現在:** Phase 27 — Remote Administration & MCP Integration  
-> **次の実装タスク:** `P27-001` — Remote Administration / MCP の責務・trust boundary・権限モデルを仕様化する
+> **次の実装タスク:** `P27-015` — Remote MCP Client→HTTPS reverse proxy→`/mcp`→Admin command境界→SimulationRuntimeまでを実Serverで検証するE2Eを追加する
 
 ## 全体の現在地
 
 | Phase | 内容 | 状態 |
 | --- | --- | --- |
 | 0〜26 | Foundation / Simulation / Infrastructure | ✅ 完了 |
-| 27 | Remote Administration & MCP Integration | ▶️ 次 |
+| 27 | Remote Administration & MCP Integration | 🚧 実装中（PR #176 / closeout待ち） |
 | 28 | Radio & Spectrum Foundation | ⏳ 待機 |
 | 29 | World & Physical Environment Generation | ⏳ 待機 |
 | 30 | Regional & Urban Generation | ⏳ 待機 |
@@ -154,34 +154,43 @@ Phase 28 完了後は、Phase 0〜28 の詳細・closeout証跡を `docs/archive
 
 ## Phase 27 — Remote Administration & MCP Integration
 
-> **状態: ▶️ 次**  
+> **状態: 🚧 実装中（PR #176 / P27-015 closeout待ち）**  
 > **依存:** Phase 4 / 20  
 > Phase 20で確立したserver-authoritative Administration command境界を、HTTPSのRemote MCP Serverから安全に再利用できるようにする。ChatGPT等のMCP Clientから状態確認・調査・運転制御・明示的に許可したmutationを実行できる一方、任意shell実行やSimulation内部への直接アクセスを公開しない。
 
-- ⬜ **P27-001** — Remote Administration / MCPの責務・trust boundary・read/write/destructive分類・権限モデルを仕様化する
-- ⬜ **P27-002** — MCP transport / tool adapter / Phase 20 Admin command境界 / SimulationRuntimeの責務分離をarchitecture文書化し、Remote AdminのADRを追加する
-- ⬜ **P27-003** — MCP Serverのhost境界と設定モデルを実装し、通常Server起動時に明示設定で有効化できるようにする
-- ⬜ **P27-004** — HTTPS向けStreamable HTTP `/mcp` endpointとMCP protocol negotiation / tool discoveryを実装する
-- ⬜ **P27-005** — Remote MCPのauthentication / authorizationとcredential取扱いを実装し、匿名のwrite操作を許可しない
-- ⬜ **P27-006** — Server version / runtime health / Simulation status / tick / pause state等を取得するread-only Toolを実装する
-- ⬜ **P27-007** — metrics / bounded log query / diagnostic stateを取得するread-only Toolを実装する
-- ⬜ **P27-008** — Entity inspect / query系の既存Administration境界をMCP Toolへmappingし、Simulation内部Storeを直接公開しない
-- ⬜ **P27-009** — `pause` / `step` / `resume` / `save`等の運転操作を既存AdminCommandQueue / executor経由のwrite Toolとして公開する
-- ⬜ **P27-010** — 明示的に許可したEntity create / update / remove等のmutationをAdmin command境界経由でMCP Toolへmappingする
-- ⬜ **P27-011** — destructive操作のconfirmation metadata・role / scope・stable result/error codeを実装し、read-only権限と分離する
-- ⬜ **P27-012** — request size / concurrency / timeout / cancellation / rate limit / result sizeの上限を実装し、slowまたは不正なRemote ClientをServer全体から隔離する
-- ⬜ **P27-013** — Cloudflare等のHTTPS reverse proxy配下でcache bypass・forwarded header・origin保護・TLS終端を安全に扱えるdeployment契約と設定例を整備する
-- ⬜ **P27-014** — arbitrary shell / executable / file path実行、unknown Tool、権限不足、oversized input、command injection、malformed MCP requestがServer停止や権限昇格へ波及しないnegative testを追加する
+- ✅ **P27-001** — Remote Administration / MCPの責務・trust boundary・read/write/destructive分類・権限モデルを仕様化する
+- ✅ **P27-002** — MCP transport / tool adapter / Phase 20 Admin command境界 / SimulationRuntimeの責務分離をarchitecture文書化し、Remote AdminのADRを追加する
+- ✅ **P27-003** — MCP Serverのhost境界と設定モデルを実装し、通常Server起動時に明示設定で有効化できるようにする
+- ✅ **P27-004** — HTTPS向けStreamable HTTP `/mcp` endpointとMCP protocol negotiation / tool discoveryを実装する
+- ✅ **P27-005** — Remote MCPのauthentication / authorizationとcredential取扱いを実装し、匿名のwrite操作を許可しない
+- ✅ **P27-006** — Server version / runtime health / Simulation status / tick / pause state等を取得するread-only Toolを実装する
+- ✅ **P27-007** — metrics / bounded log query / diagnostic stateを取得するread-only Toolを実装する
+- ✅ **P27-008** — Entity inspect / query系の既存Administration境界をMCP Toolへmappingし、Simulation内部Storeを直接公開しない
+- ✅ **P27-009** — `pause` / `step` / `resume` / `save`等の運転操作を既存AdminCommandQueue / executor経由のwrite Toolとして公開する
+- ✅ **P27-010** — 明示的に許可したEntity create / update / remove等のmutationをAdmin command境界経由でMCP Toolへmappingする
+- ✅ **P27-011** — destructive操作のconfirmation metadata・role / scope・stable result/error codeを実装し、read-only権限と分離する
+- ✅ **P27-012** — request size / concurrency / timeout / cancellation / rate limit / result sizeの上限を実装し、slowまたは不正なRemote ClientをServer全体から隔離する
+- ✅ **P27-013** — Cloudflare等のHTTPS reverse proxy配下でcache bypass・forwarded header・origin保護・TLS終端を安全に扱えるdeployment契約と設定例を整備する
+- ✅ **P27-014** — arbitrary shell / executable / file path実行、unknown Tool、権限不足、oversized input、command injection、malformed MCP requestがServer停止や権限昇格へ波及しないnegative testを追加する
 - ⬜ **P27-015** — Remote MCP Client→HTTPS reverse proxy→`/mcp`→Admin command境界→SimulationRuntimeまでを実Serverで検証するE2Eを追加し、readとwriteの双方を確認する
-- ⬜ **P27-016** — Remote Administration / MCPのspecification / architecture / ADR / security / deployment / Server README / ROADMAPを同期する
+- ✅ **P27-016** — Remote Administration / MCPのspecification / architecture / ADR / security / deployment / Server README / ROADMAPを同期する
 
 ### Phase 27 完了条件
 
-- HTTPSのRemote MCP ClientからServer状態・Simulation状態・主要diagnosticを取得できる。
-- mutationはPhase 20のserver-authoritative Admin command境界を必ず通り、MCP adapterがSimulation内部Storeを直接変更しない。
-- read / write / destructive操作の権限が分離され、認証なしのwrite、任意shell実行、無制限のfile/process操作を公開しない。
-- Cloudflare等のreverse proxy経由でもStreamable HTTP MCPとして接続でき、cache・timeout・request/result size・cancellationを安全に扱える。
-- 実Server E2EでRemote MCPのread / write / failure isolationを継続検証できる。
+- ✅ Remote MCP ClientからServer状態・Simulation状態・主要diagnosticを取得できる。
+- ✅ mutationはPhase 20のserver-authoritative Admin command境界を必ず通り、MCP adapterがSimulation内部Storeを直接変更しない。
+- ✅ read / write / destructive操作の権限が分離され、認証なしのwrite、任意shell実行、無制限のfile/process操作を公開しない。
+- ⬜ Cloudflare等のreverse proxy相当のHTTPS経路でもStreamable HTTP MCPとして接続でき、cache・timeout・request/result size・cancellationを安全に扱えることを実E2Eで確認する。
+- ✅ 実Kestrel Server E2EでRemote MCPのread / write / failure isolationを継続検証できる。
+
+### Phase 27 実装状況
+
+- PR #176 でRemote MCP host、Streamable HTTP `/mcp`、read/write/destructive scope、Administration queue mapping、resource limit、negative test、deployment docsを実装中。
+- Review対応として、timeout/cancel済みのqueued Admin commandを実行前に破棄し、timeout後のmutation遅延適用を防止する。
+- `entity_query`はRemoteからの無制限全件列挙を廃止し、stable ID指定の単一Entity inspectへ限定する。
+- Browser利用時は`AllowedOrigins`完全一致のCORS preflightを認証前に処理し、wildcard Originを許可しない。
+- log / metricsのresult size制御はJSONを途中切断せず、valid structured resultを維持する。
+- Phase全体の正式closeoutはP27-015のHTTPS reverse proxy E2EとPR最終CI成功後に行う。
 
 ---
 
