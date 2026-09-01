@@ -44,7 +44,7 @@ const connection = new MachiVerseConnection(serverUrl, { minimumDelayMs: 100, ma
 
 try {
   connection.connect();
-  await waitUntil(() => state === 'connected', 'Protocol 2.13 connection');
+  await waitUntil(() => state === 'connected', 'Protocol 2.14 connection');
   connection.setSubscription({ minX: -120, minY: -40, minZ: -10, maxX: 120, maxY: 60, maxZ: 15 });
   await waitUntil(() => snapshot !== null
     && snapshot.lines.some((line) => line.mode === TransitMode.Bus)
@@ -57,7 +57,7 @@ try {
 
   const railwayPattern = snapshot.patterns.find((pattern) => pattern.railwayServiceId !== null);
   const transitDebug = host.querySelector('.transit-debug-value');
-  assert(negotiatedVersion?.major === 2 && negotiatedVersion?.minor === 13, 'Protocol 2.13 was negotiated');
+  assert(negotiatedVersion?.major === 2 && negotiatedVersion?.minor === 14, 'Protocol 2.14 was negotiated');
   assert(railwayPattern?.stops.length === 2, 'Railway service is exposed through the common Transit pattern');
   assert(snapshot.patterns.some((pattern) => pattern.railwayServiceId === null && pattern.stops.length === 2), 'Bus pattern is published');
   assert(observedBusRoadVehicleReuse, 'Bus reuses a Road Traffic vehicle');
