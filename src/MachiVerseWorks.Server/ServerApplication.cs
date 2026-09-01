@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace MachiVerseWorks.Server;
 
@@ -12,8 +13,14 @@ public static class ServerApplication
         var builder = WebApplication.CreateBuilder(args ?? []);
         configureBuilder?.Invoke(builder);
         var options = ServerOptions.Load(builder.Configuration);
+        var mcpOptions = RemoteMcpOptions.Load(builder.Configuration);
+        var mcpLogs = new RemoteMcpLogBuffer(mcpOptions.MaxLogEntries);
         builder.WebHost.ConfigureKestrel(kestrel => kestrel.Listen(options.ListenAddress, options.Port));
         builder.Services.AddSingleton(options);
+        builder.Services.AddSingleton(mcpOptions);
+        builder.Services.AddSingleton(mcpLogs);
+        builder.Services.AddSingleton<RemoteMcpRequestGate>();
+        builder.Services.AddSingleton<RemoteMcpAdminGateway>();
         builder.Services.AddSingleton(new WebSocketOriginPolicy(options.AllowedWebSocketOrigins));
         builder.Services.AddSingleton<SimulationRuntime>();
         builder.Services.AddSingleton<ClientConnectionRegistry>();
@@ -39,7 +46,27 @@ public static class ServerApplication
         builder.Services.AddHostedService<GasPublishService>();
         builder.Services.AddHostedService<OpticalPublishService>();
 
+        if (mcpOptions.Enabled)
+        {
+            builder.Logging.AddProvider(mcpLogs);
+            builder.Services.AddAuthorization(authorization =>
+            {
+                authorization.AddPolicy(RemoteMcpPolicies.Read, policy => policy.RequireAuthenticatedUser().RequireClaim(RemoteMcpPolicies.ScopeClaim, "read"));
+                authorization.AddPolicy(RemoteMcpPolicies.Write, policy => policy.RequireAuthenticatedUser().RequireClaim(RemoteMcpPolicies.ScopeClaim, "write"));
+                authorization.AddPolicy(RemoteMcpPolicies.Destructive, policy => policy.RequireAuthenticatedUser().RequireClaim(RemoteMcpPolicies.ScopeClaim, "destructive"));
+            });
+            builder.Services.AddMcpServer()
+                .WithHttpTransport(transport => transport.Stateless = true)
+                .AddAuthorizationFilters()
+                .WithTools<RemoteMcpTools>();
+        }
+
         var app = builder.Build();
+        if (mcpOptions.Enabled)
+        {
+            app.UseMiddleware<RemoteMcpSecurityMiddleware>();
+            app.MapMcp("/mcp");
+        }
         app.UseWebSockets(new WebSocketOptions
         {
             KeepAliveInterval = TimeSpan.FromSeconds(30),
