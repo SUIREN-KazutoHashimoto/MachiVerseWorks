@@ -10,13 +10,15 @@ Simulation
   CapacityGasSupplySolver
       |
       +--> checkpoint -> Persistence
-      +--> snapshot -> Server mapper -> Protocol 2.14 -> Web debug overlay
+      +--> Gas snapshot ----+
+      |                     +--> Server read-model join -> Protocol 2.14 -> Web debug overlay
+      +--> Logistics snapshot+
       |
       +--> Delivered Gas -> existing Logistics inventory / order / freight
       +--> Economy production availability
 ```
 
-SimulationがGas状態の正本である。Persistence / Protocol / Server / Webは独自のGas state machineを持たず、Simulation snapshot / checkpointを変換する。
+SimulationがGas状態の正本である。Delivered Gasのinventory / Order / ShipmentはLogisticsが正本であり、Persistence / Protocol / Server / Webは独自のGas配送state machineを持たない。
 
 ## Pipeline Gas
 
@@ -85,7 +87,7 @@ Gas checkpointは`EconomyCheckpoint`のoptional extensionとしてSave Format 11
 
 PersistenceはGas collectionをdeserialize前にもscanし、WorldSaveLimitsを超えるnode / pipeline / facility / service pointを拒否する。
 
-## Protocol / Server
+## Protocol / Server read model
 
 Protocol 2.14の`GasSnapshot`は以下を配信する。
 
@@ -94,13 +96,21 @@ Protocol 2.14の`GasSnapshot`は以下を配信する。
 - Pipeline capacity / in-service state
 - Source / ImportTerminal / Storage capacity・output・stock・operating state
 - Piped / Delivered ServicePointのdemand・served・unserved・service state
+- Delivered ServicePointのconsumer inventory quantity / capacity
+- Delivered ServicePoint宛てactive Shipmentのaggregate quantity / count
+
+`GasPublishService`は同一`SimulationRuntime.Read`内でGas snapshotとLogistics snapshotを取得し、`GasMessageMapper`でread modelを結合する。これにより配信中にGasとLogisticsのtickがずれることを避ける。
+
+Shipment ID、詳細state、vehicle、planned / delivered tick等は引き続き`LogisticsSnapshot`が正本である。Gas snapshotへはdebugとservice-state因果確認に必要な集約値だけを複製する。
 
 Serverはdebug payloadをbounded entryとして配信し、Protocol 2.14以上のconnectionだけへ送信する。
 
 ## Web
 
-Web ClientはGas snapshotをread-only debug modelとして扱う。Gas pipe、node、facility、service health、aggregate demand / capacity / stockをoverlay表示し、Web側からSimulation正本を直接変更しない。
+Web ClientはGas snapshotをread-only debug modelとして扱う。Gas pipe、node、facility、service health、aggregate demand / capacity / pipeline storageに加え、Delivered Gasのinventory / active shipmentをoverlay表示し、Web側からSimulation正本を直接変更しない。
 
 ## Deterministic E2E
 
 Phase 25 fixtureはPipeline GasとDelivered Gasを同時にseedする。Pipeline側はRegulator nodeを通るpipelineを周期的に停止・復旧させる。Delivered側はconsumer inventory、reorder、Freight shipment、delivery、inventory replenishmentを既存Logistics経由で進める。
+
+E2EはProtocol 2.14のGas snapshotだけから、pipeline healthy→cut→recoveryと、Delivered Gas healthy→active Shipment→stockout→inventory replenishment→service recoveryを観測する。
