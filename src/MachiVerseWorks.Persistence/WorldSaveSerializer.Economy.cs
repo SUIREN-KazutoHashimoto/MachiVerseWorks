@@ -15,6 +15,7 @@ public static partial class WorldSaveSerializer
         ValidateLogisticsCheckpointWithinLimits(economy.Logistics, limits);
         ValidatePowerCheckpointWithinLimits(economy.Power, limits);
         ValidateWaterSewerCheckpointWithinLimits(economy.WaterSewer, limits);
+        ValidateGasCheckpointWithinLimits(economy.Gas, limits);
     }
 
     private static void ValidateLogisticsCheckpointWithinLimits(LogisticsCheckpoint? logistics, WorldSaveLimits limits)
@@ -47,5 +48,16 @@ public static partial class WorldSaveSerializer
         ValidateCount(waterSewer.Pumps.Count, limits.MaximumBuildingCount, "WaterSewerPumps");
         ValidateCount(waterSewer.TreatmentPlants.Count, limits.MaximumBuildingCount, "SewageTreatmentPlants");
         ValidateCount(waterSewer.ServicePoints.Count, limits.MaximumBuildingCount, "WaterSewerServicePoints");
+    }
+
+    private static void ValidateGasCheckpointWithinLimits(GasCheckpoint? gas, WorldSaveLimits limits)
+    {
+        if (gas is null) return;
+        ValidateCount(gas.Nodes.Count, limits.MaximumRoadNodeCount, "GasNodes");
+        ValidateCount(gas.Pipelines.Count, limits.MaximumRoadSegmentCount, "GasPipelines");
+        ValidateCount(gas.Sources.Count, limits.MaximumBuildingCount, "GasSources");
+        ValidateCount(gas.ImportTerminals.Count, limits.MaximumBuildingCount, "GasImportTerminals");
+        ValidateCount(gas.Storages.Count, limits.MaximumBuildingCount, "GasStorages");
+        ValidateCount(gas.ServicePoints.Count, limits.MaximumBuildingCount, "GasServicePoints");
     }
 }
