@@ -9,7 +9,11 @@ public static class WorldEnvironmentProtocolCodec
     private const int MaximumGeometryPointsPerFeature = 256;
     private const int MaximumToponyms = 256;
     private const int MaximumTextLength = 128;
-    private static readonly JsonSerializerOptions SerializerOptions = new() { MaxDepth = 16 };
+    private static readonly JsonSerializerOptions SerializerOptions = new()
+    {
+        MaxDepth = 16,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    };
 
     public static byte[] Serialize(WorldEnvironmentSnapshotMessage message, ProtocolVersion version)
     {
