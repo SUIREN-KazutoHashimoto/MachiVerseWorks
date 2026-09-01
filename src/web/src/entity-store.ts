@@ -65,11 +65,7 @@ export class EntityStore implements ReadonlyEntityStore {
 
     let offset = 0;
     for (const agentId of this.agents.keys()) {
-      const position = this.interpolation.sample(agentId, now);
-      if (position === undefined) continue;
-      target[offset] = position.x;
-      target[offset + 1] = position.y;
-      target[offset + 2] = position.z;
+      if (!this.interpolation.writeSampledPosition(agentId, now, target, offset)) continue;
       offset += 3;
     }
     return offset / 3;
