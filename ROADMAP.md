@@ -6,8 +6,8 @@ MachiVerseWorks のロードマップは、Simulation と View を独立した�
 
 | Track | 正本 | 状態 | 説明 |
 | --- | --- | --- | --- |
-| Simulation | [`docs/roadmap/simulation.md`](docs/roadmap/simulation.md) | ▶️ 進行中 | authoritative world state、各種 Simulation domain、world generation、最適化等 |
-| View | [`docs/roadmap/view.md`](docs/roadmap/view.md) | 📝 策定中 | 描画、camera、visualization、interaction、rendering LOD、管理UI等 |
+| Simulation | [`roadmap/simulation.md`](roadmap/simulation.md) | ▶️ 進行中 | authoritative world state、各種 Simulation domain、world generation、最適化等 |
+| View | [`roadmap/view.md`](roadmap/view.md) | 📝 策定中 | 描画、camera、visualization、interaction、rendering LOD、管理UI等 |
 
 Simulation と View は同時並行で進めてよい。ただし、View が Simulation 内部実装へ直接依存せず、公開された state / protocol / snapshot / query 境界を介して接続することを基本方針とする。
 
