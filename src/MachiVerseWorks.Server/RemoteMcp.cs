@@ -233,6 +233,9 @@ internal sealed class RemoteMcpRequestGate(RemoteMcpOptions options) : IDisposab
 
 internal sealed class RemoteMcpSecurityMiddleware(RequestDelegate next, RemoteMcpOptions options, RemoteMcpRequestGate gate)
 {
+    private const string CorsAllowHeaders = "Authorization, Content-Type, MCP-Protocol-Version, Mcp-Session-Id, Last-Event-ID";
+    private const string CorsAllowMethods = "GET, POST, DELETE, OPTIONS";
+
     public async Task InvokeAsync(HttpContext context)
     {
         if (!context.Request.Path.StartsWithSegments("/mcp", StringComparison.OrdinalIgnoreCase))
@@ -241,16 +244,31 @@ internal sealed class RemoteMcpSecurityMiddleware(RequestDelegate next, RemoteMc
             return;
         }
 
+        var origin = context.Request.Headers.Origin.ToString();
+        if (!options.IsOriginAllowed(origin))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return;
+        }
+        if (!string.IsNullOrWhiteSpace(origin))
+        {
+            context.Response.Headers["Access-Control-Allow-Origin"] = origin;
+            context.Response.Headers["Access-Control-Expose-Headers"] = "Mcp-Session-Id";
+            context.Response.Headers.Append("Vary", "Origin");
+        }
+        if (HttpMethods.IsOptions(context.Request.Method))
+        {
+            context.Response.Headers["Access-Control-Allow-Methods"] = CorsAllowMethods;
+            context.Response.Headers["Access-Control-Allow-Headers"] = CorsAllowHeaders;
+            context.Response.StatusCode = StatusCodes.Status204NoContent;
+            return;
+        }
+
         var maxBodyFeature = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
         if (maxBodyFeature is { IsReadOnly: false }) maxBodyFeature.MaxRequestBodySize = options.MaxRequestBytes;
         if (context.Request.ContentLength > options.MaxRequestBytes)
         {
             context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
-            return;
-        }
-        if (!options.IsOriginAllowed(context.Request.Headers.Origin.ToString()))
-        {
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
             return;
         }
         if (!options.TryAuthenticate(context.Request.Headers.Authorization.ToString(), out var credential, out var scopes))
@@ -337,28 +355,21 @@ internal sealed record RemoteMcpResult(bool Success, string Code, string Message
 
 internal sealed class RemoteMcpAdminGateway(AdminCommandQueue queue, RemoteMcpOptions options)
 {
-    public async Task<RemoteMcpResult> ExecuteAsync(string commandText, CancellationToken cancellationToken, int? lineLimit = null)
+    public async Task<RemoteMcpResult> ExecuteAsync(string commandText, CancellationToken cancellationToken)
     {
         if (!AdminCommandParser.TryParse(commandText, out var command, out var parseError) || command is null)
-            return FromAdmin(parseError ?? new AdminCommandResult(AdminCommandResultCode.InvalidSyntax, "Command could not be parsed."), lineLimit);
+            return FromAdmin(parseError ?? new AdminCommandResult(AdminCommandResultCode.InvalidSyntax, "Command could not be parsed."));
         var completion = new TaskCompletionSource<AdminCommandResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-        if (!queue.TryWrite(new AdminCommandRequest(command, completion)))
+        if (!queue.TryWrite(new AdminCommandRequest(command, completion, cancellationToken)))
             return new RemoteMcpResult(false, "queue_full", "Administration command queue is full.");
         var result = await completion.Task.WaitAsync(cancellationToken);
-        return FromAdmin(result, lineLimit);
+        return FromAdmin(result);
     }
 
-    private RemoteMcpResult FromAdmin(AdminCommandResult result, int? lineLimit)
-    {
-        var message = result.Message;
-        if (lineLimit is > 0)
-        {
-            var lines = message.Split('\n');
-            if (lines.Length > lineLimit) message = string.Join('\n', lines.Take(lineLimit.Value)) + $"\n... truncated ({lines.Length - lineLimit.Value} more line(s))";
-        }
-        message = TruncateUtf8(message, options.MaxResultBytes);
-        return new RemoteMcpResult(result.Success, ToCode(result.Code), message);
-    }
+    private RemoteMcpResult FromAdmin(AdminCommandResult result) => new(
+        result.Success,
+        ToCode(result.Code),
+        TruncateUtf8(result.Message, options.MaxResultBytes));
 
     private static string ToCode(AdminCommandResultCode code) => code switch
     {
@@ -374,7 +385,7 @@ internal sealed class RemoteMcpAdminGateway(AdminCommandQueue queue, RemoteMcpOp
         _ => "internal_error",
     };
 
-    private static string TruncateUtf8(string value, int maxBytes)
+    internal static string TruncateUtf8(string value, int maxBytes)
     {
         if (Encoding.UTF8.GetByteCount(value) <= maxBytes) return value;
         var suffix = "\n... truncated";
@@ -395,7 +406,7 @@ internal sealed class RemoteMcpAdminGateway(AdminCommandQueue queue, RemoteMcpOp
 [Authorize(Policy = RemoteMcpPolicies.Read)]
 internal sealed class RemoteMcpTools
 {
-    private static readonly IReadOnlyDictionary<string, string> QueryEntities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    private static readonly Dictionary<string, string> QueryEntities = new(StringComparer.OrdinalIgnoreCase)
     {
         ["agent"] = "agent", ["building"] = "building", ["poi"] = "poi", ["vehicle"] = "vehicle",
         ["road.node"] = "road node", ["road.segment"] = "road segment", ["road.lane"] = "road lane", ["road.connection"] = "road connection", ["road.access"] = "road access",
@@ -403,7 +414,14 @@ internal sealed class RemoteMcpTools
         ["formation"] = "formation", ["railroute"] = "railroute", ["timetable"] = "timetable", ["service"] = "service", ["train"] = "train",
     };
 
-    private static readonly HashSet<string> MutableEntities = new(QueryEntities.Keys.Where(static key => key is not "vehicle"), StringComparer.OrdinalIgnoreCase);
+    private static readonly HashSet<string> CreateEntities = new(QueryEntities.Keys.Where(static key => key is not "vehicle"), StringComparer.OrdinalIgnoreCase);
+    private static readonly HashSet<string> UpdateEntities = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "agent", "building", "poi",
+        "road.node", "road.segment", "road.lane", "road.connection", "road.access",
+        "railway.node", "railway.segment", "railway.connection", "railway.block", "railway.station", "railway.platform", "railway.access", "railway.depot",
+    };
+    private static readonly HashSet<string> RemoveEntities = new(UpdateEntities, StringComparer.OrdinalIgnoreCase);
 
     [McpServerTool(Name = "server_status", ReadOnly = true, Destructive = false, UseStructuredContent = true), Description("Read server and authoritative simulation status through the administration command boundary.")]
     public static Task<RemoteMcpResult> ServerStatus(RemoteMcpAdminGateway admin, CancellationToken cancellationToken) => admin.ExecuteAsync("status", cancellationToken);
@@ -418,24 +436,31 @@ internal sealed class RemoteMcpTools
     public static RemoteMcpResult DiagnosticsMetrics(E2eMetrics metrics, RemoteMcpOptions options)
     {
         var json = JsonSerializer.Serialize(metrics.Capture());
-        return new RemoteMcpResult(true, "ok", json.Length <= options.MaxResultBytes ? json : json[..options.MaxResultBytes]);
+        return Encoding.UTF8.GetByteCount(json) <= options.MaxResultBytes
+            ? new RemoteMcpResult(true, "ok", json)
+            : RemoteMcpResult.Rejected("result_too_large", "Metrics result exceeds the configured MCP result-size limit.");
     }
 
     [McpServerTool(Name = "logs_query", ReadOnly = true, Destructive = false, UseStructuredContent = true), Description("Query the bounded in-memory server log tail. Secrets are never included by the MCP security boundary.")]
     public static RemoteMcpResult LogsQuery(RemoteMcpLogBuffer logs, RemoteMcpOptions options, [Description("Maximum entries to return.")] int limit = 50, [Description("Optional case-insensitive text filter for category or message.")] string? contains = null)
     {
         if (limit < 1 || limit > options.MaxQueryItems) return RemoteMcpResult.Rejected("invalid_argument", $"limit must be between 1 and {options.MaxQueryItems}.");
-        var json = JsonSerializer.Serialize(logs.Query(limit, contains));
-        return new RemoteMcpResult(true, "ok", json.Length <= options.MaxResultBytes ? json : json[..options.MaxResultBytes]);
+        var entries = logs.Query(limit, contains).ToList();
+        while (entries.Count > 0)
+        {
+            var json = JsonSerializer.Serialize(entries);
+            if (Encoding.UTF8.GetByteCount(json) <= options.MaxResultBytes) return new RemoteMcpResult(true, "ok", json);
+            entries.RemoveAt(0);
+        }
+        return new RemoteMcpResult(true, "ok", "[]");
     }
 
-    [McpServerTool(Name = "entity_query", ReadOnly = true, Destructive = false, UseStructuredContent = true), Description("List or inspect an allowlisted entity type through the administration command boundary.")]
-    public static Task<RemoteMcpResult> EntityQuery(RemoteMcpAdminGateway admin, RemoteMcpOptions options, [Description("Entity type such as agent, building, road.segment, railway.station, or train.")] string entity, [Description("Optional entity ID. Omit to list entities.")] string? id = null, [Description("Maximum list lines returned.")] int limit = 50, CancellationToken cancellationToken = default)
+    [McpServerTool(Name = "entity_query", ReadOnly = true, Destructive = false, UseStructuredContent = true), Description("Inspect one allowlisted entity by stable ID through the administration command boundary. Unbounded remote enumeration is intentionally not exposed.")]
+    public static Task<RemoteMcpResult> EntityQuery(RemoteMcpAdminGateway admin, [Description("Entity type such as agent, building, road.segment, railway.station, or train.")] string entity, [Description("Stable entity ID to inspect.")] string id, CancellationToken cancellationToken = default)
     {
         if (!QueryEntities.TryGetValue(entity, out var prefix)) return Task.FromResult(RemoteMcpResult.Rejected("invalid_argument", "Entity type is not allowlisted."));
-        if (limit < 1 || limit > options.MaxQueryItems) return Task.FromResult(RemoteMcpResult.Rejected("invalid_argument", $"limit must be between 1 and {options.MaxQueryItems}."));
-        var command = id is null ? $"{prefix} list" : $"{prefix} show {Quote(id)}";
-        return admin.ExecuteAsync(command, cancellationToken, id is null ? limit : null);
+        if (string.IsNullOrWhiteSpace(id) || id.Length > 64) return Task.FromResult(RemoteMcpResult.Rejected("invalid_argument", "id must be between 1 and 64 characters."));
+        return admin.ExecuteAsync($"{prefix} show {Quote(id)}", cancellationToken);
     }
 
     [McpServerTool(Name = "simulation_pause", ReadOnly = false, Destructive = false, Idempotent = true, UseStructuredContent = true), Authorize(Policy = RemoteMcpPolicies.Write), Description("Pause simulation execution through the administration command queue.")]
@@ -455,7 +480,18 @@ internal sealed class RemoteMcpTools
     public static Task<RemoteMcpResult> SimulationSave(RemoteMcpAdminGateway admin, RemoteMcpOptions options, [Description("Save slot name using letters, digits, dot, underscore, or hyphen.")] string slot, CancellationToken cancellationToken)
     {
         if (!IsSafeSlot(slot)) return Task.FromResult(RemoteMcpResult.Rejected("invalid_argument", "slot must be 1-64 characters and contain only letters, digits, dot, underscore, or hyphen."));
-        Directory.CreateDirectory(options.SaveDirectory);
+        try
+        {
+            Directory.CreateDirectory(options.SaveDirectory);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Task.FromResult(RemoteMcpResult.Rejected("io_error", "The configured MCP save directory cannot be created or accessed."));
+        }
+        catch (IOException)
+        {
+            return Task.FromResult(RemoteMcpResult.Rejected("io_error", "The configured MCP save directory cannot be created or accessed."));
+        }
         var path = Path.Combine(options.SaveDirectory, slot + ".mvw");
         return admin.ExecuteAsync($"world save {Quote(path)}", cancellationToken);
     }
@@ -463,17 +499,24 @@ internal sealed class RemoteMcpTools
     [McpServerTool(Name = "entity_write", ReadOnly = false, Destructive = false, UseStructuredContent = true), Authorize(Policy = RemoteMcpPolicies.Write), Description("Create or update an allowlisted entity by mapping structured MCP input to the existing administration command boundary.")]
     public static Task<RemoteMcpResult> EntityWrite(RemoteMcpAdminGateway admin, [Description("Allowlisted entity type.")] string entity, [Description("Operation: add or update.")] string operation, [Description("Administration arguments for the selected entity operation. Each item becomes exactly one quoted command token.")] string[] arguments, CancellationToken cancellationToken)
     {
-        if (!MutableEntities.Contains(entity) || !QueryEntities.TryGetValue(entity, out var prefix)) return Task.FromResult(RemoteMcpResult.Rejected("invalid_argument", "Entity type is not writable through MCP."));
-        if (!operation.Equals("add", StringComparison.OrdinalIgnoreCase) && !operation.Equals("update", StringComparison.OrdinalIgnoreCase)) return Task.FromResult(RemoteMcpResult.Rejected("invalid_argument", "operation must be add or update."));
+        if (!QueryEntities.TryGetValue(entity, out var prefix)) return Task.FromResult(RemoteMcpResult.Rejected("invalid_argument", "Entity type is not writable through MCP."));
+        var normalizedOperation = operation.ToLowerInvariant();
+        var allowed = normalizedOperation switch
+        {
+            "add" => CreateEntities.Contains(entity),
+            "update" => UpdateEntities.Contains(entity),
+            _ => false,
+        };
+        if (!allowed) return Task.FromResult(RemoteMcpResult.Rejected("invalid_argument", $"Operation '{operation}' is not supported for entity type '{entity}'."));
         if (!ValidateArguments(arguments, out var error)) return Task.FromResult(error!);
-        return admin.ExecuteAsync(BuildCommand(prefix, operation.ToLowerInvariant(), arguments), cancellationToken);
+        return admin.ExecuteAsync(BuildCommand(prefix, normalizedOperation, arguments), cancellationToken);
     }
 
     [McpServerTool(Name = "entity_remove", ReadOnly = false, Destructive = true, UseStructuredContent = true), Authorize(Policy = RemoteMcpPolicies.Destructive), Description("Remove an allowlisted entity. Requires destructive scope and explicit confirmation.")]
     public static Task<RemoteMcpResult> EntityRemove(RemoteMcpAdminGateway admin, [Description("Allowlisted entity type.")] string entity, [Description("Administration arguments identifying the entity to remove.")] string[] arguments, [Description("Must be true to confirm the destructive operation.")] bool confirm, CancellationToken cancellationToken)
     {
         if (!confirm) return Task.FromResult(RemoteMcpResult.Rejected("confirmation_required", "Set confirm=true to execute an entity removal."));
-        if (!MutableEntities.Contains(entity) || !QueryEntities.TryGetValue(entity, out var prefix)) return Task.FromResult(RemoteMcpResult.Rejected("invalid_argument", "Entity type is not removable through MCP."));
+        if (!RemoveEntities.Contains(entity) || !QueryEntities.TryGetValue(entity, out var prefix)) return Task.FromResult(RemoteMcpResult.Rejected("invalid_argument", "Entity type is not removable through MCP."));
         if (!ValidateArguments(arguments, out var error)) return Task.FromResult(error!);
         return admin.ExecuteAsync(BuildCommand(prefix, "remove", arguments), cancellationToken);
     }
@@ -496,6 +539,6 @@ internal sealed class RemoteMcpTools
         return true;
     }
 
-    private static bool IsSafeSlot(string slot) => slot.Length is >= 1 and <= 64 && slot.All(static c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-') && slot is not "." and not "..";
+    private static bool IsSafeSlot(string? slot) => slot is not null && slot.Length is >= 1 and <= 64 && slot.All(static c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-') && slot is not "." and not "..";
     private static string Quote(string value) => '"' + value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal) + '"';
 }
