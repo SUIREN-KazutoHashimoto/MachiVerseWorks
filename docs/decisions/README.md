@@ -8,6 +8,8 @@
 - [`ADR-0002-localization-boundary.md`](ADR-0002-localization-boundary.md): localization を Client 境界へ置き、Protocol / Save Data を言語非依存にする
 - [`ADR-0003-versioned-save-data-boundary.md`](ADR-0003-versioned-save-data-boundary.md): Simulation checkpoint と versioned Save Data serialization を分離する
 - [`ADR-0004-3d-world-coordinate-system.md`](ADR-0004-3d-world-coordinate-system.md): Simulation World の正本座標を3D化する
+- [`ADR-0005-server-administration-boundary.md`](ADR-0005-server-administration-boundary.md): Server Administrationを単一のauthoritative command境界へ集約する
+- [`ADR-0006-remote-mcp-through-administration-boundary.md`](ADR-0006-remote-mcp-through-administration-boundary.md): Remote MCPをPhase 20 Administration境界経由に限定する
 
 命名例:
 
