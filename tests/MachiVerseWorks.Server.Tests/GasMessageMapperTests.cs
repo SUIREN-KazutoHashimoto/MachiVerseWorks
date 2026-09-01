@@ -44,7 +44,7 @@ public sealed class GasMessageMapperTests
         var segment = world.CreateRoadSegment(start, end, RoadKind.Local);
         world.CreateLane(segment, LaneDirection.Forward, 0, speedLimitMetersPerSecond: 12d);
         var access = world.CreateRoadAccessPoint(segment, 0.5d, building, mode: RoadAccessMode.Motor);
-        var company = world.CreateCompany(IndustrySector.Services, 100_000d, 0d);
+        var company = world.CreateCompany(IndustrySector.Services, 100_000, 0d);
         var establishment = world.CreateEstablishment(company, buildingId: building);
         var gas = world.CreateCommodity(CommodityKind.Gas);
         world.ConfigureInventory(establishment, gas, access, InventoryRole.Consumer, capacity: 40d, initialQuantity: 12d, reorderPoint: 5d, targetQuantity: 20d, dailyConsumptionUnits: 0d);
