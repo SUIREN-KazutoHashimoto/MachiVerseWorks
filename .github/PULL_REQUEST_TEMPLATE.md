@@ -18,6 +18,8 @@
 - [ ] runtime / Server / Browser の実機確認が必要な場合は実施した、または未確認と明記した
 - [ ] 仕様変更に伴うドキュメントを更新した
 - [ ] 重要な設計判断がある場合は ADR を追加・更新した
+- [ ] 対応するRoadmap Taskがある場合、`roadmap/SIMULATION_ROADMAP.md` / `roadmap/VIEW_ROADMAP.md` の状態を同期した
+- [ ] Markdownを追加・移動・改名した場合、local link / heading anchorの検証を実施した
 - [ ] debug code / 一時フラグ / 不要ログが残っていない
 
 ## バージョン
