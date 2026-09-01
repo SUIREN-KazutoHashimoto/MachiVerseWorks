@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Channels;
 using MachiVerseWorks.Persistence;
@@ -66,14 +67,29 @@ internal static class AdminCommandParser
     }
 }
 
-internal sealed record AdminCommandRequest(AdminCommand Command, TaskCompletionSource<AdminCommandResult> Completion);
+internal sealed record AdminCommandRequest(
+    AdminCommand Command,
+    TaskCompletionSource<AdminCommandResult> Completion,
+    CancellationToken CancellationToken = default);
 
 internal sealed class AdminCommandQueue
 {
     public const int Capacity = 256;
     private readonly Channel<AdminCommandRequest> _channel = Channel.CreateBounded<AdminCommandRequest>(new BoundedChannelOptions(Capacity) { SingleReader = true, SingleWriter = false, FullMode = BoundedChannelFullMode.Wait });
     public bool TryWrite(AdminCommandRequest request) { ArgumentNullException.ThrowIfNull(request); return _channel.Writer.TryWrite(request); }
-    public IAsyncEnumerable<AdminCommandRequest> ReadAllAsync(CancellationToken cancellationToken) => _channel.Reader.ReadAllAsync(cancellationToken);
+
+    public async IAsyncEnumerable<AdminCommandRequest> ReadAllAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await foreach (var request in _channel.Reader.ReadAllAsync(cancellationToken))
+        {
+            if (request.CancellationToken.IsCancellationRequested)
+            {
+                request.Completion.TrySetCanceled(request.CancellationToken);
+                continue;
+            }
+            yield return request;
+        }
+    }
 }
 
 internal sealed class AdminCommandExecutor(
@@ -280,7 +296,7 @@ internal sealed class ServerConsoleService(AdminCommandQueue queue, ServerOption
             if (line is null) { logger.LogInformation("Server administration console reached EOF."); break; }
             if (!AdminCommandParser.TryParse(line, out var command, out var error)) { await Console.Out.WriteLineAsync(error!.ToString()); continue; }
             var completion = new TaskCompletionSource<AdminCommandResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-            if (!queue.TryWrite(new AdminCommandRequest(command!, completion))) { await Console.Out.WriteLineAsync(new AdminCommandResult(AdminCommandResultCode.QueueFull, "Admin command queue is full.").ToString()); continue; }
+            if (!queue.TryWrite(new AdminCommandRequest(command!, completion, stoppingToken))) { await Console.Out.WriteLineAsync(new AdminCommandResult(AdminCommandResultCode.QueueFull, "Admin command queue is full.").ToString()); continue; }
             try { await Console.Out.WriteLineAsync((await completion.Task.WaitAsync(stoppingToken)).ToString()); }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
         }
