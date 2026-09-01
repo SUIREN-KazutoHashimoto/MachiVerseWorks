@@ -12,7 +12,7 @@ MachiVerseWorksのauthoritativeな`SimulationWorld`を停止点から同じstate
 
 ## Save format version
 
-current formatは **`formatVersion = 10`** とする。Save format versionはルート`VERSION`とProtocol versionから独立する。
+current formatは **`formatVersion = 11`** とする。Save format versionはルート`VERSION`とProtocol versionから独立する。実装上の正本は [`SaveFormatVersion.Current`](../../src/MachiVerseWorks.Persistence/SaveFormatVersion.cs) である。
 
 migration対象:
 
@@ -24,8 +24,11 @@ migration対象:
 - Format 8: Format 7 + Railway Infrastructure
 - Format 9: Format 8 + Railway Operations
 - Format 10: Format 9 + Multimodal Transit / Journey / Passenger / Taxi
+- Format 11: Format 10 + Economy checkpoint
 
-Format 2以前、および10より新しい未知versionは拒否する。
+Phase 22以降のLogistics / Power / Water・Sewer / Gas / Optical / Radio等は、既存Format 11へ**additive optional sub-state**として追加する。各fieldが存在しない既存Format 11 Saveは、そのdomainを空またはdefault stateとして復元できるため、これらの追加だけではformat versionを上げない。
+
+Format 2以前、および11より新しい未知versionは拒否する。
 
 ## 共通Simulation state
 
@@ -39,6 +42,8 @@ Format 2以前、および10より新しい未知versionは拒否する。
 - Railway Infrastructure
 - Railway Operations
 - Multimodal Transit
+- Economy
+- Economy checkpoint配下のoptional sub-stateとしてLogistics / Power / Water・Sewer / Gas / Optical / Radio等
 
 表示文字列ではなくraw numeric value、enum code、stable IDを保存する。
 
@@ -80,13 +85,28 @@ Railway Infrastructureを先に復元し、Route connectivity、Timetable / Stat
 
 Format 8以前はRailway Operationsを空へmigrationする。
 
-## Multimodal Transit — Format 10
+## Multimodal Transit — Format 10+
 
 `simulation.multimodalTransit`へTransit Stop / Line / Service Pattern / Trip / Bus・Taxi Vehicle / Taxi Request / Journey / Passengerと各next IDを保存する。
 
 active Bus/TaxiのRoad Vehicle reference、Railway Pattern/JourneyのRailway Service reference、PopulationのTransit Trip referenceをrestore時に整合性検証する。
 
 Format 9以前はMultimodal Transitを空へmigrationする。transfer中Passengerも同じJourney leg/stateからfixed tick進行を継続する。
+
+## Economy — Format 11+
+
+Format 11はCompany / Establishment / Job / Employment / Household economy等のEconomy checkpointを追加する。Format 10以前からmigrationした場合は空Economy stateとして開始する。
+
+Format 11導入後のdomainは互換なoptional sub-stateとして追加される。代表例:
+
+- Logistics: Commodity / Inventory / Order / Shipment
+- Power: topology / generation / load / service state
+- Water / Sewer: topology / flow / service state
+- Gas: pipeline / delivered gas / inventory / service state
+- Optical: topology / capacity / congestion / outage state
+- Radio / Spectrum: site / antenna / emission / link / spectrum state
+
+各domain固有の保存項目・参照整合性は対応する`docs/specifications/`のdomain仕様を正本とする。optional field欠落を理由にFormat 11全体を拒否せず、そのdomainの定義済みempty/default migrationを適用する。
 
 ## Signal controller state
 
@@ -100,7 +120,7 @@ Format 9以前はMultimodal Transitを空へmigrationする。transfer中Passeng
 
 ## Restore順序
 
-Format 10は大きく次の順で復元する。
+Format 11は大きく次の順で復元する。
 
 1. UTF-8 byte limit、JSON、unknown field、required field、top-level / nested collection count検証
 2. Simulation config / tick / elapsed time / random state検証
@@ -112,7 +132,8 @@ Format 10は大きく次の順で復元する。
 8. Railway Infrastructure
 9. Railway Operations
 10. Multimodal TransitとRoad / Railway / Population cross-domain reference
-11. routing / walking / traffic / signal / railway ownership等のderived stateを再構築
+11. Economyおよび存在するFormat 11 optional domain sub-stateを依存順に復元・検証
+12. routing / walking / traffic / signal / railway ownership等のderived stateを再構築
 
 いずれかが不正なら部分Worldを返さない。
 
@@ -120,7 +141,7 @@ Format 10は大きく次の順で復元する。
 
 `elapsedTicks`は`tickCount`とSimulation TickRateから得られるdeterministic elapsed timeと一致しなければならない。`randomState`はseedだけでなく保存時点のdeterministic generator状態を保持する。
 
-Vehicle / Pedestrian / Population / Railway / Multimodal Transitは、同じauthoritative inputと後続tickのもとでsave/load後もdeterministic continuationを得る。
+Vehicle / Pedestrian / Population / Railway / Multimodal Transit / Economy / Logistics / Infrastructureは、同じauthoritative inputと後続tickのもとでsave/load後もdeterministic continuationを得る。
 
 ## Resource limits
 
@@ -189,5 +210,6 @@ serializeでも`SimulationCheckpoint`からSave DTO配列へ投影する前に�
 - Railway Route / Timetable / Service / Train semantic reference不整合
 - Multimodal Stop / Pattern / Trip / Vehicle / Taxi / Journey / Passenger reference不整合
 - active Transit stateとRoad Vehicle / Railway Service / Population Tripのcross-domain不整合
+- Economy / Logistics / Utility / Communication / Radioのstable ID、cross-domain reference、capacity / inventory / service-state invariant不整合
 
 実装境界は[`../architecture/persistence.md`](../architecture/persistence.md)を参照する。

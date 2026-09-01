@@ -5,7 +5,10 @@ MachiVerseWorks のドキュメント入口です。
 ## まず読む
 
 - プロジェクト全体の概要: [`../README.md`](../README.md)
-- 現在地と次の作業: [`../ROADMAP.md`](../ROADMAP.md)
+- 3 Roadmapの責務・依存関係の索引: [`../roadmap/README.md`](../roadmap/README.md)
+- Simulation側の現在地と次の作業: [`../roadmap/SIMULATION_ROADMAP.md`](../roadmap/SIMULATION_ROADMAP.md)
+- View側の現在地と次の作業: [`../roadmap/VIEW_ROADMAP.md`](../roadmap/VIEW_ROADMAP.md)
+- Management側の現在地と次の作業: [`../roadmap/MANAGEMENT_ROADMAP.md`](../roadmap/MANAGEMENT_ROADMAP.md)
 - 共通の開発・文書ルール: [`../AGENTS.md`](../AGENTS.md)
 
 分野別の現行文書は、次の各 README を索引として辿ります。
@@ -17,7 +20,20 @@ MachiVerseWorks のドキュメント入口です。
 | [`specifications/`](specifications/) | Simulation、交通、公共交通、物流、都市Infrastructureなどの現行仕様 | [`specifications/README.md`](specifications/README.md) |
 | [`development/`](development/) | 開発環境、Git、version、CI、テスト、性能計測などの運用 | [`development/README.md`](development/README.md) |
 | [`decisions/`](decisions/) | ADR（Architecture Decision Record） | [`decisions/README.md`](decisions/README.md) |
-| [`archive/`](archive/) | Legacy資料、完了済みROADMAP、廃止設計、過去の実験記録 | [`archive/README.md`](archive/README.md) |
+| [`roadmap/`](roadmap/) | Phaseを補足する詳細設計・検討資料。進捗状態の正本ではない | [`roadmap/phase38-addon-conflict-resolution.md`](roadmap/phase38-addon-conflict-resolution.md) |
+| [`archive/`](archive/) | Legacy資料、完了済みRoadmap履歴、廃止設計、過去の実験記録 | [`archive/README.md`](archive/README.md) |
+
+> [!NOTE]
+> `docs/roadmap/` は詳細な計画・設計メモの置き場です。実装Phase / Task状態の正本はルートの [`../roadmap/SIMULATION_ROADMAP.md`](../roadmap/SIMULATION_ROADMAP.md)、[`../roadmap/VIEW_ROADMAP.md`](../roadmap/VIEW_ROADMAP.md)、[`../roadmap/MANAGEMENT_ROADMAP.md`](../roadmap/MANAGEMENT_ROADMAP.md) です。3 Roadmap間の責務と依存関係の読み方は[`../roadmap/README.md`](../roadmap/README.md)を索引とします。
+
+## 大きな責務境界
+
+- **Simulation**: Worldのauthoritative state、rule、意味的処理、Observation read model、server-authoritative command contract
+- **View**: Simulation結果を忠実に描画・観測する完全read-only client
+- **Management**: World / City / Serverを明示的に変更するUIとcommand client
+- **Analytics**: 将来必要になった場合にViewとは別Listener / data pipelineとして設計する
+
+SimulationとViewのread-only境界、Observation Gateway、cache方針は[`architecture/observation-gateway.md`](architecture/observation-gateway.md)を参照してください。
 
 ## 管理原則
 
@@ -34,5 +50,6 @@ MachiVerseWorks のドキュメント入口です。
 1. What / Why は `specifications/`、How は `architecture/`、開発手順や計測結果は `development/` に置きます。
 2. 現行文書を追加したら、そのディレクトリの `README.md` に索引を追加します。
 3. Phaseの挿入・並べ替えを行った場合は、他文書に固定されたPhase番号が残っていないか確認します。
-4. リポジトリルートで `python scripts/check-markdown-links.py` を実行し、ローカルリンクとMarkdown heading anchorを検証します。
-5. 現行契約ではなくなった資料は、参照関係を確認してから `archive/` へ移します。
+4. Roadmap責務を変更した場合はSimulation / View / Managementの3つのRoadmapと主要READMEのリンクを同期します。
+5. リポジトリルートで `python scripts/check-markdown-links.py` を実行し、ローカルリンクとMarkdown heading anchorを検証します。
+6. 現行契約ではなくなった資料は、参照関係を確認してから `archive/` へ移します。

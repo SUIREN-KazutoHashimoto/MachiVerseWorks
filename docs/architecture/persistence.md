@@ -13,14 +13,14 @@ SimulationWorld
 SimulationCheckpoint
    │ WorldSaveSerializer
    ▼
-Save Format 10 JSON
+Save Format 11 JSON
 ```
 
 loadは逆方向に、byte/resource validation → JSON DTO → checkpoint validation → `SimulationWorld.RestoreCheckpoint()`の順で行う。失敗時に部分Worldを返さない。
 
 ## Current format
 
-current Save formatは **10**。Application `VERSION`およびProtocol versionとは独立してversioningする。
+current Save formatは **11**。Application `VERSION`およびProtocol versionとは独立してversioningする。実装上の正本は [`SaveFormatVersion.Current`](../../src/MachiVerseWorks.Persistence/SaveFormatVersion.cs) である。
 
 - Format 3: Agent + Building / POI
 - Format 4: Road Network
@@ -30,8 +30,9 @@ current Save formatは **10**。Application `VERSION`およびProtocol version�
 - Format 8: Railway Infrastructure
 - Format 9: Railway Operations
 - Format 10: Multimodal Transit / Journey / Passenger / Taxi
+- Format 11: Economy checkpoint
 
-Format 3〜9はmigration pathを持ち、未導入domainを空stateとして補う。Format 2以前とcurrentより新しい未知formatは拒否する。
+Format 3〜10はmigration pathを持ち、未導入domainを空stateとして補う。Format 11導入後のLogistics / Power / Water・Sewer / Gas / Optical / Radio等は、後方互換なoptional sub-stateとして追加し、field欠落時はdomainごとのempty/default stateへ復元する。Format 2以前とcurrentより新しい未知formatは拒否する。
 
 ## Checkpoint ownership
 
@@ -46,13 +47,15 @@ Format 3〜9はmigration pathを持ち、未導入domainを空stateとして補�
 - Railway Infrastructure: TrackNode / TrackSegment / TrackConnection / BlockSection / Station / Platform / PlatformAccessPoint / Depot
 - Railway Operations: Formation / RailwayRoute / Timetable / RailwayService / Train
 - Multimodal Transit: Stop / Line / ServicePattern / Trip / TransitVehicle / TaxiRequest / Journey / Passenger
+- Economy: Company / Establishment / Job / Employment / Household economy
+- Format 11 optional sub-state: Logistics / Power / Water・Sewer / Gas / Optical / Radio等
 - 各stable-ID namespaceのnext ID
 
 描画cache、Web connection、Protocol frame、derived routing graph、Lane occupancy index、fixed-signal derived phase、runtime ownership dictionaryなどはSave Dataの正本にしない。
 
 ## Restore order
 
-参照先を先に復元する。current Format 10の大きな順序は次のとおり。
+参照先を先に復元する。current Format 11の大きな順序は次のとおり。
 
 1. byte limit / JSON構造 / required field / collection countを検証
 2. Simulation config / tick / random stateを検証
@@ -63,9 +66,10 @@ Format 3〜9はmigration pathを持ち、未導入domainを空stateとして補�
 7. Railway Infrastructure
 8. Railway Operations
 9. Multimodal TransitとRoad Vehicle / Railway Service / Population Tripのcross-domain reference
-10. derived index / graph / ownership stateを再構築
+10. Economyおよび存在するoptional domain sub-stateを依存順に検証・復元
+11. derived index / graph / ownership stateを再構築
 
-Railway OperationsはTrack / Block / Station / Platform / Depotが存在してから検証し、Multimodal TransitはRoad/Railway/Populationの参照先が復元されてから受理する。
+Railway OperationsはTrack / Block / Station / Platform / Depotが存在してから検証し、Multimodal TransitはRoad/Railway/Populationの参照先が復元されてから受理する。Economy以降のoptional domainもBuilding / Establishment / Road / Power等、それぞれの参照先を先に復元してから受理する。
 
 ## Derived state rebuild
 
@@ -95,7 +99,7 @@ restore後のfixed-tick continuationは保存したauthoritative stateとdetermi
 - `railwayOperations.timetables[].stops`: 100,000 / Timetable
 - Timetable stop total: 1,000,000 / World
 
-同名propertyでもparent contextを区別する。たとえばDepotとRailwayRouteの`trackSegmentIds`は別contractとして扱う。write側もcheckpointからDTO配列へ投影する前に同じ上限を適用する。
+同名propertyでもparent contextを区別する。たとえばDepotとRailwayRouteの`trackSegmentIds`は別contractとして扱う。write側もcheckpointからDTO配列へ投影する前に同じ上限を適用する。Format 11 optional domainは各domain checkpoint validationと対応するSave limitを追加適用する。
 
 ## Validation layers
 
@@ -108,6 +112,7 @@ restore後のfixed-tick continuationは保存したauthoritative stateとdetermi
 - Railway topology / membership / Station・Platform・Depot reference
 - Railway Operations Route / Timetable / Service / Train semantic reference
 - Multimodal Transit Stop / Pattern / Trip / Vehicle / Journey / Passengerとcross-domain reference
+- Economy / Logistics / Utility / Communication / Radio checkpointのstable ID、cross-domain reference、capacity / inventory / service-state invariant
 
 Protocolへ送れない単一aggregateをSaveからauthoritative stateへ導入しないため、BlockSection / Depot membershipにはSimulation側100,000件hard limitもある。
 

@@ -1,6 +1,8 @@
 # MachiVerseWorks.Server
 
-Headless ServerはASP.NET Core / Kestrel上で1つの`SimulationWorld`をserver-authoritativeに実行し、HTTP health endpointとProtocol 2.x binary WebSocketを提供します。
+Headless ServerはASP.NET Core / Kestrel上で1つの`SimulationWorld`をserver-authoritativeに実行し、HTTP health endpointとProtocol 2.x binary WebSocketを提供します。現在のServer Protocol上限は[`ProtocolVersion.Current`](../MachiVerseWorks.Protocol/ProtocolVersion.cs)の **2.16** です。
+
+Serverはread-onlyな**Observation Gateway**と、authoritative mutationを扱う**Administration / Management command boundary**を分離する方向で整理します。現行publish / subscription / inspection処理がObservation Gatewayの既存基盤であり、generic cache / request deduplication等の追加基盤はSimulation Roadmapの`OBS-*`で段階実装します。
 
 ## Runtime boundary
 
@@ -9,13 +11,53 @@ Headless ServerはASP.NET Core / Kestrel上で1つの`SimulationWorld`をserver-
 - hosted serviceでfixed-tick Simulationを実行する
 - `/ws`で`Hello` / `HelloAck` negotiation後のbinary Protocolを処理する
 - Browser WebSocketは`Server:AllowedWebSocketOrigins` allowlistでOriginを検証する
-- 3D `SubscribeVolume`をbounded command queue経由で処理する
-- `Server:MaximumSubscriptionCellCount`でsubscription cell数を制限する
+- `SubscribeVolume` / Inspect等のObservation Requestをread-only境界で処理する
+- publish cycleでdetached snapshot / read modelをcaptureし、3D spatial filteringとsnapshot deliveryをServer側で行う
+- Road / Railway等のstatic topologyは既存revision contractを使って不要な再送を抑制する
+- connectionごとのsnapshot deliveryはin-flight deliveryを重複scheduleしない
+- `Server:MaximumSubscriptionCellCount`でobservation subscription cell数を制限する
 - Save起動時は復元した`SimulationWorld.Config`をscheduler / HelloAck / subscription guardの正本にする
 - stdin管理Consoleはtransport-independentな`AdminCommand`境界を経由し、Simulation tickと同じauthoritative lockで直列化する
 - Remote MCPは明示設定時だけ`/mcp`を公開し、同じ`AdminCommandQueue` / executorを再利用する
+- 将来のManagement Clientはauthoritative command境界を利用し、read-only View moduleとは分離する
 
 既定では`127.0.0.1:5080`をlistenし、Vite開発用の`http://127.0.0.1:5173`と`http://localhost:5173`をBrowser Originとして許可します。
+
+## Observation Gateway
+
+Observation Gatewayは、現行のpublish / subscription / inspection処理をread-only delivery boundaryとして整理し、将来の共通cache / deduplication / resync基盤までを含むarchitecture名です。
+
+### 現在実装済みの基盤
+
+- `SubscribeVolume`等のobservation subscription
+- Person inspection等のexplicit inspection
+- Simulation lock内でcaptureしたdetached publish snapshot / read model
+- `SimulationPublishSnapshot`内の3D spatial indexによるdynamic Entity filtering
+- Road / Railway等のrevision-aware static read model / delivery
+- connection単位のsnapshot delivery scheduling / failure isolation
+- reconnect時のClient state再構築に必要な通常snapshot delivery
+
+### `OBS-*`で段階実装する拡張
+
+- generic Entity inspectionのCurrent / Recent / Planned / Relations contract
+- Entity / Spatial / Static read-model cacheの共通化
+- 同一revision・同一Observation Requestのrequest deduplication
+- negotiated Protocol version単位のencoded payload cache
+- cache invalidation / eviction / World replacement / reconnect / resyncの統一契約
+- cache hit / miss / rebuild equivalenceと複数Viewer invariance test
+
+上記の未実装項目を、現在すでに存在する機能として扱いません。Task状態の正本は[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)のObservation Gateway Foundationです。
+
+Observation Gatewayが将来も行ってはいけない責務:
+
+- Simulation state mutation
+- Activity / ETA / classification / schedule等の意味的再計算
+- current observationからsemantic futureを予測すること
+- Camera / LOD / View cacheをSimulation workload / fidelityへ反映すること
+
+将来のcache freshnessはwall-clock TTLだけではなく、Simulation由来のtick / revision / generation markerを基準にstale判定します。
+
+詳細は[`../../docs/architecture/observation-gateway.md`](../../docs/architecture/observation-gateway.md)を参照してください。
 
 ## Administration console
 
@@ -44,7 +86,7 @@ exit
 
 数値はInvariant Cultureで解釈し、IDは正の10進`ulong`です。引用符付きtokenを使うと空白を含むpathを渡せます。不正なcommandや参照整合性エラーはstructured resultとして処理し、Server processを停止させません。
 
-`world save`はSimulation lock中にcheckpointだけをcaptureし、serializationとfile I/Oはlock外で行います。`world load`はfile I/Oとdeserializeを先に終えてからworldをatomicに差し替えます。world差し替えやtopology mutationはRoad/Railway read-model revisionを進め、接続中Clientへ新しいread modelを再配信できる状態にします。
+`world save`はSimulation lock中にcheckpointだけをcaptureし、serializationとfile I/Oはlock外で行います。`world load`はfile I/Oとdeserializeを先に終えてからworldをatomicに差し替えます。world差し替えやtopology mutationはread-model revisionを進め、Observation Gatewayの関連delivery stateを再同期可能な状態へ移します。将来の共通cache invalidationは`OBS-*`でこのrevision境界へ統合します。
 
 詳細は[`../../docs/specifications/server-administration-console.md`](../../docs/specifications/server-administration-console.md)と[`../../docs/decisions/ADR-0005-server-administration-boundary.md`](../../docs/decisions/ADR-0005-server-administration-boundary.md)を参照してください。
 
@@ -68,31 +110,51 @@ Browser由来のMCP Clientだけを許可する場合はexact Originを設定し
 export Server__Mcp__AllowedOrigins='https://admin.example.com;https://ops.example.com'
 ```
 
-Internet越しではClientからKestrelのHTTP originを直接公開せず、Cloudflare Tunnel等のtrusted reverse proxyでTLSを終端し、公開URLを`https://server.example.com/mcp`のようなHTTPS endpointにします。origin側はloopback/private network/firewallで保護し、proxyは`Authorization`、`Content-Type`、`Accept`、`MCP-Protocol-Version`等を転送し、`/mcp`をcacheしない設定にします。Bearer tokenは`appsettings.json`へ書かず、環境変数またはsecret storeから注入してください。
+Internet越しではClientからKestrelのHTTP originを直接公開せず、Cloudflare Tunnel等のtrusted reverse proxyでTLSを終端し、公開URLをHTTPS endpointにします。origin側はloopback / private network / firewallで保護し、proxyは認証・Protocol headerを転送し、`/mcp`をcacheしない設定にします。Bearer tokenは`appsettings.json`へ書かず、環境変数またはsecret storeから注入してください。
 
-主なRemote MCP制限は`Server:Mcp`配下の`MaxRequestBytes`、`MaxConcurrentRequests`、`RequestsPerMinute`、`RequestTimeoutMilliseconds`、`MaxResultBytes`、`MaxLogEntries`、`MaxQueryItems`で調整できます。`simulation_save`は任意pathを受け取らず、`SaveDirectory`配下のsafe slotだけを使用します。server shutdown、`world load`、任意shell/process、任意Administration commandはRemote MCPへ公開しません。
+主なRemote MCP制限は`Server:Mcp`配下の`MaxRequestBytes`、`MaxConcurrentRequests`、`RequestsPerMinute`、`RequestTimeoutMilliseconds`、`MaxResultBytes`、`MaxLogEntries`、`MaxQueryItems`で調整できます。`simulation_save`は任意pathを受け取らず、`SaveDirectory`配下のsafe slotだけを使用します。server shutdown、`world load`、任意shell / process、任意Administration commandはRemote MCPへ公開しません。
 
 詳細契約は[`../../docs/specifications/remote-mcp-administration.md`](../../docs/specifications/remote-mcp-administration.md)、実装境界は[`../../docs/architecture/remote-mcp-administration.md`](../../docs/architecture/remote-mcp-administration.md)、判断理由は[`../../docs/decisions/ADR-0006-remote-mcp-through-administration-boundary.md`](../../docs/decisions/ADR-0006-remote-mcp-through-administration-boundary.md)を参照してください。
 
-## Published domains
+## Published observation domains
 
-negotiated minorに応じて次のread model / messageを配信します。
+negotiated minorに応じて次のread model / messageを配信します。message ID / binary layout / compatibilityの正本は[`../../docs/architecture/protocol.md`](../../docs/architecture/protocol.md)です。
 
-- Agent (2.0)
-- Road Network (2.1、revision付きread model)
-- Pedestrian (2.2)
-- Vehicle (2.3)
-- Intersection Control (2.4)
-- Population statistics / Person debug (2.5、専用publish/inspect boundary)
-- Railway Infrastructure (2.6、revision付きread model、必要ならmulti-frame)
-- Railway Operations (2.7、visible Train + related Service / Timetable)
-- Multimodal Transit (2.8、Line / Stop / Pattern / realtime Bus・Taxi / arrival estimate、現行はworld-wide delivery)
+| Minimum Protocol | Domain |
+| --- | --- |
+| 2.0 | Agent |
+| 2.1 | Road Network |
+| 2.2 | Pedestrian |
+| 2.3 | Vehicle |
+| 2.4 | Intersection Control |
+| 2.5 | Population statistics / Person debug |
+| 2.6 | Railway Infrastructure |
+| 2.7 | Railway Operations |
+| 2.8 | Multimodal Transit |
+| 2.10 | Economy |
+| 2.11 | Logistics / Freight |
+| 2.12 | Power |
+| 2.13 | Water / Sewer |
+| 2.14 | Gas |
+| 2.15 | Optical Communication |
+| 2.16 | Radio / Spectrum |
 
-1回のtraffic snapshot publishではSimulation lock下でimmutable read modelをcaptureし、lock外でmessage planning / encoding / network I/Oを行います。Agent / Road / Pedestrian / Vehicle / Intersection / RailwayはClient別`SubscribeVolume`でfilterしますが、Multimodal Transitは現行2.8ではvolume filterせずsnapshot全体を配信します。slow Clientはconnection単位のdelivery task / timeoutで隔離します。
+Protocol 2.9は新しいServer→Client domain snapshotではなく、Client→Serverのread-only `ClearPersonInspection` Observation Requestを追加します。
 
-Road snapshotとRailway Operations snapshotが1 MiBのsingle-frame上限を超える場合は、送信前に検出してsubscription-localなstructured Errorへ変換します。Railway Infrastructureはentity境界でchunkできます。
+1回のpublishではSimulation lock下でdetached / immutable read modelをcaptureし、可能な処理はlock外でfiltering / message planning / encoding / network I/Oを行います。各domainのspatial filtering、world-wide delivery、payload上限はdomainごとの現行contractに従います。
+
+Road snapshotと一部dynamic snapshotが1 MiBのsingle-frame上限を超える場合は、対応codec / publisherの契約に従い送信前にstructured Errorへ変換します。Railway Infrastructureはentity境界でchunkできます。
 
 Protocol 1.xの`SubscribeArea`や2D rectangle互換経路は提供しません。
+
+## Roadmap boundary
+
+- authoritative state / rule / Observation contract / command / Protocol / Save / Administration境界: [`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)
+- read-only Browser View / Camera / Selection / Inspector / Historical viewing / Rendering LOD: [`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)
+- editor / runtime control / configuration / Save / Addon管理UI: [`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)
+- Dashboard分析・trend・heatmap等: 将来Analytics Listener / analysis clientとして別設計
+
+3 Roadmapの責務と横断依存の索引は[`../../roadmap/README.md`](../../roadmap/README.md)を参照してください。
 
 ## ローカル起動
 
@@ -100,4 +162,4 @@ Protocol 1.xの`SubscribeArea`や2D rectangle互換経路は提供しません�
 dotnet run --project src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj
 ```
 
-詳細なlifecycle、publish read model、revision、oversize policyは[`../../docs/architecture/headless-server.md`](../../docs/architecture/headless-server.md)、wire contractは[`../../docs/architecture/protocol.md`](../../docs/architecture/protocol.md)を参照してください。
+詳細なlifecycle / Observation Gateway / revision / cache / oversize policyは[`../../docs/architecture/headless-server.md`](../../docs/architecture/headless-server.md)、wire contractは[`../../docs/architecture/protocol.md`](../../docs/architecture/protocol.md)を参照してください。

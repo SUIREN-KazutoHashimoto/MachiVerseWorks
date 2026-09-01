@@ -41,7 +41,9 @@ jobs:
           set -euo pipefail
           required_files=(
             README.md
-            ROADMAP.md
+            roadmap/SIMULATION_ROADMAP.md
+            roadmap/VIEW_ROADMAP.md
+            roadmap/MANAGEMENT_ROADMAP.md
             AGENTS.md
             CONTRIBUTING.md
             SECURITY.md

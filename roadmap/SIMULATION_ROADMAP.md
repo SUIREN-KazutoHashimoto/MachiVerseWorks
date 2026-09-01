@@ -1,28 +1,49 @@
+# Simulation Roadmap
+
+このファイルは、MachiVerseWorks の **Simulation側の実装ロードマップ**です。Simulation Core、authoritative World、Simulationを成立・検証するためのServer / Protocol / Persistence / Observation / Management command境界、およびそれらに直接依存する基盤を対象とします。
+
+純粋なread-only View表現・Camera・Selection・Inspector・描画最適化・localizationは[`VIEW_ROADMAP.md`](VIEW_ROADMAP.md)、World / City / Serverを変更するeditor・運転control・Save / Load・configuration等のUIは[`MANAGEMENT_ROADMAP.md`](MANAGEMENT_ROADMAP.md)で管理します。
+
+SimulationがWorldの唯一の意味的正本です。Activity、Status、分類、予定、ETA、状態遷移、semantic event等の意味的処理はSimulation側で完結させ、Viewへ推測・補完・再計算させません。
+
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
 > **現在:** Phase 29 — World & Physical Environment Generation  
-> **次の実装タスク:** `P29-001` — `WorldEnvironmentConfig` / world seed / geographic north / latitude・hemisphere・sea level等の正本契約を仕様化する
+> **次の実装タスク:** `P29-001` — `WorldEnvironmentConfig` / world seed / geographic north / latitude・hemisphere・sea level等の正本契約を仕様化する  
+> **並行可能な横断基盤:** Observation Gateway Foundation（View Phase 1と並行して境界整理可能）
 
 ## 全体の現在地
 
-| Phase | 内容 | 状態 |
+| Phase / 横断基盤 | 内容 | 状態 |
 | --- | --- | --- |
 | 0〜27 | Foundation / Simulation / Infrastructure / Remote Administration | ✅ 完了 |
 | 28 | Radio & Spectrum Foundation | ✅ 完了 |
+| Cross-cutting | Observation Gateway Foundation | ▶️ Phase 29 / View Phase 1と並行可能 |
 | 29 | World & Physical Environment Generation | ▶️ 次 |
 | 30 | Regional & Urban Generation | ⏳ 待機 |
 | 31 | Persistent Regional & Settlement Evolution | ⏳ 待機 |
 | 32 | Simulation Scheduling & Workload Optimization | ⏳ 待機 |
 | 33 | Deterministic Parallel Simulation | ⏳ 待機 |
-| 34 | World Rendering & Rendering LOD | ⏳ 待機 |
 | 35 | Historical World & Replay | ⏳ 待機 |
-| 36 | World & City Management UI | ⏳ 待機 |
+| 36 | World & City Management Commands | ⏳ 待機 |
 | 37 | Distribution & Compatibility | ⏳ 待機 |
-| 38 | Extension Platform & Localization | ⏳ 待機 |
+| 38 | Extension Platform | ⏳ 待機 |
 
-Phase 0〜24 の詳細 Task・closeout 証跡・当時の計画状態は、履歴として [`docs/archive/roadmap-through-phase24-closeout.md`](docs/archive/roadmap-through-phase24-closeout.md) に保存しています。Phase 13〜16 の正式 closeout 時点の詳細は [`docs/archive/roadmap-phase13-through-phase16-closeout.md`](docs/archive/roadmap-phase13-through-phase16-closeout.md) も参照してください。
+旧Phase 34を含むread-only描画計画は[`VIEW_ROADMAP.md`](VIEW_ROADMAP.md)、旧Phase 36に混在していたmutation / administration UIは[`MANAGEMENT_ROADMAP.md`](MANAGEMENT_ROADMAP.md)へ移管済みです。旧Task IDと移管先の対応は各Roadmap側にも記録します。
 
-## ROADMAP 運用ルール
+Phase 0〜24 の詳細 Task・closeout 証跡・当時の計画状態は、履歴として[`docs/archive/roadmap-through-phase24-closeout.md`](../docs/archive/roadmap-through-phase24-closeout.md)に保存しています。Phase 13〜16 の正式 closeout 時点の詳細は[`docs/archive/roadmap-phase13-through-phase16-closeout.md`](../docs/archive/roadmap-phase13-through-phase16-closeout.md)も参照してください。
+
+## 依存関係の読み方
+
+Simulation Roadmapでは依存を次のように扱う。
+
+- 各Phase見出しの **`依存:` はPhase closeoutの必須依存** とする。依存Phaseのauthoritative contractが成立しない限り、そのPhase全体を完了扱いにしない。
+- Phase内の一部Taskが安定した既存contractだけで先行できる場合は並行実装してよい。ただし未完成の依存を仮実装や別正本で補完しない。
+- **Cross-cutting** は特定Phaseの直列後続ではなく、複数Phase / Clientと並行して進める横断基盤とする。必要なTask IDだけを利用側の必須依存として指定する。
+- 後述の「推奨closeout順」は全体の実装・統合順を示す。矢印すべてが直接のhard dependencyを意味するわけではなく、正確なhard dependencyは各Phase見出しとTask記述を正本とする。
+- View / Managementの依存はそれぞれのRoadmapを正本とし、Simulation Phase番号へ無理に同期させない。
+
+## Simulation Roadmap 運用ルール
 
 - 状態記号を付けるのは、単独で完了判定できる作業だけとする。
 - 1タスクは原則として「1つの観測可能な成果」を持つ。
@@ -33,22 +54,77 @@ Phase 0〜24 の詳細 Task・closeout 証跡・当時の計画状態は、履�
 - Protocol version / Save format version は application `VERSION` と独立して、互換性が変わるときだけ更新する。
 - 「ほぼ完了」「一部完了」は ✅ にしない。残作業を別Taskへ明示的に切り出した場合のみ元Taskを完了にできる。
 - 作業中に新しい依存関係が見つかった場合は、後続PhaseのTaskを更新してから実装を進める。
-- Phaseから外した計画済み項目は暗黙に削除せず、対応Phaseまたは継続Backlogへ必ず移す。
-- 完了済みPhaseの詳細は必要に応じて `docs/archive/` へ移し、現行ROADMAPを次の判断に使いやすく保つ。
-- **Task実装状態・`develop`統合状態・Phase正式closeoutは別の状態として扱う。** 後続Phaseの実装を依存Phase完了前に先行mergeする場合、安定した既存境界だけに依存し、未完了依存を完了扱いにせず、ROADMAPへ「develop統合済み / closeout待ち」と理由を記録する。
+- Phaseから外した計画済み項目は暗黙に削除せず、対応Phase、View Roadmap、Management Roadmapまたは継続Backlogへ必ず移す。
+- 完了済みPhaseの詳細は必要に応じて`docs/archive/`へ移し、現行Simulation Roadmapを次の判断に使いやすく保つ。
+- **Task実装状態・`develop`統合状態・Phase正式closeoutは別の状態として扱う。** 後続Phaseの実装を依存Phase完了前に先行mergeする場合、安定した既存境界だけに依存し、未完了依存を完了扱いにせず、Simulation Roadmapへ「develop統合済み / closeout待ち」と理由を記録する。
 - 先行mergeは依存順を無効化しない。依存Phaseが正式完了するまで、後続Phase全体を✅へせず、依存部分のTaskを明示的に未完了で残す。
+
+## View / Managementへの移管記録
+
+未着手のClient側計画は責務ごとに分離する。
+
+### View Roadmap
+
+- 旧`P29-026` — Terrain / Water / GeographicFeature / 地名の3D描画 → View Phase 3 `V3-001`
+- 旧`P30-028`のWeb Client 3D可視化部分 → View Phase 4 `V4-001`
+- 旧Phase 34 `P34-001`〜`P34-015` — World Rendering & Rendering LOD → 主にView Phase 6
+- 旧`P35-010`と`P35-015`のtimeline rendering部分 → View Phase 9
+- 旧`P36-003` / `P36-004` — read-only Selection / Inspector → View Phase 7
+- 旧Phase 38 Localization `P38-010`〜`P38-015`とlocalization関連closeout → View Phase 10
+
+### Management Roadmap
+
+- 旧`P36-005`〜`P36-013`のeditor / override UI部分 → Management Phase 2
+- 旧`P36-014`のClient command state管理 → Management Phase 1 / 4
+- 旧`P36-015`の運転control UI → Management Phase 3
+- 旧`P36-017`のServer configuration UI → Management Phase 3
+- 旧`P36-018`のSave / Load UI → Management Phase 3
+- 旧`P36-019`のconfirmation / error UI → Management Phase 4
+- 旧`P36-020` / `P36-021`のManagement UI検証部分 → Management Phase 4
+
+旧`P36-016`のDashboard / statistics分析系はView / Managementへ移管せず、将来のAnalytics Listener / analysis clientとして別途設計する。
+
+完了済みの`P25-014`、`P26-013`、`P28-016`等のdebug可視化は各Simulation PhaseのE2E・closeout証跡として既に完了履歴へ組み込まれているため、履歴保持のため本ロードマップに残す。
 
 ## World-scale Simulationの不変条件
 
-Phase 29以降の広域World・都市成長・最適化・描画では、以下を設計上の不変条件とする。
+Phase 29以降の広域World・都市成長・最適化では、以下を設計上の不変条件とする。
 
 - **Simulation FidelityはCamera距離・表示状態・都市/郊外/農村の区分で変更しない。** 遠方・非表示地域を人口等の集計値だけへ置換して別ルールで進めない。
+- **Viewは完全read-onlyである。** Viewの存在・非存在、接続数、Camera、Selection、FPS、Rendering LOD、View cacheでSimulation結果を変えない。
 - **CameraやRendering LODはSimulation結果へ影響しない。** 同一seed・初期状態・外部入力・経過時間なら、観測した地域と一度も描画しなかった地域で同一のauthoritative stateを得る。
 - **負荷軽減はSimulationの省略ではなく不要な計算の排除で行う。** Event scheduling、dirty update、dependency tracking、spatial index、時刻からの派生値、deterministic parallelism等を使用する。
 - **Global coarse fieldは生成・検索・indexの補助表現であり、詳細Simulationの代替正本にしない。** Simulation Entityが存在する任意地域は、同じ契約とdeterministicな詳細World stateへ展開できる。
-- **Rendering LODは積極的に使用する。** 遠距離では都市点・市街地形状・道路網等へ描画を簡略化してよいが、背後のSimulation stateは簡略化しない。
+- Rendering LOD / culling / View cacheは[`VIEW_ROADMAP.md`](VIEW_ROADMAP.md)の責務とし、Simulation stateやworkloadの判定条件に使用しない。
+- Management commandは明示的な外部入力としてSimulation結果を変更できるが、必ずserver-authoritative command境界を通し、Viewの観測操作とは混同しない。
 
-## Phase 10以降の依存順
+## Observation Gateway Foundation — Cross-cutting
+
+> **状態: ▶️ Phase 29 / View Phase 1と並行可能**  
+> **必須依存:** 現行SimulationRuntime / Server publish / Protocol 2.x  
+> Viewを含むread-only clientがSimulation内部Storeへ直接依存せず、同じauthoritative observationを効率良く共有できる境界を確立する。詳細設計は[`docs/architecture/observation-gateway.md`](../docs/architecture/observation-gateway.md)を正本とする。
+
+- ⬜ **OBS-001** — Observation Requestとauthoritative mutation commandをProtocol / Server責務として明示的に分離する
+- ⬜ **OBS-002** — SimulationRuntimeからCurrent / Recent / Planned / relation等を必要に応じてdetached read modelとして取得できる共通Observation境界を設計する
+- ⬜ **OBS-003** — 現行publish / subscription / inspection処理をServer内のObservation Gateway責務として整理する
+- ⬜ **OBS-004** — Entity / Spatial / Static topology等のread modelをtick / revision / generation基準で共有するcache基盤を実装する
+- ⬜ **OBS-005** — 同一revisionの同一Observation Requestを重複生成しないrequest deduplicationを実装する
+- ⬜ **OBS-006** — negotiated Protocol versionとobservation revisionが一致する再利用可能payloadのencoded cache境界を実装する
+- ⬜ **OBS-007** — cache invalidation / eviction / World replacement / reconnect / resyncをauthoritative revisionと整合させる
+- ⬜ **OBS-008** — generic Entity inspectionでCurrent / Recent Past / Planned Future / Relationsを意味生成なしに配信できるcontractを設計する
+- ⬜ **OBS-009** — View未接続 / 単一View / 複数View / Camera・Selection・cache差でSimulation state digestが一致するinvariance E2Eを追加する
+- ⬜ **OBS-010** — cache hit / miss / eviction / deduplicationのequivalenceとServer側CPU / allocation / encoding benchmarkを記録する
+- ⬜ **OBS-011** — Observation Gateway architecture / Protocol / Server README / Roadmapを同期する
+
+### Observation Gateway完了条件
+
+- read-only ViewはObservation APIだけで必要なSimulation情報を取得できる。
+- Observation Gatewayからauthoritative mutation APIへ到達する経路がない。
+- GatewayはSimulationが生成した意味を配送・cacheするだけで、意味的stateを新規生成しない。
+- 同一revisionのcache hit / miss / rebuildで同一Observation結果を得られる。
+- Viewの接続状態・Camera・Selection・LOD・cache状態によってSimulation state digestが変化しない。
+
+## Phase 10以降の推奨closeout順
 
 ```text
 3D Simulation Foundation
@@ -76,16 +152,15 @@ Phase 29以降の広域World・都市成長・最適化・描画では、以下�
   -> Persistent Regional / Settlement Evolution
   -> Simulation Scheduling / Workload Optimization
   -> Deterministic Parallel Simulation
-  -> World Rendering / Rendering LOD
   -> Historical World / Replay
-  -> World / City Management UI
+  -> World / City Management Commands
   -> Distribution / Compatibility
-  -> Extension Platform / Localization
+  -> Extension Platform
 ```
 
-この順番は、後続機能が前段の正本モデルを再利用できることを優先する。先行mergeを行っても、Phaseの正式closeout順は依存関係に従う。Phase 27 は Server 横断の Remote Administration 境界として実装順に挿入したが、Phase 28 以降の Simulation domain が MCP 実装へ直接依存することを意味しない。
+Observation Gatewayは特定domain Phaseの意味的依存ではなく、read-only配信の横断基盤としてPhase 29以降と並行実装できる。上記は推奨closeout順であり、全矢印を直接hard dependencyとはみなさない。正確な必須依存は各Phase見出しを正本とする。View側の依存順は[`VIEW_ROADMAP.md`](VIEW_ROADMAP.md)、Management側は[`MANAGEMENT_ROADMAP.md`](MANAGEMENT_ROADMAP.md)で独立管理する。先行mergeを行っても、Simulation Phaseの正式closeoutは各Phaseの必須依存に従う。Phase 27はServer横断のRemote Administration境界として実装順に挿入したが、Phase 28以降のSimulation domainがMCP実装へ直接依存することを意味しない。
 
-Phase 28 完了後の詳細Task・closeout証跡は当面このROADMAPに残し、Phase 29以降の進行に合わせて `docs/archive/` へ整理する。
+Phase 28 完了後の詳細Task・closeout証跡は当面このSimulation Roadmapに残し、Phase 29以降の進行に合わせて`docs/archive/`へ整理する。
 
 ---
 
@@ -291,11 +366,12 @@ Phase 28 完了後の詳細Task・closeout証跡は当面このROADMAPに残し�
 - ⬜ **P29-022** — Geographic Featureへseed-deterministicな自然地名を付与し、同一seed・設定で同じFeature名を再生成する
 - ⬜ **P29-023** — 自然地名を単なる表示ラベルにせず、後続の都市名・地区名・道路名・橋梁名・駅名等が由来を参照できるToponym provenance契約を実装する
 - ⬜ **P29-024** — WorldEnvironment / Terrain / GeographicFeature / Toponymをcheckpoint / Save Dataへ統合する
-- ⬜ **P29-025** — World / Terrain / GeographicFeature / ToponymをProtocol / Serverへ配信する
-- ⬜ **P29-026** — Web Clientのflat `GridHelper`依存を置換し、terrain mesh・water・主要Geographic Feature・地名を3D描画する
+- ⬜ **P29-025** — World / Terrain / GeographicFeature / ToponymをObservation Gateway / Protocol / Serverへ配信する
 - ⬜ **P29-027** — 同一seedから同じglobal environment field・任意detailed partition・terrain・river・feature・toponymを得るreproducibility E2Eを追加する
 - ⬜ **P29-028** — global field / detailed partitionのgeneration・query・memory benchmarkを記録する
 - ⬜ **P29-029** — World / Terrain / Geographic Featureのspecification / architecture / ADR / ROADMAPを同期する
+
+> 旧`P29-026`のWeb Client 3D描画はView Roadmap Phase 3 `V3-001`へ移管した。`P29-025`が必要なObservation contractを提供した時点でView側を着手可能とする。
 
 ### Phase 29 完了条件
 
@@ -303,7 +379,7 @@ Phase 28 完了後の詳細Task・closeout証跡は当面このROADMAPに残し�
 - Global fieldは詳細Simulationの代替正本として使わず、Simulation Entityが存在する地域はCamera位置に依存せず同一精度の詳細World stateを持てる。
 - Terrainがsurface queryだけでなく、将来の洞窟・自然空洞・地下Infrastructureを許容する3D volume境界を持つ。
 - 道路・線路・建物・Agentがterrain height / slope / solid stateをqueryでき、平面gridを物理世界の正本として扱わない。
-- 河川・山・谷・盆地・峠・湾等がstableな`GeographicFeature`として存在し、自然地名と由来を保存・配信・描画できる。
+- 河川・山・谷・盆地・峠・湾等がstableな`GeographicFeature`として存在し、自然地名と由来を保存・配信できる。
 - 植生・動物・生態系の詳細Simulation、侵食・地滑り・洪水の高度Simulation、cut/fill・造成・干拓等のterrain modificationはPhase 29完了条件へ含めない。
 
 ---
@@ -356,7 +432,9 @@ Phase 28 完了後の詳細Task・closeout証跡は当面このROADMAPに残し�
 - ⬜ **P30-025** — destination name・distance・direction・route contextを使う案内標識と、河川名・峠名・橋梁名・トンネル名等の地名標識をdeterministicに生成する
 - ⬜ **P30-026** — Road Signをstable ID付き都市Entityとして配置し、Road Segment / Lane / GeographicFeature / named destinationへの参照を保持する
 - ⬜ **P30-027** — Parcel / Zone / generation history / human toponym / Road Signをcheckpoint / Save Dataへ統合する
-- ⬜ **P30-028** — Settlement network / Parcel / Zone / development / urban naming / Road SignをProtocol / Serverへ配信し、Web Clientで3D可視化する
+- ⬜ **P30-028** — Settlement network / Parcel / Zone / development / urban naming / Road SignをObservation Gateway / Protocol / Serverへ配信する
+
+> 旧`P30-028`に含まれていたWeb Client 3D可視化はView Roadmap Phase 4 `V4-001`へ分離した。必要なObservation contractが完成した時点でView側を着手可能とする。
 
 ### Generation Quality / Validation
 
@@ -403,7 +481,7 @@ Phase 28 完了後の詳細Task・closeout証跡は当面このROADMAPに残し�
 - ⬜ **P31-016** — 通勤・物流・service依存・連続市街地等から複数SettlementのMetro / Urban Region関係を動的に派生する
 - ⬜ **P31-017** — 単一中心への固定吸収を避け、複数中心が競合・補完・専門化できるregional interaction ruleを実装する
 - ⬜ **P31-018** — Settlement growth / decline / Building lifecycle / regional relationの主要変化をstable historical eventとして記録する
-- ⬜ **P31-019** — Persistent Regional stateと必要な履歴をcheckpoint / Save Data / Protocol / Serverへ統合する
+- ⬜ **P31-019** — Persistent Regional stateと必要な履歴をcheckpoint / Save Data / Observation Gateway / Protocolへ統合する
 - ⬜ **P31-020** — 複数都市・町・村・集落が100年以上成長・停滞・衰退・再成長するlong-run deterministic E2Eを追加する
 - ⬜ **P31-021** — 大都市・郊外・農村・遠隔集落を同一ruleで進めるWorld-scale Simulation benchmarkを記録する
 - ⬜ **P31-022** — Persistent Regional & Settlement Evolutionのspecification / architecture / ADR / ROADMAPを同期する
@@ -477,41 +555,11 @@ Phase 28 完了後の詳細Task・closeout証跡は当面このROADMAPに残し�
 
 ---
 
-## Phase 34 — World Rendering & Rendering LOD
-
-> **状態: ⬜ 未着手**  
-> **依存:** Phase 29〜33  
-> 同一のauthoritative World stateを、広域WorldからSettlement・街区・建物・Agentまで連続的に観測できるViewへ展開する。LOD / culling / streamingは描画にのみ適用し、Simulation workloadや結果へ一切フィードバックしない。
-
-- ⬜ **P34-001** — Simulation read model / Rendering state / Camera stateの一方向境界とRendering LOD契約を仕様化する
-- ⬜ **P34-002** — World / Region / Settlement / District / Streetの複数scaleを連続ズームできるCamera / coordinate strategyを実装する
-- ⬜ **P34-003** — Terrain / Water / GeographicFeatureのdistance-based mesh LODとcullingを実装する
-- ⬜ **P34-004** — 遠距離Settlementを市街地shape・population / role indicator等のView aggregateとして描画し、Simulation Entity自体は集約しない
-- ⬜ **P34-005** — Road / Railway / Utility corridorをscaleに応じたgeometry / line representationへ切り替えるRendering LODを実装する
-- ⬜ **P34-006** — Buildingをindividual model / block mass / urban footprintへ切り替えるRendering LODを実装する
-- ⬜ **P34-007** — Person / Vehicle等の大量Agentについてfrustum / distance culling・instancing・virtualizationを実装する
-- ⬜ **P34-008** — View data streaming / cache / evictionを実装し、evictionがSimulation Entity lifecycleへ影響しないようにする
-- ⬜ **P34-009** — Settlement / District / GeographicFeature / Road等のlabel hierarchyとcollision回避を実装する
-- ⬜ **P34-010** — Population / land use / traffic / economy / utility等のregional overlay表示基盤を実装する
-- ⬜ **P34-011** — Dynamic Urban Region / Settlement influence / service catchmentを広域map overlayとして可視化する
-- ⬜ **P34-012** — World scaleから一軒のBuildingまで移動しても座標精度・selection精度を維持するfloating-origin等の必要なprecision対策を実装する
-- ⬜ **P34-013** — Rendering有無・Camera位置・LOD levelを変更してもSimulation state digestが一致するE2Eを追加する
-- ⬜ **P34-014** — 都市中心・郊外・農村・World overviewそれぞれのframe time / draw call / memory benchmarkを記録する
-- ⬜ **P34-015** — World Rendering & Rendering LODのarchitecture / UX / performance guideline / ROADMAPを同期する
-
-### Phase 34 完了条件
-
-- 巨大World上の複数Settlementを広域mapとして確認し、任意Settlementへズームして建物・道路・Agentまで観測できる。
-- 遠距離描画を大胆に簡略化してもauthoritative Simulation stateは変化しない。
-- Camera位置・LOD・View cache状態がSimulation結果へ影響しないことをE2Eで保証する。
-
----
-
 ## Phase 35 — Historical World & Replay
 
 > **状態: ⬜ 未着手**  
-> **依存:** Phase 31〜34  
-> Worldの現在値だけでなく、Settlementの成立・成長・衰退、Buildingの建設・改修・用途変更・解体、交通網や地域関係の変化を時間軸で追跡・再構築できる履歴基盤を整える。Historical Viewはread-only projectionとし、閲覧だけでlive Simulationを巻き戻さない。
+> **依存:** Phase 31〜33  
+> Worldの現在値だけでなく、Settlementの成立・成長・衰退、Buildingの建設・改修・用途変更・解体、交通網や地域関係の変化を時間軸で追跡・再構築できる履歴基盤を整える。View側のtimeline / time sliderはView Roadmap Phase 9で扱い、Simulation側はread-only Historical projectionまでを責務とする。
 
 - ⬜ **P35-001** — Historical Event / Snapshot / Replayの責務・保持範囲・determinism・Save境界を仕様化する
 - ⬜ **P35-002** — Entity created / changed / destroyedと主要domain eventをstable ID・SimulationTime付きで記録するhistory contractを実装する
@@ -521,58 +569,57 @@ Phase 28 完了後の詳細Task・closeout証跡は当面このROADMAPに残し�
 - ⬜ **P35-006** — Buildingの建設・改修・用途変更・vacancy・解体履歴をquery可能にする
 - ⬜ **P35-007** — Settlementの人口・分類・中心・territory・role・Urban Region関係の時系列をquery可能にする
 - ⬜ **P35-008** — Road / Railway / Utility等のnetwork変更履歴をquery可能にする
-- ⬜ **P35-009** — Historical query / snapshot metadata / timelineをProtocol / Serverへ配信する
-- ⬜ **P35-010** — Web ClientへWorld timeline / time sliderを実装し、現在と過去のmap / 3D Viewを切り替えられるようにする
-- ⬜ **P35-011** — live Simulationを停止・巻き戻しせずHistorical Viewを閲覧できるread-only projectionを実装する
+- ⬜ **P35-009** — Historical query / snapshot metadata / timelineをObservation Gateway / Protocol / Serverへ配信する
+- ⬜ **P35-011** — live Simulationを停止・巻き戻しせずHistorical Viewへ提供できるread-only projectionを実装する
 - ⬜ **P35-012** — retention / snapshot interval / event compactionを設定可能にし、保持対象期間の再構築可能性を損なわないpolicyを実装する
 - ⬜ **P35-013** — Historical stateをSave Dataへ統合し、load後もtimelineを継続できるようにする
 - ⬜ **P35-014** — 100年以上のSettlement / Building / Network変化を指定時点へ再構築するdeterministic Replay E2Eを追加する
-- ⬜ **P35-015** — history storage size / snapshot creation / reconstruction time / timeline rendering benchmarkを記録する
+- ⬜ **P35-015** — history storage size / snapshot creation / reconstruction time benchmarkを記録する
 - ⬜ **P35-016** — Historical World & Replayのspecification / architecture / ADR / ROADMAPを同期する
+
+> 旧`P35-010`と`P35-015`のtimeline rendering benchmark部分はView Roadmap Phase 9へ移管した。
 
 ### Phase 35 完了条件
 
 - 「この場所・建物・Settlementが昔どうだったか」をstable IDと時間から追跡できる。
-- 指定時点のWorldをdeterministicに再構築してViewへ表示できる。
-- Historical Viewの閲覧がlive Simulationのauthoritative stateへ影響しない。
+- 指定時点のWorldをdeterministicに再構築し、read-only projectionとしてObservation Gateway / Protocolから提供できる。
+- Historical projectionの参照がlive Simulationのauthoritative stateへ影響しない。
 
 ---
 
-## Phase 36 — World & City Management UI
+## Phase 36 — World & City Management Commands
 
 > **状態: ⬜ 未着手**  
-> **依存:** Phase 30 / 31 / 34 / 35  
-> BrowserからWorld・地域・都市状態を調査・編集・管理するためのserver-authoritative UIとcommand境界を整える。
+> **依存:** Phase 20 / 30 / 31 / 35  
+> World・地域・都市・Serverを明示的に編集・管理するためのserver-authoritative command / validation / authorization境界を整える。Phase 35を必須依存にするのは、Management mutationによるBuilding / Settlement / Network変更もHistorical Event / Replayの正本契約へ記録し、履歴を迂回する第二のmutation経路を作らないためである。Browserのread-only Selection / InspectorはView Roadmap、mutation / administration UIはManagement Roadmapで扱う。
 
-- ⬜ **P36-001** — Build / Edit commandの認可・validation・ack/error契約を仕様化する
+- ⬜ **P36-001** — Build / Edit commandの認可・validation・ack / error契約を仕様化する
 - ⬜ **P36-002** — Protocolへserver-authoritative command request / resultの共通枠組みを追加する
-- ⬜ **P36-003** — Web ClientでMap / 3D Entityを選択するpicking / selection基盤を実装する
-- ⬜ **P36-004** — Region / Settlement / Building / Parcel / POI / Person / Vehicle / GeographicFeature / RoadSign等をServer read modelから表示するInspector基盤を実装する
-- ⬜ **P36-005** — Road / Laneのbuild / edit / remove commandとUIを実装する
-- ⬜ **P36-006** — Building / POI / Parcel / Zoneのbuild / edit commandとUIを実装する
-- ⬜ **P36-007** — Railway track / station / platformのbuild / edit commandとUIを実装する
-- ⬜ **P36-008** — Power Infrastructureのbuild / edit commandとUIを実装する
-- ⬜ **P36-009** — Water / Sewer Infrastructureのbuild / edit commandとUIを実装する
-- ⬜ **P36-010** — Gas Infrastructureのbuild / edit commandとUIを実装する
-- ⬜ **P36-011** — Optical Communication Infrastructureのbuild / edit commandとUIを実装する
-- ⬜ **P36-012** — Radio Site / Antenna / Spectrum設定のbuild / edit commandとUIを実装する
-- ⬜ **P36-013** — Geographic Feature名・Settlement/地区/道路名・Road Signのserver-authoritative edit / override境界を実装する
-- ⬜ **P36-014** — command失敗時にClient側だけ状態が進まないoptimistic-state禁止またはrollback方針を実装する
-- ⬜ **P36-015** — Simulation speed / pause / resume等の運転controlをServer commandとして実装する
-- ⬜ **P36-016** — Population / Traffic / Transit / Economy / Logistics / Power / Utility / Communication / Radio / Regional dynamicsのDashboard統計を実装する
-- ⬜ **P36-017** — Server configurationの変更可能項目・restart必要項目を分離してUI化する
-- ⬜ **P36-018** — current Save formatのsave / load操作をServer経由で実行する管理UIを追加する
-- ⬜ **P36-019** — destructive commandのconfirmationとstable error localizationを実装する
-- ⬜ **P36-020** — Inspector / build / edit / naming / signage / config / save操作のBrowser E2Eを追加する
-- ⬜ **P36-021** — 大規模Worldでselection・terrain・overlay・dashboardが描画hot pathを阻害しないperformance testを追加する
-- ⬜ **P36-022** — World & City Management UIのarchitecture / UX contract / ROADMAPを同期する
+- ⬜ **P36-005** — Road / Laneのbuild / edit / remove commandをserver-authoritative境界として実装する
+- ⬜ **P36-006** — Building / POI / Parcel / Zoneのbuild / edit commandをserver-authoritative境界として実装する
+- ⬜ **P36-007** — Railway track / station / platformのbuild / edit commandをserver-authoritative境界として実装する
+- ⬜ **P36-008** — Power Infrastructureのbuild / edit commandをserver-authoritative境界として実装する
+- ⬜ **P36-009** — Water / Sewer Infrastructureのbuild / edit commandをserver-authoritative境界として実装する
+- ⬜ **P36-010** — Gas Infrastructureのbuild / edit commandをserver-authoritative境界として実装する
+- ⬜ **P36-011** — Optical Communication Infrastructureのbuild / edit commandをserver-authoritative境界として実装する
+- ⬜ **P36-012** — Radio Site / Antenna / Spectrum設定のbuild / edit commandをserver-authoritative境界として実装する
+- ⬜ **P36-013** — Geographic Feature名・Settlement / 地区 / 道路名・Road Signのserver-authoritative edit / override境界を実装する
+- ⬜ **P36-015** — Simulation speed / pause / resume / explicit step等の運転controlをServer commandとして実装する
+- ⬜ **P36-017** — Server configurationの変更可能項目・restart必要項目を区別するmetadataとserver-authoritative変更境界を実装する
+- ⬜ **P36-018** — current Save formatのsave / load操作をServer commandとして実装する
+- ⬜ **P36-019** — destructive commandのconfirmation metadataとstable error code / structured parameter契約を実装する
+- ⬜ **P36-022** — World & City Management Commandsのspecification / architecture / command contract / ROADMAPを同期する
+
+> 旧`P36-003` / `P36-004`のSelection / InspectorはView Roadmap Phase 7へ移管した。旧`P36-005`〜`P36-019`に含まれていたmutation / administration UI部分と`P36-014` / `P36-020` / `P36-021`のManagement側作業はManagement Roadmapへ移管した。旧`P36-016`のDashboard / statistics分析系は将来Analytics系へ分離し、本Phase完了条件には含めない。
 
 ### Phase 36 完了条件
 
-- World / Region / Settlementの主要Entity・Terrain・Geographic Feature・Road SignをBrowserから選択・調査できる。
-- build/edit操作は必ずServer-authoritative commandを経由し、Clientだけで正本状態を変更しない。
-- 自動生成された名称・標識を由来情報を保持したまま明示的にoverrideできる。
-- 主要statisticsと運転設定を管理UIから確認できる。
+- build / edit / remove / naming / signage / runtime control / configuration / Save操作のserver-authoritative command境界が存在する。
+- build / edit操作は必ずServer-authoritative commandを経由し、Clientが正本状態を直接変更できない。
+- 自動生成された名称・標識を由来情報を保持したまま明示的にoverrideできるcommand境界を持つ。
+- Management Clientがstable command result / error / permission / confirmation metadataを利用できる。
+- World mutationがPhase 35のHistorical Event / Replay契約を迂回しない。
+- read-only Viewへmutation command責務を持ち込まない。
 
 ---
 
@@ -580,7 +627,7 @@ Phase 28 完了後の詳細Task・closeout証跡は当面このROADMAPに残し�
 
 > **状態: ⬜ 未着手**  
 > **依存:** Phase 36  
-> Save migrationと配布物を整備し、開発環境外でもversion付き成果物として起動・更新・復元できる状態にする。
+> Save migrationと配布物を整備し、開発環境外でもversion付き成果物として起動・更新・復元できる状態にする。artifact packaging等の一部Taskは安定した既存境界だけで先行できるが、Phase closeoutはManagement commandを含む対象Client / Server境界が揃った後とする。
 
 ### Save互換性
 
@@ -613,11 +660,11 @@ Phase 28 完了後の詳細Task・closeout証跡は当面このROADMAPに残し�
 
 ---
 
-## Phase 38 — Extension Platform & Localization
+## Phase 38 — Extension Platform
 
 > **状態: ⬜ 未着手**  
 > **依存:** Phase 37  
-> 正本Simulationと互換性境界を壊さず、外部拡張・高精度solver・追加localeを導入できる公開拡張基盤を作る。
+> 正本Simulationと互換性境界を壊さず、外部拡張・高精度solverを導入できる公開拡張基盤を作る。package / distribution / compatibility policyをPhase 37へ依存し、read-only View extensionはView Roadmap Phase 12、Addon管理UIはManagement Roadmap Phase 5、read-only View localizationはView Roadmap Phase 10で管理する。
 
 ### Extension Platform
 
@@ -631,28 +678,21 @@ Phase 28 完了後の詳細Task・closeout証跡は当面このROADMAPに残し�
 - ⬜ **P38-008** — Extensionのload order / dependency cycle / incompatible versionをvalidationする
 - ⬜ **P38-009** — Extension packageの開発・test用templateとsample extensionを追加する
 
-### Localization
-
-- ⬜ **P38-010** — `ja-JP`をdefaultにしたlocale discovery / fallback policyを再確認・固定する
-- ⬜ **P38-011** — 追加locale resource packを導入できるWeb Client loading境界を実装する
-- ⬜ **P38-012** — 数値・日時・単位・plural等のlocale formattingを共通化する
-- ⬜ **P38-013** — stable error code / structured parameterから各localeの表示文を生成するcoverageを拡張する
-- ⬜ **P38-014** — translation key欠落・未使用key・parameter不一致をCIで検出する
-- ⬜ **P38-015** — 少なくとも1つの追加localeで主要UI / Inspector / Dashboard / error表示をE2E確認する
-
 ### Closeout
 
-- ⬜ **P38-016** — Extension有無・solver / rule差し替え有無・追加locale有無でSave / Protocol / Simulation determinismが壊れないintegration testを追加する
-- ⬜ **P38-017** — Extension loading・solver / rule provider・localizationのstartup / memory costをbenchmarkする
-- ⬜ **P38-018** — Extension author guide / solver provider guide / localization guide / compatibility policyを整備する
+- ⬜ **P38-016** — Extension有無・solver / rule差し替え有無でSave / Protocol / Simulation determinismが壊れないintegration testを追加する
+- ⬜ **P38-017** — Extension loading・solver / rule providerのstartup / memory costをbenchmarkする
+- ⬜ **P38-018** — Extension author guide / solver provider guide / compatibility policyを整備する
 - ⬜ **P38-019** — architecture / ADR / ROADMAPを同期し、Phase 10〜38で計画した旧Backlogのcloseoutを確認する
+
+> 旧Localization `P38-010`〜`P38-015`と`P38-017` / `P38-018`のlocalization部分はView Roadmap Phase 10へ移管した。
 
 ### Phase 38 完了条件
 
 - 既存Simulation内部実装へ直接依存せず、versionedな公開境界からExtensionを追加できる。
 - 標準の軽量Infrastructure / Terrain solverを維持したまま、Extensionが高精度な物理solverや追加Regional ruleを安全に差し替えられる。
-- Extension固有stateがSave Dataと衝突せず、missing/incompatible extensionを安全に扱える。
-- `ja-JP`以外のlocaleを主要UIへ追加でき、Protocol / Save / Simulationへ翻訳済み文言を持ち込まない。
+- Extension固有stateがSave Dataと衝突せず、missing / incompatible extensionを安全に扱える。
+- View Addon / Management AddonがSimulation内部APIではなく同じExtension Platform contractへ依存できる。
 
 ---
 
@@ -664,15 +704,25 @@ Phase 9以降で未割当だったterrain系項目はPhase 29へ正式移管す�
 | --- | --- |
 | terrain model / terrain collision | Phase 29.2 |
 | ground snapping / surface追従 | Phase 29.2 |
-| Terrain Foundation — terrain height / surface / slope / 3D spatial query / Save / Protocol / Web描画 | Phase 29.2 |
+| Terrain Foundation — terrain height / surface / slope / 3D spatial query / Save / Protocol | Phase 29.2 |
+| Terrain / Water / GeographicFeature 3D描画 | View Roadmap Phase 3 |
 | Terrain Interaction — terrain collision / ground snapping / Road / Building / Pedestrian接続 | Phase 29.2 |
 | Parcel / zoning / land use / initial development | Phase 30.2 |
 | Initial regional / city generation | Phase 30.1 / 30.2 |
 | Persistent settlement / building evolution | Phase 31 |
 | Simulation workload optimization | Phase 32 |
 | Deterministic parallelism | Phase 33 |
-| Rendering LOD / world-scale view | Phase 34 |
+| Rendering LOD / world-scale view | View Roadmap Phase 6 |
+| read-only Selection / Inspector | View Roadmap Phase 7 |
+| Current / Recent / Planned Inspector | View Roadmap Phase 8 |
 | Historical replay | Phase 35 |
+| Historical timeline / time slider | View Roadmap Phase 9 |
+| World / City Management UI | Management Roadmap |
+| Management localization / command UX | Management Roadmap Phase 4 |
+| Addon management UI | Management Roadmap Phase 5 |
+| View Addon / rendering extension | View Roadmap Phase 12 |
+| Dashboard / statistics analysis | 将来Analytics Listener / analysis client |
+| Web View localization | View Roadmap Phase 10 |
 | Geographic Feature / natural toponym | Phase 29.2 |
 | Human place naming / road / bridge / tunnel / station naming | Phase 30.1 / 30.2 |
 | Terrain-aware road signage | Phase 30.2 |
@@ -685,13 +735,17 @@ Phase 9以降で未割当だったterrain系項目はPhase 29へ正式移管す�
 - Advanced Natural Dynamics — erosion、landslide、real-time river flow、flood simulation等
 - Advanced Cave Generation — cave network、natural tunnel、arch、underground water等の高度生成
 - Natural Environment Simulation — vegetation、biome、habitat、wildlife、animal / ecosystem simulation
+- Analytics Platform — 長期統計、分析、trend、heatmap、analysis storage / query / client
 
 ## 新規Backlogの扱い
 
 Phase 10以降の実装中に新しい大テーマが見つかった場合は、既存Phaseへ無理に詰め込まない。
 
 1. 既存Phaseの完了に必須なら、そのPhaseへ独立Taskとして追加する。
-2. 完了に必須でない大テーマなら、このROADMAP末尾へBacklogとして記録する。
-3. 着手時にWhat / Whyを`docs/specifications/`、Howを`docs/architecture/`またはADRへ切り分ける。
-4. 実装・保存・配信・描画・検証のどこまでをPhase完了条件とするか明示する。
-5. Phase完了時に、残件が暗黙に持ち越されていないことを確認する。
+2. 純read-only Viewの大テーマなら[`VIEW_ROADMAP.md`](VIEW_ROADMAP.md)へ移す。
+3. Management UI / command clientの大テーマなら[`MANAGEMENT_ROADMAP.md`](MANAGEMENT_ROADMAP.md)へ移す。
+4. 分析・統計・trend等ならView / Managementへ混在させずAnalytics系Backlogとして保持する。
+5. Simulation側で完了に必須でない大テーマなら、このSimulation Roadmap末尾へBacklogとして記録する。
+6. 着手時にWhat / Whyを`docs/specifications/`、Howを`docs/architecture/`またはADRへ切り分ける。
+7. 実装・保存・配信・検証のどこまでをPhase完了条件とするか明示する。
+8. Phase完了時に、残件が暗黙に持ち越されていないことを確認する。

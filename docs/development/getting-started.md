@@ -8,6 +8,10 @@ SDK / runtime の version は個別に手入力して管理せず、Repository �
 - Node.js: [`src/web/.node-version`](../../src/web/.node-version)
 - npm dependency: [`src/web/package-lock.json`](../../src/web/package-lock.json)
 
+実装計画はSimulation側[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)、read-only View側[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)、Management側[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)を正本とします。
+
+SimulationとViewのObservation Gateway / cache境界は[`../architecture/observation-gateway.md`](../architecture/observation-gateway.md)を参照してください。
+
 ## Windows 実機での推奨セットアップ
 
 Windows では `scripts/setup-dev.bat` と `scripts/run-dev.bat` を推奨入口とします。
@@ -62,7 +66,7 @@ scripts\setup-dev.bat
 
 セットアップに失敗した場合は途中で終了し、失敗した step を console に表示します。
 
-### 3. Server + Web Client の起動
+### 3. Server + Web View の起動
 
 ```bat
 scripts\run-dev.bat
@@ -72,8 +76,8 @@ scripts\run-dev.bat
 
 1. MachiVerseWorks.Server を別 console window で起動
 2. `http://127.0.0.1:5080/health` の応答を確認
-3. Web Client を別 console window で `127.0.0.1:5173` に固定して起動
-4. Web Client の HTTP 応答を確認
+3. Web View を別 console window で `127.0.0.1:5173` に固定して起動
+4. Web View の HTTP 応答を確認
 5. 既定 browser で `http://127.0.0.1:5173` を開く
 
 既定 endpoint は次のとおりです。
@@ -84,11 +88,11 @@ scripts\run-dev.bat
 | Health | `http://127.0.0.1:5080/health` |
 | E2E metrics | `http://127.0.0.1:5080/metrics/e2e` |
 | WebSocket | `ws://127.0.0.1:5080/ws` |
-| Web Client | `http://127.0.0.1:5173` |
+| Web View | `http://127.0.0.1:5173` |
 
 停止するときは Server / Web の各 console window で `Ctrl+C` を押します。
 
-Web Client の port は Server の既定 WebSocket Origin allowlist と一致させるため `5173` に固定し、使用中の場合は別 port へ自動 fallback せず起動失敗とします。
+Web View の port は Server の既定 WebSocket Origin allowlist と一致させるため `5173` に固定し、使用中の場合は別 port へ自動 fallback せず起動失敗とします。
 
 ### 4. 再セットアップ
 
@@ -100,7 +104,7 @@ scripts\setup-dev.bat
 
 新しい version は `.tools/` 配下の別 directory に配置されます。
 
-完全に作り直す場合は MachiVerseWorks の Server / Web Client を停止したうえで `.tools/` と `src/web/node_modules/` を削除し、`setup-dev.bat` を再実行します。
+完全に作り直す場合は MachiVerseWorks の Server / Web View を停止したうえで `.tools/` と `src/web/node_modules/` を削除し、`setup-dev.bat` を再実行します。
 
 ## 手動セットアップ / Windows 以外
 
@@ -117,7 +121,7 @@ dotnet build MachiVerseWorks.slnx --configuration Release --no-restore
 dotnet test MachiVerseWorks.slnx --configuration Release --no-build
 ```
 
-### Web Client
+### Web View
 
 ```bash
 cd src/web
@@ -129,7 +133,7 @@ npm test
 npm run build
 ```
 
-## Server + Web Client の手動起動
+## Server + Web View の手動起動
 
 2つの terminal を使います。
 
@@ -146,19 +150,25 @@ cd src/web
 npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
 ```
 
-Web Client の既定 Server URL は `ws://127.0.0.1:5080/ws` なので、既定構成では追加設定なしで接続します。
+Web View の既定 Server URL は `ws://127.0.0.1:5080/ws` なので、既定構成では追加設定なしで接続します。
 
-別 Server へ接続する場合は Web Client 起動時に `VITE_SERVER_URL` を指定します。
+別 Server へ接続する場合は Web View 起動時に `VITE_SERVER_URL` を指定します。
 
-## Phase 6 E2E の一括確認
+現時点の`src/web`はread-only Viewです。将来Management Clientが同じWeb stackを利用する場合も、View moduleとは別のcommand client / shellとして実装します。
 
-Chrome または Chromium が `PATH` にある環境では、Repository root から次の1コマンドで Phase 6 scenario を再現できます。
+## End-to-End のローカル確認
+
+実Server / Protocol / Web Viewを横断するE2Eの正規一覧は[`../../.github/workflows/e2e.yml`](../../.github/workflows/e2e.yml)です。現在はCore PoCからRadio / Spectrumまでの実装済み主要domainをmatrixで管理しています。
+
+各scenarioは`script`欄に対応する`bash scripts/run-phaseXX-e2e.sh`をローカルでも実行できます。変更したdomainに対応するscenarioを選び、無関係な古いPhase scriptを一律に実行する運用にはしません。
+
+Core / Browser基盤だけを確認したい場合は、Chrome または Chromium が `PATH` にある環境で次を実行できます。
 
 ```bash
 bash scripts/run-phase6-e2e.sh
 ```
 
-この script は 1,000 / 10,000 / 100,000 Agent の Server を順に起動し、実 Browser で接続、表示 state、camera 由来 subscription、remove、再接続、近傍配信、Server/Client metrics を検証します。詳細は [`e2e-poc.md`](e2e-poc.md) を参照してください。
+このscenarioの詳細は[`e2e-poc.md`](e2e-poc.md)を参照してください。
 
 ## PR 前の確認
 
@@ -176,13 +186,9 @@ npm test
 npm run build
 ```
 
-Phase 6 以降の End-to-End 変更では、加えて Repository root から次を実行します。
+Server / Protocol / Browserを変更した場合は、加えて[`../../.github/workflows/e2e.yml`](../../.github/workflows/e2e.yml)の対象domainに対応するE2E scriptを実行します。性能へ影響する変更では[`../../.github/workflows/benchmarks.yml`](../../.github/workflows/benchmarks.yml)の対象benchmarkも確認します。
 
-```bash
-bash scripts/run-phase6-e2e.sh
-```
-
-Repository 内 Markdown link は CI の `repository` job でも検証されます。
+Repository 内 Markdown link は CI の `repository` job でも検証されます。Markdownを移動・改名した場合は特に`python scripts/check-markdown-links.py`で事前確認することを推奨します。
 
 ## Version
 

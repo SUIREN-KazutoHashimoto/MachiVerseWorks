@@ -2,18 +2,32 @@
 
 ## 概要
 
-Headless ServerはASP.NET Core / Kestrel上でHTTP health endpointとbinary WebSocket endpointを提供し、1つの`SimulationWorld`をserver-authoritativeな正本として所有する。current Protocolは **2.8**。position、subscription、snapshotはnative 3Dである。
+Headless ServerはASP.NET Core / Kestrel上でHTTP health endpointとbinary WebSocket endpointを提供し、1つの`SimulationWorld`をserver-authoritativeな正本として所有する。current Protocolは **2.16**。実装上のversion正本は[`../../src/MachiVerseWorks.Protocol/ProtocolVersion.cs`](../../src/MachiVerseWorks.Protocol/ProtocolVersion.cs)、binary契約は[`protocol.md`](protocol.md)である。position、observation subscription、snapshotはnative 3Dを基本とする。
+
+Serverでは、read-onlyなObservation Gatewayとauthoritative mutationを扱うAdministration / Management command boundaryを明示的に分離する。
 
 ```text
 Kestrel
 ├─ GET /health
-└─ /ws
-   └─ WebSocketSessionHandler
-      ├─ ClientConnectionRegistry
-      └─ bounded ClientCommandQueue
-             │
-             ▼
-      ClientCommandProcessor
+├─ /ws
+│  └─ WebSocketSessionHandler
+│     ├─ ClientConnectionRegistry
+│     ├─ Observation Request
+│     │      │
+│     │      ▼
+│     │ Observation Gateway
+│     │  ├─ subscription / inspect
+│     │  ├─ shared read-model cache
+│     │  ├─ request deduplication
+│     │  ├─ snapshot / delta planning
+│     │  └─ protocol encoding / delivery
+│     │
+│     └─ future Management command transport
+│            │
+│            ▼
+│       authoritative command queue
+└─ /mcp  (explicitly enabled only)
+   └─ Remote MCP adapter
 
 stdin ──► ServerConsoleService ──► AdminCommandParser
                                       │
@@ -30,58 +44,102 @@ SimulationTickService ─────────► SimulationRuntime
                             SimulationWorld
                                       │
                                       ▼
-                         SimulationPublishSnapshot
-                            ├─ spatial domains
-                            │    └─ client-volume filtering
-                            └─ Multimodal Transit
-                                 └─ world-wide mapping
+                       detached observation read models
                                       │
                                       ▼
-                             SnapshotPublishService
-
-PopulationPublishService ──► statistics / Person debug
+                          Observation Gateway
 ```
+
+Observation Gatewayの詳細は[`observation-gateway.md`](observation-gateway.md)を参照する。
 
 ## State ownership
 
-`SimulationRuntime`が`SimulationWorld`を所有する。WebSocket session、connection registry、Protocol message、publish read model、Administration ConsoleはSimulation mutable storeを直接所有しない。
+`SimulationRuntime`が`SimulationWorld`を所有する。WebSocket session、connection registry、Protocol message、Observation Gateway、publish read model、Administration Console、Remote MCP adapterはSimulation mutable storeを直接所有しない。
 
-`SimulationRuntime._gate`はauthoritative mutationとatomic captureの境界である。1 publish cycleではClientごとにWorld queryせず、lock内で必要なdetached snapshot/read modelを1回captureする。Agent / Road / Pedestrian / Vehicle / Intersection / RailwayのClient別`WorldVolume` filtering、message planning、encoding、network I/Oはlock外で行う。Multimodal Transitは同じcaptureを使うが、現行2.8ではClient volumeでfilterせずworld-wide messageへmapする。
+`SimulationRuntime._gate`はauthoritative mutationとatomic observation captureの境界である。publish cycleではClientごとにWorld queryを繰り返さず、lock内で必要なdetached snapshot / read modelをcaptureし、spatial filtering、message planning、cache、encoding、network I/O等を可能な限りlock外で行う。
 
-Administration mutationも同じ`SimulationRuntime._gate`を通るため、Simulation tickの途中へstdin処理が割り込まない。Consoleのparseや表示、file I/OはWorld lockの責務ではない。
+Administration / Management mutationも同じauthoritative runtime境界を通るため、Simulation tick途中へtransport処理が未管理で割り込まない。Console parse、MCP transport、Observation delivery、表示、file I/OはWorld lockの責務ではない。
 
-## Administration command boundary
+## Observation Gateway boundary
 
-Phase 20ではstdinをtransportとして扱い、command実行契約から分離する。
+View向けWebSocket処理はread-only Observation Gatewayを経由する。
+
+Observation Gatewayが扱うもの:
+
+- `SubscribeVolume`等の観測範囲request
+- Inspect系の明示target request
+- detached read modelの共有
+- spatial filtering
+- static / dynamic snapshot delivery
+- revision-driven cache
+- request deduplication
+- encoded payload再利用
+- reconnect / resync
+- slow client isolation
+
+Observation Gatewayが扱わないもの:
+
+- authoritative mutation
+- Simulation rule実行
+- Activity / ETA / classification等の意味的判定
+- current stateからfuture stateを予測する処理
+- ViewのCamera / LODによるSimulation workload / fidelity変更
+
+ViewからServerへの通信が存在しても、それが観測対象を指定するだけならread-only invariantを壊さない。
+
+## Observation cache
+
+Observation Gatewayは同一authoritative resultの再生成・再encodeを避けるため、read-only cacheを持てる。
+
+cache freshnessはwall-clock TTLだけでなく、domainのtick / revision / generation markerを優先する。
+
+代表的なcache:
+
+- Entity Observation Cache: Entity ID + observation revision
+- Spatial Observation Cache: chunk / region + observation revision
+- Static Revision Cache: Road / Railway / Terrain / Building topology等
+- Encoded Payload Cache: negotiated Protocol version + observation revision
+
+同じrevisionの同一requestが同時に来た場合はrequest deduplicationで1回の生成処理を共有できる。
+
+cacheはSimulationが公開した意味を保存・再利用するだけで、新しいsemantic stateを生成しない。
+
+## Administration / Management command boundary
+
+Phase 20でstdinをtransportとして扱い、command実行契約から分離した。Phase 27ではRemote MCPも同じcommand境界を安全に再利用する。将来のManagement Clientも同じserver-authoritative原則に従う。
 
 - `ServerConsoleService`はstdinの1行入力、EOF、host cancellationだけを扱う。
 - `AdminCommandParser`はquoted token、`--option=value`、Invariant Culture数値、stable ID、enum表現を`AdminCommand`へ変換する。
 - `AdminCommandQueue`はbounded / single-reader channelで、producerへ無制限bufferを許さない。
-- `AdminCommandExecutorV2`はqueueをFIFOに逐次処理し、structured `AdminCommandResultCode`と人間向けmessageを返す。
-- mutation/readは`SimulationRuntime.Read` / `Mutate`、pause/resume/manual step、checkpoint/world replacement APIだけからauthoritative Worldへ到達する。
-- Remote Admin / City Management UIはstdin serviceを再利用せず、認証・認可・監査を別途通過した後に同じcommand queue/executor境界へ接続できる。
+- `AdminCommandExecutorV2`はqueueをFIFOに逐次処理し、structured result / error codeを返す。
+- mutationは`SimulationRuntime`の明示境界だけからauthoritative Worldへ到達する。
+- Remote MCPは認証・scope・request isolationを通過した後に同じAdministration境界へ接続し、Simulation内部Storeへ直接アクセスしない。
+- 将来のManagement ClientもBrowser側から直接Storeを変更せず、Simulation Roadmapで定義するserver-authoritative command境界を使用する。
+- read-only View moduleへこのcommand clientを混在させない。
 
-Consoleはローカルtrusted operator向けであり、認証境界ではない。外部公開可能なRemote Admin endpointとして扱わない。
+Consoleはlocal trusted operator向け、Remote MCPは別のauthentication / authorization境界を持つ。Management Clientも利用者向けのpermission / confirmation境界を別途持つ。
+
+Remote MCP詳細は[`remote-mcp-administration.md`](remote-mcp-administration.md)、Management計画は[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)を参照する。
 
 ## Administration ordering and pause
 
-`SimulationTickService`のautomatic tickとAdministration mutationは`SimulationRuntime`の同じlockで直列化される。`simulation pause`後はautomatic `Step()`がno-opになる。paused中の`simulation step [count]`だけが明示回数のWorld stepを進めるため、queue中のmutation、manual step、resumeの順序は再現可能である。
+`SimulationTickService`のautomatic tickとAdministration / Management mutationは`SimulationRuntime`の同じlockで直列化される。`simulation pause`後はautomatic `Step()`がno-opになる。paused中の`simulation step [count]`だけが明示回数のWorld stepを進めるため、queue中のmutation、manual step、resumeの順序を管理できる。
 
 Administration executor自体もsingle-readerなので、同時producerが存在しても受理済みcommandはqueue順に1件ずつ実行する。
 
 ## Runtime topology invalidation
 
-Road / Railway Infrastructureのpublish read modelはrevision-drivenである。Administrationによるtopology mutation成功時、または`world load`でauthoritative Worldを差し替えた時に、対応revisionを単調増加させてcached read modelを破棄する。次のpublish captureで新しいread modelを生成し、接続済みClientは保持しているlast delivered revisionとの差によって再配信を受ける。
+Road / Railway Infrastructure等のrevision-driven observation read modelはauthoritative topology変更時にrevisionを進め、関連cacheをstale化する。次のcaptureで新しいread modelを生成し、接続済みClientは保持しているdelivery stateとの差によって更新を受ける。
 
-World replacement時はRoadとRailwayの両revisionを進める。dynamic Agent / Pedestrian / Vehicle stateは既存known-ID差分処理によってupdate/removeへ収束し、新Worldの現在stateが次回publishの正本になる。
+World replacement時は関連revision / connection-local delivery stateが新しいWorldと矛盾しないよう再配信可能な状態へ移行する。dynamic Entityはknown-ID差分処理等によってupdate / removeへ収束し、新Worldの現在stateが次回Observation publishの正本になる。
 
 ## Administration save / load
 
-`world save`はruntime lock中に`SimulationCheckpoint`をcaptureし、lockを解放した後でdetached `SimulationWorld`をrestoreしてserialize/file writeする。長時間file I/O中にSimulation lockを保持しない。
+`world save`はruntime lock中に`SimulationCheckpoint`をcaptureし、lockを解放した後でserialization / file writeを行う。長時間file I/O中にSimulation lockを保持しない。
 
-`world load`はfile readとdeserializeを先に完了し、検証済み`SimulationWorld`を`SimulationRuntime.ReplaceWorld`で短時間にatomic差し替えする。差し替え時にfixture pending state、Road/Railway read-model cacheを破棄し、revisionを進める。
+`world load`はfile readとdeserializeを先に完了し、検証済み`SimulationWorld`を短時間にatomic差し替えする。Save formatの正本は[`persistence.md`](persistence.md)と[`../specifications/save-data.md`](../specifications/save-data.md)である。
 
-Railway Infrastructureのadministrative update/removeは既存Create APIのvalidationだけでは表現できないため、候補`SimulationCheckpoint`を構築し、`SimulationWorld.RestoreCheckpoint`の完全な参照整合性validationを先に通す。validation成功後のみ現在Railway storeへ反映する。Railway Operationsが初期化済みの場合は既存`EnsureRailwayInfrastructureMutable`契約に従いInfrastructure mutationを拒否する。
+World load後はObservation Gatewayのrevision / cache / connection-local delivery stateを新Worldに対して再同期可能な状態へ移す。
 
 ## Saveからのruntime configuration
 
@@ -89,19 +147,27 @@ Railway Infrastructureのadministrative update/removeは既存Create APIのvalid
 
 - schedulerは復元Worldのtick intervalを使用
 - `HelloAck` tick rateも同じ値
-- subscription cell validationも復元Worldのspatial cell sizeを使用
+- observation subscription cell validationも復元Worldのspatial cell sizeを使用
 
 新規WorldだけServerOptionsからSimulationConfigを構築する。
 
 ## Tick lifecycle
 
-`SimulationTickService`は`BackgroundService` / `PeriodicTimer`から`SimulationRuntime.Step()`を呼ぶ。network receive/sendをtick loopへ持ち込まない。application stopping tokenでgraceful shutdownする。
+`SimulationTickService`は`BackgroundService` / `PeriodicTimer`から`SimulationRuntime.Step()`を呼ぶ。network receive / sendをtick loopへ持ち込まない。application stopping tokenでgraceful shutdownする。
 
-## Client command boundary
+## Observation Request boundary
 
-network receive pathからSimulation stateを同期的に変更し続けず、Client commandはbounded `Channel<ClientCommand>`へ投入する。
+現行Web Viewからのrequestはread-only observationとして扱う。
 
-現行subscription commandは3D `SubscribeVolume`。finite、各軸`max >= min`、SpatialGrid変換可能性、`MaximumSubscriptionCellCount`をcommand queue前に検証する。2D `SubscribeArea`互換入口はない。
+現行例:
+
+- 3D `SubscribeVolume`
+- `InspectPerson`
+- `ClearPersonInspection`
+
+`SubscribeVolume`はfinite、各軸`max >= min`、SpatialGrid変換可能性、`MaximumSubscriptionCellCount`を受付時に検証する。2D `SubscribeArea`互換入口はない。
+
+将来generic inspect / historical observationを追加する場合も、mutation commandとは別contractを維持する。
 
 ## Connection state
 
@@ -110,11 +176,11 @@ network receive pathからSimulation stateを同期的に変更し続けず、Cl
 - WebSocket / handshake state / negotiated Protocol version
 - current `WorldVolume` / subscription revision
 - dynamic entity delivery state
-- static Road revision/subscription state
-- static Railway Infrastructure revision/subscription state
+- static topology revision / subscription state
+- Person inspection等のconnection-local Observation Request state
 - send serialization / in-flight delivery state
 
-切断時はconnection-local stateを破棄する。Administrationの`connection list` / `show` / `disconnect`はこのregistryだけを操作し、Simulation Entity namespaceと混在させない。
+切断時はconnection-local stateを破棄する。Observation connection stateをSimulation Entity namespaceと混在させない。
 
 ## Handshake / capability boundary
 
@@ -124,61 +190,55 @@ network receive pathからSimulation stateを同期的に変更し続けず、Cl
 4. `HelloAck`と以後のframe headerも同じversion
 5. handshake後は受信header versionの完全一致を要求
 
-Server 2.8はminorごとに次を追加配信する。
+Server current 2.16はminorごとに次を追加する。
 
-- 2.0 Agent
-- 2.1 Road
-- 2.2 Pedestrian
-- 2.3 Vehicle
-- 2.4 Intersection Control
-- 2.5 Population statistics / Person debug
-- 2.6 Railway Infrastructure
-- 2.7 Railway Operations
-- 2.8 Multimodal Transit
+| Protocol | Capability / domain |
+| --- | --- |
+| 2.0 | Agent / `SubscribeVolume` |
+| 2.1 | Road Network |
+| 2.2 | Pedestrian |
+| 2.3 | Vehicle |
+| 2.4 | Intersection Control |
+| 2.5 | Population statistics / Person debug |
+| 2.6 | Railway Infrastructure |
+| 2.7 | Railway Operations |
+| 2.8 | Multimodal Transit |
+| 2.9 | `ClearPersonInspection` |
+| 2.10 | Economy |
+| 2.11 | Logistics / Freight |
+| 2.12 | Power |
+| 2.13 | Water / Sewer |
+| 2.14 | Gas |
+| 2.15 | Optical Communication |
+| 2.16 | Radio / Spectrum |
 
 negotiated minorより新しいmessageを送らない。
 
-## Atomic publish read model
+## Observation publish read model
 
-`SnapshotPublishService`はSimulation tickとは別周期で動く。subscription済み送信対象が0なら不要なcaptureを避ける。
+Observation publish serviceはSimulation tickとは別周期で動かせる。送信対象が0なら不要なcaptureを避けられるが、View有無によってSimulation自体のstate / workload policy / fidelityを変更してはならない。
 
-capture対象は同一Simulation lock / tick時点のdetached dataで、少なくともAgent / Pedestrian / Vehicle、Intersection state、Road、Railway Infrastructure、Railway Operations、Multimodal Transitを含む。Agent / Pedestrian / Vehicle / Intersection / Road / Railway Operations / Railway Infrastructureはcapture後にClient volumeでfilterする。Multimodal Transitはcapture全体をconnectionへmapし、volume boundsを適用しない。
+capture対象は同一authoritative boundaryから得たdetached dataとし、network threadがSimulationのmutable collectionを直接列挙し続けない。
 
-Population statistics / Person inspectorは専用`PopulationPublishService` / inspect command boundaryを持ち、traffic snapshot publish intervalと独立してよい。
+domainごとに次の配送契約を使い分ける。
 
-## Static Road delivery
+- spatial subscriptionでfilterするdynamic / static domain
+- revision-driven static read model
+- explicit inspect target
+- historical read-only projection
+- domain固有のbounded observation snapshot
 
-Road topologyはrevision-driven。connectionはsubscription revision + road revisionを記録し、両方不変なら同じRoad snapshotを毎tick再送しない。subscription変更またはtopology revision変更時にfiltered snapshotを送る。
+既存のworld-wide statisticsは現行Protocol互換のObservationとして配送できるが、View側で分析を追加しない。将来のAnalytics ListenerはCamera向けObservationと別feedを持てるようにする。
 
-Road snapshotはsingle-frame。payload 1 MiB超過をsend前に検出し、対象subscriptionへ`InvalidRequest` / `roadSnapshotTooLarge`を返す。publisher全体のfaultにはしない。
+Protocol 2.10〜2.16のEconomy / Logistics / Infrastructure / Communication / Radioも同じServer-authoritative原則に従い、対応minorをnegotiationしたconnectionだけへmessageを送る。詳細なfield / unit / payload contractは[`protocol.md`](protocol.md)と各`docs/specifications/`を正本とする。
 
-## Railway Infrastructure delivery
+## Static / dynamic delivery rules
 
-Railway InfrastructureはProtocol 2.6のstatic/revision-driven read modelである。subscription変更またはrailway revision変更時にfiltered snapshotを送る。
+Road topologyはrevision-drivenで、subscription revision + topology revisionが変わらなければ同じstatic snapshotを無駄に再送しない。
 
-1 MiB超snapshotは`RailwayInfrastructureProtocolChunker`でentity境界へ分割する。同deliveryの全chunkは同revisionで、先頭だけ`isFullSnapshot=true`、continuationはfalse。BlockSection / Depot 1件は分割しない。
+Railway InfrastructureはProtocol 2.6のmulti-frame contractを持ち、1 MiB超snapshotをentity境界でchunkできる。Railway Operations等のsingle-frame domainはcodecのpayload lengthをpreflightし、契約上の上限超過をconnection-localなstructured Errorへ変換する。
 
-Clientはfull chunkで旧stateをresetし、同revision continuationを順にaccumulateする。このためrailway revisionが同じままsubscriptionだけ変わった場合も、先頭full flagによって旧volume stateを残さない。
-
-## Railway Operations delivery
-
-Protocol 2.7のdynamic message 710はvisible Trainと、そのTrainが参照するService / Timetableをmappingする。Train visibilityはpublish snapshotにある**Train position point**を3D subscriptionへ照合する。
-
-message 710はsingle-frame。`RailwayOperationsProtocolCodec.GetPayloadLength()`でpayload長をpreflightし、1 MiB超過時はpartial snapshotを送らず`InvalidRequest` / `railwayOperationsSnapshotTooLarge`へ変換する。1 Clientの大規模subscriptionをpublisher全体のfaultへ波及させない。
-
-## Multimodal Transit delivery
-
-Protocol 2.8のmessage 720はLine / Stop / Pattern、realtime Bus・Taxi state、arrival estimateを同じpublish captureからmapする。Road TrafficとRailway Operationsのauthoritative movementを複製せず、Multimodal Transitのcross-mode stateだけをwireへ投影する。
-
-現行`PublishConnectionAsync`は`publishSnapshot.MultimodalTransit`全体を`MultimodalTransitMessageMapper`へ渡すため、message 720にはClient `SubscribeVolume`によるspatial filterを適用しない。Clientがsnapshot publisherへ参加するにはsubscription済みである必要があるが、そのvolume boundsはTransitのLine / Stop / Pattern / Vehicle / Arrival Estimate選択には使わない。Protocol 2.8のTransit deliveryはworld-wideで、volume-based interest managementは将来拡張事項である。
-
-2.7以下へmessage 720を送らない。
-
-## Snapshot delivery isolation
-
-connectionごとに最大1件のdelivery taskをin-flightにし、同connectionが配送中なら次周期をqueueせずdropする。異なるconnectionのdeliveryは独立taskなのでslow Clientのbackpressureを他Clientへ伝播させない。
-
-各message sendへtimeoutを適用し、transport由来のexpected Client failureはconnection単位で隔離する。unexpected invariant violationはscheduler faultとして扱う一方、事前分類可能なpayload超過はstructured Client errorへ変換する。
+slow Viewはconnection単位のdelivery task / timeoutで隔離し、他ClientやSimulation tickへbackpressureを波及させない。
 
 ## Subscription revision / remove consistency
 
@@ -188,21 +248,26 @@ subscription変更中に古いdeliveryが完了しても、dynamic known-ID stat
 
 ## Send serialization
 
-同一WebSocketへhandshake/error responseとsnapshot publisherが同時sendしないようconnection単位でsendを直列化する。serializationはsend lockの前に行い、lockはWebSocket I/O ownershipだけを守る。
+同一WebSocketへhandshake / error responseとsnapshot publisherが同時sendしないようconnection単位でsendを直列化する。serializationはsend lockの前に行い、lockはWebSocket I/O ownershipだけを守る。
+
+同一Protocol version / observation revision / payloadを多数Viewへ送信する場合は、connection固有metadataと分離可能な範囲でencode済みpayload cacheを検討する。
 
 ## Logging / shutdown
 
 expected Client delivery停止とunexpected system faultを区別してstructured logへ記録する。shutdownではhosted serviceとWebSocket sessionをcancelし、新規delivery schedulingを止めてin-flight taskを回収する。
 
-Administration Consoleではunknown command、invalid number/enum、missing entity、reference conflict、queue full、invalid simulation state、I/O errorをstructured resultへ変換し、Server process faultへ昇格させない。stdin EOFはConsole Serviceだけを終了し、`exit` / `stop` commandだけが`IHostApplicationLifetime.StopApplication()`を通じてgraceful shutdownを要求する。
+Administration / Managementではunknown command、invalid number / enum、missing entity、reference conflict、queue full、invalid simulation state、I/O errorをstructured resultへ変換し、Server process faultへ昇格させない。Remote MCPでもauthorization failure、oversized input、timeout、rate limit等をrequest単位で隔離する。
 
 ## 現行制約
 
-- Agent / Pedestrian / Vehicleは汎用aggregate compressionを持たない
-- Roadはsingle-frameでoversize error
-- Railway Infrastructureだけが明示multi-frame chunk contractを持つ
-- Railway Operationsはsingle-frame + structured oversize error
-- Protocol 2.8 Multimodal Transitは現行world-wide deliveryで、Client volume filteringは未実装
-- Administration Consoleはlocal trusted operator interfaceであり、remote authentication / authorizationは未実装
+- Protocolは2.x minor negotiationを使用し、Clientが対応しない新domain snapshotを送らない
+- 一部static / dynamic snapshotはsingle-frame上限を持ち、Railway Infrastructure等だけが明示chunk contractを持つ
+- domainごとのspatial filtering / world-wide deliveryの差は各domain契約に従う
+- Administration Consoleはlocal trusted operator interface、Remote MCPは明示設定と認証を必要とするremote interfaceである
+- Browser Viewはread-onlyとし、Selection / Inspector / Historical viewingをView Roadmapで管理する
+- editor / runtime control / configuration / Save UIはManagement Roadmapで管理する
+- AnalyticsはView / Managementの必須責務へ混在させない
 
-binary layoutは[`protocol.md`](protocol.md)、Web側state適用は[`web-client.md`](web-client.md)、Administration command grammarは[`../specifications/server-administration-console.md`](../specifications/server-administration-console.md)を参照する。
+将来のSimulation / Observation contractは[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)、read-only View実装は[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)、Management UIは[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)を参照する。
+
+binary layoutは[`protocol.md`](protocol.md)、Observation Gatewayは[`observation-gateway.md`](observation-gateway.md)、Web側state適用は[`web-client.md`](web-client.md)、Administration command grammarは[`../specifications/server-administration-console.md`](../specifications/server-administration-console.md)を参照する。

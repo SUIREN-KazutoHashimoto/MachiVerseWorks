@@ -1,6 +1,6 @@
 # Protocol Binary Layout
 
-MachiVerseWorksのServer / Web Client間binary protocolを定義する。ProtocolはApplication `VERSION`とSave formatから独立してversioningし、current protocol versionは **2.9** とする。
+MachiVerseWorksのServer / Web Client間binary protocolを定義する。ProtocolはApplication `VERSION`とSave formatから独立してversioningし、current protocol versionは **2.16** とする。実装上の正本は [`ProtocolVersion.Current`](../../src/MachiVerseWorks.Protocol/ProtocolVersion.cs) と [`MessageType`](../../src/MachiVerseWorks.Protocol/MessageType.cs) である。
 
 ## Version compatibility
 
@@ -16,6 +16,13 @@ MachiVerseWorksのServer / Web Client間binary protocolを定義する。Protoco
 - 2.7: `RailwayOperationsSnapshot`
 - 2.8: `MultimodalTransitSnapshot`
 - 2.9: `ClearPersonInspection`
+- 2.10: `EconomySnapshot`
+- 2.11: `LogisticsSnapshot`
+- 2.12: `PowerSnapshot`
+- 2.13: `WaterSewerSnapshot`
+- 2.14: `GasSnapshot`
+- 2.15: `OpticalSnapshot`
+- 2.16: `RadioSnapshot` / `SpectrumSnapshot`
 
 同一majorではServer current以下のminorをClientが要求した場合に受理できる。negotiation成立versionはClientが`Hello` frame headerで要求したversionそのものとし、connection state、`HelloAck` payload、以後のframe headerへ同じ値を使う。Serverはnegotiated minorより新しいmessageを送らない。
 
@@ -59,9 +66,17 @@ headerのpayload lengthと実frame長が一致しないframe、未知flags、1 M
 | 700 | `RailwayInfrastructureSnapshot` | Server → Client | 2.6 |
 | 710 | `RailwayOperationsSnapshot` | Server → Client | 2.7 |
 | 720 | `MultimodalTransitSnapshot` | Server → Client | 2.8 |
+| 730 | `EconomySnapshot` | Server → Client | 2.10 |
+| 740 | `LogisticsSnapshot` | Server → Client | 2.11 |
+| 750 | `PowerSnapshot` | Server → Client | 2.12 |
+| 760 | `WaterSewerSnapshot` | Server → Client | 2.13 |
+| 770 | `GasSnapshot` | Server → Client | 2.14 |
+| 780 | `OpticalSnapshot` | Server → Client | 2.15 |
+| 790 | `RadioSnapshot` | Server → Client | 2.16 |
+| 791 | `SpectrumSnapshot` | Server → Client | 2.16 |
 | 900 | `Error` | Server → Client | 2.0 |
 
-`SubscribeArea`は存在しない。Agent / Road / Pedestrian / Vehicle / Intersection / Railwayは3D `SubscribeVolume`をClient別spatial filteringの境界として使う。Protocol 2.8で追加されたMultimodal Transitは現行Serverではsubscription volumeで絞らず、subscription済みconnectionへworld-wide snapshotを配信する。Population statisticsはWorld全体集計、Person debugはstable Person ID指定のdebug contractである。
+`SubscribeArea`は存在しない。Agent / Road / Pedestrian / Vehicle / Intersection / Railwayは3D `SubscribeVolume`をClient別spatial filteringの境界として使う。Multimodal Transitを含む各domain snapshotはnegotiated minorによってversion gateし、ServerはClientが対応しない新しいmessageを送らない。Population statisticsはWorld全体集計、Person debugはstable Person ID指定のdebug contractである。
 
 ## Hello / HelloAck
 
@@ -256,9 +271,25 @@ optional stable IDは0 sentinel。Bus StopはLane、Railway StopはStation（任
 
 現行Serverはmessage 720のLine / Stop / Pattern / Vehicle / Arrival EstimateをClient `SubscribeVolume`でfilterせず、`publishSnapshot.MultimodalTransit`全体からmessageを作成する。したがってTransit deliveryは現時点ではworld-wideであり、volume-based interest managementは将来拡張事項である。`MultimodalTransitProtocolCodec.GetPayloadLength()`で送信前にpayload長を計算し、1 MiB超過時はmessage 720をserializeせず`InvalidRequest` / `detailCode=multimodalTransitSnapshotTooLarge`へ変換する。
 
+## Protocol 2.10〜2.16 domain snapshots
+
+Phase 21〜28で追加されたdomainは、既存2.x negotiationを維持したままminor versionごとにsnapshot messageを追加する。
+
+| Protocol | Message | Domain specification |
+| --- | --- | --- |
+| 2.10 | `EconomySnapshot` (730) | [`../specifications/economy.md`](../specifications/economy.md) |
+| 2.11 | `LogisticsSnapshot` (740) | [`../specifications/logistics-freight.md`](../specifications/logistics-freight.md) |
+| 2.12 | `PowerSnapshot` (750) | [`../specifications/power-infrastructure.md`](../specifications/power-infrastructure.md) |
+| 2.13 | `WaterSewerSnapshot` (760) | [`../specifications/water-sewer-infrastructure.md`](../specifications/water-sewer-infrastructure.md) |
+| 2.14 | `GasSnapshot` (770) | [`../specifications/gas-infrastructure.md`](../specifications/gas-infrastructure.md) |
+| 2.15 | `OpticalSnapshot` (780) | [`../specifications/optical-communication.md`](../specifications/optical-communication.md) |
+| 2.16 | `RadioSnapshot` (790) / `SpectrumSnapshot` (791) | [`../specifications/radio-spectrum.md`](../specifications/radio-spectrum.md) |
+
+各messageのfield、単位、参照整合性、bounded collection、Server publish semanticsは対応domain specificationとC# codecを同期して変更する。message type IDとminimum negotiated versionは本書および`MessageType` / `ProtocolVersion`を同時に更新する。
+
 ## Snapshot tick semantics
 
-traffic publish cycle内のAgent / Pedestrian / Vehicle / Intersection / Road / Railway / Transit dataは同じauthoritative captureを基礎にする。Agent / Pedestrian / Vehicle / Intersection / Road / Railwayはcapture後のimmutable read modelへClient別volume filterを適用するが、Multimodal Transitは同じcapture tickのworld-wide snapshotをfilterせず配信する。
+traffic publish cycle内のAgent / Pedestrian / Vehicle / Intersection / Road / Railway / Transitおよび対応するdomain snapshotは、各publisherがcaptureしたauthoritative read modelのtickを観測時点とする。spatial filteringを行うdomainではcapture後のimmutable read modelへClient別volume filterを適用し、world-wide / aggregate domainは各domainのpublish契約に従う。
 
 Population publisherは専用serviceであり、別publish intervalのtickがtraffic snapshotと異なることを許容する。各message自身のtickを観測時点とする。
 
@@ -270,6 +301,13 @@ Population publisherは専用serviceであり、別publish intervalのtickがtra
 - Railway Infrastructure: `RailwayInfrastructureProtocolCodec`
 - Railway Operations: `RailwayOperationsProtocolCodec`
 - Multimodal Transit: `MultimodalTransitProtocolCodec`
+- Economy: `EconomyProtocolCodec`
+- Logistics: `LogisticsProtocolCodec`
+- Power: `PowerProtocolCodec`
+- Water / Sewer: `WaterSewerProtocolCodec`
+- Gas: `GasProtocolCodec`
+- Optical: `OpticalProtocolCodec`
+- Radio / Spectrum: Radio / Spectrum codec
 
 Server / Webはcommon headerのmessage typeから対応decoderへdispatchする。Simulation内部classをwire object graphとして直接露出しない。
 
