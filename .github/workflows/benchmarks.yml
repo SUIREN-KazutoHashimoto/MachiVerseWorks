@@ -81,6 +81,10 @@ jobs:
             name: water-sewer-loads-1k-5k
             filter: '*WaterSewerBenchmarks*'
             timeout: 20
+          - id: gas
+            name: gas-loads-1k-5k
+            filter: '*GasBenchmarks*'
+            timeout: 20
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
