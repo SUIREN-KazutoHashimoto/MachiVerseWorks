@@ -1,19 +1,19 @@
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 26 — Optical Communication Infrastructure（実装・検証完了 / `develop` 統合待ち）
-> **次の実装タスク:** PR #172 を `develop` へ統合し、統合後に Phase 26 を正式 closeout する
+> **現在:** Phase 27 — Remote Administration & MCP Integration  
+> **次の実装タスク:** `P27-001` — Remote Administration / MCP の責務・trust boundary・権限モデルを仕様化する
 
 ## 全体の現在地
 
 | Phase | 内容 | 状態 |
 | --- | --- | --- |
-| 0〜25 | Foundation / Simulation / Infrastructure | ✅ 完了 |
-| 26 | Optical Communication Infrastructure | ▶️ 実装・検証完了 / `develop` 統合待ち |
-| 27 | Radio & Spectrum Foundation | ⏳ 待機 |
-| 28 | Urban Growth & City Generation | ⏳ 待機 |
-| 29 | City Management UI | ⏳ 待機 |
-| 30 | Distribution & Compatibility | ⏳ 待機 |
-| 31 | Extension Platform & Localization | ⏳ 待機 |
+| 0〜26 | Foundation / Simulation / Infrastructure | ✅ 完了 |
+| 27 | Remote Administration & MCP Integration | ▶️ 次 |
+| 28 | Radio & Spectrum Foundation | ⏳ 待機 |
+| 29 | Urban Growth & City Generation | ⏳ 待機 |
+| 30 | City Management UI | ⏳ 待機 |
+| 31 | Distribution & Compatibility | ⏳ 待機 |
+| 32 | Extension Platform & Localization | ⏳ 待機 |
 
 Phase 0〜24 の詳細 Task・closeout 証跡・当時の計画状態は、履歴として [`docs/archive/roadmap-through-phase24-closeout.md`](docs/archive/roadmap-through-phase24-closeout.md) に保存しています。Phase 13〜16 の正式 closeout 時点の詳細は [`docs/archive/roadmap-phase13-through-phase16-closeout.md`](docs/archive/roadmap-phase13-through-phase16-closeout.md) も参照してください。
 
@@ -54,6 +54,7 @@ Phase 0〜24 の詳細 Task・closeout 証跡・当時の計画状態は、履�
   -> Water / Sewer Infrastructure
   -> Gas Infrastructure
   -> Optical Communication Infrastructure
+  -> Remote Administration / MCP
   -> Radio / Spectrum Foundation
   -> Urban Growth / City Generation
   -> City Management UI
@@ -61,14 +62,14 @@ Phase 0〜24 の詳細 Task・closeout 証跡・当時の計画状態は、履�
   -> Extension Platform / Localization
 ```
 
-この順番は、後続機能が前段の正本モデルを再利用できることを優先する。先行mergeを行っても、Phaseの正式closeout順は依存関係に従う。
+この順番は、後続機能が前段の正本モデルを再利用できることを優先する。先行mergeを行っても、Phaseの正式closeout順は依存関係に従う。Phase 27 は Server 横断の Remote Administration 境界として実装順に挿入するが、Phase 28 以降の Simulation domain が MCP 実装へ直接依存することを意味しない。
 
 ---
 
 ## Phase 25 — Gas Infrastructure
 
-> **状態: ✅ 完了**
-> **依存:** Phase 10 / 21 / 22 / 23
+> **状態: ✅ 完了**  
+> **依存:** Phase 10 / 21 / 22 / 23  
 > 配管によるガス供給と、LPガス等を想定した物流による配達供給を同じ都市需要へ接続する。標準の配管Simulationは接続・capacity中心とし、圧力・流量等の詳細物理計算は交換可能なsolver境界の外側へ分離する。
 
 - ✅ **P25-001** — Pipeline Gas / Delivered Gasの責務、単位、需要・在庫・簡易solver境界を仕様化する
@@ -99,7 +100,7 @@ Phase 0〜24 の詳細 Task・closeout 証跡・当時の計画状態は、履�
 
 ### Phase 25 実装状況
 
-- PR #171 を `develop` へ統合済み。
+- PR #171 を `develop` へ統合済み（merge commit `2563b595a61a8639767282e959f77ea0c9096ad4`）。
 - Pipeline outage / recovery、Delivered Gas stockout / Shipment / replenishment / recoveryをE2Eで検証する。
 - Delivered Gas checkpointは参照先Gas commodityの`Consumer` inventory存在を復元時に検証する。
 - `IGasSupplySolver` の結果はWorld stateへ適用する前に、未知・重複ID、非有限値、負値、request上限超過を拒否する。
@@ -108,8 +109,8 @@ Phase 0〜24 の詳細 Task・closeout 証跡・当時の計画状態は、履�
 
 ## Phase 26 — Optical Communication Infrastructure
 
-> **状態: ▶️ 実装・検証完了 / `develop` 統合待ち**
-> **依存:** Phase 10 / 21 / 23
+> **状態: ✅ 完了**  
+> **依存:** Phase 10 / 21 / 23  
 > 光ファイバーを中心とする固定通信のphysical topology、access、traffic demand、bandwidth、congestion、障害を都市Entityへ接続する。標準Simulationはroutingとcapacity中心とし、光損失・分散等の詳細伝送計算は交換可能なsolver境界の外側へ分離する。
 
 - ✅ **P26-001** — Optical Communicationの責務、traffic / bandwidth単位、簡易solverと詳細光伝送solverの境界を仕様化する
@@ -137,43 +138,76 @@ Phase 0〜24 の詳細 Task・closeout 証跡・当時の計画状態は、履�
 - ✅ Protocol 2.15 / Server / Web debugでbandwidth・congestion・簡易latency・equipment power・backhaul stateを観測できる。
 - ✅ deterministic E2EでFiber reroute・停電・backhaul outage/recoveryを検証し、1k / 5k Optical load benchmarkをCIで記録する。
 
-### Phase 26 実装状況
+### Phase 26 closeout evidence
 
-- PR #172 でSimulation / Save / Protocol 2.15 / Server / Web / E2E / benchmark / docsを実装。
+- PR #172 を `develop` へ統合済み（merge commit `2a0ee18846f45894c870114545330b2aaf1ab746`）。
+- final head `314a0592ade0b39835ccff0890b5b21fec63f541` で Dependency Review `33484684321`、Optical Benchmark `33484684353`、CI `33484684372`、Benchmarks `33484684355`、End-to-end `33484684486` がすべて成功した。
 - 標準solverはstable ID順のdeterministic shortest-pathとbottleneck capacity allocationを使用し、85%以上のFiber利用率をcongestionとして観測する。
 - 簡易latencyはroute hop数とFiber utilizationから決定論的に算出し、詳細な光損失・分散・波長設計は標準solverの対象外とする。
 - Save Format 11のoptional `OpticalCheckpoint`として保存・復元し、旧Saveとの互換性を維持する。
-- Phase正式closeoutはPR #172を`develop`へ統合し、merge commitと最終runを記録した後に行う。
 
 ---
 
-## Phase 27 — Radio & Spectrum Foundation
+## Phase 27 — Remote Administration & MCP Integration
 
-> **状態: ⬜ 未着手**
-> **依存:** Phase 10 / 23 / 26
-> LTE等の特定通信方式へ依存しないRadio / Spectrumの共通基盤を作り、周波数・送受信機・アンテナ・伝搬・干渉を都市の3D空間上で扱えるようにする。標準Simulationは軽量な簡易伝搬を用い、詳細な電磁界・ray tracing等は交換可能なsolver境界の外側へ分離する。
+> **状態: ▶️ 次**  
+> **依存:** Phase 4 / 20  
+> Phase 20で確立したserver-authoritative Administration command境界を、HTTPSのRemote MCP Serverから安全に再利用できるようにする。ChatGPT等のMCP Clientから状態確認・調査・運転制御・明示的に許可したmutationを実行できる一方、任意shell実行やSimulation内部への直接アクセスを公開しない。
 
-- ⬜ **P27-001** — Radio / Spectrum Foundationの用途非依存責務、単位、determinism、solver境界を仕様化する
-- ⬜ **P27-002** — SpectrumBand / RadioChannelと周波数・bandwidth・overlapのstable契約を実装する
-- ⬜ **P27-003** — RadioSite / Transmitter / Receiver / Antenna / Emissionのstable IDとstateモデルを実装する
-- ⬜ **P27-004** — Antennaの3D position・orientation・gain・簡易radiation pattern契約を実装する
-- ⬜ **P27-005** — Transmissionのfrequency・bandwidth・transmit power・operating stateを実装する
-- ⬜ **P27-006** — Receiverの受信帯域・sensitivityと送受信候補を評価する共通契約を実装する
-- ⬜ **P27-007** — Radio Foundationから独立して差し替え可能な`IRadioPropagationSolver`相当のsolver境界を実装する
-- ⬜ **P27-008** — 距離・周波数・送信電力・antenna gainからreceived powerを求める軽量な標準propagation solverを実装する
-- ⬜ **P27-009** — Building `WorldVolume`を使うLoS / NLoS・簡易obstruction / penetration penaltyを実装する
-- ⬜ **P27-010** — 周波数帯域が重なるEmissionを候補化する簡易interference計算を実装する
-- ⬜ **P27-011** — received power・noise / interference・SINR等の用途非依存Radio Link resultを実装する
-- ⬜ **P27-012** — 大量Transmitterを全件走査しない3D spatial index / candidate queryを実装する
-- ⬜ **P27-013** — Radio Siteの電力供給とOptical backhaul参照を既存Infrastructureへ接続する
-- ⬜ **P27-014** — Radio / Spectrum stateをcheckpoint / Save Dataへ含める
-- ⬜ **P27-015** — Radio site・spectrum・emission・coverage / link resultをProtocol / Serverで配信する
-- ⬜ **P27-016** — Web ClientでRadio site・antenna・channel・簡易coverage / interferenceをdebug可視化する
-- ⬜ **P27-017** — 複数周波数・複数送信源・遮蔽・干渉・停電/backhaul障害を検証するdeterministic E2Eを追加する
-- ⬜ **P27-018** — 大規模Transmitter / Receiver / spectrum query / propagationのbenchmarkを記録する
-- ⬜ **P27-019** — Radio & Spectrum Foundationのspecification / architecture / ROADMAPを同期する
+- ⬜ **P27-001** — Remote Administration / MCPの責務・trust boundary・read/write/destructive分類・権限モデルを仕様化する
+- ⬜ **P27-002** — MCP transport / tool adapter / Phase 20 Admin command境界 / SimulationRuntimeの責務分離をarchitecture文書化し、Remote AdminのADRを追加する
+- ⬜ **P27-003** — MCP Serverのhost境界と設定モデルを実装し、通常Server起動時に明示設定で有効化できるようにする
+- ⬜ **P27-004** — HTTPS向けStreamable HTTP `/mcp` endpointとMCP protocol negotiation / tool discoveryを実装する
+- ⬜ **P27-005** — Remote MCPのauthentication / authorizationとcredential取扱いを実装し、匿名のwrite操作を許可しない
+- ⬜ **P27-006** — Server version / runtime health / Simulation status / tick / pause state等を取得するread-only Toolを実装する
+- ⬜ **P27-007** — metrics / bounded log query / diagnostic stateを取得するread-only Toolを実装する
+- ⬜ **P27-008** — Entity inspect / query系の既存Administration境界をMCP Toolへmappingし、Simulation内部Storeを直接公開しない
+- ⬜ **P27-009** — `pause` / `step` / `resume` / `save`等の運転操作を既存AdminCommandQueue / executor経由のwrite Toolとして公開する
+- ⬜ **P27-010** — 明示的に許可したEntity create / update / remove等のmutationをAdmin command境界経由でMCP Toolへmappingする
+- ⬜ **P27-011** — destructive操作のconfirmation metadata・role / scope・stable result/error codeを実装し、read-only権限と分離する
+- ⬜ **P27-012** — request size / concurrency / timeout / cancellation / rate limit / result sizeの上限を実装し、slowまたは不正なRemote ClientをServer全体から隔離する
+- ⬜ **P27-013** — Cloudflare等のHTTPS reverse proxy配下でcache bypass・forwarded header・origin保護・TLS終端を安全に扱えるdeployment契約と設定例を整備する
+- ⬜ **P27-014** — arbitrary shell / executable / file path実行、unknown Tool、権限不足、oversized input、command injection、malformed MCP requestがServer停止や権限昇格へ波及しないnegative testを追加する
+- ⬜ **P27-015** — Remote MCP Client→HTTPS reverse proxy→`/mcp`→Admin command境界→SimulationRuntimeまでを実Serverで検証するE2Eを追加し、readとwriteの双方を確認する
+- ⬜ **P27-016** — Remote Administration / MCPのspecification / architecture / ADR / security / deployment / Server README / ROADMAPを同期する
 
 ### Phase 27 完了条件
+
+- HTTPSのRemote MCP ClientからServer状態・Simulation状態・主要diagnosticを取得できる。
+- mutationはPhase 20のserver-authoritative Admin command境界を必ず通り、MCP adapterがSimulation内部Storeを直接変更しない。
+- read / write / destructive操作の権限が分離され、認証なしのwrite、任意shell実行、無制限のfile/process操作を公開しない。
+- Cloudflare等のreverse proxy経由でもStreamable HTTP MCPとして接続でき、cache・timeout・request/result size・cancellationを安全に扱える。
+- 実Server E2EでRemote MCPのread / write / failure isolationを継続検証できる。
+
+---
+
+## Phase 28 — Radio & Spectrum Foundation
+
+> **状態: ⬜ 未着手**  
+> **依存:** Phase 10 / 23 / 26  
+> LTE等の特定通信方式へ依存しないRadio / Spectrumの共通基盤を作り、周波数・送受信機・アンテナ・伝搬・干渉を都市の3D空間上で扱えるようにする。標準Simulationは軽量な簡易伝搬を用い、詳細な電磁界・ray tracing等は交換可能なsolver境界の外側へ分離する。
+
+- ⬜ **P28-001** — Radio / Spectrum Foundationの用途非依存責務、単位、determinism、solver境界を仕様化する
+- ⬜ **P28-002** — SpectrumBand / RadioChannelと周波数・bandwidth・overlapのstable契約を実装する
+- ⬜ **P28-003** — RadioSite / Transmitter / Receiver / Antenna / Emissionのstable IDとstateモデルを実装する
+- ⬜ **P28-004** — Antennaの3D position・orientation・gain・簡易radiation pattern契約を実装する
+- ⬜ **P28-005** — Transmissionのfrequency・bandwidth・transmit power・operating stateを実装する
+- ⬜ **P28-006** — Receiverの受信帯域・sensitivityと送受信候補を評価する共通契約を実装する
+- ⬜ **P28-007** — Radio Foundationから独立して差し替え可能な`IRadioPropagationSolver`相当のsolver境界を実装する
+- ⬜ **P28-008** — 距離・周波数・送信電力・antenna gainからreceived powerを求める軽量な標準propagation solverを実装する
+- ⬜ **P28-009** — Building `WorldVolume`を使うLoS / NLoS・簡易obstruction / penetration penaltyを実装する
+- ⬜ **P28-010** — 周波数帯域が重なるEmissionを候補化する簡易interference計算を実装する
+- ⬜ **P28-011** — received power・noise / interference・SINR等の用途非依存Radio Link resultを実装する
+- ⬜ **P28-012** — 大量Transmitterを全件走査しない3D spatial index / candidate queryを実装する
+- ⬜ **P28-013** — Radio Siteの電力供給とOptical backhaul参照を既存Infrastructureへ接続する
+- ⬜ **P28-014** — Radio / Spectrum stateをcheckpoint / Save Dataへ含める
+- ⬜ **P28-015** — Radio site・spectrum・emission・coverage / link resultをProtocol / Serverで配信する
+- ⬜ **P28-016** — Web ClientでRadio site・antenna・channel・簡易coverage / interferenceをdebug可視化する
+- ⬜ **P28-017** — 複数周波数・複数送信源・遮蔽・干渉・停電/backhaul障害を検証するdeterministic E2Eを追加する
+- ⬜ **P28-018** — 大規模Transmitter / Receiver / spectrum query / propagationのbenchmarkを記録する
+- ⬜ **P28-019** — Radio & Spectrum Foundationのspecification / architecture / ROADMAPを同期する
+
+### Phase 28 完了条件
 
 - LTE / 5G / Wi-Fi / Broadcast等の個別方式をRadio Foundationの正本へ埋め込まず、共通の周波数・送受信・アンテナ・伝搬・干渉結果を扱える。
 - 3D World上の位置・建物遮蔽・複数Emissionを考慮した軽量でdeterministicな標準Radio Simulationが成立する。
@@ -181,30 +215,30 @@ Phase 0〜24 の詳細 Task・closeout 証跡・当時の計画状態は、履�
 
 ---
 
-## Phase 28 — Urban Growth & City Generation
+## Phase 29 — Urban Growth & City Generation
 
-> **状態: ⬜ 未着手**
-> **依存:** Phase 10〜19 / 21〜27の主要都市モデル
+> **状態: ⬜ 未着手**  
+> **依存:** Phase 10〜19 / 21〜26 / 28 の主要都市モデル  
 > Parcel / Zoning / Land Useとdeterministic city generationを導入し、都市を手作業fixtureだけでなく生成・成長させられるようにする。Phase 10から委譲されたParcel / land-useの正本はこのPhaseで導入する。
 
-- ⬜ **P28-001** — Parcel境界・Zone種別・土地利用・占有/development stateの正本契約を仕様化する
-- ⬜ **P28-002** — Parcel store / stable ID lifecycleとZone designationを設定するSimulation commandを実装する
-- ⬜ **P28-003** — Road access・parcel size・land useからdevelopment suitabilityを評価する
-- ⬜ **P28-004** — Zoneに応じたBuilding用途・規模候補を選ぶdevelopment ruleを実装する
-- ⬜ **P28-005** — 空ParcelへのBuilding development lifecycleを実装する
-- ⬜ **P28-006** — demand変化に応じたredevelopment / vacancyの最小ruleを実装する
-- ⬜ **P28-007** — seedからRoad Networkを生成するdeterministic generatorを実装する
-- ⬜ **P28-008** — Road NetworkからParcelを生成するdeterministic subdivisionを実装する
-- ⬜ **P28-009** — Parcel / ZoneからBuilding / POIを生成するdeterministic generatorを実装する
-- ⬜ **P28-010** — 初期Population / Household / Jobを生成都市へ配置するseeding処理を実装する
-- ⬜ **P28-011** — Railway / Power / Water / Sewer / Gas / Optical / Radio等の既存Infrastructureを壊さないgeneration constraintを定義する
-- ⬜ **P28-012** — Parcel / Zone / city generation設定・seed・生成結果をSave / checkpoint契約へ統合する
-- ⬜ **P28-013** — Parcel / Zone / development stateをProtocol / Serverで配信し、Web Clientで可視化する
-- ⬜ **P28-014** — 同一seedで同一都市を生成するreproducibility E2Eを追加する
-- ⬜ **P28-015** — 小/中/大規模都市generation時間・memory・初期Simulation負荷benchmarkを記録する
-- ⬜ **P28-016** — Urban Growth / City Generationのspecification / architecture / ROADMAPを同期する
+- ⬜ **P29-001** — Parcel境界・Zone種別・土地利用・占有/development stateの正本契約を仕様化する
+- ⬜ **P29-002** — Parcel store / stable ID lifecycleとZone designationを設定するSimulation commandを実装する
+- ⬜ **P29-003** — Road access・parcel size・land useからdevelopment suitabilityを評価する
+- ⬜ **P29-004** — Zoneに応じたBuilding用途・規模候補を選ぶdevelopment ruleを実装する
+- ⬜ **P29-005** — 空ParcelへのBuilding development lifecycleを実装する
+- ⬜ **P29-006** — demand変化に応じたredevelopment / vacancyの最小ruleを実装する
+- ⬜ **P29-007** — seedからRoad Networkを生成するdeterministic generatorを実装する
+- ⬜ **P29-008** — Road NetworkからParcelを生成するdeterministic subdivisionを実装する
+- ⬜ **P29-009** — Parcel / ZoneからBuilding / POIを生成するdeterministic generatorを実装する
+- ⬜ **P29-010** — 初期Population / Household / Jobを生成都市へ配置するseeding処理を実装する
+- ⬜ **P29-011** — Railway / Power / Water / Sewer / Gas / Optical / Radio等の既存Infrastructureを壊さないgeneration constraintを定義する
+- ⬜ **P29-012** — Parcel / Zone / city generation設定・seed・生成結果をSave / checkpoint契約へ統合する
+- ⬜ **P29-013** — Parcel / Zone / development stateをProtocol / Serverで配信し、Web Clientで可視化する
+- ⬜ **P29-014** — 同一seedで同一都市を生成するreproducibility E2Eを追加する
+- ⬜ **P29-015** — 小/中/大規模都市generation時間・memory・初期Simulation負荷benchmarkを記録する
+- ⬜ **P29-016** — Urban Growth / City Generationのspecification / architecture / ROADMAPを同期する
 
-### Phase 28 完了条件
+### Phase 29 完了条件
 
 - Parcel / Zone / land-useがSimulation正本として存在し、Zone指定からBuilding developmentへ状態が遷移できる。
 - 同一seed・設定から同一のRoad / Parcel / Buildingを再生成できる。
@@ -212,35 +246,35 @@ Phase 0〜24 の詳細 Task・closeout 証跡・当時の計画状態は、履�
 
 ---
 
-## Phase 29 — City Management UI
+## Phase 30 — City Management UI
 
-> **状態: ⬜ 未着手**
-> **依存:** Phase 28
+> **状態: ⬜ 未着手**  
+> **依存:** Phase 29  
 > Browserから都市状態を調査・編集・管理するためのserver-authoritative UIとcommand境界を整える。
 
-- ⬜ **P29-001** — Build / Edit commandの認可・validation・ack/error契約を仕様化する
-- ⬜ **P29-002** — Protocolへserver-authoritative command request / resultの共通枠組みを追加する
-- ⬜ **P29-003** — Web Clientで3D Entityを選択するpicking / selection基盤を実装する
-- ⬜ **P29-004** — Building / Parcel / POI / Person / Vehicle等をServer read modelから表示するInspector基盤を実装する
-- ⬜ **P29-005** — Road / Laneのbuild / edit / remove commandとUIを実装する
-- ⬜ **P29-006** — Building / POI / Parcel / Zoneのbuild / edit commandとUIを実装する
-- ⬜ **P29-007** — Railway track / station / platformのbuild / edit commandとUIを実装する
-- ⬜ **P29-008** — Power Infrastructureのbuild / edit commandとUIを実装する
-- ⬜ **P29-009** — Water / Sewer Infrastructureのbuild / edit commandとUIを実装する
-- ⬜ **P29-010** — Gas Infrastructureのbuild / edit commandとUIを実装する
-- ⬜ **P29-011** — Optical Communication Infrastructureのbuild / edit commandとUIを実装する
-- ⬜ **P29-012** — Radio Site / Antenna / Spectrum設定のbuild / edit commandとUIを実装する
-- ⬜ **P29-013** — command失敗時にClient側だけ状態が進まないoptimistic-state禁止またはrollback方針を実装する
-- ⬜ **P29-014** — Simulation speed / pause / resume等の運転controlをServer commandとして実装する
-- ⬜ **P29-015** — Population / Traffic / Transit / Economy / Logistics / Power / Utility / Communication / RadioのDashboard統計を実装する
-- ⬜ **P29-016** — Server configurationの変更可能項目・restart必要項目を分離してUI化する
-- ⬜ **P29-017** — current Save formatのsave / load操作をServer経由で実行する管理UIを追加する
-- ⬜ **P29-018** — destructive commandのconfirmationとstable error localizationを実装する
-- ⬜ **P29-019** — Inspector / build / edit / config / save操作のBrowser E2Eを追加する
-- ⬜ **P29-020** — 大規模都市でselection・overlay・dashboardが描画hot pathを阻害しないperformance testを追加する
-- ⬜ **P29-021** — City Management UIのarchitecture / UX contract / ROADMAPを同期する
+- ⬜ **P30-001** — Build / Edit commandの認可・validation・ack/error契約を仕様化する
+- ⬜ **P30-002** — Protocolへserver-authoritative command request / resultの共通枠組みを追加する
+- ⬜ **P30-003** — Web Clientで3D Entityを選択するpicking / selection基盤を実装する
+- ⬜ **P30-004** — Building / Parcel / POI / Person / Vehicle等をServer read modelから表示するInspector基盤を実装する
+- ⬜ **P30-005** — Road / Laneのbuild / edit / remove commandとUIを実装する
+- ⬜ **P30-006** — Building / POI / Parcel / Zoneのbuild / edit commandとUIを実装する
+- ⬜ **P30-007** — Railway track / station / platformのbuild / edit commandとUIを実装する
+- ⬜ **P30-008** — Power Infrastructureのbuild / edit commandとUIを実装する
+- ⬜ **P30-009** — Water / Sewer Infrastructureのbuild / edit commandとUIを実装する
+- ⬜ **P30-010** — Gas Infrastructureのbuild / edit commandとUIを実装する
+- ⬜ **P30-011** — Optical Communication Infrastructureのbuild / edit commandとUIを実装する
+- ⬜ **P30-012** — Radio Site / Antenna / Spectrum設定のbuild / edit commandとUIを実装する
+- ⬜ **P30-013** — command失敗時にClient側だけ状態が進まないoptimistic-state禁止またはrollback方針を実装する
+- ⬜ **P30-014** — Simulation speed / pause / resume等の運転controlをServer commandとして実装する
+- ⬜ **P30-015** — Population / Traffic / Transit / Economy / Logistics / Power / Utility / Communication / RadioのDashboard統計を実装する
+- ⬜ **P30-016** — Server configurationの変更可能項目・restart必要項目を分離してUI化する
+- ⬜ **P30-017** — current Save formatのsave / load操作をServer経由で実行する管理UIを追加する
+- ⬜ **P30-018** — destructive commandのconfirmationとstable error localizationを実装する
+- ⬜ **P30-019** — Inspector / build / edit / config / save操作のBrowser E2Eを追加する
+- ⬜ **P30-020** — 大規模都市でselection・overlay・dashboardが描画hot pathを阻害しないperformance testを追加する
+- ⬜ **P30-021** — City Management UIのarchitecture / UX contract / ROADMAPを同期する
 
-### Phase 29 完了条件
+### Phase 30 完了条件
 
 - 都市の主要EntityをBrowserから選択・調査できる。
 - build/edit操作は必ずServer-authoritative commandを経由し、Clientだけで正本状態を変更しない。
@@ -248,36 +282,36 @@ Phase 0〜24 の詳細 Task・closeout 証跡・当時の計画状態は、履�
 
 ---
 
-## Phase 30 — Distribution & Compatibility
+## Phase 31 — Distribution & Compatibility
 
-> **状態: ⬜ 未着手**
-> **依存:** Phase 29
+> **状態: ⬜ 未着手**  
+> **依存:** Phase 30  
 > Save migrationと配布物を整備し、開発環境外でもversion付き成果物として起動・更新・復元できる状態にする。
 
 ### Save互換性
 
-- ⬜ **P30-001** — Save migrationのsupport範囲・失敗契約・version policyを仕様化する
-- ⬜ **P30-002** — Save formatごとのmigration stepを登録できるframeworkを実装する
-- ⬜ **P30-003** — repositoryに旧Save format fixtureを保持し、自動migration testを追加する
-- ⬜ **P30-004** — migration中断・unsupported version・破損dataを安全に拒否する
-- ⬜ **P30-005** — migration前後でstable IDと継続可能stateを保持するintegration testを追加する
+- ⬜ **P31-001** — Save migrationのsupport範囲・失敗契約・version policyを仕様化する
+- ⬜ **P31-002** — Save formatごとのmigration stepを登録できるframeworkを実装する
+- ⬜ **P31-003** — repositoryに旧Save format fixtureを保持し、自動migration testを追加する
+- ⬜ **P31-004** — migration中断・unsupported version・破損dataを安全に拒否する
+- ⬜ **P31-005** — migration前後でstable IDと継続可能stateを保持するintegration testを追加する
 
 ### 配布・Deployment
 
-- ⬜ **P30-006** — Server standalone binaryのsupported OS / architecture matrixを定義する
-- ⬜ **P30-007** — Windows / Linux向けServer publish artifactをCIで生成する
-- ⬜ **P30-008** — 必要性を検証した上で追加architecture / OS向けartifactを生成する
-- ⬜ **P30-009** — Web Client production buildのbase path / Server endpoint設定をdeployment向けに整理する
-- ⬜ **P30-010** — static hosting向けWeb Client artifactをCIで生成する
-- ⬜ **P30-011** — Server用container imageとruntime configuration契約を実装する
-- ⬜ **P30-012** — release artifactへVERSION・commit SHA・license / third-party noticeを同梱する
-- ⬜ **P30-013** — release artifactのchecksum / SBOM等、配布時に必要なintegrity metadataを生成する
-- ⬜ **P30-014** — package / binary / Web / containerを起動するrelease smoke testをCIへ追加する
-- ⬜ **P30-015** — install / upgrade / rollback / backup / restore手順をdocument化する
-- ⬜ **P30-016** — develop→main release時のversion / artifact / release note手順を自動化可能な形へ整理する
-- ⬜ **P30-017** — Distribution / Compatibilityのarchitecture / development docs / ROADMAPを同期する
+- ⬜ **P31-006** — Server standalone binaryのsupported OS / architecture matrixを定義する
+- ⬜ **P31-007** — Windows / Linux向けServer publish artifactをCIで生成する
+- ⬜ **P31-008** — 必要性を検証した上で追加architecture / OS向けartifactを生成する
+- ⬜ **P31-009** — Web Client production buildのbase path / Server endpoint設定をdeployment向けに整理する
+- ⬜ **P31-010** — static hosting向けWeb Client artifactをCIで生成する
+- ⬜ **P31-011** — Server用container imageとruntime configuration契約を実装する
+- ⬜ **P31-012** — release artifactへVERSION・commit SHA・license / third-party noticeを同梱する
+- ⬜ **P31-013** — release artifactのchecksum / SBOM等、配布時に必要なintegrity metadataを生成する
+- ⬜ **P31-014** — package / binary / Web / containerを起動するrelease smoke testをCIへ追加する
+- ⬜ **P31-015** — install / upgrade / rollback / backup / restore手順をdocument化する
+- ⬜ **P31-016** — develop→main release時のversion / artifact / release note手順を自動化可能な形へ整理する
+- ⬜ **P31-017** — Distribution / Compatibilityのarchitecture / development docs / ROADMAPを同期する
 
-### Phase 30 完了条件
+### Phase 31 完了条件
 
 - 開発toolchainを手作業構築しなくても、配布artifactからServerとWeb Clientを起動できる。
 - 対応対象の旧Save Dataを明示的なmigration経路で読み込める。
@@ -285,41 +319,41 @@ Phase 0〜24 の詳細 Task・closeout 証跡・当時の計画状態は、履�
 
 ---
 
-## Phase 31 — Extension Platform & Localization
+## Phase 32 — Extension Platform & Localization
 
-> **状態: ⬜ 未着手**
-> **依存:** Phase 30
+> **状態: ⬜ 未着手**  
+> **依存:** Phase 31  
 > 正本Simulationと互換性境界を壊さず、外部拡張・高精度solver・追加localeを導入できる公開拡張基盤を作る。
 
 ### Extension Platform
 
-- ⬜ **P31-001** — Extension / Modで公開する範囲と非公開内部APIの境界を仕様化する
-- ⬜ **P31-002** — Extension manifest・stable ID・version・dependency契約を定義する
-- ⬜ **P31-003** — data-only extensionとcode extensionを分離したloading modelを設計する
-- ⬜ **P31-004** — code extensionの信頼境界・権限・非sandbox性を明示し、安全なdefault policyを実装する
-- ⬜ **P31-005** — Simulationへextension contentとPower / Water / Sewer / Gas / Optical / Radio等のsolver providerを登録するversioned public APIを実装する
-- ⬜ **P31-006** — Extension固有Save Dataをnamespace付きで保存し、missing extension時の挙動を定義する
-- ⬜ **P31-007** — Protocolへextension固有wire typeを直接衝突させない拡張契約を設計する
-- ⬜ **P31-008** — Extensionのload order / dependency cycle / incompatible versionをvalidationする
-- ⬜ **P31-009** — Extension packageの開発・test用templateとsample extensionを追加する
+- ⬜ **P32-001** — Extension / Modで公開する範囲と非公開内部APIの境界を仕様化する
+- ⬜ **P32-002** — Extension manifest・stable ID・version・dependency契約を定義する
+- ⬜ **P32-003** — data-only extensionとcode extensionを分離したloading modelを設計する
+- ⬜ **P32-004** — code extensionの信頼境界・権限・非sandbox性を明示し、安全なdefault policyを実装する
+- ⬜ **P32-005** — Simulationへextension contentとPower / Water / Sewer / Gas / Optical / Radio等のsolver providerを登録するversioned public APIを実装する
+- ⬜ **P32-006** — Extension固有Save Dataをnamespace付きで保存し、missing extension時の挙動を定義する
+- ⬜ **P32-007** — Protocolへextension固有wire typeを直接衝突させない拡張契約を設計する
+- ⬜ **P32-008** — Extensionのload order / dependency cycle / incompatible versionをvalidationする
+- ⬜ **P32-009** — Extension packageの開発・test用templateとsample extensionを追加する
 
 ### Localization
 
-- ⬜ **P31-010** — `ja-JP`をdefaultにしたlocale discovery / fallback policyを再確認・固定する
-- ⬜ **P31-011** — 追加locale resource packを導入できるWeb Client loading境界を実装する
-- ⬜ **P31-012** — 数値・日時・単位・plural等のlocale formattingを共通化する
-- ⬜ **P31-013** — stable error code / structured parameterから各localeの表示文を生成するcoverageを拡張する
-- ⬜ **P31-014** — translation key欠落・未使用key・parameter不一致をCIで検出する
-- ⬜ **P31-015** — 少なくとも1つの追加localeで主要UI / Inspector / Dashboard / error表示をE2E確認する
+- ⬜ **P32-010** — `ja-JP`をdefaultにしたlocale discovery / fallback policyを再確認・固定する
+- ⬜ **P32-011** — 追加locale resource packを導入できるWeb Client loading境界を実装する
+- ⬜ **P32-012** — 数値・日時・単位・plural等のlocale formattingを共通化する
+- ⬜ **P32-013** — stable error code / structured parameterから各localeの表示文を生成するcoverageを拡張する
+- ⬜ **P32-014** — translation key欠落・未使用key・parameter不一致をCIで検出する
+- ⬜ **P32-015** — 少なくとも1つの追加localeで主要UI / Inspector / Dashboard / error表示をE2E確認する
 
 ### Closeout
 
-- ⬜ **P31-016** — Extension有無・solver差し替え有無・追加locale有無でSave / Protocol / Simulation determinismが壊れないintegration testを追加する
-- ⬜ **P31-017** — Extension loading・solver provider・localizationのstartup / memory costをbenchmarkする
-- ⬜ **P31-018** — Extension author guide / solver provider guide / localization guide / compatibility policyを整備する
-- ⬜ **P31-019** — architecture / ADR / ROADMAPを同期し、Phase 10〜31で計画した旧Backlogのcloseoutを確認する
+- ⬜ **P32-016** — Extension有無・solver差し替え有無・追加locale有無でSave / Protocol / Simulation determinismが壊れないintegration testを追加する
+- ⬜ **P32-017** — Extension loading・solver provider・localizationのstartup / memory costをbenchmarkする
+- ⬜ **P32-018** — Extension author guide / solver provider guide / localization guide / compatibility policyを整備する
+- ⬜ **P32-019** — architecture / ADR / ROADMAPを同期し、Phase 10〜32で計画した旧Backlogのcloseoutを確認する
 
-### Phase 31 完了条件
+### Phase 32 完了条件
 
 - 既存Simulation内部実装へ直接依存せず、versionedな公開境界からExtensionを追加できる。
 - 標準の軽量Infrastructure solverを維持したまま、Extensionが高精度な物理solverを安全に差し替えられる。
