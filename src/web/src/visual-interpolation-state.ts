@@ -39,6 +39,17 @@ export class VisualInterpolationState<Id> {
     }
   }
 
+  /** Writes a sampled position directly into a caller-owned render buffer. */
+  public writeSampledPosition(id: Id, now: number, target: Float32Array, offset: number): boolean {
+    const track = this.tracks.get(id);
+    if (track === undefined) return false;
+    const alpha = clamp((now - track.receivedAt) / track.interpolationDurationMs, 0, 1);
+    target[offset] = lerp(track.previous.x, track.current.x, alpha);
+    target[offset + 1] = lerp(track.previous.y, track.current.y, alpha);
+    target[offset + 2] = lerp(track.previous.z, track.current.z, alpha);
+    return true;
+  }
+
   public sample(id: Id, now: number): VisualPosition | undefined {
     const track = this.tracks.get(id);
     if (track === undefined) return undefined;
