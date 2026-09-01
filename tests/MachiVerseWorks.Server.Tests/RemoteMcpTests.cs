@@ -1,9 +1,12 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text.Json;
 using MachiVerseWorks.Server;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol;
 
 namespace MachiVerseWorks.Server.Tests;
 
@@ -36,6 +39,22 @@ public sealed class RemoteMcpTests
         request.Headers.TryAddWithoutValidation("Origin", "https://untrusted.example");
         using var rejectedOrigin = await client.SendAsync(request);
         Assert.AreEqual(HttpStatusCode.Forbidden, rejectedOrigin.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task TrustedBrowserOriginPreflightDoesNotRequireBearerToken()
+    {
+        await using var host = await StartMcpHostAsync();
+        using var client = host.CreateHttpClient();
+        using var request = new HttpRequestMessage(HttpMethod.Options, "/mcp");
+        request.Headers.TryAddWithoutValidation("Origin", "https://trusted.example");
+        request.Headers.TryAddWithoutValidation("Access-Control-Request-Method", "POST");
+        request.Headers.TryAddWithoutValidation("Access-Control-Request-Headers", "authorization,content-type");
+
+        using var response = await client.SendAsync(request);
+        Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.AreEqual("https://trusted.example", response.Headers.GetValues("Access-Control-Allow-Origin").Single());
+        Assert.IsTrue(response.Headers.GetValues("Access-Control-Allow-Headers").Single().Contains("Authorization", StringComparison.OrdinalIgnoreCase));
     }
 
     [TestMethod]
@@ -130,10 +149,11 @@ public sealed class RemoteMcpTests
             ["operation"] = "add",
             ["arguments"] = new[] { "0", "0", "0\nstop" },
         }, cancellationToken: CancellationToken.None);
-        Assert.IsFalse(injection.IsError is true);
+        AssertStructuredRejection(injection, "invalid_argument");
+        Assert.AreEqual(0, simulation.ActiveAgentCount);
 
         var unsafeSave = await writeClient.CallToolAsync("simulation_save", new Dictionary<string, object?> { ["slot"] = "../../outside" }, cancellationToken: CancellationToken.None);
-        Assert.IsFalse(unsafeSave.IsError is true);
+        AssertStructuredRejection(unsafeSave, "invalid_argument");
 
         var tick = simulation.TickCount;
         await WaitUntilAsync(() => simulation.TickCount > tick, TimeSpan.FromSeconds(2));
@@ -150,7 +170,87 @@ public sealed class RemoteMcpTests
             ["arguments"] = new[] { "1" },
             ["confirm"] = false,
         }, cancellationToken: CancellationToken.None);
-        Assert.IsFalse(unconfirmed.IsError is true);
+        AssertStructuredRejection(unconfirmed, "confirmation_required");
+    }
+
+    [TestMethod]
+    public async Task MutationAllowlistMatchesSupportedAdministrationOperations()
+    {
+        await using var host = await StartMcpHostAsync();
+        await using var writeClient = await CreateMcpClientAsync(host, WriteToken);
+
+        var unsupportedUpdate = await writeClient.CallToolAsync("entity_write", new Dictionary<string, object?>
+        {
+            ["entity"] = "formation",
+            ["operation"] = "update",
+            ["arguments"] = Array.Empty<string>(),
+        }, cancellationToken: CancellationToken.None);
+        AssertStructuredRejection(unsupportedUpdate, "invalid_argument");
+    }
+
+    [TestMethod]
+    public async Task EntityQueryRequiresStableIdInsteadOfRemoteFullEnumeration()
+    {
+        await using var host = await StartMcpHostAsync();
+        await using var readClient = await CreateMcpClientAsync(host, ReadToken);
+
+        var missingId = await readClient.CallToolAsync("entity_query", new Dictionary<string, object?> { ["entity"] = "agent" }, cancellationToken: CancellationToken.None);
+        Assert.IsTrue(missingId.IsError is true);
+    }
+
+    [TestMethod]
+    public async Task LogQueryKeepsMessageJsonValidWhenResultIsBounded()
+    {
+        await using var host = await StartMcpHostAsync(new Dictionary<string, string?> { ["Server:Mcp:MaxResultBytes"] = "1024" });
+        var loggerFactory = host.App.Services.GetRequiredService<ILoggerFactory>();
+        var logger = loggerFactory.CreateLogger("RemoteMcpTests.LongLog");
+        for (var index = 0; index < 50; index++) logger.LogInformation("entry-{Index} {Payload}", index, new string('x', 200));
+
+        await using var readClient = await CreateMcpClientAsync(host, ReadToken);
+        var result = await readClient.CallToolAsync("logs_query", new Dictionary<string, object?> { ["limit"] = 50 }, cancellationToken: CancellationToken.None);
+        Assert.IsFalse(result.IsError is true);
+        var structured = GetStructured(result);
+        var message = structured.GetProperty("message").GetString();
+        Assert.IsNotNull(message);
+        using var _ = JsonDocument.Parse(message);
+    }
+
+    [TestMethod]
+    public async Task SaveDirectoryFailureReturnsStableIoError()
+    {
+        var filePath = Path.GetTempFileName();
+        try
+        {
+            await using var host = await StartMcpHostAsync(new Dictionary<string, string?> { ["Server:Mcp:SaveDirectory"] = filePath });
+            await using var writeClient = await CreateMcpClientAsync(host, WriteToken);
+            var result = await writeClient.CallToolAsync("simulation_save", new Dictionary<string, object?> { ["slot"] = "test" }, cancellationToken: CancellationToken.None);
+            AssertStructuredRejection(result, "io_error");
+        }
+        finally
+        {
+            File.Delete(filePath);
+        }
+    }
+
+    [TestMethod]
+    public async Task CanceledAdminRequestIsDiscardedBeforeExecution()
+    {
+        var queue = new AdminCommandQueue();
+        Assert.IsTrue(AdminCommandParser.TryParse("simulation pause", out var canceledCommand, out _));
+        Assert.IsTrue(AdminCommandParser.TryParse("status", out var liveCommand, out _));
+
+        using var requestCancellation = new CancellationTokenSource();
+        requestCancellation.Cancel();
+        var canceledCompletion = new TaskCompletionSource<AdminCommandResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var liveCompletion = new TaskCompletionSource<AdminCommandResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Assert.IsTrue(queue.TryWrite(new AdminCommandRequest(canceledCommand!, canceledCompletion, requestCancellation.Token)));
+        Assert.IsTrue(queue.TryWrite(new AdminCommandRequest(liveCommand!, liveCompletion)));
+
+        using var readCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        await using var enumerator = queue.ReadAllAsync(readCancellation.Token).GetAsyncEnumerator();
+        Assert.IsTrue(await enumerator.MoveNextAsync());
+        Assert.AreSame(liveCommand, enumerator.Current.Command);
+        Assert.IsTrue(canceledCompletion.Task.IsCanceled);
     }
 
     private static Task<ServerTestHost> StartMcpHostAsync(IReadOnlyDictionary<string, string?>? overrides = null)
@@ -178,6 +278,20 @@ public sealed class RemoteMcpTests
             AdditionalHeaders = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
         });
         return McpClient.CreateAsync(transport).AsTask();
+    }
+
+    private static void AssertStructuredRejection(CallToolResult result, string expectedCode)
+    {
+        Assert.IsFalse(result.IsError is true);
+        var structured = GetStructured(result);
+        Assert.IsFalse(structured.GetProperty("success").GetBoolean());
+        Assert.AreEqual(expectedCode, structured.GetProperty("code").GetString());
+    }
+
+    private static JsonElement GetStructured(CallToolResult result)
+    {
+        Assert.IsTrue(result.StructuredContent.HasValue);
+        return result.StructuredContent.Value;
     }
 
     private static async Task WaitUntilAsync(Func<bool> predicate, TimeSpan timeout)
