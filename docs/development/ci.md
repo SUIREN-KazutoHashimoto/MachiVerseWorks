@@ -18,7 +18,7 @@ Branch protection / Rulesetのrequired checkは **`CI / ci-gate`** を正本と�
 
 ### Repository validation
 
-- 必須Repository fileが存在し空でないこと
+- 必須Repository fileが存在し空でないこと。Roadmapは`roadmap/SIMULATION_ROADMAP.md`と`roadmap/VIEW_ROADMAP.md`の両方を必須とする
 - `scripts/check-markdown-links.py`でMarkdown local file linkとheading anchorを検証
 - `global.json` SDK policy
 - `VERSION`の`A.B.C`形式
@@ -26,6 +26,8 @@ Branch protection / Rulesetのrequired checkは **`CI / ci-gate`** を正本と�
 - `main`向けPRはbase `A.B.C`から厳密に`(A+1).0.0`へ更新
 - その他のPR targetはbaseより大きい`VERSION`を要求
 - `src/web/locales/manifest.json`のlocale/default整合
+
+MarkdownやRoadmapを移動・改名した場合は、CIのMarkdown link validationを必ず通し、旧相対リンクを残さない。
 
 ### .NET
 
@@ -72,7 +74,7 @@ SHA pinはAction repositoryの内容差し替えリスクを下げるためのsu
 
 `.github/workflows/benchmarks.yml`が性能回帰の正規入口。Phaseごとにworkflowを増やさず、機能名をmatrixへ追加する。
 
-現在の主なjob:
+現在の主なBenchmarkDotNet matrix:
 
 - `road-network-10k-100k`
 - `routing-small-medium-large`
@@ -81,6 +83,13 @@ SHA pinはAction repositoryの内容差し替えリスクを下げるためのsu
 - `railway-10k-100k`
 - `railway-operations-100-1000`
 - `journey-transfer-dispatch`
+- `logistics-inventory-100-1000`
+- `power-loads-1k-5k`
+- `water-sewer-loads-1k-5k`
+- `gas-loads-1k-5k`
+
+scenario / auxiliary job:
+
 - `vehicles-1k-10k-100k`
 - `population-1k-10k-100k`
 - `benchmarkdotnet-smoke`
@@ -90,20 +99,25 @@ SHA pinはAction repositoryの内容差し替えリスクを下げるためのsu
 
 PRと`develop` merge後に対象path変更で実行し、feature branch push単独では二重実行しない。artifactは原則14日保持する。
 
-Population scenarioは`idle`に加えて`foot-dispatch` / `motor-dispatch`を同じrunnerから出力し、詳細は[`population-benchmark.md`](population-benchmark.md)を参照する。
-
-Railway Infrastructureのscenario / baselineは[`railway-infrastructure-benchmark.md`](railway-infrastructure-benchmark.md)を参照する。
+個別domainのbaselineや再現条件は`docs/development/*-benchmark.md`を参照し、workflow matrixを変更した場合はこの文書も同期する。
 
 ## 4. End-to-end
 
-`.github/workflows/e2e.yml`がServer / Protocol / Web接続E2Eの正規入口。Phase 6 / 11 / 13 / 14 / **15** / 16 / 17 / 18 / 19のscriptをmatrixから呼び出す。
+`.github/workflows/e2e.yml`がServer / Protocol / Web接続E2Eの正規入口。現在はPhase 6のCore PoCからPhase 28のRadio / Spectrumまで、実装済み主要domainを1つのmatrixで継続検証する。
 
-Phase 15 Population E2Eは実Server + WebSocket + headless Browserで次を検証する。
+主なmatrix:
 
-- Protocol 2.9接続と`PopulationStatistics`表示
-- Person inspectorによる`PersonDebug`表示
-- client reconnect後のinspection再送 / UI復元
-- 別WebSocketによるProtocol 2.5 `Hello -> InspectPerson -> PersonDebug`互換
+- core / road network / road traffic / intersection
+- population / pedestrian
+- railway infrastructure / railway operations / multimodal transit
+- administration console
+- economy / logistics
+- power / water-sewer / gas
+- optical communication
+- remote MCP administration
+- radio / spectrum
+
+Population E2Eなど古いminor互換も個別scenarioで確認しつつ、Web Clientのcurrent negotiation上限はProtocol 2.16である。Protocol番号の正本は[`../architecture/protocol.md`](../architecture/protocol.md)、workflowの実行対象の正本は[`.github/workflows/e2e.yml`](../../.github/workflows/e2e.yml)とする。
 
 新規E2Eは原則としてPhase専用workflowを増やさず、このmatrixへ機能名 / script / artifactを追加する。
 
