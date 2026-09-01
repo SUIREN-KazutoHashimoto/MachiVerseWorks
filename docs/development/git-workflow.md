@@ -59,7 +59,7 @@ GitHub Repository 側で設定する値は [`repository-settings.md`](repository
 4. 関連する仕様 (`docs/specifications/`)
 5. 関連する設計 (`docs/architecture/`)
 6. 重要な採用理由がある場合は ADR (`docs/decisions/`)
-7. 対応する `ROADMAP.md` の Task ID
+7. 対応する `roadmap/SIMULATION_ROADMAP.md` の Task ID
 
 ファイル名や古い資料だけで現在の挙動を決めつけず、実効コードと test を確認します。
 
@@ -185,5 +185,5 @@ PR本文には最低限、可能な範囲で次を含めます。
 - 必要な test / build / benchmark が成功している
 - runtime 確認が必要な項目は確認済み、または未確認と明記している
 - 不要な debug code / experiment flag が残っていない
-- `ROADMAP.md` の Task 状態が同期されている
+- `roadmap/SIMULATION_ROADMAP.md` の Task 状態が同期されている
 - 通常開発期間では `AGENTS.md` と `versioning.md` の version 規則へ従っている
