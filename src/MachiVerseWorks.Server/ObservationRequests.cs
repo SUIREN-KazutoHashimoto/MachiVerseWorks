@@ -57,7 +57,7 @@ internal sealed class ObservationRequestProcessor(
                         connection.ClearPersonInspection();
                         break;
                     default:
-                        logger.LogWarning("Ignoring unsupported observation request type {RequestType}.", request.GetType().Name);
+                        ServerLog.UnsupportedObservationRequest(logger, request.GetType().Name);
                         break;
                 }
             }
