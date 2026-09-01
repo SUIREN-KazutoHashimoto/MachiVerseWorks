@@ -149,4 +149,14 @@ public sealed record WorldEnvironmentSnapshot(
     IReadOnlyList<TerrainSurfaceSample> TerrainSamples,
     IReadOnlyList<GeographicFeature> Features,
     IReadOnlyList<NaturalToponym> Toponyms,
-    ulong TickCount);
+    ulong TickCount)
+{
+    public WorldEnvironmentSnapshot(
+        WorldEnvironmentConfig config,
+        WorldVolume volume,
+        IReadOnlyList<RegionalEnvironmentSample> samples,
+        IReadOnlyList<GeographicFeature> features,
+        IReadOnlyList<NaturalToponym> toponyms,
+        ulong tickCount)
+        : this(config, volume, samples, Array.Empty<TerrainSurfaceSample>(), features, toponyms, tickCount) { }
+}
