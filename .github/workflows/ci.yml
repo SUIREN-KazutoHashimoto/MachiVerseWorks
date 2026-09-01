@@ -42,6 +42,7 @@ jobs:
           required_files=(
             README.md
             roadmap/SIMULATION_ROADMAP.md
+            roadmap/VIEW_ROADMAP.md
             AGENTS.md
             CONTRIBUTING.md
             SECURITY.md
