@@ -30,9 +30,9 @@
 | 1 | Read-Only View Foundation | 現行read-only Protocol / Observation boundary | ▶️ 基盤着手可能 |
 | 2 | Camera & Observation Navigation | Observation subscription contract | ⏳ 待機 |
 | 3 | Physical World Rendering | Simulation Phase 29 observation contract | ⏳ Simulation依存待ち |
-| 4 | Settlement & Structure Rendering | Simulation Phase 30 / 31 observation contract | ⏳ Simulation依存待ち |
+| 4 | Settlement & Structure Rendering | Simulation Phase 30 baseline / Phase 31 evolution | ⏳ Simulation依存待ち |
 | 5 | Infrastructure & Dynamic Entity Fidelity | 各Simulation domain observation contract | ⏳ View基盤待ち |
-| 6 | Large World Rendering & Rendering LOD | Simulation Phase 29〜33 world contract | ⏳ Simulation依存待ち |
+| 6 | Large World Rendering & Rendering LOD | Simulation Phase 29〜31 world / settlement observation | ⏳ Simulation依存待ち |
 | 7 | Object Selection & Inspector | generic Entity inspection Current / Relations | ⏳ Observation依存待ち |
 | 8 | Temporal Observation | recent / planned semantic observation | ⏳ Simulation依存待ち |
 | 9 | Historical World View | Simulation Phase 35 historical projection | ⏳ Simulation依存待ち |
@@ -50,6 +50,8 @@ View Roadmapでは、依存を次の3種類に分ける。
 - **統合依存** — 後から同じcomponentを組み合わせるための依存。対象Phaseの基礎実装開始を止めない。
 
 Observation Gateway Foundation全体をView Phase 1の一括hard gateにはしない。現行read-only Protocolで成立するView-local基盤は先行でき、`OBS-001` / `OBS-003`の境界整理と並行して進める。generic Inspectorは`OBS-008`のCurrent / Relations契約、Temporal Observationは同TaskのRecent / Planned契約と各Simulation domainのsemantic observationが揃った時点でcloseoutできる。
+
+Simulation Phase 32のSchedulerやPhase 33のparallelismはSimulation内部のworkload / execution戦略であり、Observation contractが変わらない限りView Renderingの必須依存にしない。ViewはSimulation内部の計算方式ではなく、公開されたauthoritative observationだけへ依存する。
 
 ## Simulation Roadmap追従ルール
 
@@ -167,19 +169,21 @@ Viewを完全read-onlyなPresentation clientとして固定し、Observation Gat
 ## View Phase 4 — Settlement & Structure Rendering
 
 > **状態: ⏳ Simulation依存待ち**  
-> **必須依存:** View Phase 3、Simulation Phase 30 `P30-028`とPhase 31のSettlement / Parcel / Zone / Building / naming observation contract
+> **必須依存:** View Phase 3、Simulation Phase 30 `P30-028`相当のSettlement / Parcel / Zone / naming baseline observation  
+> **統合依存:** Simulation Phase 31 Persistent Regional observation（`V4-004` / `V4-006`の動的変化表示）
 
 - ⬜ **V4-001** — Settlement network / Parcel / Zone / development / urban naming / Road Signを3D可視化する（旧`P30-028`のView部分）
 - ⬜ **V4-002** — City / Town / Village / Hamlet等の分類はSimulation提供値だけを使用して表示する
 - ⬜ **V4-003** — Building / POI / Parcel / District / Settlement relationをstable ID参照に基づき表示する
-- ⬜ **V4-004** — 建設・用途変更・vacancy・demolition等のSimulation state transitionを描画へ反映する
+- ⬜ **V4-004** — Simulation Phase 31が公開する建設・用途変更・vacancy・demolition等のstate transitionを描画へ反映する
 - ⬜ **V4-005** — 高密度中心市街地、低密度郊外、農村、Village / Hamlet、遠隔集落のvisual representationを同じread model契約から成立させる
-- ⬜ **V4-006** — 複数Settlementが連続市街地化・分離・成長・衰退してもView側で単一都市へ固定集約しないことをE2E確認する
+- ⬜ **V4-006** — Simulation Phase 31の複数Settlementが連続市街地化・分離・成長・衰退してもView側で単一都市へ固定集約しないことをE2E確認する
 - ⬜ **V4-007** — Settlement / Structure rendering baselineを記録する
 
 ### View Phase 4 完了条件
 
-- Simulationが生成・進化させた複数Settlementを忠実に観測できる。
+- Simulation Phase 30のbaseline Settlement / Structureを忠実に観測できる。
+- Phase 31のPersistent Regional observationが利用可能な場合は、複数Settlementの成長・停滞・衰退・再成長を同じ表示契約へ反映できる。
 - 人口や位置からViewが都市分類・土地利用・成長状態を推測しない。
 - 一極集中を前提にせず、複数都市・町・村・集落が同じWorld内に並存する状態を視覚的に確認できる。
 
@@ -211,7 +215,8 @@ Viewを完全read-onlyなPresentation clientとして固定し、Observation Gat
 ## View Phase 6 — Large World Rendering & Rendering LOD
 
 > **状態: ⏳ Simulation依存待ち**  
-> **必須依存:** View Phase 3〜5、Simulation Phase 29〜33のlarge-world observation / coordinate contract
+> **必須依存:** View Phase 3〜5、Simulation Phase 29〜31のWorld / Settlement observationとstable coordinate contract  
+> **統合依存:** Simulation Phase 32 / 33とのinvariance / performance回帰確認。Scheduler / worker / partition実装そのものには依存しない
 
 旧Phase 34のWorld Rendering / Rendering LOD計画を、read-only原則と複数Settlementを持つ巨大World前提に合わせて再構成する。
 
@@ -228,8 +233,9 @@ Viewを完全read-onlyなPresentation clientとして固定し、Observation Gat
 - ⬜ **V6-011** — Camera中心から遠いRegionでも同じ座標精度・selection・streaming契約を維持する
 - ⬜ **V6-012** — 都市中心→郊外→農村→遠隔集落を移動した際、LOD境界・chunk境界で地形やInfrastructureが不自然に欠落しないtransitionを実装する
 - ⬜ **V6-013** — Camera / LOD / View cache変更時もSimulation state digestが一致するE2Eを追加する（旧`P34-013`）
-- ⬜ **V6-014** — 都市中心・郊外・農村・遠隔集落・World overviewのframe time / draw call / memory benchmarkを記録する（旧`P34-014`）
-- ⬜ **V6-015** — World Rendering / LOD architecture / guideline / Roadmapを同期する（旧`P34-015`）
+- ⬜ **V6-014** — Simulation Phase 32 / 33導入前後でも同一Observation contractを同じView pipelineで表示できるregression testを追加する
+- ⬜ **V6-015** — 都市中心・郊外・農村・遠隔集落・World overviewのframe time / draw call / memory benchmarkを記録する（旧`P34-014`）
+- ⬜ **V6-016** — World Rendering / LOD architecture / guideline / Roadmapを同期する（旧`P34-015`）
 
 旧`P34-010` / `P34-011`のPopulation / economy / influence / catchment等の分析overlayはViewから除外する。Simulationが直接持つ状態をそのまま表示するvisual layerが必要になった場合だけ、意味的処理なしのTaskとして再追加する。
 
@@ -239,6 +245,7 @@ Viewを完全read-onlyなPresentation clientとして固定し、Observation Gat
 - 複数都市、郊外、農村、Village / Hamlet、遠隔集落を同じWorld View上で移動・比較できる。
 - LOD / culling / cache / streamingがSimulation結果やEntity lifecycleへ影響しない。
 - 遠距離地域の描画負荷を下げても、その地域のSimulation精度が下がったことを意味しない。
+- Simulation Scheduler / parallel worker / partition構成が変化しても、公開Observation contractが同じならView実装を分岐させない。
 
 ---
 
