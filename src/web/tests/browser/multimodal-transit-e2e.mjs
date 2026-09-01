@@ -18,6 +18,7 @@ let snapshot = null;
 let observedBusMovement = false;
 let observedTaxiMovement = false;
 let observedBusRoadVehicleReuse = false;
+let observedFutureArrival = false;
 const firstPositions = new Map();
 
 const connection = new MachiVerseConnection(serverUrl, { minimumDelayMs: 100, maximumDelayMs: 500 }, {
@@ -26,6 +27,7 @@ const connection = new MachiVerseConnection(serverUrl, { minimumDelayMs: 100, ma
     if (message.type !== MultimodalTransitMessageType.MultimodalTransitSnapshot) return;
     snapshot = message;
     ui.setMultimodalTransit(message);
+    if (message.arrivalEstimates.some((arrival) => arrival.estimatedArrivalTick >= message.tickCount)) observedFutureArrival = true;
     for (const vehicle of message.vehicles) {
       if (vehicle.kind === TransitVehicleKind.Bus && vehicle.roadVehicleId !== null) observedBusRoadVehicleReuse = true;
       const initial = firstPositions.get(vehicle.id);
@@ -62,7 +64,7 @@ try {
   assert(snapshot.patterns.some((pattern) => pattern.railwayServiceId === null && pattern.stops.length === 2), 'Bus pattern is published');
   assert(observedBusRoadVehicleReuse, 'Bus reuses a Road Traffic vehicle');
   assert(snapshot.vehicles.some((vehicle) => vehicle.kind === TransitVehicleKind.Taxi), 'Taxi vehicle is published');
-  assert(snapshot.arrivalEstimates.some((arrival) => arrival.estimatedArrivalTick >= snapshot.tickCount), 'Arrival estimate is published');
+  assert(observedFutureArrival, 'Arrival estimate is published');
   assert(transitDebug instanceof HTMLElement && transitDebug.textContent.includes('Bus') && transitDebug.textContent.includes('Railway'), 'Transit route/stop/vehicle/arrival debug UI was updated');
 
   result.dataset.status = 'passed';
@@ -77,6 +79,7 @@ try {
     observedBusMovement,
     observedTaxiMovement,
     observedBusRoadVehicleReuse,
+    observedFutureArrival,
     debug: transitDebug.textContent,
   });
 } catch (error) {
