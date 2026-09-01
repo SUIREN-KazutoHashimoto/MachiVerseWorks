@@ -1,4 +1,4 @@
-# ADR-0006: Route Remote MCP Through the Administration Boundary
+# ADR-0006: Remote MCPをAdministration境界経由で実行する
 
 ## Status
 
@@ -6,44 +6,63 @@ Accepted
 
 ## Context
 
-Phase 20 introduced an in-process administration command boundary with parsing, validation, a bounded command queue, and a single executor that owns authoritative mutations against `SimulationRuntime`.
+Phase 20では、command parsing、validation、bounded command queue、authoritative mutationを直列実行するexecutorからなるAdministration境界を導入した。この境界が`SimulationRuntime`へ対する管理操作の正本である。
 
-Phase 27 needs remote MCP access for AI assistants and operational tooling. A direct MCP-to-Simulation adapter would be shorter initially, but it would create a second mutation path, duplicate validation, weaken deterministic ordering, and make future administration rules diverge between local and remote callers.
+Phase 27では、AI assistantや運用ToolからRemote MCP経由でServerを参照・管理できる必要がある。
 
-Remote access also introduces a larger security surface: authentication, least privilege, destructive-operation confirmation, request bounding, proxy deployment, and prompt-injection-driven tool calls must be considered explicitly.
+MCP ToolからSimulationへ直接接続するadapterは実装量を減らせる一方、次の問題を生む。
+
+- authoritative mutation pathが二重化する
+- Administration側のvalidationを複製する必要がある
+- localとremoteで操作仕様が乖離しやすい
+- deterministicなmutation orderingを弱める
+- 将来の権限・監査・制限を2系統で維持する必要がある
+
+またRemote accessでは、認証、least privilege、destructive operationのconfirmation、request resource制限、reverse proxy deployment、AIからの誤ったTool invocationを明示的に考慮する必要がある。
 
 ## Decision
 
-MCP is a transport and tool-adaptation layer only.
+MCPはtransportおよびTool adaptation layerとしてのみ扱う。
 
-All authoritative MCP reads and mutations that have an administration equivalent are converted to fixed, allowlisted administration commands and sent through `AdminCommandParser`, `AdminCommandQueue`, and `AdminCommandExecutorV2`.
+Administration相当のauthoritative read / mutationは、固定allowlistに基づくAdministration commandへ変換し、`AdminCommandParser`、`AdminCommandQueue`、`AdminCommandExecutorV2`を経由して実行する。
 
-MCP tools do not depend on `SimulationRuntime` and do not expose a generic command executor.
+MCP Toolは`SimulationRuntime`へ直接依存せず、generic Administration command executorも公開しない。
 
-The MCP surface uses three bearer scopes: read, write, and destructive. Tool authorization metadata is enforced during both discovery and invocation. Destructive entity removal also requires an explicit confirmation parameter.
+権限はread / write / destructiveの3scopeへ分離し、MCP discoveryとinvocationの両方で認可する。destructiveなEntity removeにはscopeに加えて明示的な`confirm=true`を要求する。
 
-MCP is disabled by default. The public transport is Streamable HTTP at `/mcp`, using the official C# MCP ASP.NET Core SDK. Remote deployments terminate HTTPS at the application or a trusted reverse proxy/tunnel while keeping any plaintext origin private.
+MCPは既定で無効とし、公式C# MCP ASP.NET Core SDKによるStreamable HTTPを`/mcp`へ公開する。Remote deploymentではapplication自身またはtrusted reverse proxy / tunnelでHTTPSを終端し、plaintext originをuntrusted networkへ公開しない。
 
-The remote surface intentionally excludes server shutdown, world load, arbitrary shell/process execution, arbitrary filesystem access, and arbitrary administration commands.
+Remote surfaceからServer shutdown、world load、任意shell / process実行、任意filesystem access、generic Administration commandを除外する。
+
+大規模Entityの全件列挙はRemote MCP read surfaceへ公開しない。`entity_query`はstable IDによる単一Entity inspectへ限定し、高volume queryが必要になった場合は共有Administration/read-model境界自体へbounded query contractを追加する。
+
+Create / update / remove capabilityはoperation別allowlistで管理し、Administration側に実装されていないoperationをMCP capabilityとして公開しない。
+
+Remote requestがtimeoutまたはcancelされた場合、そのcancellation tokenを`AdminCommandRequest`へ伝播し、まだqueue待ちのcommandはexecutorへ渡さない。Clientへtimeoutを返した後からmutationだけが遅延適用される状態を許可しない。
 
 ## Consequences
 
 ### Positive
 
-- local console and remote MCP share one authoritative command/validation path
-- simulation mutation ordering remains serialized by the existing bounded queue
-- MCP does not introduce direct dependencies into Simulation domain projects
-- security review can reason about a small explicit remote allowlist
-- read/write/destructive capabilities are discoverable according to caller scope
-- future administration validation improvements automatically apply to MCP
+- Local ConsoleとRemote MCPが1つのauthoritative command / validation pathを共有できる
+- Simulation mutation orderingを既存bounded queueで直列化できる
+- Simulation domain projectへMCP依存を持ち込まない
+- Remote security reviewの対象を明示的な小さいTool / operation allowlistへ限定できる
+- read / write / destructive capabilityをcaller scopeに応じてdiscovery段階から制御できる
+- Administration validationの改善がRemote MCPにも適用される
+- timeoutしたqueued mutationの遅延実行を防止できる
+- read credentialからの無制限Entity全件formattingを防止できる
 
 ### Negative
 
-- MCP result shape is constrained by the text-oriented Phase 20 administration results
-- some operations require quoting/translation between structured MCP arguments and administration command tokens
-- high-volume data export is intentionally unsuitable for this interface
-- pre-shared bearer credentials require external rotation and secret management
+- MCP resultはPhase 20 Administrationのtext-oriented result形状に影響される
+- structured MCP argumentとAdministration tokenの間にtranslation / quotingが必要になる
+- 大量データexportには適さない
+- pre-shared bearer credentialのrotationとsecret管理をdeployment側で行う必要がある
+- operation allowlistをAdministration capability変更時に同期する必要がある
 
 ## Follow-up
 
-If a future phase requires richer structured administration responses, evolve the shared Administration boundary itself rather than letting MCP bypass it. If OAuth/OIDC is later required, replace the credential authentication layer while preserving the same authorization policies and tool-to-Administration mapping.
+将来よりrichなstructured Administration responseやbounded Entity検索が必要になった場合、MCPだけに専用のSimulation accessを追加せず、共有Administration / read-model境界そのものを拡張する。
+
+OAuth / OIDCが必要になった場合はcredential authentication layerを置き換えてよいが、read / write / destructive policyおよびTool→Administration mappingは維持する。
