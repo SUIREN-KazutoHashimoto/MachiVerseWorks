@@ -108,7 +108,8 @@ public sealed record EconomyCheckpoint(
     WaterSewerCheckpoint? WaterSewer = null,
     GasCheckpoint? Gas = null,
     OpticalCheckpoint? Optical = null,
-    RadioCheckpoint? Radio = null);
+    RadioCheckpoint? Radio = null,
+    WorldEnvironmentCheckpoint? WorldEnvironment = null);
 
 public readonly record struct SimulationCompanyCheckpoint(
     CompanyId Id,
