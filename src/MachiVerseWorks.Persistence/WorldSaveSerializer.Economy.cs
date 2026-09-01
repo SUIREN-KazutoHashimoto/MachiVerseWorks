@@ -16,6 +16,7 @@ public static partial class WorldSaveSerializer
         ValidatePowerCheckpointWithinLimits(economy.Power, limits);
         ValidateWaterSewerCheckpointWithinLimits(economy.WaterSewer, limits);
         ValidateGasCheckpointWithinLimits(economy.Gas, limits);
+        ValidateOpticalCheckpointWithinLimits(economy.Optical, limits);
     }
 
     private static void ValidateLogisticsCheckpointWithinLimits(LogisticsCheckpoint? logistics, WorldSaveLimits limits)
@@ -59,5 +60,15 @@ public static partial class WorldSaveSerializer
         ValidateCount(gas.ImportTerminals.Count, limits.MaximumBuildingCount, "GasImportTerminals");
         ValidateCount(gas.Storages.Count, limits.MaximumBuildingCount, "GasStorages");
         ValidateCount(gas.ServicePoints.Count, limits.MaximumBuildingCount, "GasServicePoints");
+    }
+
+    private static void ValidateOpticalCheckpointWithinLimits(OpticalCheckpoint? optical, WorldSaveLimits limits)
+    {
+        if (optical is null) return;
+        ValidateCount(optical.Nodes.Count, limits.MaximumRoadNodeCount, "OpticalNodes");
+        ValidateCount(optical.FiberCables.Count, limits.MaximumRoadSegmentCount, "FiberCables");
+        ValidateCount(optical.Equipment.Count, limits.MaximumBuildingCount, "OpticalEquipment");
+        ValidateCount(optical.Backhauls.Count, limits.MaximumBuildingCount, "OpticalBackhauls");
+        ValidateCount(optical.Demands.Count, limits.MaximumBuildingCount, "OpticalDemands");
     }
 }
