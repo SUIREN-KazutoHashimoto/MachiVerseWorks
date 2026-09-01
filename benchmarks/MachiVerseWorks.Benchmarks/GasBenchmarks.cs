@@ -61,14 +61,14 @@ public class DeliveredGasBenchmarks
         _world.CreateLane(segment, LaneDirection.Forward, 0, speedLimitMetersPerSecond: 20d);
         var supplierAccess = _world.CreateRoadAccessPoint(segment, 0.02d, supplierBuilding, mode: RoadAccessMode.Motor);
         var destinationAccess = _world.CreateRoadAccessPoint(segment, 0.98d, destinationBuilding, mode: RoadAccessMode.Motor);
-        var supplierCompany = _world.CreateCompany(IndustrySector.Transport, 100_000_000d, 0d);
+        var supplierCompany = _world.CreateCompany(IndustrySector.Transport, 100_000_000, 0d);
         var supplier = _world.CreateEstablishment(supplierCompany, buildingId: supplierBuilding);
         var gas = _world.CreateCommodity(CommodityKind.Gas);
         _world.ConfigureInventory(supplier, gas, supplierAccess, InventoryRole.Supplier, capacity: InventoryCount * 20d, initialQuantity: InventoryCount * 10d);
 
         for (var index = 0; index < InventoryCount; index++)
         {
-            var company = _world.CreateCompany(IndustrySector.Services, 100_000d, 0d);
+            var company = _world.CreateCompany(IndustrySector.Services, 100_000, 0d);
             var establishment = _world.CreateEstablishment(company, buildingId: destinationBuilding);
             _world.ConfigureInventory(establishment, gas, destinationAccess, InventoryRole.Consumer, capacity: 20d, initialQuantity: 0d, reorderPoint: 5d, targetQuantity: 10d, dailyConsumptionUnits: 1d);
             _world.CreateDeliveredGasServicePoint(establishment, gas, 1d, destinationBuilding);
