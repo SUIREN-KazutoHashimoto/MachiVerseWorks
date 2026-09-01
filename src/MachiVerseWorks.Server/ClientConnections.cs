@@ -203,6 +203,8 @@ internal sealed class ClientConnection : IDisposable
                 WaterSewerSnapshotMessage waterSewer => WaterSewerProtocolCodec.Serialize(waterSewer, version),
                 GasSnapshotMessage gas => GasProtocolCodec.Serialize(gas, version),
                 OpticalSnapshotMessage optical => OpticalProtocolCodec.Serialize(optical, version),
+                RadioSnapshotMessage radio => RadioProtocolCodec.Serialize(radio, version),
+                SpectrumSnapshotMessage spectrum => RadioProtocolCodec.Serialize(spectrum, version),
                 InspectPersonMessage or PopulationStatisticsMessage or PersonDebugMessage => PopulationProtocolCodec.Serialize(message, version),
                 _ => ProtocolCodec.Serialize(message, version),
             };
