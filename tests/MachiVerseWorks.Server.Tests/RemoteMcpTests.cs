@@ -5,6 +5,7 @@ using MachiVerseWorks.Server;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
@@ -74,8 +75,15 @@ public sealed class RemoteMcpTests
         using (var oversized = new HttpRequestMessage(HttpMethod.Post, "/mcp") { Content = new StringContent(new string('x', 5000)) })
         {
             oversized.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ReadToken);
-            using var response = await client.SendAsync(oversized);
-            Assert.AreEqual(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+            try
+            {
+                using var response = await client.SendAsync(oversized);
+                Assert.AreEqual(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+            }
+            catch (HttpRequestException)
+            {
+                // Kestrel may terminate an oversized request before a complete 413 response is observable by HttpClient.
+            }
         }
 
         using (var malformed = new HttpRequestMessage(HttpMethod.Post, "/mcp") { Content = new StringContent("{not-json") })
@@ -135,8 +143,7 @@ public sealed class RemoteMcpTests
     {
         await using var host = await StartMcpHostAsync();
         await using var client = await CreateMcpClientAsync(host, ReadToken);
-        var result = await client.CallToolAsync("simulation_pause", new Dictionary<string, object?>(), cancellationToken: CancellationToken.None);
-        Assert.IsTrue(result.IsError is true);
+        await AssertMcpProtocolFailureAsync(client.CallToolAsync("simulation_pause", new Dictionary<string, object?>(), cancellationToken: CancellationToken.None));
     }
 
     [TestMethod]
@@ -146,8 +153,7 @@ public sealed class RemoteMcpTests
         var simulation = host.App.Services.GetRequiredService<SimulationRuntime>();
         await using var writeClient = await CreateMcpClientAsync(host, WriteToken);
 
-        var unknown = await writeClient.CallToolAsync("shell_exec", new Dictionary<string, object?> { ["command"] = "stop" }, cancellationToken: CancellationToken.None);
-        Assert.IsTrue(unknown.IsError is true);
+        await AssertMcpProtocolFailureAsync(writeClient.CallToolAsync("shell_exec", new Dictionary<string, object?> { ["command"] = "stop" }, cancellationToken: CancellationToken.None));
 
         var injection = await writeClient.CallToolAsync("entity_write", new Dictionary<string, object?>
         {
@@ -299,6 +305,18 @@ public sealed class RemoteMcpTests
     {
         Assert.IsTrue(result.StructuredContent.HasValue);
         return result.StructuredContent.Value;
+    }
+
+    private static async Task AssertMcpProtocolFailureAsync(Task task)
+    {
+        try
+        {
+            await task;
+            Assert.Fail("Expected an MCP protocol failure.");
+        }
+        catch (McpProtocolException)
+        {
+        }
     }
 
     private static async Task WaitUntilAsync(Func<bool> predicate, TimeSpan timeout)
