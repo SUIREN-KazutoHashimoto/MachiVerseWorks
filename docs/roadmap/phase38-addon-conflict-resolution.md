@@ -2,14 +2,17 @@
 
 この文書は、Simulation Roadmap Phase 38 **Extension Platform** を補足する詳細設計・検討資料です。進捗状態やTask IDの正本ではありません。
 
-- Simulation / Server / Save / Protocol / package / dependency / conflict等の正式な実装計画: [`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md) Phase 38
-- Web ClientのView extension、Addon Manager UI、表示・操作、localization等の正式な実装計画: [`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)
+正式な実装計画は責務ごとに分離します。
+
+- Simulation / Server / Save / Protocol / package / dependency / conflict rule等: [`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md) Phase 38
+- read-only View extension、model / material / rendering layer / Inspector表示、localization等: [`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)
+- Addon install / enable / disable / update / settings / trust / conflict解決等の操作UI: [`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md) Phase 5
 
 Phase 38は、単なるsolver差し替え機構ではなく、MachiVerseWorksをAddon-firstで拡張していくための公開Extension Platformとして設計する。小規模で独立した機能は原則Addonとして実装し、Core変更は汎用概念・安定したExtension Point・Save / Protocol / Security / Performance等の基盤変更に限定する。
 
 ## 開発方針
 
-新しい機能を実装する際は、まずAddonとして表現できるかを検討する。
+新しい機能を実装するときは、まずAddonとして表現できるかを検討する。
 
 ```text
 新機能
@@ -32,11 +35,9 @@ Coreへ直接追加するのは、特定機能そのものではなく、複数A
 
 ## Addon分類
 
-少なくとも以下の3種類を正式な利用モデルとして扱う。
-
 ### Content Addon
 
-既存の汎用概念を組み合わせて、新しいコンテンツを追加する。
+既存の汎用概念を組み合わせて新しいcontentを追加する。
 
 例:
 
@@ -62,31 +63,43 @@ Replacement AddonはCore内部を書き換えず、versionedなExtension Point�
 
 ### View Addon
 
-Simulation semanticsを変えず、見た目・情報表示・操作UIを拡張または置換する。
+Simulation semanticsを変えず、**read-onlyな視覚表現**を拡張または置換する。
 
 例:
 
 - 車両3D model差し替え
 - Building model / material差し替え
 - Rendering theme
-- Map layer / overlay
-- Inspector / Panel / Tool追加
+- read-only map layer
+- Inspector section
+- read-only panel
 
-View overrideとSimulation replacementは別契約として扱う。公開Extension contractの共通基盤はSimulation Phase 38側で定義し、Web Client側のresolver / layer / panel / tool等の実装はView Roadmapで管理する。
+View AddonはSimulation stateを変更するcommandを提供しない。View overrideとSimulation replacementは別契約として扱う。
+
+### Management Addon
+
+World / City / Server / Addon configuration等へ明示的な操作を追加する場合はView AddonではなくManagement Addon / Management contributionとして扱う。
+
+例:
+
+- Management command tool
+- Addon settings editor
+- custom build / edit tool
+- privileged operation panel
+
+Management contributionは必ずserver-authoritative command / Extension Platform lifecycle境界を通り、read-only View moduleへmutation責務を持ち込まない。
 
 ## Public Extension API
 
 公式AddonとCommunity Addonは同じPublic Extension APIだけを使用する。公式Addon専用の内部APIアクセスを設けない。
 
-Addonは `MachiVerseWorks.Simulation.Internal.*` 等の内部namespaceへ依存せず、公開された `MachiVerseWorks.Extensions.*` / `MachiVerseWorks.PublicApi.*` 相当の境界だけを参照する。
+Addonは`MachiVerseWorks.Simulation.Internal.*`等の内部namespaceへ依存せず、公開された`MachiVerseWorks.Extensions.*` / `MachiVerseWorks.PublicApi.*`相当の境界だけを参照する。
 
 将来的にCIで内部namespaceへのAddon依存を検出・拒否できるようにする。
 
 ## Extension Lifecycle / Hooks
 
-Addonのライフサイクルとイベント境界をversioned public APIとして提供する。
-
-少なくとも以下を扱えるようにする。
+Addonのライフサイクルとevent境界をversioned public APIとして提供する。
 
 - discovery
 - validation
@@ -102,18 +115,14 @@ Simulationに影響するHook / Eventはdeterministicな順序を持ち、同じ
 
 ## View Extension Points
 
-Web / Rendering層では少なくとも以下を拡張可能にする。
+read-only View / Rendering層では少なくとも以下を拡張可能にする。
 
 - model override / resolver
 - material / texture override
 - rendering layer
-- map overlay
+- read-only map layer
 - inspector section
-- panel
-- tool
-- command / menu contribution
-
-例:
+- read-only panel
 
 ```text
 vehicle.car.default
@@ -127,7 +136,20 @@ View Addon realistic-japanese-cars
 
 View resource IDはstable IDとして扱い、Addonがfilesystem pathへ直接依存しないようにする。
 
-これらのWeb Client実装・描画・UX・performanceはView Roadmapの責務とする。Simulation Phase 38はView Addonを安全に識別・配布・validationする共通Extension contractを提供する。
+View extensionはObservation Gatewayから得たauthoritative observationだけを利用し、View側で意味的stateを生成しない。
+
+## Management Extension Points
+
+操作系はManagement側へ分離する。
+
+- command / menu contribution
+- editor tool
+- settings form
+- install / enable / disable / update action
+- conflict resolution action
+- Developer Mode action
+
+Management extensionはView componentを表示用に再利用できるが、mutation clientをView moduleへ注入しない。
 
 ## Extension Settings / Configuration
 
@@ -138,7 +160,9 @@ Addon固有設定をCore設定と衝突しないnamespace付きconfigurationと�
 - restart-required設定とruntime変更可能設定の区別
 - UIへ公開可能なstructured metadata
 
-設定のauthoritative schema / validationはExtension Platform側、実際の設定画面はView Roadmap側の責務とする。
+authoritative schema / validation / apply ruleはExtension Platform側、**設定変更UIはManagement Roadmap Phase 5**の責務とする。
+
+read-only Viewが表示用theme等のView-local preferenceを持つ場合は、Simulation / Extension authoritative settingと明確に区別する。
 
 ## Enable / Disable / Failure Isolation
 
@@ -162,8 +186,6 @@ Incompatible
 
 Repositoryをinstall unitにせず、Addon packageを配布・installation unitとする。
 
-推奨package形式:
-
 ```text
 example.pizza-1.4.0.mvaddon
 ├─ manifest.json
@@ -175,9 +197,7 @@ example.pizza-1.4.0.mvaddon
 └─ LICENSE
 ```
 
-`.mvaddon` はzip系archiveとして実装可能だが、format version / manifest / checksum / signature metadataを持つ独立した公開契約とする。
-
-Repository / Addon / Package / Versionは別概念として扱う。
+`.mvaddon`はzip系archiveとして実装可能だが、format version / manifest / checksum / signature metadataを持つ独立した公開契約とする。
 
 ```text
 Git Repository ≠ Addon ≠ Package ≠ Release Version
@@ -227,11 +247,11 @@ Addonが要求する能力をmanifestで明示する。
 - `simulation.replace`
 - `view.model.override`
 - `view.layer.register`
-- `view.panel.register`
+- `management.tool.register`
 
-Install / Enable時にPublisher・requested capability・code/data-only区分を表示できるstructured metadataを提供する。
+Install / Enable時にPublisher・requested capability・code / data-only区分を表示できるstructured metadataを提供する。
 
-Data-only AddonとCode Addonを分け、Code Addonは任意コード実行能力を持ち得る非sandbox extensionであることを明示する。ユーザー向けtrust表示はView Roadmapで扱う。
+Data-only AddonとCode Addonを分け、Code Addonは任意コード実行能力を持ち得る非sandbox extensionであることを明示する。**trust表示と承認操作はManagement Roadmap Phase 5**で扱う。
 
 ## Extension Point Contract
 
@@ -247,8 +267,9 @@ Extension Pointは少なくとも以下のmodeを持つ。
 simulation.transport.movement-provider  Single
 simulation.radio.propagation-solver     Single
 view.model.override                     Single/Priority
-view.overlay                            Multiple
-view.panel                              Multiple
+view.layer                              Multiple
+view.inspector-section                  Multiple
+management.tool                         Ordered Multiple
 simulation.event-listener               Ordered Multiple
 content.establishment                   Multiple
 ```
@@ -292,7 +313,7 @@ vehicle.car.default
 4. Core Default
 ```
 
-filesystem / repository列挙順へ依存しない。競合情報の生成・解決ruleはSimulation Phase 38、競合理由や解決候補を表示するUIはView Roadmapで扱う。
+filesystem / repository列挙順へ依存しない。競合情報の生成・validation・provider selection ruleはSimulation Phase 38、**競合理由・候補の表示とユーザーによる解決操作はManagement Roadmap Phase 5**で扱う。
 
 ## Integration Addon
 
@@ -323,17 +344,19 @@ save
 
 Saveには必要なAddon ID / version compatibility情報を保持する。
 
-missing / incompatible Addonがある場合は、暗黙にAddon stateを破棄せず、`Required by Save` / `Missing` / `Incompatible` として明示する。
+missing / incompatible Addonがある場合は、暗黙にAddon stateを破棄せず、`Required by Save` / `Missing` / `Incompatible`として明示する。
 
-Saveの正本契約は [`../specifications/save-data.md`](../specifications/save-data.md) と整合させる。
+Saveの正本契約は[`../specifications/save-data.md`](../specifications/save-data.md)と整合させる。
 
-## Protocol Boundary
+## Protocol / Observation Boundary
 
 Extension固有wire typeをCore Protocol namespaceへ無制限に追加しない。Extension message / payloadはversioned envelope・namespace等の公開境界を通し、Addon同士のwire type衝突を避ける。
 
-翻訳済み文字列はProtocol / Save / Simulation正本へ保存せず、stable code / structured parameterをView側でlocalizeする。
+read-only View Addonへ提供する情報はObservation Gatewayの原則に従う。Simulation semanticsをView Addon側で計算させない。
 
-Protocolの正本契約は [`../architecture/protocol.md`](../architecture/protocol.md) と整合させる。
+翻訳済み文字列はProtocol / Save / Simulation正本へ保存せず、stable code / structured parameterをClient presentation側でlocalizeする。
+
+Protocolの正本契約は[`../architecture/protocol.md`](../architecture/protocol.md)、Observation境界は[`../architecture/observation-gateway.md`](../architecture/observation-gateway.md)と整合させる。
 
 ## Official Addon Repository Strategy
 
@@ -353,15 +376,11 @@ MachiVerseWorks-Addons
    └─ japanese-buildings/
 ```
 
-`MachiVerseWorks-Addons` は公式Addon monorepoとして運用し、各Addonは独立manifest / version / package / releaseを持つ。
-
-1 repository内に複数Addonが存在しても、build / test / package / release単位はAddonごとに分離できるようにする。
+`MachiVerseWorks-Addons`は公式Addon monorepoとして運用し、各Addonは独立manifest / version / package / releaseを持つ。
 
 ## Core CloneとOfficial Addon
 
 開発環境ではCore repositoryから公式Addon monorepoを取得できるようにする。
-
-推奨構成:
 
 ```text
 MachiVerseWorks/
@@ -371,20 +390,13 @@ MachiVerseWorks/
    └─ official/   # Git submodule -> MachiVerseWorks-Addons
 ```
 
-標準developer cloneは以下を推奨する。
+標準developer cloneは次を推奨する。
 
 ```bash
 git clone --recurse-submodules <repo>
 ```
 
-setup scriptも提供し、plain clone後でもofficial addon submoduleを初期化できるようにする。
-
-Runtime起動時にnetwork経由でGit cloneする設計にはしない。
-
-```text
-Git / Setup → Official Addon取得
-Runtime     → 既に存在するAddonをvalidation / load
-```
+setup scriptも提供し、plain clone後でもofficial addon submoduleを初期化できるようにする。Runtime起動時にnetwork経由でGit cloneする設計にはしない。
 
 ## Release Distribution
 
@@ -396,9 +408,6 @@ dist/
 ├─ web/
 └─ extensions/
    └─ official/
-      ├─ pizza/
-      ├─ weather/
-      └─ ...
 ```
 
 Official AddonもCommunity Addonも同じPublic Extension API・manifest・package format・conflict ruleを使用する。
@@ -436,8 +445,12 @@ User-facing Addon Managerでは少なくとも以下を扱う。
 - conflict status
 - publisher / trust information
 - requested capabilities
+- Addon settings
+- Developer Mode
 
-Addon Managerが利用するsource / dependency / validation / status APIはSimulation Phase 38側のExtension Platform契約として整備し、**画面・操作UX・表示performanceはView Roadmap側**で管理する。
+source / dependency / validation / status / lifecycle APIはSimulation Phase 38側のExtension Platform契約として整備し、**画面・操作UX・trust確認・設定変更はManagement Roadmap Phase 5**で管理する。
+
+Addonのread-only状態を表示するためにView共通componentを再利用することはできるが、install / enable等の操作をView Roadmapへ入れない。
 
 ## Install Sources
 
@@ -454,14 +467,6 @@ GitHub Release等のURLからpackageを取得する。Repository sourceを直接
 ### Addon Registry / Source
 
 将来的にOfficial / Community source indexを登録できるようにする。
-
-```text
-Addon Sources
-
-Official
-Community A
-Community B
-```
 
 Source indexはAddon ID / version / package URL / checksum / publisher metadata等を返す。
 
@@ -486,45 +491,46 @@ Food Industry Framework
 Addon developer向けにpackage生成なしでlocal directoryをlinkできるDeveloper Modeを提供する。
 
 ```text
-Addon Manager
+Management Addon Manager
 → Developer Mode
 → Link Development Addon
 → /path/to/MyAddon/
 ```
 
-通常利用では`.mvaddon`をinstallし、local directory loadは明示的Developer Modeに限定する。development loader / package validationはExtension Platform側、Developer Mode UIはView Roadmap側で扱う。
+通常利用では`.mvaddon`をinstallし、local directory loadは明示的Developer Modeに限定する。development loader / package validationはExtension Platform側、**Developer Mode操作UIはManagement Roadmap Phase 5**で扱う。
 
 ## Localization
 
-Localizationは旧Phase 38から分離し、現在は [`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md) の **View Phase 5 — Localization** を進捗正本とする。
+Localizationは旧Phase 38から分離し、現在は[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)の **View Phase 10 — Localization** をread-only View側の進捗正本とする。
 
 Extension Platform側は次の言語非依存契約だけを保証する。
 
 - Addonが自身のlocale resourceをpackageへ含められる
 - Core / 他Addonとtranslation key namespaceが衝突しないようAddon ID namespaceを使用する
 - Protocol / Save / Simulationへ翻訳済み表示文字列を持ち込まない
-- stable error code / structured parameterをView側へ渡せる
+- stable error code / structured parameterをClient presentation側へ渡せる
 
-locale selector、fallback、number / date / unit / plural formatting、translation key validation、追加locale E2EはView Roadmapで管理する。
+ViewのInspector等の表示localizationはView Roadmap、Addon Manager / settings / trust / conflict UI固有文言はManagement Roadmapで扱う。共通i18n resource / formatterの再利用は許可する。
 
 ## Roadmap ownership
-
-この補足資料に含まれる設計要素は、正式Task化するときに次の責務へ分割する。
 
 | 項目 | 正本Roadmap |
 | --- | --- |
 | Public Extension API / lifecycle / hook / deterministic ordering | Simulation Roadmap Phase 38 |
 | manifest / package / dependency / capability / permission contract | Simulation Roadmap Phase 38 |
-| enable / disable / failure isolation / compatibility status | Simulation Roadmap Phase 38 |
-| Save namespace / Protocol extension boundary | Simulation Roadmap Phase 38 |
+| enable / disable / failure isolation / compatibility state | Simulation Roadmap Phase 38 |
+| Save namespace / Protocol / Observation extension boundary | Simulation Roadmap Phase 38 |
 | Conflict Resolver / provider selection / Integration Addon contract | Simulation Roadmap Phase 38 |
-| Official Addon development integration / release bundle contract | Simulation Roadmap Phase 38 / Distributionとの依存を明記 |
-| model / material / rendering layer / overlay extension implementation | View Roadmap |
-| Inspector / Panel / Tool / command contribution UI | View Roadmap |
-| Addon Manager / trust / conflict / Developer Mode UI | View Roadmap |
-| localization / locale resource UI | View Roadmap Phase 5 |
+| Official Addon development integration / release bundle contract | Simulation Roadmap Phase 38 / Distribution依存 |
+| model / material / rendering layer / read-only View extension | View Roadmap |
+| read-only Inspector section / panel | View Roadmap |
+| View localization | View Roadmap Phase 10 |
+| Management command / editor tool contribution | Management Roadmap |
+| Addon Manager / install / update / enable / disable | Management Roadmap Phase 5 |
+| trust / capability / conflict resolution UI | Management Roadmap Phase 5 |
+| Addon settings / Developer Mode UI | Management Roadmap Phase 5 |
 
-旧文書に存在した `P38-020` 以降のTask更新案は、現在のSimulation / View Roadmap分離前の案であり、**Task IDの正本として使用しない**。必要な内容は着手時に各Roadmapへ小さなTaskとして分解する。
+旧文書に存在した`P38-020`以降のTask更新案はSimulation / View / Management分離前の案であり、**Task IDの正本として使用しない**。必要な内容は着手時に各Roadmapへ小さなTaskとして分解する。
 
 ## 完了イメージ
 
@@ -533,17 +539,16 @@ Extension Platform全体として、最終的に次を成立させる。
 - MachiVerseWorks Coreを変更せず、Public Extension APIだけで実用Addonを作成できる。
 - Content Addonで新規Building / Establishment / Industry等を追加できる。
 - Replacement AddonでSimulation provider / solver / ruleを安全に差し替えられる。
-- View Addonでmodel / material / overlay / panel / inspector / toolを追加・置換できる。
+- View Addonでread-onlyなmodel / material / layer / inspectorを追加・置換できる。
+- Management Addon / Addon Managerで明示的な操作を安全なcommand境界から追加できる。
 - Addon固有Save Data / Protocol payload / settings / localeがstable ID namespaceで衝突しない。
 - Official AddonとCommunity Addonが同じPublic Extension API・package format・trust / conflict ruleに従う。
 - `.mvaddon`をFile / URL / Sourceからinstallできる。
-- AddonはCore installationと分離したUser Dataへ保存でき、Core upgrade後も保持できる。
 - dependency / incompatible version / conflict / missing required AddonをSimulation開始前に検出できる。
 - 複数Extensionが同じ排他的Extension Pointを要求した場合、暗黙load orderで勝者を決めない。
 - View overrideは明示priorityでdeterministicに解決できる。
 - Ordered Hook / Eventは同じAddon構成からdeterministicな順序を得る。
 - Integration Addonにより独立Addon同士を本体変更なしで連携できる。
-- Official Addon sourceをCore development checkoutから取得でき、releaseではCoreと対応するOfficial Addonがbundleされる。
-- 少なくとも1つの実用sample addonでSimulation拡張、View拡張、Save Data、設定、localizationを横断確認できる。
+- 少なくとも1つの実用sample addonでSimulation拡張、read-only View拡張、Management操作、Save Data、設定、localizationを横断確認できる。
 
 Phase 38完了後の通常機能開発では、「まずAddonで実装し、不足する汎用Extension PointだけをCoreへ追加する」ことを標準開発フローとする。
