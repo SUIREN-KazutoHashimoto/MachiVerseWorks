@@ -19,6 +19,8 @@ import { WorldView } from './world-view.ts';
 import { ECONOMY_SNAPSHOT_MESSAGE_TYPE, type EconomyProtocolMessage, type EconomySnapshotMessage } from './economy-protocol.ts';
 import { LogisticsDebugOverlay } from './logistics-debug.ts';
 import { LOGISTICS_SNAPSHOT_MESSAGE_TYPE, type LogisticsProtocolMessage, type LogisticsSnapshotMessage } from './logistics-protocol.ts';
+import { PowerDebugOverlay } from './power-debug.ts';
+import { POWER_SNAPSHOT_MESSAGE_TYPE, type PowerProtocolMessage, type PowerSnapshotMessage } from './power-protocol.ts';
 
 export class Application {
   private readonly localizer = initializeLocalization();
@@ -35,6 +37,7 @@ export class Application {
   private readonly railwayOperations: RailwayOperationsLayer;
   private readonly ui: ClientUi;
   private readonly logisticsDebug: LogisticsDebugOverlay;
+  private readonly powerDebug: PowerDebugOverlay;
   private readonly connection: MachiVerseConnection;
   private animationFrame = 0;
   private lastSubscriptionAt = Number.NEGATIVE_INFINITY;
@@ -51,6 +54,7 @@ export class Application {
     this.railwayOperations = new RailwayOperationsLayer(this.view.scene);
     this.ui = new ClientUi(host, this.localizer, performanceMetrics !== null);
     this.logisticsDebug = new LogisticsDebugOverlay(host);
+    this.powerDebug = new PowerDebugOverlay(host);
     this.connection = new MachiVerseConnection(
       this.config.serverUrl,
       { minimumDelayMs: this.config.reconnectMinimumDelayMs, maximumDelayMs: this.config.reconnectMaximumDelayMs },
@@ -73,6 +77,7 @@ export class Application {
           this.ui.clearMultimodalTransit();
           this.ui.clearEconomy();
           this.logisticsDebug.clear();
+          this.powerDebug.clear();
           this.ui.setProtocol(null);
         },
         onHelloAck: (version) => { this.ui.clearError(); this.ui.setProtocol(version); },
@@ -97,6 +102,7 @@ export class Application {
     this.railway.dispose();
     this.railwayOperations.dispose();
     this.logisticsDebug.dispose();
+    this.powerDebug.dispose();
     this.view.dispose();
     this.ui.dispose();
   }
@@ -137,7 +143,7 @@ export class Application {
     this.lastPerformanceUiAt = now; this.ui.setPerformanceMetrics(metrics.snapshot());
   }
 
-  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage | MultimodalTransitProtocolMessage | EconomyProtocolMessage | LogisticsProtocolMessage): void {
+  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage | MultimodalTransitProtocolMessage | EconomyProtocolMessage | LogisticsProtocolMessage | PowerProtocolMessage): void {
     switch (message.type) {
       case MessageType.AgentSpawn: this.applyAgentSpawn(message); return;
       case MessageType.AgentUpdate: this.applyAgentUpdate(message); return;
@@ -157,6 +163,7 @@ export class Application {
       case MultimodalTransitMessageType.MultimodalTransitSnapshot: this.applyMultimodalTransit(message); return;
       case ECONOMY_SNAPSHOT_MESSAGE_TYPE: this.applyEconomy(message); return;
       case LOGISTICS_SNAPSHOT_MESSAGE_TYPE: this.applyLogistics(message); return;
+      case POWER_SNAPSHOT_MESSAGE_TYPE: this.applyPower(message); return;
       case MessageType.Hello:
       case MessageType.HelloAck:
       case MessageType.SubscribeVolume:
@@ -177,6 +184,7 @@ export class Application {
   private applyMultimodalTransit(message: MultimodalTransitSnapshotMessage): void { this.ui.setMultimodalTransit(message); }
   private applyEconomy(message: EconomySnapshotMessage): void { this.ui.setEconomy(message); }
   private applyLogistics(message: LogisticsSnapshotMessage): void { this.logisticsDebug.apply(message); }
+  private applyPower(message: PowerSnapshotMessage): void { this.powerDebug.apply(message); }
   private updateEntityAudioPosition(message: AgentStateMessage): void { if (this.audio.hasEntityEmitters(message.agentId)) this.audio.updateEntityPosition(message.agentId, { x: message.x, y: message.y, z: message.z }); }
 
   private handleProtocolError(message: ProtocolErrorMessage): void {
