@@ -8,6 +8,8 @@ SDK / runtime の version は個別に手入力して管理せず、Repository �
 - Node.js: [`src/web/.node-version`](../../src/web/.node-version)
 - npm dependency: [`src/web/package-lock.json`](../../src/web/package-lock.json)
 
+実装計画はSimulation側[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)、View側[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)を正本とします。
+
 ## Windows 実機での推奨セットアップ
 
 Windows では `scripts/setup-dev.bat` と `scripts/run-dev.bat` を推奨入口とします。
@@ -150,15 +152,19 @@ Web Client の既定 Server URL は `ws://127.0.0.1:5080/ws` なので、既定�
 
 別 Server へ接続する場合は Web Client 起動時に `VITE_SERVER_URL` を指定します。
 
-## Phase 6 E2E の一括確認
+## End-to-End のローカル確認
 
-Chrome または Chromium が `PATH` にある環境では、Repository root から次の1コマンドで Phase 6 scenario を再現できます。
+実Server / Protocol / Web Clientを横断するE2Eの正規一覧は[`../../.github/workflows/e2e.yml`](../../.github/workflows/e2e.yml)です。現在はCore PoCからRadio / Spectrumまでの実装済み主要domainをmatrixで管理しています。
+
+各scenarioは`script`欄に対応する`bash scripts/run-phaseXX-e2e.sh`をローカルでも実行できます。変更したdomainに対応するscenarioを選び、無関係な古いPhase scriptを一律に実行する運用にはしません。
+
+Core / Browser基盤だけを確認したい場合は、Chrome または Chromium が `PATH` にある環境で次を実行できます。
 
 ```bash
 bash scripts/run-phase6-e2e.sh
 ```
 
-この script は 1,000 / 10,000 / 100,000 Agent の Server を順に起動し、実 Browser で接続、表示 state、camera 由来 subscription、remove、再接続、近傍配信、Server/Client metrics を検証します。詳細は [`e2e-poc.md`](e2e-poc.md) を参照してください。
+このscenarioの詳細は[`e2e-poc.md`](e2e-poc.md)を参照してください。
 
 ## PR 前の確認
 
@@ -176,13 +182,9 @@ npm test
 npm run build
 ```
 
-Phase 6 以降の End-to-End 変更では、加えて Repository root から次を実行します。
+Server / Protocol / Browserを変更した場合は、加えて[`../../.github/workflows/e2e.yml`](../../.github/workflows/e2e.yml)の対象domainに対応するE2E scriptを実行します。性能へ影響する変更では[`../../.github/workflows/benchmarks.yml`](../../.github/workflows/benchmarks.yml)の対象benchmarkも確認します。
 
-```bash
-bash scripts/run-phase6-e2e.sh
-```
-
-Repository 内 Markdown link は CI の `repository` job でも検証されます。
+Repository 内 Markdown link は CI の `repository` job でも検証されます。Markdownを移動・改名した場合は特に`python scripts/check-markdown-links.py`で事前確認することを推奨します。
 
 ## Version
 
