@@ -29,8 +29,10 @@ internal sealed class GasFixtureHostedService(SimulationRuntime simulation, ICon
         var supplierBuilding = world.CreateBuilding(new WorldVolume(0d, 20d, 0d, 10d, 30d, 8d), BuildingKind.Industrial);
         var consumerBuilding = world.CreateBuilding(new WorldVolume(395d, 20d, 0d, 405d, 30d, 8d), BuildingKind.Commercial);
         var sourceNode = world.CreateGasNode(new WorldPoint(5d, 15d, 0d), GasNodeKind.Source);
+        var regulatorNode = world.CreateGasNode(new WorldPoint(200d, 20d, 0d), GasNodeKind.Regulator);
         var serviceNode = world.CreateGasNode(new WorldPoint(400d, 25d, 0d), GasNodeKind.Service);
-        _pipelineId = world.CreateGasPipeline(sourceNode, serviceNode, 30d);
+        world.CreateGasPipeline(sourceNode, regulatorNode, 30d);
+        _pipelineId = world.CreateGasPipeline(regulatorNode, serviceNode, 30d);
         world.CreateGasSource(sourceNode, 30d);
         world.CreateGasStorage(sourceNode, 100d, 40d, 10d);
         world.CreatePipedGasServicePoint(serviceNode, 12d, buildingId: consumerBuilding);
