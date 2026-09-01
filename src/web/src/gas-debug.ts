@@ -1,4 +1,4 @@
-import { Localizer, initializeLocalization } from './localization.ts';
+import { initializeLocalization, type Localizer } from './localization.ts';
 import { GasFacilityKind, GasOperatingState, GasServiceState, type GasSnapshotMessage } from './gas-protocol.ts';
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
