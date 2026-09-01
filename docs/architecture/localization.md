@@ -2,13 +2,13 @@
 
 MachiVerseWorks は初期段階では日本語を主言語として開発しますが、将来の多言語対応で Simulation / Protocol / Save Data / UI の契約を壊さないよう、最初から言語境界を定義します。
 
-この文書は翻訳作業そのものではなく、国際化（i18n）のアーキテクチャを定めます。Localization機能の実装計画・進捗は [`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md) の **View Phase 5 — Localization** を正本とします。
+この文書は翻訳作業そのものではなく、国際化（i18n）のアーキテクチャを定めます。read-only ViewのLocalization機能の実装計画・進捗は[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)の **View Phase 10 — Localization** を正本とします。将来Management UI固有の文言を実装する場合は[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)へTaskを置き、共通resource / formatting基盤は再利用できる構成とします。
 
 ## 1. 基本原則
 
 - シミュレーション状態は言語に依存させない。
 - Protocol は原則として翻訳済みの表示文字列を送らない。
-- ユーザー向け文言の最終的なローカライズは Web Client が担当する。
+- ユーザー向け文言の最終的なローカライズは Client presentation 層が担当する。
 - 保存データには表示文言ではなく、安定した ID / code / enum / raw value を保存する。
 - 数値、日時、単位、複数形などを文字列結合で組み立てない。
 - Locale は BCP 47 language tag（例: `ja-JP`, `en-US`）で扱う。
@@ -79,15 +79,15 @@ localizedDisplayName
 
 Protocol version と翻訳 resource version は独立して扱えるようにします。
 
-### Web Client
+### View / Management presentation
 
-Web Client が locale 選択、resource lookup、message formatting、数値・日時・単位の地域形式を担当します。
+read-only Viewがlocale選択、resource lookup、message formatting、数値・日時・単位の地域形式を担当します。Management Clientが同じWeb presentation stackを使う場合は共通i18n基盤を再利用できますが、Managementのcommand責務をViewへ持ち込みません。
 
 将来 i18n library を採用する場合も、この責務境界は変更しません。
 
 ## 3. Locale resource
 
-Web Client の locale resource は `src/web/locales/` を入口とします。
+Web presentation の locale resource は `src/web/locales/` を入口とします。
 
 初期段階では `ja-JP` のみを supported locale とし、実際の UI 実装を開始した時点からユーザー向け固定文言を resource key 経由にします。
 
@@ -138,7 +138,7 @@ power.shortage = {deficit} MW不足
 - 速度: m/s など正規化された内部値
 - 電力: W / kW / MW 等へ変換可能な raw value
 
-表示時は Web Client 側で `Intl.NumberFormat`, `Intl.DateTimeFormat` など locale-aware API を利用する方針とします。
+表示時は Web presentation 側で `Intl.NumberFormat`, `Intl.DateTimeFormat` など locale-aware API を利用する方針とします。
 
 小数点、桁区切り、日付順序、12/24時間表記を保存データや Protocol の文字列へ固定しません。
 
@@ -198,9 +198,9 @@ RTL 対応そのものは初期実装の必須要件ではありません。
 
 ## 10. 将来の実装段階
 
-多言語対応を実際に開始するときは、少なくとも次を追加します。
+read-only Viewの多言語対応を実際に開始するときは、少なくとも次を追加します。
 
-1. Web Client の i18n service
+1. Web presentation の i18n service
 2. `ja-JP` resource の正本化
 3. locale selector
 4. browser locale detection
@@ -209,4 +209,4 @@ RTL 対応そのものは初期実装の必須要件ではありません。
 7. resource schema / type safety
 8. 最初の追加 locale
 
-具体的なライブラリ選定は Web Client の実装開始時に行い、この文書では固定しません。これらをTaskへ分解するときは [`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md) を更新します。
+具体的なライブラリ選定は実装開始時に行い、この文書では固定しません。View向けTaskへ分解するときは[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)、Management固有UIへ広げる場合は[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)を更新します。
