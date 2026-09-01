@@ -7,6 +7,9 @@ internal sealed class PowerFixtureHostedService(
     IConfiguration configuration) : BackgroundService
 {
     private GeneratorId _generatorId;
+    private BuildingId _industrialBuildingId;
+    private PowerNodeId _loadNodeId;
+    private ulong _lastDemandCycle = ulong.MaxValue;
     private bool _enabled;
     private bool _seeded;
 
@@ -29,11 +32,18 @@ internal sealed class PowerFixtureHostedService(
             {
                 var tick = simulation.TickCount;
                 var cycle = tick % 90UL;
+                var cycleNumber = tick / 90UL;
                 var target = cycle >= 30UL && cycle < 60UL ? GeneratorOperatingState.Offline : GeneratorOperatingState.Online;
                 simulation.Mutate(world =>
                 {
                     if (_seeded && world.TryGetGeneratorSnapshot(_generatorId, out var generator) && generator.OperatingState != target)
                         world.SetGeneratorOperatingState(_generatorId, target);
+
+                    if (_seeded && cycle >= 10UL && cycle < 20UL && cycleNumber != _lastDemandCycle)
+                    {
+                        world.CreatePowerLoad(_loadNodeId, 0.5d, buildingId: _industrialBuildingId);
+                        _lastDemandCycle = cycleNumber;
+                    }
                     return true;
                 });
             }
@@ -45,13 +55,13 @@ internal sealed class PowerFixtureHostedService(
 
     private void Seed(SimulationWorld world)
     {
-        var industrial = world.CreateBuilding(new WorldVolume(40d, -6d, 0d, 50d, 6d, 8d), BuildingKind.Industrial);
+        _industrialBuildingId = world.CreateBuilding(new WorldVolume(40d, -6d, 0d, 50d, 6d, 8d), BuildingKind.Industrial);
         var generatorNode = world.CreatePowerNode(new WorldPoint(0d, 30d, 0d), PowerNodeKind.GeneratorBus);
         var substation = world.CreatePowerNode(new WorldPoint(25d, 30d, 0d), PowerNodeKind.Substation);
-        var loadNode = world.CreatePowerNode(new WorldPoint(45d, 0d, 0d), PowerNodeKind.Load);
+        _loadNodeId = world.CreatePowerNode(new WorldPoint(45d, 0d, 0d), PowerNodeKind.Load);
         world.CreatePowerLine(generatorNode, substation, 25d);
-        world.CreatePowerLine(substation, loadNode, 15d);
+        world.CreatePowerLine(substation, _loadNodeId, 15d);
         _generatorId = world.CreateGenerator(generatorNode, 20d);
-        world.CreatePowerLoad(loadNode, 12d, buildingId: industrial);
+        world.CreatePowerLoad(_loadNodeId, 12d, buildingId: _industrialBuildingId);
     }
 }
