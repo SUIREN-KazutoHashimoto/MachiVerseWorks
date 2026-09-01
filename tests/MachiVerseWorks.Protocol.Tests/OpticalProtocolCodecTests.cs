@@ -21,6 +21,7 @@ public sealed class OpticalProtocolCodecTests
         CollectionAssert.AreEqual(message.Equipment.ToArray(), restored.Equipment.ToArray());
         CollectionAssert.AreEqual(message.Backhauls.ToArray(), restored.Backhauls.ToArray());
         CollectionAssert.AreEqual(message.Demands.ToArray(), restored.Demands.ToArray());
+        Assert.IsTrue(restored.Demands[0].EstimatedLatencyMilliseconds > 0d);
     }
 
     [TestMethod]
@@ -35,5 +36,5 @@ public sealed class OpticalProtocolCodecTests
         new[] { new ProtocolFiberCable(1, 1, 2, 10d, 4d, 0.4d, true, false) },
         new[] { new ProtocolOpticalEquipment(1, 1, ProtocolOpticalEquipmentKind.Router, 0, 0, 10d, false, true, true, true), new ProtocolOpticalEquipment(2, 2, ProtocolOpticalEquipmentKind.Onu, 42, 0, 10d, true, true, true, true) },
         new[] { new ProtocolOpticalBackhaul(1, 1, 10d, 4d, 0.4d, true, true) },
-        new[] { new ProtocolOpticalDemand(1, 2, ProtocolOpticalDemandKind.Building, 42, 0, 4d, 4d, 4d, ProtocolOpticalQualityState.Healthy, 1) });
+        new[] { new ProtocolOpticalDemand(1, 2, ProtocolOpticalDemandKind.Building, 42, 0, 4d, 4d, 4d, ProtocolOpticalQualityState.Healthy, 1, 1.5d) });
 }
