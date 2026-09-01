@@ -89,7 +89,7 @@ public sealed class PowerSimulationTests
     public void IndustryProductionScalesWithPowerAvailability()
     {
         var world = CreatePowerWorld(generatorCapacity: 5d, lineCapacity: 20d, baseDemand: 10d, out _, out _, out _, out var company);
-        for (var tick = 0; tick < EconomyDefaults.TicksPerEconomicDay; tick++) world.Step();
+        for (ulong tick = 0; tick < EconomyDefaults.TicksPerEconomicDay; tick++) world.Step();
 
         Assert.IsTrue(world.TryGetCompanySnapshot(company, out var companySnapshot));
         Assert.IsTrue(companySnapshot.ProducedUnits > 0d);
