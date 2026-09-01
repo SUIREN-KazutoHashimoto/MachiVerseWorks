@@ -6,7 +6,9 @@ const sourceUrl = (name) => new URL(`../src/${name}`, import.meta.url);
 
 test('View transport exposes observation and inspection requests only', async () => {
   const source = await readFile(sourceUrl('connection.ts'), 'utf8');
-  const publicMethods = [...source.matchAll(/public\s+([A-Za-z0-9_]+)\s*\(/g)].map((match) => match[1]);
+  const publicMethods = [...source.matchAll(/public\s+([A-Za-z0-9_]+)\s*\(/g)]
+    .map((match) => match[1])
+    .filter((name) => name !== 'constructor');
 
   assert.deepEqual(
     publicMethods,
