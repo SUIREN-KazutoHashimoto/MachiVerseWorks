@@ -25,6 +25,7 @@ public static class ServerApplication
         builder.Services.AddHostedService<PowerFixtureHostedService>();
         builder.Services.AddHostedService<WaterSewerFixtureHostedService>();
         builder.Services.AddHostedService<GasFixtureHostedService>();
+        builder.Services.AddHostedService<OpticalFixtureHostedService>();
         builder.Services.AddHostedService<SimulationTickService>();
         builder.Services.AddHostedService<ClientCommandProcessor>();
         builder.Services.AddHostedService<AdminCommandExecutorV2>();
@@ -36,6 +37,7 @@ public static class ServerApplication
         builder.Services.AddHostedService<PowerPublishService>();
         builder.Services.AddHostedService<WaterSewerPublishService>();
         builder.Services.AddHostedService<GasPublishService>();
+        builder.Services.AddHostedService<OpticalPublishService>();
 
         var app = builder.Build();
         app.UseWebSockets(new WebSocketOptions
@@ -84,9 +86,7 @@ public static class ServerApplication
                 return;
             }
             using var socket = await context.WebSockets.AcceptWebSocketAsync();
-            using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-                context.RequestAborted,
-                app.Lifetime.ApplicationStopping);
+            using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, app.Lifetime.ApplicationStopping);
             var handler = context.RequestServices.GetRequiredService<WebSocketSessionHandler>();
             await handler.HandleAsync(socket, linkedCancellation.Token);
         });
