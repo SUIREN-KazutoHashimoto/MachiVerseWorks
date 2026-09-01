@@ -66,7 +66,7 @@ public sealed class WorldEnvironmentProtocolCodecTests
     [TestMethod]
     public void ProtocolBefore217RejectsEnvironmentSnapshot()
     {
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() =>
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
             WorldEnvironmentProtocolCodec.Serialize(CreateMessage(), new ProtocolVersion(2, 16)));
     }
 
