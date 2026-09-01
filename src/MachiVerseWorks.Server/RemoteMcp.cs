@@ -188,7 +188,7 @@ internal sealed class RemoteMcpOptions
     }
 }
 
-internal sealed class RemoteMcpRequestGate(RemoteMcpOptions options)
+internal sealed class RemoteMcpRequestGate(RemoteMcpOptions options) : IDisposable
 {
     private readonly SemaphoreSlim _concurrency = new(options.MaxConcurrentRequests, options.MaxConcurrentRequests);
     private readonly object _rateLock = new();
@@ -218,6 +218,8 @@ internal sealed class RemoteMcpRequestGate(RemoteMcpOptions options)
         lease = new Lease(_concurrency);
         return true;
     }
+
+    public void Dispose() => _concurrency.Dispose();
 
     private sealed class Lease(SemaphoreSlim semaphore) : IDisposable
     {
@@ -378,12 +380,14 @@ internal sealed class RemoteMcpAdminGateway(AdminCommandQueue queue, RemoteMcpOp
         var suffix = "\n... truncated";
         var budget = Math.Max(0, maxBytes - Encoding.UTF8.GetByteCount(suffix));
         var builder = new StringBuilder();
+        var usedBytes = 0;
         foreach (var rune in value.EnumerateRunes())
         {
-            if (Encoding.UTF8.GetByteCount(builder.ToString()) + rune.Utf8SequenceLength > budget) break;
+            if (usedBytes + rune.Utf8SequenceLength > budget) break;
             builder.Append(rune.ToString());
+            usedBytes += rune.Utf8SequenceLength;
         }
-        return builder + suffix;
+        return builder.ToString() + suffix;
     }
 }
 
@@ -399,7 +403,7 @@ internal sealed class RemoteMcpTools
         ["formation"] = "formation", ["railroute"] = "railroute", ["timetable"] = "timetable", ["service"] = "service", ["train"] = "train",
     };
 
-    private static readonly IReadOnlySet<string> MutableEntities = new HashSet<string>(QueryEntities.Keys.Where(static key => key is not "vehicle"), StringComparer.OrdinalIgnoreCase);
+    private static readonly HashSet<string> MutableEntities = new(QueryEntities.Keys.Where(static key => key is not "vehicle"), StringComparer.OrdinalIgnoreCase);
 
     [McpServerTool(Name = "server_status", ReadOnly = true, Destructive = false, UseStructuredContent = true), Description("Read server and authoritative simulation status through the administration command boundary.")]
     public static Task<RemoteMcpResult> ServerStatus(RemoteMcpAdminGateway admin, CancellationToken cancellationToken) => admin.ExecuteAsync("status", cancellationToken);
