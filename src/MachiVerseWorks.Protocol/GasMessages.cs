@@ -7,6 +7,7 @@ public enum ProtocolGasNodeKind : byte
     Storage = 2,
     Distribution = 3,
     Service = 4,
+    Regulator = 5,
 }
 
 public enum ProtocolGasFacilityKind : byte
