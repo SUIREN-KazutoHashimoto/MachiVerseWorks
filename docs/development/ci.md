@@ -18,7 +18,7 @@ Branch protection / Rulesetのrequired checkは **`CI / ci-gate`** を正本と�
 
 ### Repository validation
 
-- 必須Repository fileが存在し空でないこと。Roadmapは`roadmap/SIMULATION_ROADMAP.md`と`roadmap/VIEW_ROADMAP.md`の両方を必須とする
+- 必須Repository fileが存在し空でないこと。Roadmapは`roadmap/SIMULATION_ROADMAP.md`、`roadmap/VIEW_ROADMAP.md`、`roadmap/MANAGEMENT_ROADMAP.md`の3ファイルを必須とする
 - `scripts/check-markdown-links.py`でMarkdown local file linkとheading anchorを検証
 - `global.json` SDK policy
 - `VERSION`の`A.B.C`形式
