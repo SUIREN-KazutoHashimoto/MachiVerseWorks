@@ -27,10 +27,10 @@ public sealed partial class SimulationWorld
         {
             if (formation.Id.Value == 0 || !formationById.TryAdd(formation.Id, formation))
                 throw new ArgumentException($"Train formation ID {formation.Id.Value} is zero or duplicated.", nameof(checkpoint));
-            if (!IsPositiveFinite(formation.LengthMeters)
-                || !IsPositiveFinite(formation.MaximumSpeedMetersPerSecond)
-                || !IsPositiveFinite(formation.MaximumAccelerationMetersPerSecondSquared)
-                || !IsPositiveFinite(formation.ServiceDecelerationMetersPerSecondSquared)
+            if (!IsPositiveFiniteRailwayOperation(formation.LengthMeters)
+                || !IsPositiveFiniteRailwayOperation(formation.MaximumSpeedMetersPerSecond)
+                || !IsPositiveFiniteRailwayOperation(formation.MaximumAccelerationMetersPerSecondSquared)
+                || !IsPositiveFiniteRailwayOperation(formation.ServiceDecelerationMetersPerSecondSquared)
                 || formation.Capacity <= 0)
                 throw new ArgumentException($"Train formation {formation.Id.Value} contains invalid physical values.", nameof(checkpoint));
         }
@@ -40,7 +40,7 @@ public sealed partial class SimulationWorld
         {
             if (route.Id.Value == 0 || !routeById.TryAdd(route.Id, route))
                 throw new ArgumentException($"Railway route ID {route.Id.Value} is zero or duplicated.", nameof(checkpoint));
-            if (route.TrackSegmentIds is null || route.TrackSegmentIds.Count == 0 || !IsPositiveFinite(route.LengthMeters))
+            if (route.TrackSegmentIds is null || route.TrackSegmentIds.Count == 0 || !IsPositiveFiniteRailwayOperation(route.LengthMeters))
                 throw new ArgumentException($"Railway route {route.Id.Value} is empty or has an invalid length.", nameof(checkpoint));
             var localSegments = new HashSet<TrackSegmentId>();
             foreach (var segmentId in route.TrackSegmentIds)
@@ -137,5 +137,5 @@ public sealed partial class SimulationWorld
         }
     }
 
-    private static bool IsPositiveFinite(double value) => double.IsFinite(value) && value > 0d;
+    private static bool IsPositiveFiniteRailwayOperation(double value) => double.IsFinite(value) && value > 0d;
 }
