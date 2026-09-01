@@ -12,14 +12,16 @@ if (!(result instanceof HTMLElement) || server === null) throw new Error('Phase 
 
 const socket = new WebSocket(server);
 socket.binaryType = 'arraybuffer';
-const timeout = window.setTimeout(() => fail(new Error('Timed out waiting for Gas pipeline outage/recovery and delivered-gas stockout/replenishment.')), 60_000);
+const timeout = window.setTimeout(() => fail(new Error('Timed out waiting for Gas pipeline outage/recovery and delivered-gas stockout/shipment/replenishment.')), 60_000);
 let handshaken = false;
 let sawPipedHealthy = false;
 let sawPipedOutage = false;
 let sawPipedRecovery = false;
 let sawDeliveredHealthy = false;
+let sawDeliveredShipment = false;
 let sawDeliveredStockout = false;
 let sawDeliveredRecovery = false;
+let minimumDeliveredInventory = Number.POSITIVE_INFINITY;
 
 socket.addEventListener('open', () => socket.send(encodeHello({ major: 2, minor: 14 })));
 socket.addEventListener('message', async (event) => {
@@ -43,17 +45,21 @@ socket.addEventListener('message', async (event) => {
     if (sawPipedHealthy && pipeCut && piped.serviceState === GasServiceState.Unavailable && piped.unservedCubicMetersPerDay > 0) sawPipedOutage = true;
     if (sawPipedOutage && pipeOnline && piped.serviceState === GasServiceState.Supplied) sawPipedRecovery = true;
 
-    if (delivered.commodityId !== 0n && delivered.serviceState === GasServiceState.Supplied && delivered.servedCubicMetersPerDay > 0) {
-      if (sawDeliveredStockout) sawDeliveredRecovery = true;
-      else sawDeliveredHealthy = true;
-    }
-    if (sawDeliveredHealthy && delivered.serviceState === GasServiceState.Unavailable && delivered.unservedCubicMetersPerDay > 0) sawDeliveredStockout = true;
+    if (delivered.commodityId === 0n || delivered.deliveredInventoryCapacityCubicMeters <= 0) throw new Error('Delivered Gas inventory metadata is missing.');
+    minimumDeliveredInventory = Math.min(minimumDeliveredInventory, delivered.deliveredInventoryCubicMeters);
+    if (delivered.activeShipmentCount > 0 && delivered.activeShipmentCubicMeters > 0) sawDeliveredShipment = true;
 
-    if (!sawPipedHealthy || !sawPipedOutage || !sawPipedRecovery || !sawDeliveredHealthy || !sawDeliveredStockout || !sawDeliveredRecovery) return;
+    if (delivered.serviceState === GasServiceState.Supplied && delivered.servedCubicMetersPerDay > 0 && delivered.deliveredInventoryCubicMeters > 0) {
+      if (sawDeliveredStockout && sawDeliveredShipment && delivered.deliveredInventoryCubicMeters > minimumDeliveredInventory + 1e-6) sawDeliveredRecovery = true;
+      else if (!sawDeliveredStockout) sawDeliveredHealthy = true;
+    }
+    if (sawDeliveredHealthy && delivered.serviceState === GasServiceState.Unavailable && delivered.unservedCubicMetersPerDay > 0 && delivered.deliveredInventoryCubicMeters <= 1e-9) sawDeliveredStockout = true;
+
+    if (!sawPipedHealthy || !sawPipedOutage || !sawPipedRecovery || !sawDeliveredHealthy || !sawDeliveredShipment || !sawDeliveredStockout || !sawDeliveredRecovery) return;
     clearTimeout(timeout);
     socket.close(1000, 'done');
     result.dataset.status = 'passed';
-    result.textContent = `Phase 25 E2E passed: tick=${message.statistics.tickCount.toString()}, served=${message.statistics.servedCubicMetersPerDay.toFixed(2)}m3/day, unserved=${message.statistics.unservedCubicMetersPerDay.toFixed(2)}m3/day`;
+    result.textContent = `Phase 25 E2E passed: tick=${message.statistics.tickCount.toString()}, inventory=${delivered.deliveredInventoryCubicMeters.toFixed(2)}m3, activeShipments=${String(delivered.activeShipmentCount)}`;
   } catch (error) {
     fail(error);
   }
