@@ -104,7 +104,7 @@ Phase 29以降の広域World・都市成長・最適化では、以下を設計�
 > **必須依存:** 現行SimulationRuntime / Server publish / Protocol 2.x  
 > Viewを含むread-only clientがSimulation内部Storeへ直接依存せず、同じauthoritative observationを効率良く共有できる境界を確立する。詳細設計は[`docs/architecture/observation-gateway.md`](../docs/architecture/observation-gateway.md)を正本とする。
 
-- ⬜ **OBS-001** — Observation Requestとauthoritative mutation commandをProtocol / Server責務として明示的に分離する
+- ✅ **OBS-001** — Observation Requestとauthoritative mutation commandをProtocol / Server責務として明示的に分離する
 - ⬜ **OBS-002** — SimulationRuntimeからCurrent / Recent / Planned / relation等を必要に応じてdetached read modelとして取得できる共通Observation境界を設計する
 - ⬜ **OBS-003** — 現行publish / subscription / inspection処理をServer内のObservation Gateway責務として整理する
 - ⬜ **OBS-004** — Entity / Spatial / Static topology等のread modelをtick / revision / generation基準で共有するcache基盤を実装する
