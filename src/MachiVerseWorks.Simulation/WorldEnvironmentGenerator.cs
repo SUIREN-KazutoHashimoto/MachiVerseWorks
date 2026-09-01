@@ -53,7 +53,7 @@ public sealed class WorldEnvironmentGenerator
 
     public IReadOnlyList<SettlementCandidateRegion> SelectSettlementCandidates(WorldVolume volume, int count)
     {
-        if (count < 0) throw new ArgumentOutOfRangeException(nameof(count));
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
         if (count == 0) return Array.Empty<SettlementCandidateRegion>();
         var candidates = CreateSettlementCandidatePool(volume, Math.Max(count * 8, 64));
         var selected = new List<SettlementCandidateRegion>(Math.Min(count, candidates.Count));
@@ -78,7 +78,7 @@ public sealed class WorldEnvironmentGenerator
 
     public IReadOnlyList<GeographicFeature> DetectGeographicFeatures(WorldVolume volume, int maximumFeatures = 128)
     {
-        if (maximumFeatures <= 0) throw new ArgumentOutOfRangeException(nameof(maximumFeatures));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumFeatures);
         var width = Math.Max(volume.Width, _config.TerrainDetailScaleMeters);
         var depth = Math.Max(volume.Depth, _config.TerrainDetailScaleMeters);
         var targetCells = Math.Max(2, (int)Math.Ceiling(Math.Sqrt(maximumFeatures * 2d)));
@@ -121,7 +121,7 @@ public sealed class WorldEnvironmentGenerator
             new ToponymProvenance(ToponymProvenanceKind.GeneratedNaturalFeature, feature.Id, null, "phase29-natural-v1"));
     }
 
-    private IReadOnlyList<SettlementCandidateRegion> CreateSettlementCandidatePool(WorldVolume volume, int targetCount)
+    private List<SettlementCandidateRegion> CreateSettlementCandidatePool(WorldVolume volume, int targetCount)
     {
         var columns = Math.Max(2, (int)Math.Ceiling(Math.Sqrt(targetCount)));
         var rows = columns;
