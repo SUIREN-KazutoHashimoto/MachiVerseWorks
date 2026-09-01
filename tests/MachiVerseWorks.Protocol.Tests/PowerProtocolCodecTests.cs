@@ -41,7 +41,7 @@ public sealed class PowerProtocolCodecTests
         var message = new PowerSnapshotMessage(
             new ProtocolPowerStatistics(0, 0, 0, 0, 0, 0d, 0d, 0d, 0d, 0d, 0), [], [], [], []);
 
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => PowerProtocolCodec.Serialize(message, new ProtocolVersion(2, 11)));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => PowerProtocolCodec.Serialize(message, new ProtocolVersion(2, 11)));
     }
 
     [TestMethod]
