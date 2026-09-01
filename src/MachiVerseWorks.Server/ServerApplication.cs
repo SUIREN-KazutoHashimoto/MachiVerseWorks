@@ -33,6 +33,7 @@ public static class ServerApplication
         builder.Services.AddHostedService<WaterSewerFixtureHostedService>();
         builder.Services.AddHostedService<GasFixtureHostedService>();
         builder.Services.AddHostedService<OpticalFixtureHostedService>();
+        builder.Services.AddHostedService<RadioFixtureHostedService>();
         builder.Services.AddHostedService<SimulationTickService>();
         builder.Services.AddHostedService<ClientCommandProcessor>();
         builder.Services.AddHostedService<AdminCommandExecutorV2>();
@@ -45,6 +46,7 @@ public static class ServerApplication
         builder.Services.AddHostedService<WaterSewerPublishService>();
         builder.Services.AddHostedService<GasPublishService>();
         builder.Services.AddHostedService<OpticalPublishService>();
+        builder.Services.AddHostedService<RadioPublishService>();
 
         if (mcpOptions.Enabled)
         {

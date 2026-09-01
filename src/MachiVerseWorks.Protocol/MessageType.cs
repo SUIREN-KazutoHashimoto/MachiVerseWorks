@@ -29,5 +29,7 @@ public enum MessageType : ushort
     WaterSewerSnapshot = 760,
     GasSnapshot = 770,
     OpticalSnapshot = 780,
+    RadioSnapshot = 790,
+    SpectrumSnapshot = 791,
     Error = 900,
 }

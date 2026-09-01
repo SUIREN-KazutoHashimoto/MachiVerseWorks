@@ -30,6 +30,7 @@ public readonly record struct WorldPoint
 
 public readonly record struct WorldVector
 {
+    [System.Text.Json.Serialization.JsonConstructor]
     public WorldVector(double x, double y, double z)
     {
         ValidateFinite(x, nameof(x));

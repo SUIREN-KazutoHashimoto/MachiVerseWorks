@@ -1,15 +1,15 @@
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 28 — Radio & Spectrum Foundation  
-> **次の実装タスク:** `P28-001` — Radio / Spectrum Foundationの用途非依存責務、単位、determinism、solver境界を仕様化する
+> **現在:** Phase 29 — World & Physical Environment Generation  
+> **次の実装タスク:** `P29-001` — `WorldEnvironmentConfig` / world seed / geographic north / latitude・hemisphere・sea level等の正本契約を仕様化する
 
 ## 全体の現在地
 
 | Phase | 内容 | 状態 |
 | --- | --- | --- |
 | 0〜27 | Foundation / Simulation / Infrastructure / Remote Administration | ✅ 完了 |
-| 28 | Radio & Spectrum Foundation | ▶️ 次 |
-| 29 | World & Physical Environment Generation | ⏳ 待機 |
+| 28 | Radio & Spectrum Foundation | ✅ 完了 |
+| 29 | World & Physical Environment Generation | ▶️ 次 |
 | 30 | Regional & Urban Generation | ⏳ 待機 |
 | 31 | Persistent Regional & Settlement Evolution | ⏳ 待機 |
 | 32 | Simulation Scheduling & Workload Optimization | ⏳ 待機 |
@@ -85,7 +85,7 @@ Phase 29以降の広域World・都市成長・最適化・描画では、以下�
 
 この順番は、後続機能が前段の正本モデルを再利用できることを優先する。先行mergeを行っても、Phaseの正式closeout順は依存関係に従う。Phase 27 は Server 横断の Remote Administration 境界として実装順に挿入したが、Phase 28 以降の Simulation domain が MCP 実装へ直接依存することを意味しない。
 
-Phase 28 完了後は、Phase 0〜28 の詳細・closeout証跡を `docs/archive/` へ退避し、現行ROADMAPをPhase 29以降中心へ整理する。
+Phase 28 完了後の詳細Task・closeout証跡は当面このROADMAPに残し、Phase 29以降の進行に合わせて `docs/archive/` へ整理する。
 
 ---
 
@@ -214,41 +214,51 @@ Phase 28 完了後は、Phase 0〜28 の詳細・closeout証跡を `docs/archive
 
 ## Phase 28 — Radio & Spectrum Foundation
 
-> **状態: ▶️ 次**  
+> **状態: ✅ 完了**  
 > **依存:** Phase 10 / 23 / 26  
 > LTE等の特定通信方式へ依存しないRadio / Spectrumの共通基盤を作り、周波数・送受信機・アンテナ・伝搬・干渉を都市の3D空間上で扱えるようにする。標準Simulationは軽量な簡易伝搬を用い、詳細な電磁界・ray tracing等は交換可能なsolver境界の外側へ分離する。
 
-- ⬜ **P28-001** — Radio / Spectrum Foundationの用途非依存責務、単位、determinism、solver境界を仕様化する
-- ⬜ **P28-002** — SpectrumBand / RadioChannelと周波数・bandwidth・overlapのstable契約を実装する
-- ⬜ **P28-003** — RadioSite / Transmitter / Receiver / Antenna / Emissionのstable IDとstateモデルを実装する
-- ⬜ **P28-004** — Antennaの3D position・orientation・gain・簡易radiation pattern契約を実装する
-- ⬜ **P28-005** — Transmissionのfrequency・bandwidth・transmit power・operating stateを実装する
-- ⬜ **P28-006** — Receiverの受信帯域・sensitivityと送受信候補を評価する共通契約を実装する
-- ⬜ **P28-007** — Radio Foundationから独立して差し替え可能な`IRadioPropagationSolver`相当のsolver境界を実装する
-- ⬜ **P28-008** — 距離・周波数・送信電力・antenna gainからreceived powerを求める軽量な標準propagation solverを実装する
-- ⬜ **P28-009** — Building `WorldVolume`を使うLoS / NLoS・簡易obstruction / penetration penaltyを実装する
-- ⬜ **P28-010** — 周波数帯域が重なるEmissionを候補化する簡易interference計算を実装する
-- ⬜ **P28-011** — received power・noise / interference・SINR等の用途非依存Radio Link resultを実装する
-- ⬜ **P28-012** — 大量Transmitterを全件走査しない3D spatial index / candidate queryを実装する
-- ⬜ **P28-013** — Radio Siteの電力供給とOptical backhaul参照を既存Infrastructureへ接続する
-- ⬜ **P28-014** — Radio / Spectrum stateをcheckpoint / Save Dataへ含める
-- ⬜ **P28-015** — Radio site・spectrum・emission・coverage / link resultをProtocol / Serverで配信する
-- ⬜ **P28-016** — Web ClientでRadio site・antenna・channel・簡易coverage / interferenceをdebug可視化する
-- ⬜ **P28-017** — 複数周波数・複数送信源・遮蔽・干渉・停電/backhaul障害を検証するdeterministic E2Eを追加する
-- ⬜ **P28-018** — 大規模Transmitter / Receiver / spectrum query / propagationのbenchmarkを記録する
-- ⬜ **P28-019** — Radio & Spectrum Foundationのspecification / architecture / ROADMAPを同期する
+- ✅ **P28-001** — Radio / Spectrum Foundationの用途非依存責務、単位、determinism、solver境界を仕様化する
+- ✅ **P28-002** — SpectrumBand / RadioChannelと周波数・bandwidth・overlapのstable契約を実装する
+- ✅ **P28-003** — RadioSite / Transmitter / Receiver / Antenna / Emissionのstable IDとstateモデルを実装する
+- ✅ **P28-004** — Antennaの3D position・orientation・gain・簡易radiation pattern契約を実装する
+- ✅ **P28-005** — Transmissionのfrequency・bandwidth・transmit power・operating stateを実装する
+- ✅ **P28-006** — Receiverの受信帯域・sensitivityと送受信候補を評価する共通契約を実装する
+- ✅ **P28-007** — Radio Foundationから独立して差し替え可能な`IRadioPropagationSolver`相当のsolver境界を実装する
+- ✅ **P28-008** — 距離・周波数・送信電力・antenna gainからreceived powerを求める軽量な標準propagation solverを実装する
+- ✅ **P28-009** — Building `WorldVolume`を使うLoS / NLoS・簡易obstruction / penetration penaltyを実装する
+- ✅ **P28-010** — 周波数帯域が重なるEmissionを候補化する簡易interference計算を実装する
+- ✅ **P28-011** — received power・noise / interference・SINR等の用途非依存Radio Link resultを実装する
+- ✅ **P28-012** — 大量Transmitterを全件走査しない3D spatial index / candidate queryを実装する
+- ✅ **P28-013** — Radio Siteの電力供給とOptical backhaul参照を既存Infrastructureへ接続する
+- ✅ **P28-014** — Radio / Spectrum stateをcheckpoint / Save Dataへ含める
+- ✅ **P28-015** — Radio site・spectrum・emission・coverage / link resultをProtocol / Serverで配信する
+- ✅ **P28-016** — Web ClientでRadio site・antenna・channel・簡易coverage / interferenceをdebug可視化する
+- ✅ **P28-017** — 複数周波数・複数送信源・遮蔽・干渉・停電/backhaul障害を検証するdeterministic E2Eを追加する
+- ✅ **P28-018** — 大規模Transmitter / Receiver / spectrum query / propagationのbenchmarkを記録する
+- ✅ **P28-019** — Radio & Spectrum Foundationのspecification / architecture / ROADMAPを同期する
 
 ### Phase 28 完了条件
 
-- LTE / 5G / Wi-Fi / Broadcast等の個別方式をRadio Foundationの正本へ埋め込まず、共通の周波数・送受信・アンテナ・伝搬・干渉結果を扱える。
-- 3D World上の位置・建物遮蔽・複数Emissionを考慮した軽量でdeterministicな標準Radio Simulationが成立する。
-- 詳細なreflection / diffraction / multipath / terrain / material / ray tracing等を標準完了条件に含めず、将来のExtensionが高精度propagation solverを差し替えられる。
+- ✅ LTE / 5G / Wi-Fi / Broadcast等の個別方式をRadio Foundationの正本へ埋め込まず、共通の周波数・送受信・アンテナ・伝搬・干渉結果を扱える。
+- ✅ 3D World上の位置・建物遮蔽・複数Emissionを考慮した軽量でdeterministicな標準Radio Simulationが成立する。
+- ✅ 詳細なreflection / diffraction / multipath / terrain / material / ray tracing等を標準完了条件に含めず、将来のExtensionが高精度propagation solverを差し替えられる。
+- ✅ Radio / Spectrum stateをcheckpoint / Save Dataへ保存・復元し、Protocol 2.16 / Server / Web debugで観測できる。
+- ✅ Power / Optical backhaul障害をRadio operational stateへ反映し、3D spatial candidate queryとbenchmarkで大規模候補検索を継続検証できる。
+
+### Phase 28 closeout evidence
+
+- PR #179 の機能検証head `2565fd95dd47fd13ad29d6cd2dee78a6c81fa562` で Dependency Review `33515371520`、CI `33515371598`、Benchmarks `33515371514`、Radio Benchmark `33515371511`、Optical Benchmark `33515371584`、End-to-end `33515371583` がすべて成功した。
+- `radio-spectrum-server-browser` E2Eでは実Kestrel ServerからProtocol 2.16のRadio / Spectrum snapshotをBrowserへ配信し、4 Radio Site、4 Antenna、2 Transmitter、2 Receiver、3 Emission、3 Linkを観測する。3つの周波数、重複帯域による干渉候補、Building遮蔽、Power line outage、Optical backhaul outage、復旧、およびWeb debug overlay描画をpass条件として検証する。
+- `IRadioPropagationSolver`を方式非依存の差し替え境界とし、標準solverは距離・周波数・送信電力・antenna gain・Building obstruction・noise / interferenceからreceived powerとSINRをdeterministicに算出する。reflection / diffraction / multipath / terrain / material / ray tracingは標準solverの責務外とする。
+- 50,000 Transmitter相当の3D candidate query benchmarkは平均 `11.993 ms`、200,000 propagation evaluationは平均 `19.894 ms`。Radio Benchmark run `33515371511` で継続記録する。
+- `WorldVector`を明示JSON構築可能にしてAntenna offset / orientationをSave Dataで保持し、Radio entity stable ID・infrastructure binding・explicit link bindingをcheckpoint復元後も維持する。
 
 ---
 
 ## Phase 29 — World & Physical Environment Generation
 
-> **状態: ⬜ 未着手**  
+> **状態: ▶️ 次**  
 > **依存:** Phase 9 / 10 / 11 / 12 / 17 / 24 / 28  
 > 都市生成より上流にある世界・気候・地形・水系・地理Featureをauthoritativeかつdeterministicに生成し、道路・建物・交通・後続都市生成が自然環境へ従うための物理世界を確立する。世界規模の低解像度fieldは生成・検索を支援する上位表現として使用し、任意のRegion / Partitionを同一ルールのSimulation解像度へdeterministicに展開できる構成とする。Camera距離や表示状態によって詳細World stateの有無・精度を変えない。
 

@@ -35,8 +35,9 @@
 - [`water-sewer-infrastructure.md`](water-sewer-infrastructure.md): Water / Sewer network、flow、service / outageと都市entityへの接続
 - [`gas-infrastructure.md`](gas-infrastructure.md): Gas network、supply / demand、service / outageと都市entityへの接続
 - [`optical-communication.md`](optical-communication.md): OpticalNode / FiberCable / OLT・ONU / backhaul、帯域・輻輳・簡易latency・障害復旧
+- [`radio-spectrum.md`](radio-spectrum.md): 方式非依存Radio Site / Antenna / Tx / Rx / Emission、周波数・伝搬・遮蔽・干渉・SINR
 
-Railway InfrastructureとRailway Operationsは責務を分離します。前者はTrack / Station等のtopology正本、後者はそのstable IDを参照して動くTrain / Service stateです。Multimodal Transitはさらにその上でRoad Traffic / Railway Operationsを再利用し、mode間Journeyを所有します。Optical CommunicationはPower InfrastructureとBuilding / Establishmentのstable IDを再利用し、Phase 28のRadio & Spectrum Foundationへgeneric backhaul境界を提供します。
+Railway InfrastructureとRailway Operationsは責務を分離します。前者はTrack / Station等のtopology正本、後者はそのstable IDを参照して動くTrain / Service stateです。Multimodal Transitはさらにその上でRoad Traffic / Railway Operationsを再利用し、mode間Journeyを所有します。Optical CommunicationはPower InfrastructureとBuilding / Establishmentのstable IDを再利用し、Radio & Spectrum Foundationへgeneric backhaul境界を提供します。
 
 Protocolの現行version、binary layout、互換性ルールは [`../architecture/protocol.md`](../architecture/protocol.md) を正本とします。索引READMEではProtocol番号を重複管理しません。
 
