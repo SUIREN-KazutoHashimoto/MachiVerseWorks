@@ -46,11 +46,7 @@ public static partial class WorldSaveSerializer
         ValidateCount(totalTimetableStops, limits.MaximumTimetableStopTotalCount, "TimetableStops");
     }
 
-    private static void ScanNestedValue(
-        ref Utf8JsonReader reader,
-        NestedSaveContext context,
-        WorldSaveLimits limits,
-        ref NestedSaveScanTotals totals)
+    private static void ScanNestedValue(ref Utf8JsonReader reader, NestedSaveContext context, WorldSaveLimits limits, ref NestedSaveScanTotals totals)
     {
         if (reader.TokenType == JsonTokenType.StartObject)
         {
@@ -61,11 +57,7 @@ public static partial class WorldSaveSerializer
             ScanNestedArray(ref reader, NestedSaveContext.Other, int.MaxValue, null, NestedArrayKind.None, limits, ref totals);
     }
 
-    private static void ScanNestedObject(
-        ref Utf8JsonReader reader,
-        NestedSaveContext context,
-        WorldSaveLimits limits,
-        ref NestedSaveScanTotals totals)
+    private static void ScanNestedObject(ref Utf8JsonReader reader, NestedSaveContext context, WorldSaveLimits limits, ref NestedSaveScanTotals totals)
     {
         var objectDepth = reader.CurrentDepth;
         while (reader.Read())
@@ -84,25 +76,11 @@ public static partial class WorldSaveSerializer
 
             if (reader.TokenType != JsonTokenType.StartArray) continue;
             var rule = GetNestedArrayRule(context, property, limits);
-            ScanNestedArray(
-                ref reader,
-                GetNestedArrayElementContext(context, property),
-                rule.MaximumCount,
-                rule.Path,
-                rule.Kind,
-                limits,
-                ref totals);
+            ScanNestedArray(ref reader, GetNestedArrayElementContext(context, property), rule.MaximumCount, rule.Path, rule.Kind, limits, ref totals);
         }
     }
 
-    private static void ScanNestedArray(
-        ref Utf8JsonReader reader,
-        NestedSaveContext elementContext,
-        int maximumCount,
-        string? path,
-        NestedArrayKind kind,
-        WorldSaveLimits limits,
-        ref NestedSaveScanTotals totals)
+    private static void ScanNestedArray(ref Utf8JsonReader reader, NestedSaveContext elementContext, int maximumCount, string? path, NestedArrayKind kind, WorldSaveLimits limits, ref NestedSaveScanTotals totals)
     {
         var arrayDepth = reader.CurrentDepth;
         var count = 0;
@@ -160,6 +138,7 @@ public static partial class WorldSaveSerializer
         {
             if (reader.ValueTextEquals("logistics")) return NestedSaveProperty.Logistics;
             if (reader.ValueTextEquals("power")) return NestedSaveProperty.Power;
+            if (reader.ValueTextEquals("waterSewer")) return NestedSaveProperty.WaterSewer;
         }
         else if (context == NestedSaveContext.Logistics)
         {
@@ -175,6 +154,18 @@ public static partial class WorldSaveSerializer
             if (reader.ValueTextEquals("generators")) return NestedSaveProperty.Generators;
             if (reader.ValueTextEquals("loads")) return NestedSaveProperty.PowerLoads;
         }
+        else if (context == NestedSaveContext.WaterSewer)
+        {
+            if (reader.ValueTextEquals("waterNodes")) return NestedSaveProperty.WaterNodes;
+            if (reader.ValueTextEquals("waterPipes")) return NestedSaveProperty.WaterPipes;
+            if (reader.ValueTextEquals("sewerNodes")) return NestedSaveProperty.SewerNodes;
+            if (reader.ValueTextEquals("sewerPipes")) return NestedSaveProperty.SewerPipes;
+            if (reader.ValueTextEquals("waterSources")) return NestedSaveProperty.WaterSources;
+            if (reader.ValueTextEquals("reservoirs")) return NestedSaveProperty.Reservoirs;
+            if (reader.ValueTextEquals("pumps")) return NestedSaveProperty.Pumps;
+            if (reader.ValueTextEquals("treatmentPlants")) return NestedSaveProperty.TreatmentPlants;
+            if (reader.ValueTextEquals("servicePoints")) return NestedSaveProperty.ServicePoints;
+        }
         return NestedSaveProperty.Other;
     }
 
@@ -186,6 +177,7 @@ public static partial class WorldSaveSerializer
             (NestedSaveContext.Simulation, NestedSaveProperty.Economy) => NestedSaveContext.Economy,
             (NestedSaveContext.Economy, NestedSaveProperty.Logistics) => NestedSaveContext.Logistics,
             (NestedSaveContext.Economy, NestedSaveProperty.Power) => NestedSaveContext.Power,
+            (NestedSaveContext.Economy, NestedSaveProperty.WaterSewer) => NestedSaveContext.WaterSewer,
             _ => NestedSaveContext.Other,
         };
 
@@ -219,75 +211,34 @@ public static partial class WorldSaveSerializer
             (NestedSaveContext.Power, NestedSaveProperty.PowerLines) => new(limits.MaximumRoadSegmentCount, "simulation.economy.power.lines", NestedArrayKind.None),
             (NestedSaveContext.Power, NestedSaveProperty.Generators) => new(limits.MaximumBuildingCount, "simulation.economy.power.generators", NestedArrayKind.None),
             (NestedSaveContext.Power, NestedSaveProperty.PowerLoads) => new(limits.MaximumBuildingCount, "simulation.economy.power.loads", NestedArrayKind.None),
+            (NestedSaveContext.WaterSewer, NestedSaveProperty.WaterNodes) => new(limits.MaximumRoadNodeCount, "simulation.economy.waterSewer.waterNodes", NestedArrayKind.None),
+            (NestedSaveContext.WaterSewer, NestedSaveProperty.WaterPipes) => new(limits.MaximumRoadSegmentCount, "simulation.economy.waterSewer.waterPipes", NestedArrayKind.None),
+            (NestedSaveContext.WaterSewer, NestedSaveProperty.SewerNodes) => new(limits.MaximumRoadNodeCount, "simulation.economy.waterSewer.sewerNodes", NestedArrayKind.None),
+            (NestedSaveContext.WaterSewer, NestedSaveProperty.SewerPipes) => new(limits.MaximumRoadSegmentCount, "simulation.economy.waterSewer.sewerPipes", NestedArrayKind.None),
+            (NestedSaveContext.WaterSewer, NestedSaveProperty.WaterSources) => new(limits.MaximumBuildingCount, "simulation.economy.waterSewer.waterSources", NestedArrayKind.None),
+            (NestedSaveContext.WaterSewer, NestedSaveProperty.Reservoirs) => new(limits.MaximumBuildingCount, "simulation.economy.waterSewer.reservoirs", NestedArrayKind.None),
+            (NestedSaveContext.WaterSewer, NestedSaveProperty.Pumps) => new(limits.MaximumBuildingCount, "simulation.economy.waterSewer.pumps", NestedArrayKind.None),
+            (NestedSaveContext.WaterSewer, NestedSaveProperty.TreatmentPlants) => new(limits.MaximumBuildingCount, "simulation.economy.waterSewer.treatmentPlants", NestedArrayKind.None),
+            (NestedSaveContext.WaterSewer, NestedSaveProperty.ServicePoints) => new(limits.MaximumBuildingCount, "simulation.economy.waterSewer.servicePoints", NestedArrayKind.None),
             _ => new(int.MaxValue, null, NestedArrayKind.None),
         };
 
     private static bool IsJsonValueStart(JsonTokenType tokenType) => tokenType is
-        JsonTokenType.StartObject or
-        JsonTokenType.StartArray or
-        JsonTokenType.String or
-        JsonTokenType.Number or
-        JsonTokenType.True or
-        JsonTokenType.False or
-        JsonTokenType.Null;
+        JsonTokenType.StartObject or JsonTokenType.StartArray or JsonTokenType.String or JsonTokenType.Number or JsonTokenType.True or JsonTokenType.False or JsonTokenType.Null;
 
     private enum NestedSaveContext : byte
     {
-        Other,
-        Root,
-        Simulation,
-        Vehicle,
-        Person,
-        BlockSection,
-        Depot,
-        RailwayOperations,
-        RailwayRoute,
-        Timetable,
-        Economy,
-        Logistics,
-        Power,
+        Other, Root, Simulation, Vehicle, Person, BlockSection, Depot, RailwayOperations, RailwayRoute, Timetable, Economy, Logistics, Power, WaterSewer,
     }
 
     private enum NestedSaveProperty : byte
     {
-        Other,
-        Simulation,
-        Vehicles,
-        Persons,
-        BlockSections,
-        Depots,
-        RailwayOperations,
-        RouteSteps,
-        Schedule,
-        Needs,
-        SegmentIds,
-        TrackSegmentIds,
-        Routes,
-        Timetables,
-        Stops,
-        Economy,
-        Logistics,
-        Commodities,
-        Inventories,
-        Orders,
-        Shipments,
-        Power,
-        PowerNodes,
-        PowerLines,
-        Generators,
-        PowerLoads,
+        Other, Simulation, Vehicles, Persons, BlockSections, Depots, RailwayOperations, RouteSteps, Schedule, Needs, SegmentIds, TrackSegmentIds, Routes, Timetables, Stops,
+        Economy, Logistics, Commodities, Inventories, Orders, Shipments, Power, PowerNodes, PowerLines, Generators, PowerLoads,
+        WaterSewer, WaterNodes, WaterPipes, SewerNodes, SewerPipes, WaterSources, Reservoirs, Pumps, TreatmentPlants, ServicePoints,
     }
 
-    private enum NestedArrayKind : byte
-    {
-        None,
-        TimetableStops,
-    }
-
+    private enum NestedArrayKind : byte { None, TimetableStops }
     private readonly record struct NestedArrayRule(int MaximumCount, string? Path, NestedArrayKind Kind);
-
-    private struct NestedSaveScanTotals
-    {
-        public int TimetableStopCount;
-    }
+    private struct NestedSaveScanTotals { public int TimetableStopCount; }
 }

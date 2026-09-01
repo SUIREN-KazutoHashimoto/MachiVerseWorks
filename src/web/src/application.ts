@@ -21,6 +21,8 @@ import { LogisticsDebugOverlay } from './logistics-debug.ts';
 import { LOGISTICS_SNAPSHOT_MESSAGE_TYPE, type LogisticsProtocolMessage, type LogisticsSnapshotMessage } from './logistics-protocol.ts';
 import { PowerDebugOverlay } from './power-debug.ts';
 import { POWER_SNAPSHOT_MESSAGE_TYPE, type PowerProtocolMessage, type PowerSnapshotMessage } from './power-protocol.ts';
+import { WaterSewerDebugOverlay } from './water-sewer-debug.ts';
+import { WATER_SEWER_SNAPSHOT_MESSAGE_TYPE, type WaterSewerProtocolMessage, type WaterSewerSnapshotMessage } from './water-sewer-protocol.ts';
 
 export class Application {
   private readonly localizer = initializeLocalization();
@@ -38,6 +40,7 @@ export class Application {
   private readonly ui: ClientUi;
   private readonly logisticsDebug: LogisticsDebugOverlay;
   private readonly powerDebug: PowerDebugOverlay;
+  private readonly waterSewerDebug: WaterSewerDebugOverlay;
   private readonly connection: MachiVerseConnection;
   private animationFrame = 0;
   private lastSubscriptionAt = Number.NEGATIVE_INFINITY;
@@ -55,6 +58,7 @@ export class Application {
     this.ui = new ClientUi(host, this.localizer, performanceMetrics !== null);
     this.logisticsDebug = new LogisticsDebugOverlay(host);
     this.powerDebug = new PowerDebugOverlay(host);
+    this.waterSewerDebug = new WaterSewerDebugOverlay(host);
     this.connection = new MachiVerseConnection(
       this.config.serverUrl,
       { minimumDelayMs: this.config.reconnectMinimumDelayMs, maximumDelayMs: this.config.reconnectMaximumDelayMs },
@@ -78,6 +82,7 @@ export class Application {
           this.ui.clearEconomy();
           this.logisticsDebug.clear();
           this.powerDebug.clear();
+          this.waterSewerDebug.clear();
           this.ui.setProtocol(null);
         },
         onHelloAck: (version) => { this.ui.clearError(); this.ui.setProtocol(version); },
@@ -103,6 +108,7 @@ export class Application {
     this.railwayOperations.dispose();
     this.logisticsDebug.dispose();
     this.powerDebug.dispose();
+    this.waterSewerDebug.dispose();
     this.view.dispose();
     this.ui.dispose();
   }
@@ -131,7 +137,8 @@ export class Application {
 
   private updateAudio(now: number): void {
     if (this.audioSyncPending || now - this.lastAudioSyncAt < 200) return;
-    this.lastAudioSyncAt = now; this.audioSyncPending = true;
+    this.lastAudioSyncAt = now;
+    this.audioSyncPending = true;
     const listener = this.view.getListenerPosition();
     void Promise.all([this.audio.syncSpatialVoices(listener), this.ambient.update(listener)])
       .catch((error: unknown) => { if (this.disposed) return; const detail = error instanceof Error ? error.message : String(error); this.ui.showError(this.localizer.t('error.client', { detail })); })
@@ -140,10 +147,11 @@ export class Application {
 
   private updatePerformanceUi(now: number, metrics: ClientPerformanceMetrics): void {
     if (now - this.lastPerformanceUiAt < 500) return;
-    this.lastPerformanceUiAt = now; this.ui.setPerformanceMetrics(metrics.snapshot());
+    this.lastPerformanceUiAt = now;
+    this.ui.setPerformanceMetrics(metrics.snapshot());
   }
 
-  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage | MultimodalTransitProtocolMessage | EconomyProtocolMessage | LogisticsProtocolMessage | PowerProtocolMessage): void {
+  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage | MultimodalTransitProtocolMessage | EconomyProtocolMessage | LogisticsProtocolMessage | PowerProtocolMessage | WaterSewerProtocolMessage): void {
     switch (message.type) {
       case MessageType.AgentSpawn: this.applyAgentSpawn(message); return;
       case MessageType.AgentUpdate: this.applyAgentUpdate(message); return;
@@ -164,6 +172,7 @@ export class Application {
       case ECONOMY_SNAPSHOT_MESSAGE_TYPE: this.applyEconomy(message); return;
       case LOGISTICS_SNAPSHOT_MESSAGE_TYPE: this.applyLogistics(message); return;
       case POWER_SNAPSHOT_MESSAGE_TYPE: this.applyPower(message); return;
+      case WATER_SEWER_SNAPSHOT_MESSAGE_TYPE: this.applyWaterSewer(message); return;
       case MessageType.Hello:
       case MessageType.HelloAck:
       case MessageType.SubscribeVolume:
@@ -185,6 +194,7 @@ export class Application {
   private applyEconomy(message: EconomySnapshotMessage): void { this.ui.setEconomy(message); }
   private applyLogistics(message: LogisticsSnapshotMessage): void { this.logisticsDebug.apply(message); }
   private applyPower(message: PowerSnapshotMessage): void { this.powerDebug.apply(message); }
+  private applyWaterSewer(message: WaterSewerSnapshotMessage): void { this.waterSewerDebug.apply(message); }
   private updateEntityAudioPosition(message: AgentStateMessage): void { if (this.audio.hasEntityEmitters(message.agentId)) this.audio.updateEntityPosition(message.agentId, { x: message.x, y: message.y, z: message.z }); }
 
   private handleProtocolError(message: ProtocolErrorMessage): void {

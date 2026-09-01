@@ -55,5 +55,10 @@
   "transitDebug.summary": "Route {routes} / Stop {stops} / Bus Line {busLines} / Railway Line {railwayLines} / Bus {buses} / Taxi {taxis} / Vehicle {vehicles} / 到着 {arrivals}",
   "economyDebug.title": "Economy Debug",
   "economyDebug.none": "経済情報なし",
-  "economyDebug.summary": "企業 {companies} / Job {jobs} / 雇用 {employed} / 求人 {vacancies} / 世帯所得 {income} / 消費 {spending} / 売上 {revenue} / 費用 {expense} / 生産 {produced} / Cycle {cycle} / {details}"
+  "economyDebug.summary": "企業 {companies} / Job {jobs} / 雇用 {employed} / 求人 {vacancies} / 世帯所得 {income} / 消費 {spending} / 売上 {revenue} / 費用 {expense} / 生産 {produced} / Cycle {cycle} / {details}",
+  "waterSewerDebug.ariaLabel": "上下水道ネットワークのデバッグ表示",
+  "waterSewerDebug.waiting": "上下水道: スナップショット待機中",
+  "waterSewerDebug.summary": "上下水道 Tick {tick} / 上水停止 {waterUnavailable} / 下水停止 {sewerUnavailable} / 越流 {overflow}",
+  "waterSewerDebug.water": "上水 {served}/{demand} m3/day / 供給容量 {capacity}",
+  "waterSewerDebug.wastewater": "下水 {processed}/{generated} m3/day / 越流 {overflow} m3/day"
 }

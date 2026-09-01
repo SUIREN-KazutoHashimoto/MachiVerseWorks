@@ -104,7 +104,8 @@ public sealed record EconomyCheckpoint(
     IReadOnlyList<SimulationEmploymentCheckpoint> Employments,
     IReadOnlyList<SimulationHouseholdEconomyCheckpoint> Households,
     LogisticsCheckpoint? Logistics = null,
-    PowerCheckpoint? Power = null);
+    PowerCheckpoint? Power = null,
+    WaterSewerCheckpoint? WaterSewer = null);
 
 public readonly record struct SimulationCompanyCheckpoint(
     CompanyId Id,
