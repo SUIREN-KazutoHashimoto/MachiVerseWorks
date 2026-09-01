@@ -66,6 +66,7 @@ versioned Save Data と Simulation checkpoint の変換・検証を担当しま�
 - `docs/specifications/`: シミュレーション仕様（What / Why）
 - `docs/development/`: 開発・テスト・Git 運用
 - `docs/decisions/`: ADR
+- `docs/roadmap/`: Phaseを補足する詳細設計・検討資料。Task状態の正本にはしない
 - `docs/archive/`: 廃止済み資料・Legacy 資料・実験記録
 - `roadmap/`: 領域別の実装ロードマップ。Simulation は `roadmap/SIMULATION_ROADMAP.md`、View は `roadmap/VIEW_ROADMAP.md` を正本とする
 - `scripts/`: 開発・CI 補助スクリプト
@@ -79,9 +80,11 @@ versioned Save Data と Simulation checkpoint の変換・検証を担当しま�
 - 現行仕様は `docs/specifications/` を正とする。
 - 技術構成や責務分離は `docs/architecture/` を正とする。
 - 採用理由を将来説明する必要がある設計判断は `docs/decisions/` に ADR を作成する。
+- Phaseの詳細な検討メモを残す場合は `docs/roadmap/` を利用できるが、進捗・Task状態は必ずルート `roadmap/` の正本へ反映する。
 - 廃止した資料は削除ではなく、参照価値がある場合のみ `docs/archive/` へ移す。
 - `archive` を未整理ファイルの一時置き場として使わない。
 - 将来の予定や作業状態は仕様書へ混ぜず、`roadmap/` 配下の領域別ロードマップで管理する。Simulation は `roadmap/SIMULATION_ROADMAP.md`、View は `roadmap/VIEW_ROADMAP.md` を正本とする。
+- 文書を移動・改名した場合は、README・開発ルール・CI・他Markdownからの相対リンクを更新し、`python scripts/check-markdown-links.py` またはCIのMarkdown link validationでリンク切れがないことを確認する。
 
 ## 5. Git 運用
 
@@ -95,12 +98,12 @@ main
 
 標準の短命ブランチ名は次の通りとする。
 
-- `feature/*`: 新機能
-- `fix/*`: 不具合修正
-- `perf/*`: 性能改善
-- `refactor/*`: 振る舞いを変えない構造改善
-- `docs/*`: 文書・公開設定
-- `experiment/*`: 採用未確定の実験
+- `feature/<topic>`: 新機能
+- `fix/<topic>`: 不具合修正
+- `perf/<topic>`: 性能改善
+- `refactor/<topic>`: 振る舞いを変えない構造改善
+- `docs/<topic>`: 文書・公開設定
+- `experiment/<topic>`: 採用未確定の実験
 
 - 通常の実装は短命な作業ブランチで行う。
 - `develop` への統合は PR を使用する。
@@ -150,6 +153,7 @@ PR に伴う A / B の更新コミットは、PR 作成のためのバージョ�
 - 新しい設計判断が重要な場合は ADR が追加または更新されている。
 - 一時的なデバッグコード、不要なログ、実験用フラグが本流に残っていない。
 - 対応する `roadmap/SIMULATION_ROADMAP.md` または `roadmap/VIEW_ROADMAP.md` の対象タスクがある場合は、実際の完了状態と状態記号が一致している。
+- Markdownを追加・移動・改名した場合は、ローカルリンクとheading anchorの検証が成功している。
 
 ## 8. エージェント向け注意
 
@@ -174,7 +178,7 @@ PR に伴う A / B の更新コミットは、PR 作成のためのバージョ�
 - ユーザー入力文字列、固有名詞、外部コンテンツはシステム UI 文言と区別する。
 - i18n library は Web Client 実装開始時に選定し、初期セットアップ段階では固定しない。
 
-詳細は `docs/architecture/localization.md`、`docs/development/localization-guidelines.md`、`docs/decisions/ADR-0002-localization-boundary.md` を参照する。
+詳細は `docs/architecture/localization.md`、`docs/development/localization-guidelines.md`、`docs/decisions/ADR-0002-localization-boundary.md` を参照する。実装計画と進捗は `roadmap/VIEW_ROADMAP.md` のLocalization Phaseを正本とする。
 
 ## 10. Roadmap 運用
 
@@ -183,6 +187,7 @@ PR に伴う A / B の更新コミットは、PR 作成のためのバージョ�
 - 未完了Taskは `⬜`、必要な検証まで済んだ完了Taskは `✅` で表す。
 - 作業開始前に、依頼内容に対応する既存 Task ID があるか両Roadmapで確認する。
 - 対応タスクが存在しない計画済み作業は、責務に応じたRoadmapへ小さなタスクとして追加する。
+- `docs/roadmap/` の補足資料へTask案を書いた場合も、実際に着手対象とするTask ID・状態はルート `roadmap/` の正本へ同期する。
 - 1つのTaskへ複数の独立した成果を詰め込まない。
 - 「交通を完成」「UIを完成」など長期間閉じられない粒度のTaskを作らない。
 - 作業中に想定より大きいことが分かった場合は、元タスクを無理に完了させず残作業を新しい Task ID へ分割する。
