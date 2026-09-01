@@ -2,7 +2,7 @@
 
 Headless ServerはASP.NET Core / Kestrel上で1つの`SimulationWorld`をserver-authoritativeに実行し、HTTP health endpointとProtocol 2.x binary WebSocketを提供します。現在のServer Protocol上限は[`ProtocolVersion.Current`](../MachiVerseWorks.Protocol/ProtocolVersion.cs)の **2.16** です。
 
-Serverはread-onlyな**Observation Gateway**と、authoritative mutationを扱う**Administration / Management command boundary**を分離します。
+Serverはread-onlyな**Observation Gateway**と、authoritative mutationを扱う**Administration / Management command boundary**を分離する方向で整理します。現行publish / subscription / inspection処理がObservation Gatewayの既存基盤であり、generic cache / request deduplication等の追加基盤はSimulation Roadmapの`OBS-*`で段階実装します。
 
 ## Runtime boundary
 
@@ -12,7 +12,9 @@ Serverはread-onlyな**Observation Gateway**と、authoritative mutationを扱�
 - `/ws`で`Hello` / `HelloAck` negotiation後のbinary Protocolを処理する
 - Browser WebSocketは`Server:AllowedWebSocketOrigins` allowlistでOriginを検証する
 - `SubscribeVolume` / Inspect等のObservation Requestをread-only境界で処理する
-- Observation read modelのspatial filtering / revision cache / request deduplication / snapshot deliveryをServer側で行う
+- publish cycleでdetached snapshot / read modelをcaptureし、3D spatial filteringとsnapshot deliveryをServer側で行う
+- Road / Railway等のstatic topologyは既存revision contractを使って不要な再送を抑制する
+- connectionごとのsnapshot deliveryはin-flight deliveryを重複scheduleしない
 - `Server:MaximumSubscriptionCellCount`でobservation subscription cell数を制限する
 - Save起動時は復元した`SimulationWorld.Config`をscheduler / HelloAck / subscription guardの正本にする
 - stdin管理Consoleはtransport-independentな`AdminCommand`境界を経由し、Simulation tickと同じauthoritative lockで直列化する
@@ -23,29 +25,37 @@ Serverはread-onlyな**Observation Gateway**と、authoritative mutationを扱�
 
 ## Observation Gateway
 
-Observation GatewayはSimulationが公開したdetached read modelをView等のread-only clientへ配送します。
+Observation Gatewayは、現行のpublish / subscription / inspection処理をread-only delivery boundaryとして整理し、将来の共通cache / deduplication / resync基盤までを含むarchitecture名です。
 
-許可する責務:
+### 現在実装済みの基盤
 
-- observation subscription
-- explicit inspection
-- spatial filtering
-- snapshot / delta planning
-- revision-driven static delivery
-- Entity / Spatial / Static read-model cache
--同一requestのdeduplication
-- 再利用可能なencoded payload cache
-- reconnect / resync
-- slow client isolation
+- `SubscribeVolume`等のobservation subscription
+- Person inspection等のexplicit inspection
+- Simulation lock内でcaptureしたdetached publish snapshot / read model
+- `SimulationPublishSnapshot`内の3D spatial indexによるdynamic Entity filtering
+- Road / Railway等のrevision-aware static read model / delivery
+- connection単位のsnapshot delivery scheduling / failure isolation
+- reconnect時のClient state再構築に必要な通常snapshot delivery
 
-禁止する責務:
+### `OBS-*`で段階実装する拡張
+
+- generic Entity inspectionのCurrent / Recent / Planned / Relations contract
+- Entity / Spatial / Static read-model cacheの共通化
+- 同一revision・同一Observation Requestのrequest deduplication
+- negotiated Protocol version単位のencoded payload cache
+- cache invalidation / eviction / World replacement / reconnect / resyncの統一契約
+- cache hit / miss / rebuild equivalenceと複数Viewer invariance test
+
+上記の未実装項目を、現在すでに存在する機能として扱いません。Task状態の正本は[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)のObservation Gateway Foundationです。
+
+Observation Gatewayが将来も行ってはいけない責務:
 
 - Simulation state mutation
 - Activity / ETA / classification / schedule等の意味的再計算
 - current observationからsemantic futureを予測すること
 - Camera / LOD / View cacheをSimulation workload / fidelityへ反映すること
 
-cacheはwall-clock TTLだけではなく、Simulation由来のtick / revision / generation markerを基準にstale判定します。
+将来のcache freshnessはwall-clock TTLだけではなく、Simulation由来のtick / revision / generation markerを基準にstale判定します。
 
 詳細は[`../../docs/architecture/observation-gateway.md`](../../docs/architecture/observation-gateway.md)を参照してください。
 
@@ -76,7 +86,7 @@ exit
 
 数値はInvariant Cultureで解釈し、IDは正の10進`ulong`です。引用符付きtokenを使うと空白を含むpathを渡せます。不正なcommandや参照整合性エラーはstructured resultとして処理し、Server processを停止させません。
 
-`world save`はSimulation lock中にcheckpointだけをcaptureし、serializationとfile I/Oはlock外で行います。`world load`はfile I/Oとdeserializeを先に終えてからworldをatomicに差し替えます。world差し替えやtopology mutationはread-model revisionを進め、Observation Gatewayの関連cache / connection-local delivery stateを再同期可能な状態へ移します。
+`world save`はSimulation lock中にcheckpointだけをcaptureし、serializationとfile I/Oはlock外で行います。`world load`はfile I/Oとdeserializeを先に終えてからworldをatomicに差し替えます。world差し替えやtopology mutationはread-model revisionを進め、Observation Gatewayの関連delivery stateを再同期可能な状態へ移します。将来の共通cache invalidationは`OBS-*`でこのrevision境界へ統合します。
 
 詳細は[`../../docs/specifications/server-administration-console.md`](../../docs/specifications/server-administration-console.md)と[`../../docs/decisions/ADR-0005-server-administration-boundary.md`](../../docs/decisions/ADR-0005-server-administration-boundary.md)を参照してください。
 
@@ -131,7 +141,7 @@ negotiated minorに応じて次のread model / messageを配信します。messa
 
 Protocol 2.9は新しいServer→Client domain snapshotではなく、Client→Serverのread-only `ClearPersonInspection` Observation Requestを追加します。
 
-1回のpublishではSimulation lock下でdetached / immutable read modelをcaptureし、可能な処理はlock外でcache / filtering / message planning / encoding / network I/Oを行います。各domainのspatial filtering、world-wide delivery、payload上限はdomainごとの現行contractに従います。
+1回のpublishではSimulation lock下でdetached / immutable read modelをcaptureし、可能な処理はlock外でfiltering / message planning / encoding / network I/Oを行います。各domainのspatial filtering、world-wide delivery、payload上限はdomainごとの現行contractに従います。
 
 Road snapshotと一部dynamic snapshotが1 MiBのsingle-frame上限を超える場合は、対応codec / publisherの契約に従い送信前にstructured Errorへ変換します。Railway Infrastructureはentity境界でchunkできます。
 
@@ -143,6 +153,8 @@ Protocol 1.xの`SubscribeArea`や2D rectangle互換経路は提供しません�
 - read-only Browser View / Camera / Selection / Inspector / Historical viewing / Rendering LOD: [`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)
 - editor / runtime control / configuration / Save / Addon管理UI: [`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)
 - Dashboard分析・trend・heatmap等: 将来Analytics Listener / analysis clientとして別設計
+
+3 Roadmapの責務と横断依存の索引は[`../../roadmap/README.md`](../../roadmap/README.md)を参照してください。
 
 ## ローカル起動
 
