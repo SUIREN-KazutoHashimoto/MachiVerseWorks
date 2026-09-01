@@ -107,7 +107,7 @@ public sealed class ServerIntegrationTests
         await ServerTestHost.HandshakeAsync(socket);
         await ServerTestHost.SendAsync(socket, new SubscribeVolumeMessage(-1e300, -1e300, -1e300, 1e300, 1e300, 1e300), ProtocolVersion.Current);
 
-        var error = Assert.IsInstanceOfType<ProtocolErrorMessage>((await ServerTestHost.ReceiveAsync(socket, TimeSpan.FromSeconds(3))).Message);
+        var error = Assert.IsInstanceOfType<ProtocolErrorMessage>(await ReceiveUntilAsync(socket, static message => message is ProtocolErrorMessage));
         Assert.AreEqual(ProtocolErrorCode.InvalidRequest, error.Code);
         Assert.IsTrue(error.Parameters.Any(parameter => parameter.Key == ProtocolErrorParameterKeys.DetailCode && parameter.Value == SubscriptionVolumePolicy.OutsideSpatialGridDetailCode));
 
