@@ -21,10 +21,12 @@ public sealed class CapacityPowerDispatchSolver : IPowerDispatchSolver
         var graph = new FlowGraph(orderedNodes.Length + 2);
         var source = orderedNodes.Length;
         var sink = source + 1;
-
+        var lineIds = new HashSet<PowerLineId>();
         foreach (var line in request.Lines.OrderBy(static item => item.Id.Value))
         {
             ValidateCapacity(line.CapacityMegawatts, nameof(request));
+            if (line.Id.Value == 0 || !lineIds.Add(line.Id))
+                throw new ArgumentException("Power dispatch request contains an invalid or duplicate line ID.", nameof(request));
             if (!nodeIndexes.TryGetValue(line.FromNodeId, out var from) || !nodeIndexes.TryGetValue(line.ToNodeId, out var to) || from == to)
                 throw new ArgumentException("Power dispatch request contains a line with an invalid node reference.", nameof(request));
             if (!line.IsInService || line.CapacityMegawatts <= PowerDefaults.SupplyEpsilonMegawatts) continue;
@@ -32,24 +34,30 @@ public sealed class CapacityPowerDispatchSolver : IPowerDispatchSolver
             graph.AddEdge(to, from, line.CapacityMegawatts);
         }
 
+        var generatorIds = new HashSet<GeneratorId>();
         var generatorEdges = new List<(GeneratorId Id, int EdgeIndex, double Capacity)>();
         foreach (var generator in request.Generators.OrderBy(static item => item.Id.Value))
         {
             ValidateCapacity(generator.AvailableCapacityMegawatts, nameof(request));
+            if (generator.Id.Value == 0 || !generatorIds.Add(generator.Id))
+                throw new ArgumentException("Power dispatch request contains an invalid or duplicate Generator ID.", nameof(request));
             if (!nodeIndexes.TryGetValue(generator.NodeId, out var node))
                 throw new ArgumentException("Power dispatch request contains a Generator with an invalid node reference.", nameof(request));
             var edgeIndex = graph.AddEdge(source, node, generator.AvailableCapacityMegawatts);
             generatorEdges.Add((generator.Id, edgeIndex, generator.AvailableCapacityMegawatts));
         }
 
-        var loadEdges = new List<(PowerLoadId Id, int EdgeIndex, double Demand)>();
+        var loadIds = new HashSet<PowerLoadId>();
+        var loadEdges = new List<(PowerLoadId Id, int NodeIndex, int EdgeIndex, double Demand)>();
         foreach (var load in request.Loads.OrderBy(static item => item.Id.Value))
         {
             ValidateCapacity(load.DemandMegawatts, nameof(request));
+            if (load.Id.Value == 0 || !loadIds.Add(load.Id))
+                throw new ArgumentException("Power dispatch request contains an invalid or duplicate Load ID.", nameof(request));
             if (!nodeIndexes.TryGetValue(load.NodeId, out var node))
                 throw new ArgumentException("Power dispatch request contains a Load with an invalid node reference.", nameof(request));
             var edgeIndex = graph.AddEdge(node, sink, load.DemandMegawatts);
-            loadEdges.Add((load.Id, edgeIndex, load.DemandMegawatts));
+            loadEdges.Add((load.Id, node, edgeIndex, load.DemandMegawatts));
         }
 
         graph.MaxFlow(source, sink);
@@ -59,7 +67,7 @@ public sealed class CapacityPowerDispatchSolver : IPowerDispatchSolver
             Math.Max(0d, item.Capacity - graph.GetRemainingCapacity(source, item.EdgeIndex)))).ToArray();
         var loads = loadEdges.Select(item => new PowerLoadDispatch(
             item.Id,
-            Math.Max(0d, item.Demand - graph.GetRemainingCapacity(nodeIndexes[request.Loads.First(load => load.Id == item.Id).NodeId], item.EdgeIndex)))).ToArray();
+            Math.Max(0d, item.Demand - graph.GetRemainingCapacity(item.NodeIndex, item.EdgeIndex)))).ToArray();
         return new PowerDispatchResult(Array.AsReadOnly(generators), Array.AsReadOnly(loads));
     }
 
