@@ -142,4 +142,11 @@ public sealed record GeographicFeature(
 public sealed record ToponymProvenance(ToponymProvenanceKind Kind, GeographicFeatureId SourceFeatureId, ToponymId? ParentToponymId, string GeneratorKey);
 public sealed record NaturalToponym(ToponymId Id, GeographicFeatureId FeatureId, string Name, ToponymProvenance Provenance);
 public sealed record WorldEnvironmentCheckpoint(WorldEnvironmentConfig Config, IReadOnlyList<GeographicFeature> Features, IReadOnlyList<NaturalToponym> Toponyms);
-public sealed record WorldEnvironmentSnapshot(WorldEnvironmentConfig Config, WorldVolume Volume, IReadOnlyList<RegionalEnvironmentSample> Samples, IReadOnlyList<GeographicFeature> Features, IReadOnlyList<NaturalToponym> Toponyms, ulong TickCount);
+public sealed record WorldEnvironmentSnapshot(
+    WorldEnvironmentConfig Config,
+    WorldVolume Volume,
+    IReadOnlyList<RegionalEnvironmentSample> Samples,
+    IReadOnlyList<TerrainSurfaceSample> TerrainSamples,
+    IReadOnlyList<GeographicFeature> Features,
+    IReadOnlyList<NaturalToponym> Toponyms,
+    ulong TickCount);
