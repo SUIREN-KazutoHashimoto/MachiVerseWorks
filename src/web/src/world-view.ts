@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 
-import type { EntityStore } from './entity-store.ts';
-import type { PedestrianStore } from './pedestrian-store.ts';
-import { RoadNetworkStore } from './road-network-store.ts';
-import { LaneDirection, RoadNodeKind, type Lane, type RoadNetworkSnapshotMessage, type WorldVolume } from './protocol.ts';
-import { IntersectionControlStore, VehicleStore } from './traffic-store.ts';
+import type { ReadonlyEntityStore } from './entity-store.ts';
+import type { ReadonlyPedestrianStore } from './pedestrian-store.ts';
+import type { ReadonlyRoadNetworkStore } from './road-network-store.ts';
+import { LaneDirection, RoadNodeKind, type Lane, type WorldVolume } from './protocol.ts';
+import type { ReadonlyIntersectionControlStore, ReadonlyVehicleStore } from './traffic-store.ts';
 import { SignalIndication } from './traffic-protocol.ts';
 
 const CAMERA_HEIGHT = 500;
@@ -32,7 +32,6 @@ export class WorldView {
   private readonly pedestrianRenderer: PedestrianRenderer;
   private readonly vehicleRenderer: VehicleRenderer;
   private readonly intersectionRenderer: IntersectionControlRenderer;
-  private readonly roadStore = new RoadNetworkStore();
   private readonly roadRenderer: RoadNetworkRenderer;
   private aspect = 1;
   private dragPointerId: number | null = null;
@@ -73,17 +72,15 @@ export class WorldView {
     this.renderer.setSize(width, height, false);
   }
 
-  public applyRoadNetwork(snapshot: RoadNetworkSnapshotMessage): void { this.roadStore.replace(snapshot); }
-  public clearRoadNetwork(): void { this.roadStore.clear(); }
-
   public render(
-    store: EntityStore,
+    store: ReadonlyEntityStore,
     now: number,
-    pedestrians: PedestrianStore | null = null,
-    vehicles: VehicleStore | null = null,
-    intersections: IntersectionControlStore | null = null,
+    pedestrians: ReadonlyPedestrianStore | null = null,
+    vehicles: ReadonlyVehicleStore | null = null,
+    intersections: ReadonlyIntersectionControlStore | null = null,
+    roadNetwork: ReadonlyRoadNetworkStore | null = null,
   ): void {
-    this.roadRenderer.update(this.roadStore);
+    if (roadNetwork !== null) this.roadRenderer.update(roadNetwork);
     this.agentRenderer.update(store, now);
     this.pedestrianRenderer.update(pedestrians, now);
     const vehicleCount = this.vehicleRenderer.update(vehicles, now);
@@ -211,7 +208,7 @@ class RoadNetworkRenderer {
     this.scene.add(this.roadLines, this.laneLines, this.intersections);
   }
 
-  public update(store: RoadNetworkStore): void {
+  public update(store: ReadonlyRoadNetworkStore): void {
     if (store.revision === this.renderedRevision) return;
     this.renderedRevision = store.revision;
     const snapshot = store.snapshot;
@@ -269,7 +266,7 @@ class AgentRenderer {
   private positions = new Float32Array(this.capacity * 3);
 
   public constructor(private readonly scene: THREE.Scene) { this.mesh = this.createMesh(this.capacity); this.scene.add(this.mesh); }
-  public update(store: EntityStore, now: number): void {
+  public update(store: ReadonlyEntityStore, now: number): void {
     this.ensureCapacity(store.size);
     const count = store.writeSampledPositions(now, this.positions);
     for (let index = 0; index < count; index += 1) {
@@ -297,7 +294,7 @@ class PedestrianRenderer {
   private positions = new Float32Array(this.capacity * 3);
 
   public constructor(private readonly scene: THREE.Scene) { this.mesh = this.createMesh(this.capacity); this.scene.add(this.mesh); }
-  public update(store: PedestrianStore | null, now: number): void {
+  public update(store: ReadonlyPedestrianStore | null, now: number): void {
     if (store === null) { this.mesh.count = 0; this.mesh.instanceMatrix.needsUpdate = true; return; }
     this.ensureCapacity(store.size);
     const count = store.writeSampledPositions(now, this.positions);
@@ -333,7 +330,7 @@ class VehicleRenderer {
 
   public constructor(private readonly scene: THREE.Scene) { this.mesh = this.createMesh(this.capacity); this.scene.add(this.mesh); }
 
-  public update(store: VehicleStore | null, now: number): number {
+  public update(store: ReadonlyVehicleStore | null, now: number): number {
     if (store === null) { this.mesh.count = 0; this.mesh.instanceMatrix.needsUpdate = true; return 0; }
     this.ensureCapacity(store.size);
     const count = store.writeSampledTransforms(now, this.positions, this.scales, this.yaws);
@@ -388,7 +385,7 @@ class IntersectionControlRenderer {
     this.scene.add(this.stopLines, this.red, this.yellow, this.green, this.queues);
   }
 
-  public update(store: IntersectionControlStore | null, now: number): number {
+  public update(store: ReadonlyIntersectionControlStore | null, now: number): number {
     const stopPositions: number[] = [], redPositions: number[] = [], yellowPositions: number[] = [], greenPositions: number[] = [], queuePositions: number[] = [];
     let controllerCount = 0;
     if (store !== null) for (const controller of store.active(now)) {
