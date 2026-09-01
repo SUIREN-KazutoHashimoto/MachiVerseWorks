@@ -1,17 +1,17 @@
 # Remote MCP Administration Architecture
 
-## Purpose
+## 目的
 
-Phase 27 adds a remote Model Context Protocol (MCP) boundary to the existing headless server without creating a second authoritative administration path.
+Phase 27では、既存Headless ServerへRemote Model Context Protocol（MCP）境界を追加する。ただし、authoritativeなAdministration経路を二重化しないことを最優先とする。
 
-The data flow is intentionally one-way:
+基本data flowは次のとおり。
 
 ```text
-MCP client
+MCP Client
   -> HTTPS reverse proxy / tunnel
   -> Streamable HTTP /mcp
   -> RemoteMcpSecurityMiddleware
-  -> MCP tool adapter
+  -> MCP Tool adapter
   -> RemoteMcpAdminGateway
   -> AdminCommandParser
   -> AdminCommandQueue
@@ -19,35 +19,49 @@ MCP client
   -> SimulationRuntime
 ```
 
-MCP tools never receive `SimulationRuntime` and never reach simulation stores directly. Read operations and mutations therefore keep the same validation, deterministic scheduling, and state ownership used by the Phase 20 administration console.
+MCP Toolは`SimulationRuntime`を直接受け取らず、Simulation内部Storeにも直接アクセスしない。readとmutationはPhase 20 Administration Consoleと同じvalidation、authoritative ordering、state ownershipを再利用する。
 
-## Host boundary
+## Host境界
 
-The MCP server is hosted inside `MachiVerseWorks.Server` with the official `ModelContextProtocol.AspNetCore` package and Streamable HTTP at `/mcp`.
+MCP Serverは`MachiVerseWorks.Server`内へ組み込み、公式`ModelContextProtocol.AspNetCore` packageを利用して`/mcp`へStreamable HTTP endpointを公開する。
 
-`Server:Mcp:Enabled` defaults to `false`. When disabled, MCP services are not registered and `/mcp` is not mapped. Enabling MCP therefore requires an explicit deployment decision.
+`Server:Mcp:Enabled`の既定値は`false`とする。無効時はMCP serviceを登録せず、`/mcp`もmapしない。Remote MCP公開はdeployment側の明示的なopt-inである。
 
-The transport is configured as stateless because the Phase 27 tool set does not use server-to-client sampling, elicitation, or other session-owned features.
+Phase 27のToolはserver-to-client samplingやelicitation等のsession-owned機能を使用しないため、HTTP transportはstatelessとして構成する。
 
-## Authentication and authorization
+## 認証・認可境界
 
-Phase 27 uses pre-shared bearer credentials with three monotonically increasing scopes:
+pre-shared bearer credentialを3段階のscopeへ分離する。
 
-| Credential | Claims | Intended tools |
+| Credential | Claims | 主なTool |
 | --- | --- | --- |
-| read | `read` | status, version, diagnostics, logs, entity inspection |
-| write | `read`, `write` | read tools plus pause, step, resume, save, entity add/update |
-| destructive | `read`, `write`, `destructive` | all above plus entity removal |
+| read | `read` | status / version / diagnostics / logs / Entity inspect |
+| write | `read`, `write` | readに加えてpause / step / resume / save / Entity add・update |
+| destructive | `read`, `write`, `destructive` | 上記に加えて許可済みEntity remove |
 
-Configured tokens must be at least 32 characters and distinct. Only SHA-256 token hashes are retained by the runtime. The raw configured token value is never written to MCP logs.
+設定tokenは32文字以上かつ相互に異なる値とする。runtimeでは比較用SHA-256 hashのみ保持し、raw tokenをlogへ出力しない。
 
-ASP.NET Core authorization policies are also attached to MCP tools through the MCP SDK authorization filters. Consequently, unauthorized tools are filtered from `tools/list`, and a client cannot bypass the scope check by directly issuing `tools/call` with a hidden tool name.
+MCP SDKのauthorization filterをToolへ適用し、scope不足のToolは`tools/list`から除外する。Clientが非表示Tool名を直接`tools/call`しても同じpolicyで拒否する。
+
+## Browser Origin境界
+
+Browser以外のMCP Clientは通常`Origin`を送信しないため、その場合はCORS処理を必要としない。
+
+Browserから別Originへ接続する場合、`Authorization` headerによりpreflightが発生する。`RemoteMcpSecurityMiddleware`は次の順序で処理する。
+
+1. `/mcp` requestかを判定する。
+2. `Origin`が存在する場合は`AllowedOrigins`完全一致を検証する。
+3. 許可済み`OPTIONS` preflightへCORS response headerを返し、Bearer認証前に`204`で終了する。
+4. 通常requestではrequest size、Bearer認証、rate/concurrency制限、timeoutを適用する。
+5. 許可済みOriginへ`Access-Control-Allow-Origin`を完全一致値で返す。
+
+wildcard Originは使用しない。
 
 ## Tool surface
 
-The MCP surface is deliberately smaller than the local administration console.
+Remote MCP surfaceはlocal Administration Consoleより意図的に狭く保つ。
 
-Exposed read tools:
+read Tool:
 
 - `server_status`
 - `server_version`
@@ -56,70 +70,96 @@ Exposed read tools:
 - `logs_query`
 - `entity_query`
 
-Exposed write tools:
+write Tool:
 
 - `simulation_pause`
 - `simulation_step`
 - `simulation_resume`
 - `simulation_save`
-- `entity_write` (`add` / `update` only)
+- `entity_write`
 
-Exposed destructive tool:
+Destructive Tool:
 
-- `entity_remove` with destructive scope and `confirm=true`
+- `entity_remove`
 
-Not exposed:
+公開しない操作:
 
-- server shutdown / `stop` / `exit`
+- Server shutdown / `stop` / `exit`
 - `world load`
-- arbitrary administration command execution
-- arbitrary shell/process execution
-- arbitrary file read/write paths
-- client disconnect controls
+- generic Administration command execution
+- shell / process execution
+- 任意file path read/write
+- Client disconnect control
+- remote全Entity列挙
 
-Dynamic MCP arguments are converted into exactly one quoted administration token each. Entity types are mapped through a fixed allowlist before command parsing.
+MCPから受け取る可変argumentは1要素ずつquoted Administration tokenへ変換する。Entity種別とoperationは固定allowlistを通過したものだけcommandへmappingする。
 
-## Save boundary
+## Entity inspect境界
 
-`simulation_save` accepts a slot name rather than a path. A slot is restricted to 1-64 ASCII letters, digits, `.`, `_`, and `-`, excluding `.` and `..`. The resulting path is always placed under `Server:Mcp:SaveDirectory` and then handed to the existing `world save` administration command.
+大規模worldで`<entity> list`を呼ぶと、Administration executorがsnapshot生成・sort・formattingを全件分実行する可能性がある。この処理をRemote read credentialから繰り返せる状態はresource isolation上不適切である。
 
-MCP does not expose `world load` because remote replacement of the authoritative world has a wider failure and confirmation surface than Phase 27 requires.
+このためPhase 27の`entity_query`はstable IDを必須とし、`show`相当の1 Entity inspectだけを公開する。大量データ取得は将来の専用bounded query/read-model境界で扱い、MCP adapterで全件結果を後段truncateする設計は採用しない。
 
-## Bounded diagnostics and logs
+## Mutation allowlist境界
 
-A bounded in-memory `ILoggerProvider` is registered only when MCP is enabled. `logs_query` can search this tail but cannot access files. Query count and result size are bounded by configuration.
+Create / update / removeの可否を単一`MutableEntities`集合で表現せず、operationごとにallowlistを分離する。
 
-`diagnostics_metrics` reuses the existing `E2eMetrics` snapshot and caps the serialized result.
+Administration側が`add`のみ提供するFormation、Rail Route、Timetable、Service、TrainはRemote MCPでも`add`だけを許可する。update/removeをTool contract上許可してからexecutorで`invalid_argument`へ落とす構造を避け、remote capabilityとauthoritative implementationを一致させる。
+
+## Save境界
+
+`simulation_save`はpathではなくslot名を受け取る。slotは1〜64文字のASCII英数字、`.`, `_`, `-`に限定し、`.`と`..`を禁止する。
+
+実pathは常に`Server:Mcp:SaveDirectory`配下へ生成し、既存`world save` commandへ渡す。Directory作成・アクセスの失敗はMCP adapter内でstable `io_error`へ変換する。
+
+Remote MCPから`world load`は公開しない。authoritative world置換はPhase 27のremote trust boundaryより広いconfirmation / failure surfaceを持つためである。
+
+## Bounded diagnostics / logs
+
+MCP有効時だけbounded memory `ILoggerProvider`を登録する。`logs_query`はこのtailのみ検索し、filesystem上のlog fileへアクセスしない。
+
+log resultが`MaxResultBytes`を超える場合、serialized JSON文字列を途中sliceしない。entry数を削減して再serializationし、常にvalid JSONを返す。
+
+`diagnostics_metrics`もserialization後のサイズを確認し、完全なresultが上限を超える場合はstable rejectionを返す。
 
 ## Request isolation
 
-The `/mcp` boundary applies:
+`/mcp`境界では次を適用する。
 
-- maximum request body size
-- global concurrent-request limit
-- per-credential fixed-window requests-per-minute limit
-- request timeout via `RequestAborted`
-- exact Origin allowlist when an `Origin` header is present
-- bounded tool query/result sizes
+- request body最大サイズ
+- MCP全体の同時request数
+- credential単位のrequests-per-minute
+- request timeout / cancellation
+- `Origin`存在時のexact allowlist
+- Tool input / result size上限
+- bounded log retention
 
-Requests without an `Origin` header are supported for non-browser MCP clients. Browser-originated requests must match `Server:Mcp:AllowedOrigins` exactly.
+slow / malformed ClientがSimulation全体へ無制限のresource負荷を波及させないことを目的とする。
 
-## Reverse proxy / Cloudflare contract
+## Queue cancellation
 
-Remote clients must connect to an HTTPS URL such as `https://server.example/mcp`. Kestrel can remain on a private HTTP origin when TLS terminates at a trusted reverse proxy or Cloudflare Tunnel, provided that the origin is not directly reachable from untrusted networks.
+`RemoteMcpAdminGateway`はMCP requestのcancellation tokenを`AdminCommandRequest`へ保持させる。
 
-Deployment requirements:
+`AdminCommandQueue`はrequestをexecutorへ渡す直前にtokenを確認し、すでにcancel済みならcompletionをcancelしてcommandを破棄する。これによりrequest timeout後にqueued mutationだけが遅れて適用される事象を防止する。
 
-1. Publish only the proxy/tunnel HTTPS endpoint.
-2. Keep the Kestrel origin private or firewall-restricted.
-3. Inject bearer tokens through environment/secrets management, never source control.
-4. Configure proxy request/body/time limits at least as strict as the application limits.
-5. Do not cache `/mcp` responses.
-6. Preserve `Authorization`, `Content-Type`, `Accept`, `MCP-Protocol-Version`, and MCP response headers.
-7. If browser MCP clients are allowed, configure only the required trusted origins.
+executorがすでに実行を開始したcommandへ汎用rollbackを提供するものではない。Phase 27で保証するのは「実行開始前のcancel済みqueue itemを実行しない」ことである。
 
-Cloudflare Access may be added as an outer authentication layer, but it does not replace the MCP bearer scope checks in this phase.
+## Reverse proxy / Cloudflare契約
+
+Remote Clientは`https://server.example/mcp`のようなHTTPS URLへ接続する。TLSをtrusted reverse proxyまたはCloudflare Tunnelで終端する場合、Kestrel originはprivate networkまたはfirewallで保護する。
+
+Deployment要件:
+
+1. 外部へ公開するのはproxy / tunnelのHTTPS endpointだけとする。
+2. Kestrel originへuntrusted networkから直接到達できないようにする。
+3. Bearer tokenは環境変数またはsecret管理から注入する。
+4. proxy側のrequest body / timeout制限をapplication側と同等以上に厳しくする。
+5. `/mcp` responseをcacheしない。
+6. `Authorization`, `Content-Type`, `Accept`, `MCP-Protocol-Version`およびMCP response headerを保持する。
+7. Browser MCP Clientを許可する場合は必要なOriginだけを設定する。
+
+Cloudflare Access等を外側の追加認証として利用してよいが、Phase 27のread/write/destructive scope認可を置き換えるものではない。
 
 ## Failure isolation
 
-A slow or malformed MCP client can consume only its bounded request slot and timeout. Administration work is still serialized through the existing bounded `AdminCommandQueue`, so MCP cannot introduce a second concurrent mutation path into the simulation.
+MCPは独立したmutation pathを作らず、既存のbounded `AdminCommandQueue`による直列化を維持する。不正request、timeout、scope不足、oversize input、unsupported operationはSimulation process停止や権限昇格へ波及させず、HTTP statusまたはstable Tool resultとして閉じ込める。
