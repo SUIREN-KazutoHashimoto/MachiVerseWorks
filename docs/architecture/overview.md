@@ -1,40 +1,61 @@
 # Architecture Overview
 
-MachiVerseWorks は、都市シミュレーション本体と表示クライアントを明確に分離します。
+MachiVerseWorks は、authoritativeな都市Simulation、read-onlyなView、World / City / Serverを変更するManagementを明確に分離します。
 
-実装計画・Task状態も同じ責務境界に合わせ、Server-authoritativeなSimulation側は[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)、描画・Camera・UI / UX・View performance・localizationは[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)を正本とします。
+実装計画・Task状態も同じ責務境界に合わせ、Simulation側は[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)、純粋な観測・描画は[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)、管理・編集UIは[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)を正本とします。
 
 ## 全体構成
 
 ```text
-Browser 3D Client
-        ↕
-MachiVerseWorks.Protocol
-        ↕
-MachiVerseWorks.Server
-        ↓
-MachiVerseWorks.Simulation
-        ↑
-MachiVerseWorks.Persistence
+                         ┌───────────────────────┐
+                         │    Read-Only View     │
+                         │ render / inspector    │
+                         └───────────▲───────────┘
+                                     │ observation only
+                              MachiVerseWorks.Protocol
+                                     │
+                         ┌───────────┴───────────┐
+                         │ MachiVerseWorks.Server│
+                         │ Observation Gateway   │
+                         │ Command Boundary      │
+                         └───────┬───────▲───────┘
+                                 │       │ command
+                                 ▼       │
+                         ┌───────────────────────┐
+                         │ MachiVerseWorks.      │
+                         │ Simulation            │
+                         │ authoritative world   │
+                         └───────────▲───────────┘
+                                     │ checkpoint mapping
+                         ┌───────────┴───────────┐
+                         │ MachiVerseWorks.      │
+                         │ Persistence           │
+                         └───────────────────────┘
+
+Management Client ── command ────────► Server Command Boundary
+                 └─ read-only View component / Observation Gatewayを再利用可能
 ```
 
 `MachiVerseWorks.Persistence` は実行ループを所有せず、Simulation checkpointとversioned Save Dataの変換境界としてSimulationを参照します。Server save/load機能は、この境界を実行ホストから呼び出します。
 
 ## Simulation Core
 
-`MachiVerseWorks.Simulation` が authoritative world を所有します。
+`MachiVerseWorks.Simulation` がauthoritative worldと意味的処理を所有します。
 
 責務:
 
-- World / Agent / Traffic / Transit / Logistics / Power 等の状態管理
+- World / Agent / Traffic / Transit / Logistics / Power等の状態管理
 - simulation tick
-- command の適用
+- rule / semantic state / schedule / state transition
+- authoritative commandの適用
 - spatial index
-- deterministic / reproducible な処理が必要な領域の管理
-- snapshot 作成に必要な読み取り境界の提供
+- deterministic / reproducibleな処理が必要な領域の管理
+- Current / Recent / Planned / Historical等の観測に必要なread model境界
 - save/load用checkpointの作成・復元境界
 
-Simulation Core は HTTP、WebSocket、ASP.NET Core、DOM、Three.js を知りません。
+Activity、ETA、都市分類、予定、semantic event等をView側へ計算委譲しません。
+
+Simulation CoreはHTTP、WebSocket、ASP.NET Core、DOM、Three.jsを知りません。
 
 ## Persistence
 
@@ -52,101 +73,138 @@ PersistenceはSimulation内部Storeを正本として所有せず、file path、
 
 ## Server
 
-`MachiVerseWorks.Server` は実行ホストと外部境界です。
+`MachiVerseWorks.Server` は実行ホストと外部境界です。read-only observationとauthoritative commandを別責務として扱います。
 
 責務:
 
-- Simulation のライフサイクル
+- Simulationのライフサイクル
 - tick loop
-- Client 接続
+- Client接続
+- Observation Gateway
+  - subscription / interest management
+  - detached read model取得
+  - spatial filtering
+  - snapshot / delta配信
+  - observation cache / request deduplication
+  - reconnect / resync
 - command validation / dispatch
-- subscription / interest management
-- snapshot / delta / statistics の配信
-- save / load 等の外部 I/O 境界
-- Remote Administration等からauthoritative command境界を安全に再利用するhost機能
+- save / load等の外部I/O境界
+- Remote Administration / Managementからauthoritative command境界を安全に再利用するhost機能
 
-Network I/O と Simulation の可変 state を直接共有し続けず、明示的な command / snapshot 境界を使います。
+Network I/OとSimulationのmutable stateを直接共有し続けず、明示的なobservation / command境界を使います。
+
+Observation Gatewayの詳細は[`observation-gateway.md`](observation-gateway.md)を参照してください。
 
 ## Protocol
 
 `MachiVerseWorks.Protocol` は外部契約です。
 
-- command type
+- observation request
 - snapshot / delta message
 - entity spawn / update / remove
-- metadata / statistics
+- management / administration command type
+- metadata
 - protocol version
 - binary layout
 - compatibility rule
 
-Simulation 内部の class や object graph を、そのまま network contract にしません。現行versionとbinary layoutの正本は[`protocol.md`](protocol.md)です。
+read-only Observation Requestとauthoritative mutation commandは意味的に区別します。Simulation内部のclassやobject graphをそのままnetwork contractにしません。現行versionとbinary layoutの正本は[`protocol.md`](protocol.md)です。
 
-## Web Client
+## View
 
-Web Client は表示と入力を担当します。
+Viewは**完全read-only**な観測Clientです。
 
-- Camera 周辺など必要範囲を subscribe
-- snapshot / delta を受信
-- spawn / update / remove をローカル描画 state へ反映
-- Simulation tick 間を補間して描画
-- UI / Inspector から server-authoritative command 境界へ入力する
+- Camera周辺や明示targetのObservation Requestを送る
+- snapshot / deltaを受信する
+- spawn / update / removeをローカル描画stateへ反映する
+- Simulation tick間を補間して描画する
+- Objectを選択し、Current / Recent Past / Planned Future等のSimulation提供値をInspectorへ表示する
+- Historical projectionを受信して過去Worldを表示する
 
-Client のローカル state は描画・UX用のキャッシュであり、都市世界の正本ではありません。Camera / Rendering LOD / View cacheをSimulation Fidelityやworkloadの判定条件に使用しません。
+ViewはSimulation stateを変更するcommandを送信しません。ViewローカルstateはCamera、Selection、Rendering resource、cache、LOD、interpolation等のPresentation用途に限定します。
+
+Viewの存在・非存在、Client数、Camera位置、Selection、描画FPS、Rendering LOD、View cache状態によってSimulation結果が変化してはなりません。
+
+## Management
+
+ManagementはWorld / City / Serverを明示的に変更する操作Clientです。
+
+- build / edit / remove
+- naming / override
+- simulation pause / resume / step
+- Server configuration
+- Save / Load
+- destructive operation confirmation
+
+Managementはread-only View componentを画面内で再利用してよいですが、mutationは必ずServerのauthoritative command境界から実行します。View module自体へcommand責務を混在させません。
+
+ManagementのTask状態は[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)を正本とします。
+
+## Analytics
+
+人口統計、経済分析、交通分析、trend、heatmap等の分析処理はViewに実装しません。必要になった場合は専用Analytics Listener / data pipeline / analysis clientを別責務として設計します。
+
+ViewがCamera中心の局所Observationを必要とするのに対し、Analyticsは長期・全World・集計向けfeedを必要とするため、両者を同じClient-side処理へ統合しません。
 
 ## Tick と Snapshot
 
-Simulation tick と表示 frame を分離します。
-
-例:
+Simulation tickと表示frameを分離します。
 
 ```text
 Simulation: fixed / controlled tick
-Snapshot:   lower-frequency publish
-Rendering:  display refresh rate + interpolation
+Observation publish: lower-frequency / revision-driven
+Rendering: display refresh rate + interpolation
 ```
 
-具体的な tick rate や publish rate は benchmark 後に決定し、固定値を設計上の前提にしすぎません。
+具体的なtick rateやpublish rateはbenchmark後に決定し、固定値を設計上の前提にしすぎません。
 
-Snapshot は network thread が Simulation の mutable storage を直接読む方式ではなく、immutable view、double buffer、copy-on-publish 等の方式を比較して決定します。
+Snapshotはnetwork threadがSimulationのmutable storageを直接読む方式ではなく、detached immutable read model、double buffer、copy-on-publish等を使用します。
 
-## Spatial Interest Management
+## Spatial Observation
 
-大規模都市全体を全 Client へ送信しません。
+大規模World全体を全Viewへ送信しません。
 
-Client は camera / inspection target 等から必要範囲を Server へ通知し、Server は空間 index を用いて対象 entity を選択します。domainによってaggregate / world-wide read modelが必要な場合は、各Protocol contractで明示します。
+ViewはCamera / inspection target等から必要範囲をObservation Gatewayへ通知し、Gatewayはdetached read modelをspatial filteringして配信します。
 
-基本イベント:
+代表的なdelivery:
 
 - spawn
 - update
 - remove
+- revision-driven static snapshot
+- explicit inspect result
+- Historical projection
 
-必要に応じて full snapshot と delta を組み合わせます。
+必要に応じてfull snapshotとdeltaを組み合わせます。
+
+Observation範囲はdelivery負荷を決めるだけで、Simulation FidelityやSimulation対象を変えません。
 
 ## Performance Principles
 
-旧 Machi-Sim での経験から、次を初期原則とします。
+旧Machi-Simでの経験から、次を初期原則とします。
 
-- hot path の不要 allocation を避ける
-- Agent ごとの Task を作らない
-- subsystem / chunk / range 単位で並列化する
-- 毎 tick / frame の全件 scan を避ける
-- active / sleeping / event-driven state を検討する
-- routing / traffic / pedestrian / publish / render を個別計測する
-- optimization は benchmark と profiler に基づく
+- hot pathの不要allocationを避ける
+- AgentごとのTaskを作らない
+- subsystem / chunk / range単位で並列化する
+- 毎tick / frameの全件scanを避ける
+- active / sleeping / event-driven stateを検討する
+- routing / traffic / pedestrian / publish / renderを個別計測する
+- Observation Gatewayのcache / deduplicationで同一read処理を無駄に繰り返さない
+- optimizationはbenchmarkとprofilerに基づく
 
-C# 側ではまず通常の array / struct / Span / Parallel.For 等で明快に実装し、unsafe / SIMD / native code は計測後に必要な箇所だけ検討します。
+C#側ではまず通常のarray / struct / Span / Parallel.For等で明快に実装し、unsafe / SIMD / native codeは計測後に必要な箇所だけ検討します。
 
 ## Legacyとの違い
 
-旧 `Machi-Sim_Legacy` はブラウザ内で Simulation と Rendering を完結させていました。
+旧`Machi-Sim_Legacy`はブラウザ内でSimulationとRenderingを完結させていました。
 
-MachiVerseWorks では以下を変更します。
+MachiVerseWorksでは以下を変更します。
 
-- Browser-owned world → Server-owned world
-- Worker / SharedArrayBuffer 中心 → C# Simulation Core
-- runtime patch accumulation → 明示的な責務と contract
-- rendering requirement と simulation data ownership を分離
-- whole-world client state → spatial / explicit read-model subscription
+- Browser-owned world → Server-owned authoritative world
+- Worker / SharedArrayBuffer中心 → C# Simulation Core
+- runtime patch accumulation → 明示的な責務とcontract
+- rendering requirementとsimulation data ownershipを分離
+- whole-world client state → spatial / explicit Observation Request
+- View mutation UI → 独立したManagement command client
 
-Legacyから引き継ぐ知見は [`../archive/legacy-machi-sim/README.md`](../archive/legacy-machi-sim/README.md) を参照してください。
+Legacyから引き継ぐ知見は[`../archive/legacy-machi-sim/README.md`](../archive/legacy-machi-sim/README.md)を参照してください。
