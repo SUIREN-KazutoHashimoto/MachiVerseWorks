@@ -2,7 +2,7 @@
 
 都市シミュレーションとしての**現行仕様**を分野別に管理します。
 
-このディレクトリでは What / Why を中心に記述し、実装方法の詳細は `docs/architecture/` へ分離します。
+このディレクトリでは What / Why を中心に記述し、実装方法の詳細は `docs/architecture/` へ分離します。将来実装のTask状態は仕様書へ混ぜず、Simulation側は[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)、View側は[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)を正本とします。
 
 ## Foundation / Client / Server
 
@@ -39,6 +39,6 @@
 
 Railway InfrastructureとRailway Operationsは責務を分離します。前者はTrack / Station等のtopology正本、後者はそのstable IDを参照して動くTrain / Service stateです。Multimodal Transitはさらにその上でRoad Traffic / Railway Operationsを再利用し、mode間Journeyを所有します。Optical CommunicationはPower InfrastructureとBuilding / Establishmentのstable IDを再利用し、Radio & Spectrum Foundationへgeneric backhaul境界を提供します。
 
-Protocolの現行version、binary layout、互換性ルールは [`../architecture/protocol.md`](../architecture/protocol.md) を正本とします。索引READMEではProtocol番号を重複管理しません。
+Protocolの現行version、binary layout、互換性ルールは [`../architecture/protocol.md`](../architecture/protocol.md) を正本とします。Save formatの現行versionとmigrationは[`save-data.md`](save-data.md)を正本とし、索引READMEでは番号を重複管理しません。
 
 過去Phaseの歴史的資料を現行契約と異なる形で残す必要がある場合は `docs/archive/` へ移します。
