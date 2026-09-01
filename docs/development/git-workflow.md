@@ -175,11 +175,12 @@ PR本文には最低限、可能な範囲で次を含めます。
 - architecture / responsibility → `docs/architecture/`
 - 開発・テスト・運用 → `docs/development/`
 - 長期的な設計判断と理由 → `docs/decisions/`
+- Phase補足設計・検討 → `docs/roadmap/`（Task状態の正本にはしない）
 - 廃止済み・Legacy・実験履歴 → `docs/archive/`
 - Simulation側の実装計画 → `roadmap/SIMULATION_ROADMAP.md`
 - View側の実装計画 → `roadmap/VIEW_ROADMAP.md`
 
-過去資料を現行仕様の根拠へ戻さないようにします。
+過去資料を現行仕様の根拠へ戻さないようにします。文書を移動・改名した場合は参照元を更新し、`python scripts/check-markdown-links.py`またはCIのMarkdown link validationでローカルリンクとheading anchorを検証します。
 
 ## 10. 完了条件
 
@@ -190,4 +191,5 @@ PR本文には最低限、可能な範囲で次を含めます。
 - runtime 確認が必要な項目は確認済み、または未確認と明記している
 - 不要な debug code / experiment flag が残っていない
 - 対応する `roadmap/SIMULATION_ROADMAP.md` / `roadmap/VIEW_ROADMAP.md` の Task 状態が同期されている
+- Markdownを追加・移動・改名した場合はlocal link / heading anchor validationが成功している
 - 通常開発期間では `AGENTS.md` と `versioning.md` の version 規則へ従っている
