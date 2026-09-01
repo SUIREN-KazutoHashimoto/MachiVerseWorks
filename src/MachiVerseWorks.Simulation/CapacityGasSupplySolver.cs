@@ -60,7 +60,7 @@ public sealed class CapacityGasSupplySolver : IGasSupplySolver
         Func<T, ulong> getId,
         Func<T, GasNodeId> getNodeId,
         Func<T, double> getCapacity,
-        IReadOnlyDictionary<GasNodeId, int> indexes,
+        Dictionary<GasNodeId, int> indexes,
         DirectedCapacityGraph graph,
         int sourceVertex,
         string name)
