@@ -18,6 +18,10 @@ MachiVerseWorks の現行技術アーキテクチャを管理します。
 - [`persistence.md`](persistence.md): Simulation checkpoint、Save Data serializer、validation、format evolution
 - [`localization.md`](localization.md): 多言語対応を見越した言語境界
 
+## World / Physical Environment
+
+- [`world-environment-terrain.md`](world-environment-terrain.md): authoritative Global Environment、Detailed 3D Terrain、GeographicFeature、Toponym、Observation / Save境界
+
 ## Mobility / Population / Economy
 
 - [`road-network.md`](road-network.md): Road Network topology、spatial index、access boundary
