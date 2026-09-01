@@ -13,7 +13,7 @@ import {
 } from '../src/gas-protocol.ts';
 
 function createFrame() {
-  const payloadLength = 92 + (33 * 2) + 33 + 42 + 74;
+  const payloadLength = 92 + (33 * 2) + 33 + 42 + 102;
   const frame = new ArrayBuffer(PROTOCOL_HEADER_SIZE + payloadLength);
   const view = new DataView(frame);
   const o = PROTOCOL_HEADER_SIZE;
@@ -71,6 +71,10 @@ function createFrame() {
   view.setFloat64(c + 57, 10, true);
   view.setFloat64(c + 65, 0, true);
   view.setUint8(c + 73, GasServiceState.Supplied);
+  view.setFloat64(c + 74, 0, true);
+  view.setFloat64(c + 82, 0, true);
+  view.setFloat64(c + 90, 0, true);
+  view.setUint32(c + 98, 0, true);
   return frame;
 }
 
@@ -81,6 +85,7 @@ test('Gas snapshot decodes Protocol 2.14 payload', () => {
   assert.deepEqual(envelope.version, { major: 2, minor: 14 });
   assert.equal(envelope.message.statistics.servedCubicMetersPerDay, 10);
   assert.equal(envelope.message.servicePoints[0].serviceState, GasServiceState.Supplied);
+  assert.equal(envelope.message.servicePoints[0].activeShipmentCount, 0);
 });
 
 test('Gas decoder rejects Protocol 2.13', () => {
