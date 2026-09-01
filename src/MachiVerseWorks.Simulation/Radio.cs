@@ -112,7 +112,9 @@ public readonly record struct RadioPropagationRequest(
     FrequencyBlock FrequencyBlock,
     RadioLinkBudget LinkBudget,
     double InterferenceDbm,
-    double NoiseFloorDbm);
+    double NoiseFloorDbm,
+    double ObstructionLossDb = 0d,
+    bool IsLineOfSight = true);
 
 public readonly record struct RadioPropagationResult(
     double DistanceMeters,
@@ -157,7 +159,11 @@ public sealed record RadioSnapshot(
     IReadOnlyList<FrequencyBlock> FrequencyBlocks,
     IReadOnlyList<RadioLinkSnapshot> Links,
     IReadOnlyList<RadioServiceArea> ServiceAreas,
-    IReadOnlyList<SpectrumConflict> Conflicts);
+    IReadOnlyList<SpectrumConflict> Conflicts,
+    IReadOnlyList<RadioAntennaSnapshot>? Antennas = null,
+    IReadOnlyList<RadioTransmitterSnapshot>? Transmitters = null,
+    IReadOnlyList<RadioReceiverSnapshot>? Receivers = null,
+    IReadOnlyList<RadioEmissionSnapshot>? Emissions = null);
 
 public sealed record RadioCheckpoint(
     ulong NextSiteId,
@@ -169,7 +175,17 @@ public sealed record RadioCheckpoint(
     IReadOnlyList<SpectrumBand> Bands,
     IReadOnlyList<FrequencyBlock> FrequencyBlocks,
     IReadOnlyList<SimulationRadioLinkCheckpoint> Links,
-    IReadOnlyList<RadioPeer> Peers);
+    IReadOnlyList<RadioPeer> Peers,
+    ulong NextAntennaId = 1,
+    ulong NextTransmitterId = 1,
+    ulong NextReceiverId = 1,
+    ulong NextEmissionId = 1,
+    IReadOnlyList<SimulationRadioAntennaCheckpoint>? Antennas = null,
+    IReadOnlyList<SimulationRadioTransmitterCheckpoint>? Transmitters = null,
+    IReadOnlyList<SimulationRadioReceiverCheckpoint>? Receivers = null,
+    IReadOnlyList<SimulationRadioEmissionCheckpoint>? Emissions = null,
+    IReadOnlyList<RadioSiteInfrastructureBinding>? SiteInfrastructure = null,
+    IReadOnlyList<RadioLinkEntityBinding>? LinkEntityBindings = null);
 
 public readonly record struct SimulationRadioSiteCheckpoint(
     RadioSiteId Id,
