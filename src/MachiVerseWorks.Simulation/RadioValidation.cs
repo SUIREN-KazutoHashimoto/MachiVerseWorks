@@ -93,6 +93,7 @@ public static class RadioValidation
         ValidateLinkBudget(request.LinkBudget);
         ValidateFinite(request.InterferenceDbm, nameof(request));
         ValidateFinite(request.NoiseFloorDbm, nameof(request));
+        ValidateNonNegativeFinite(request.ObstructionLossDb, nameof(request));
     }
 
     public static void ValidateSiteSnapshot(RadioSiteSnapshot site, string paramName)
