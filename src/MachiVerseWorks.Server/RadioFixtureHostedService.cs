@@ -4,7 +4,8 @@ namespace MachiVerseWorks.Server;
 
 internal sealed class RadioFixtureHostedService(SimulationRuntime simulation, IConfiguration configuration) : BackgroundService
 {
-    private RadioSiteId _interfererSiteId;
+    private PowerLineId _sourcePowerLineId;
+    private OpticalBackhaulId _interfererBackhaulId;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -18,7 +19,8 @@ internal sealed class RadioFixtureHostedService(SimulationRuntime simulation, IC
                 var phase = simulation.TickCount % 90UL;
                 simulation.Mutate(world =>
                 {
-                    world.SetRadioSiteInService(_interfererSiteId, phase < 30UL || phase >= 60UL);
+                    world.SetPowerLineInService(_sourcePowerLineId, phase is < 30UL or >= 45UL);
+                    world.SetOpticalBackhaulInService(_interfererBackhaulId, phase is < 60UL or >= 75UL);
                     return true;
                 });
             }
@@ -28,7 +30,19 @@ internal sealed class RadioFixtureHostedService(SimulationRuntime simulation, IC
 
     private void Seed(SimulationWorld world)
     {
-        world.CreateBuilding(new WorldVolume(390d, -45d, 0d, 480d, 45d, 75d), BuildingKind.Commercial);
+        var obstruction = world.CreateBuilding(new WorldVolume(390d, -45d, 0d, 480d, 45d, 75d), BuildingKind.Commercial);
+        _ = obstruction;
+        var sourcePowerBuilding = world.CreateBuilding(new WorldVolume(-80d, -120d, 0d, -40d, -80d, 25d), BuildingKind.Commercial);
+
+        var powerSource = world.CreatePowerNode(new WorldPoint(-140d, -100d, 0d), PowerNodeKind.GeneratorBus);
+        var powerLoad = world.CreatePowerNode(new WorldPoint(-60d, -100d, 0d), PowerNodeKind.Load);
+        _sourcePowerLineId = world.CreatePowerLine(powerSource, powerLoad, 10d);
+        world.CreateGenerator(powerSource, 5d);
+        world.CreatePowerLoad(powerLoad, 1d, sourcePowerBuilding);
+
+        var interfererOpticalNode = world.CreateOpticalNode(new WorldPoint(150d, 100d, 0d), OpticalNodeKind.BackboneGateway);
+        world.CreateOpticalEquipment(interfererOpticalNode, OpticalEquipmentKind.Router, 20d, requiresPower: false);
+        _interfererBackhaulId = world.CreateOpticalBackhaul(interfererOpticalNode, 20d);
 
         var band = world.CreateSpectrumBand("radio-debug", 3_300d, 3_800d);
         var channelA = world.CreateRadioChannel(band, 3_500d, 20d);
@@ -37,16 +51,19 @@ internal sealed class RadioFixtureHostedService(SimulationRuntime simulation, IC
 
         var source = world.CreateRadioSite(new WorldPoint(0d, 0d, 0d), RadioSiteKind.Macro, 15d, 30d);
         var receiverSite = world.CreateRadioSite(new WorldPoint(850d, 0d, 0d), RadioSiteKind.Micro, 5d, 12d);
-        _interfererSiteId = world.CreateRadioSite(new WorldPoint(150d, 120d, 0d), RadioSiteKind.Macro, 15d, 25d);
+        var interfererSite = world.CreateRadioSite(new WorldPoint(150d, 120d, 0d), RadioSiteKind.Macro, 15d, 25d);
         var interferenceReceiverSite = world.CreateRadioSite(new WorldPoint(900d, 120d, 0d), RadioSiteKind.Micro, 5d, 12d);
+
+        world.BindRadioSiteInfrastructure(source, sourcePowerBuilding, requiresPower: true);
+        world.BindRadioSiteInfrastructure(interfererSite, opticalBackhaulId: _interfererBackhaulId, requiresPower: false);
 
         var sourceAntenna = world.CreateRadioAntenna(source, new WorldVector(0d, 0d, 30d), new WorldVector(1d, 0d, 0d), 15d, RadioAntennaPatternKind.Directional, 90d, 20d);
         var receiverAntenna = world.CreateRadioAntenna(receiverSite, new WorldVector(0d, 0d, 12d), new WorldVector(-1d, 0d, 0d), 5d, RadioAntennaPatternKind.Directional, 100d, 15d);
-        var interfererAntenna = world.CreateRadioAntenna(_interfererSiteId, new WorldVector(0d, 0d, 25d), new WorldVector(1d, 0d, 0d), 15d, RadioAntennaPatternKind.Directional, 120d, 20d);
+        var interfererAntenna = world.CreateRadioAntenna(interfererSite, new WorldVector(0d, 0d, 25d), new WorldVector(1d, 0d, 0d), 15d, RadioAntennaPatternKind.Directional, 120d, 20d);
         var interferenceReceiverAntenna = world.CreateRadioAntenna(interferenceReceiverSite, new WorldVector(0d, 0d, 12d), new WorldVector(-1d, 0d, 0d), 5d, RadioAntennaPatternKind.Directional, 100d, 15d);
 
         var sourceTransmitter = world.CreateRadioTransmitter(source, sourceAntenna, 46d);
-        var interfererTransmitter = world.CreateRadioTransmitter(_interfererSiteId, interfererAntenna, 46d);
+        var interfererTransmitter = world.CreateRadioTransmitter(interfererSite, interfererAntenna, 46d);
         var receiver = world.CreateRadioReceiver(receiverSite, receiverAntenna, 3_300d, 3_800d, -105d);
         var interferenceReceiver = world.CreateRadioReceiver(interferenceReceiverSite, interferenceReceiverAntenna, 3_300d, 3_800d, -105d);
 
