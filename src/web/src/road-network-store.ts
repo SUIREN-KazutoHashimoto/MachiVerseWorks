@@ -1,6 +1,14 @@
 import type { Lane, LaneConnection, RoadAccessPoint, RoadNetworkSnapshotMessage, RoadNode, RoadSegment } from './protocol.ts';
 
-export class RoadNetworkStore {
+export interface ReadonlyRoadNetworkStore {
+  readonly snapshot: RoadNetworkSnapshotMessage | null;
+  readonly revision: number;
+  readonly segmentCount: number;
+  getNode(id: bigint): RoadNode | undefined;
+  getSegment(id: bigint): RoadSegment | undefined;
+}
+
+export class RoadNetworkStore implements ReadonlyRoadNetworkStore {
   private current: RoadNetworkSnapshotMessage | null = null;
   private nodeById = new Map<bigint, RoadNode>();
   private segmentById = new Map<bigint, RoadSegment>();
