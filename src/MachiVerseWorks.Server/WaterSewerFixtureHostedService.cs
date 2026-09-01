@@ -13,7 +13,7 @@ internal sealed class WaterSewerFixtureHostedService(
     private BuildingId _additionalBuildingId;
     private bool _enabled;
     private bool _seeded;
-    private bool _additionalDemandAdded;
+    private ulong _lastDemandCycle = ulong.MaxValue;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -34,6 +34,7 @@ internal sealed class WaterSewerFixtureHostedService(
             {
                 var tick = simulation.TickCount;
                 var cycle = tick % 100UL;
+                var demandCycle = tick / 100UL;
                 simulation.Mutate(world =>
                 {
                     if (!_seeded) return true;
@@ -41,14 +42,14 @@ internal sealed class WaterSewerFixtureHostedService(
                     world.SetSewageTreatmentPlantOperatingState(
                         _treatmentPlantId,
                         cycle is >= 20UL and < 40UL ? UtilityOperatingState.Offline : UtilityOperatingState.Online);
-                    if (!_additionalDemandAdded && tick >= 10UL)
+                    if (cycle < 10UL && demandCycle != _lastDemandCycle)
                     {
                         world.CreateWaterSewerServicePoint(
                             _serviceWaterNodeId,
                             _serviceSewerNodeId,
-                            7d,
+                            3d + (demandCycle % 5UL),
                             buildingId: _additionalBuildingId);
-                        _additionalDemandAdded = true;
+                        _lastDemandCycle = demandCycle;
                     }
                     return true;
                 });
