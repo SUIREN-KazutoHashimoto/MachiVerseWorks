@@ -4,7 +4,7 @@
 
 ## 開発フロー / 共通ルール
 
-- [`getting-started.md`](getting-started.md): 環境準備、build、test、Server + Web Client起動手順
+- [`getting-started.md`](getting-started.md): 環境準備、build、test、Server + Web View起動手順
 - [`coding-guidelines.md`](coding-guidelines.md): C# / Simulation / Server / Protocol / Webの共通実装ルール
 - [`git-workflow.md`](git-workflow.md): branch / PR / validationの標準フロー
 - [`repository-settings.md`](repository-settings.md): branch protection、merge方式、GitHub Security設定の基準
@@ -13,9 +13,18 @@
 - [`performance.md`](performance.md): benchmark、profiling、性能指標、最適化判断の基準
 - [`localization-guidelines.md`](localization-guidelines.md): 将来の多言語対応を壊さない実装ルール
 
-共通の開発ルールはルートの [`../../AGENTS.md`](../../AGENTS.md) を正本とします。.NET SDKの基準はルートの `global.json`、Node.jsの基準は `src/web/.node-version` を正本とします。
+共通の開発ルールはルートの[`../../AGENTS.md`](../../AGENTS.md)を正本とします。.NET SDKの基準はルートの`global.json`、Node.jsの基準は`src/web/.node-version`を正本とします。
 
-実装計画・Task状態は、Simulation側を[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)、View側を[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)で管理します。`docs/roadmap/` にあるPhase補足資料は詳細設計・検討用であり、Task状態の正本ではありません。
+実装計画・Task状態は、Simulation側を[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)、read-only View側を[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)、管理・編集UIを[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)で管理します。`docs/roadmap/`にあるPhase補足資料は詳細設計・検討用であり、Task状態の正本ではありません。
+
+責務判断の基準:
+
+- World state / rule / meaning / Observation contract / authoritative command → Simulation Roadmap
+- 描画 / Camera / Selection / Inspector / Historical viewing / Rendering LOD → View Roadmap
+- build / edit / runtime control / configuration / Save UI → Management Roadmap
+- 統計分析 / trend / heatmap等 → Viewへ入れず将来Analytics系として別設計
+
+SimulationとViewのObservation Gateway / cache境界は[`../architecture/observation-gateway.md`](../architecture/observation-gateway.md)を参照します。
 
 ## E2E / Benchmark基盤
 
@@ -50,4 +59,4 @@
 - [`water-sewer-infrastructure-benchmark.md`](water-sewer-infrastructure-benchmark.md): Water / Sewer infrastructure solver / state publish
 - [`gas-infrastructure-benchmark.md`](gas-infrastructure-benchmark.md): Gas infrastructure solver / state publish
 
-Phase番号を含むbenchmark文書は、その時点のbaseline evidenceを識別するための名称です。現在のSimulation / View Roadmap上の進行Phaseを示す索引としては扱いません。新しいbenchmark evidenceを追加した場合は、このREADMEにも追記します。
+Phase番号を含むbenchmark文書は、その時点のbaseline evidenceを識別するための名称です。現在のSimulation / View / Management Roadmap上の進行Phaseを示す索引としては扱いません。新しいbenchmark evidenceを追加した場合は、このREADMEにも追記します。
