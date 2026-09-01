@@ -11,7 +11,7 @@ const FIXED_PAYLOAD_LENGTH = 92;
 const NODE_PAYLOAD_LENGTH = 33;
 const PIPELINE_PAYLOAD_LENGTH = 33;
 const FACILITY_PAYLOAD_LENGTH = 42;
-const SERVICE_POINT_PAYLOAD_LENGTH = 74;
+const SERVICE_POINT_PAYLOAD_LENGTH = 102;
 
 export enum GasNodeKind { Source = 0, ImportTerminal = 1, Storage = 2, Distribution = 3, Service = 4, Regulator = 5 }
 export enum GasFacilityKind { Source = 0, ImportTerminal = 1, Storage = 2 }
@@ -52,6 +52,10 @@ export interface GasServicePoint {
   readonly servedCubicMetersPerDay: number;
   readonly unservedCubicMetersPerDay: number;
   readonly serviceState: GasServiceState;
+  readonly deliveredInventoryCubicMeters: number;
+  readonly deliveredInventoryCapacityCubicMeters: number;
+  readonly activeShipmentCubicMeters: number;
+  readonly activeShipmentCount: number;
 }
 export interface GasSnapshotMessage {
   readonly type: typeof GAS_SNAPSHOT_MESSAGE_TYPE;
@@ -120,7 +124,12 @@ export function decodeGasFrame(frame: ArrayBuffer): GasProtocolEnvelope {
   }
   const servicePoints: GasServicePoint[] = [];
   for (let index = 0; index < servicePointCount; index += 1) {
-    const servicePoint: GasServicePoint = { servicePointId: view.getBigUint64(cursor, true), nodeId: view.getBigUint64(cursor + 8, true), buildingId: view.getBigUint64(cursor + 16, true), establishmentId: view.getBigUint64(cursor + 24, true), deliveryMode: view.getUint8(cursor + 32) as GasDeliveryMode, commodityId: view.getBigUint64(cursor + 33, true), baseDemandCubicMetersPerDay: view.getFloat64(cursor + 41, true), demandCubicMetersPerDay: view.getFloat64(cursor + 49, true), servedCubicMetersPerDay: view.getFloat64(cursor + 57, true), unservedCubicMetersPerDay: view.getFloat64(cursor + 65, true), serviceState: view.getUint8(cursor + 73) as GasServiceState };
+    const servicePoint: GasServicePoint = {
+      servicePointId: view.getBigUint64(cursor, true), nodeId: view.getBigUint64(cursor + 8, true), buildingId: view.getBigUint64(cursor + 16, true), establishmentId: view.getBigUint64(cursor + 24, true),
+      deliveryMode: view.getUint8(cursor + 32) as GasDeliveryMode, commodityId: view.getBigUint64(cursor + 33, true), baseDemandCubicMetersPerDay: view.getFloat64(cursor + 41, true), demandCubicMetersPerDay: view.getFloat64(cursor + 49, true),
+      servedCubicMetersPerDay: view.getFloat64(cursor + 57, true), unservedCubicMetersPerDay: view.getFloat64(cursor + 65, true), serviceState: view.getUint8(cursor + 73) as GasServiceState,
+      deliveredInventoryCubicMeters: view.getFloat64(cursor + 74, true), deliveredInventoryCapacityCubicMeters: view.getFloat64(cursor + 82, true), activeShipmentCubicMeters: view.getFloat64(cursor + 90, true), activeShipmentCount: view.getUint32(cursor + 98, true),
+    };
     if (!validServicePoint(servicePoint)) throw new ProtocolDecodeFailure('Gas service point entry is invalid.');
     servicePoints.push(servicePoint); cursor += SERVICE_POINT_PAYLOAD_LENGTH;
   }
@@ -134,8 +143,9 @@ function validNode(value: GasNode): boolean { return value.nodeId !== 0n && valu
 function validPipeline(value: GasPipeline): boolean { return value.pipelineId !== 0n && value.fromNodeId !== 0n && value.toNodeId !== 0n && value.fromNodeId !== value.toNodeId && positive(value.capacityCubicMetersPerDay); }
 function validFacility(value: GasFacility): boolean { return value.kind >= GasFacilityKind.Source && value.kind <= GasFacilityKind.Storage && value.facilityId !== 0n && value.nodeId !== 0n && positive(value.capacityCubicMetersPerDay) && nonNegative(value.outputCubicMetersPerDay) && nonNegative(value.storedCubicMeters) && value.outputCubicMetersPerDay <= value.capacityCubicMetersPerDay + 1e-9 && (value.operatingState === GasOperatingState.Online || value.operatingState === GasOperatingState.Offline); }
 function validServicePoint(value: GasServicePoint): boolean {
-  if (value.servicePointId === 0n || (value.buildingId === 0n && value.establishmentId === 0n) || !positive(value.baseDemandCubicMetersPerDay) || !nonNegative(value.demandCubicMetersPerDay) || !nonNegative(value.servedCubicMetersPerDay) || !nonNegative(value.unservedCubicMetersPerDay) || value.servedCubicMetersPerDay > value.demandCubicMetersPerDay + 1e-9 || value.serviceState < GasServiceState.Supplied || value.serviceState > GasServiceState.Unavailable) return false;
-  return value.deliveryMode === GasDeliveryMode.Piped ? value.nodeId !== 0n && value.commodityId === 0n : value.deliveryMode === GasDeliveryMode.Delivered && value.nodeId === 0n && value.establishmentId !== 0n && value.commodityId !== 0n;
+  if (value.servicePointId === 0n || (value.buildingId === 0n && value.establishmentId === 0n) || !positive(value.baseDemandCubicMetersPerDay) || !nonNegative(value.demandCubicMetersPerDay) || !nonNegative(value.servedCubicMetersPerDay) || !nonNegative(value.unservedCubicMetersPerDay) || value.servedCubicMetersPerDay > value.demandCubicMetersPerDay + 1e-9 || value.serviceState < GasServiceState.Supplied || value.serviceState > GasServiceState.Unavailable || !nonNegative(value.deliveredInventoryCubicMeters) || !nonNegative(value.deliveredInventoryCapacityCubicMeters) || !nonNegative(value.activeShipmentCubicMeters) || !Number.isInteger(value.activeShipmentCount) || value.activeShipmentCount < 0) return false;
+  if (value.deliveryMode === GasDeliveryMode.Piped) return value.nodeId !== 0n && value.commodityId === 0n && value.deliveredInventoryCubicMeters <= 1e-9 && value.deliveredInventoryCapacityCubicMeters <= 1e-9 && value.activeShipmentCubicMeters <= 1e-9 && value.activeShipmentCount === 0;
+  return value.deliveryMode === GasDeliveryMode.Delivered && value.nodeId === 0n && value.establishmentId !== 0n && value.commodityId !== 0n && positive(value.deliveredInventoryCapacityCubicMeters) && value.deliveredInventoryCubicMeters <= value.deliveredInventoryCapacityCubicMeters + 1e-9 && (value.activeShipmentCount === 0 ? value.activeShipmentCubicMeters <= 1e-9 : value.activeShipmentCubicMeters > 0);
 }
 function positive(value: number): boolean { return Number.isFinite(value) && value > 0; }
 function nonNegative(value: number): boolean { return Number.isFinite(value) && value >= 0; }
