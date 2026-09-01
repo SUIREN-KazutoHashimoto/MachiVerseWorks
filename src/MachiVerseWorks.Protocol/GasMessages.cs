@@ -87,7 +87,11 @@ public readonly record struct ProtocolGasServicePoint(
     double DemandCubicMetersPerDay,
     double ServedCubicMetersPerDay,
     double UnservedCubicMetersPerDay,
-    ProtocolGasServiceState ServiceState);
+    ProtocolGasServiceState ServiceState,
+    double DeliveredInventoryCubicMeters,
+    double DeliveredInventoryCapacityCubicMeters,
+    double ActiveShipmentCubicMeters,
+    uint ActiveShipmentCount);
 
 public sealed record GasSnapshotMessage(
     ProtocolGasStatistics Statistics,
