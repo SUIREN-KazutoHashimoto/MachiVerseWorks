@@ -18,12 +18,13 @@ import { decodeTrafficFrame, isTrafficFrame, type TrafficProtocolMessage } from 
 import { decodeEconomyFrame, isEconomyFrame, type EconomyProtocolMessage } from './economy-protocol.ts';
 import { decodeLogisticsFrame, isLogisticsFrame, type LogisticsProtocolMessage } from './logistics-protocol.ts';
 import { decodePowerFrame, isPowerFrame, type PowerProtocolMessage } from './power-protocol.ts';
+import { decodeWaterSewerFrame, isWaterSewerFrame, type WaterSewerProtocolMessage } from './water-sewer-protocol.ts';
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'handshaking' | 'connected' | 'reconnecting';
 export interface FrameDecodeMetrics { readonly frameBytes: number; readonly decodeTimeMs: number; }
 export interface ConnectionCallbacks {
   readonly onStateChanged: (state: ConnectionState) => void;
-  readonly onMessage: (message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage | MultimodalTransitProtocolMessage | EconomyProtocolMessage | LogisticsProtocolMessage | PowerProtocolMessage) => void;
+  readonly onMessage: (message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage | MultimodalTransitProtocolMessage | EconomyProtocolMessage | LogisticsProtocolMessage | PowerProtocolMessage | WaterSewerProtocolMessage) => void;
   readonly onProtocolError: (message: ProtocolErrorMessage) => void;
   readonly onClientError: (error: Error) => void;
   readonly onDisconnected: () => void;
@@ -113,40 +114,43 @@ export class MachiVerseConnection {
         return;
       }
 
-      const powerFrame = isPowerFrame(buffer);
-      const logisticsFrame = !powerFrame && isLogisticsFrame(buffer);
-      const economyFrame = !powerFrame && !logisticsFrame && isEconomyFrame(buffer);
-      const multimodalTransitFrame = !powerFrame && !logisticsFrame && !economyFrame && isMultimodalTransitFrame(buffer);
-      const railwayFrame = !powerFrame && !logisticsFrame && !economyFrame && !multimodalTransitFrame && isRailwayFrame(buffer);
-      const railwayOperationsFrame = !powerFrame && !logisticsFrame && !economyFrame && !multimodalTransitFrame && !railwayFrame && isRailwayOperationsFrame(buffer);
-      const populationFrame = !powerFrame && !logisticsFrame && !economyFrame && !multimodalTransitFrame && !railwayFrame && !railwayOperationsFrame && isPopulationFrame(buffer);
-      const trafficFrame = !powerFrame && !logisticsFrame && !economyFrame && !multimodalTransitFrame && !railwayFrame && !railwayOperationsFrame && !populationFrame && isTrafficFrame(buffer);
-      const envelope = powerFrame
-        ? decodePowerFrame(buffer)
-        : logisticsFrame
-          ? decodeLogisticsFrame(buffer)
-          : economyFrame
-            ? decodeEconomyFrame(buffer)
-            : multimodalTransitFrame
-              ? decodeMultimodalTransitFrame(buffer)
-              : railwayFrame
-                ? decodeRailwayFrame(buffer)
-                : railwayOperationsFrame
-                  ? decodeRailwayOperationsFrame(buffer)
-                  : populationFrame
-                    ? decodePopulationFrame(buffer)
-                    : trafficFrame
-                      ? decodeTrafficFrame(buffer)
-                      : decodeFrame(buffer);
+      const waterSewerFrame = isWaterSewerFrame(buffer);
+      const powerFrame = !waterSewerFrame && isPowerFrame(buffer);
+      const logisticsFrame = !waterSewerFrame && !powerFrame && isLogisticsFrame(buffer);
+      const economyFrame = !waterSewerFrame && !powerFrame && !logisticsFrame && isEconomyFrame(buffer);
+      const multimodalTransitFrame = !waterSewerFrame && !powerFrame && !logisticsFrame && !economyFrame && isMultimodalTransitFrame(buffer);
+      const railwayFrame = !waterSewerFrame && !powerFrame && !logisticsFrame && !economyFrame && !multimodalTransitFrame && isRailwayFrame(buffer);
+      const railwayOperationsFrame = !waterSewerFrame && !powerFrame && !logisticsFrame && !economyFrame && !multimodalTransitFrame && !railwayFrame && isRailwayOperationsFrame(buffer);
+      const populationFrame = !waterSewerFrame && !powerFrame && !logisticsFrame && !economyFrame && !multimodalTransitFrame && !railwayFrame && !railwayOperationsFrame && isPopulationFrame(buffer);
+      const trafficFrame = !waterSewerFrame && !powerFrame && !logisticsFrame && !economyFrame && !multimodalTransitFrame && !railwayFrame && !railwayOperationsFrame && !populationFrame && isTrafficFrame(buffer);
+      const envelope = waterSewerFrame
+        ? decodeWaterSewerFrame(buffer)
+        : powerFrame
+          ? decodePowerFrame(buffer)
+          : logisticsFrame
+            ? decodeLogisticsFrame(buffer)
+            : economyFrame
+              ? decodeEconomyFrame(buffer)
+              : multimodalTransitFrame
+                ? decodeMultimodalTransitFrame(buffer)
+                : railwayFrame
+                  ? decodeRailwayFrame(buffer)
+                  : railwayOperationsFrame
+                    ? decodeRailwayOperationsFrame(buffer)
+                    : populationFrame
+                      ? decodePopulationFrame(buffer)
+                      : trafficFrame
+                        ? decodeTrafficFrame(buffer)
+                        : decodeFrame(buffer);
       if (onFrameDecoded !== undefined) onFrameDecoded({ frameBytes: buffer.byteLength, decodeTimeMs: Math.max(0, performance.now() - decodeStartedAt) });
       if (this.state !== 'connected') {
-        if (!powerFrame && !logisticsFrame && !economyFrame && !multimodalTransitFrame && !railwayFrame && !railwayOperationsFrame && !populationFrame && !trafficFrame && envelope.message.type === MessageType.Error) this.callbacks.onProtocolError(envelope.message as ProtocolErrorMessage);
+        if (!waterSewerFrame && !powerFrame && !logisticsFrame && !economyFrame && !multimodalTransitFrame && !railwayFrame && !railwayOperationsFrame && !populationFrame && !trafficFrame && envelope.message.type === MessageType.Error) this.callbacks.onProtocolError(envelope.message as ProtocolErrorMessage);
         return;
       }
 
       const negotiatedVersion = this.negotiatedVersion;
       if (negotiatedVersion === null || !protocolVersionsEqual(envelope.version, negotiatedVersion)) throw new ProtocolDecodeFailure('Server frame version changed after protocol negotiation.');
-      if (!powerFrame && !logisticsFrame && !economyFrame && !multimodalTransitFrame && !railwayFrame && !railwayOperationsFrame && !populationFrame && !trafficFrame && envelope.message.type === MessageType.Error) {
+      if (!waterSewerFrame && !powerFrame && !logisticsFrame && !economyFrame && !multimodalTransitFrame && !railwayFrame && !railwayOperationsFrame && !populationFrame && !trafficFrame && envelope.message.type === MessageType.Error) {
         this.callbacks.onProtocolError(envelope.message as ProtocolErrorMessage);
         return;
       }
