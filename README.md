@@ -39,7 +39,7 @@ MachiVerseWorks は、市民・道路交通・公共交通・物流・産業・�
 - Phase 19 Multimodal Transit: ✅ 完了
 - Phase 20 Server Administration Console: ⏭️ 次
 
-詳細なSimulation Phase / Task状態は[`roadmap/SIMULATION_ROADMAP.md`](roadmap/SIMULATION_ROADMAP.md)だけを進捗の正本とし、READMEへ全Task一覧を複製しません。
+詳細なPhase / Task状態は、Simulation側を[`roadmap/SIMULATION_ROADMAP.md`](roadmap/SIMULATION_ROADMAP.md)、View側を[`roadmap/VIEW_ROADMAP.md`](roadmap/VIEW_ROADMAP.md)で管理し、READMEへ全Task一覧は複製しません。
 
 ## Architecture
 
@@ -114,7 +114,8 @@ MachiVerseWorks/
 │  ├─ decisions/
 │  └─ archive/
 ├─ roadmap/
-│  └─ SIMULATION_ROADMAP.md
+│  ├─ SIMULATION_ROADMAP.md
+│  └─ VIEW_ROADMAP.md
 ├─ scripts/
 ├─ tools/
 ├─ .github/
@@ -148,7 +149,7 @@ MachiVerseWorks/
 | [`docs/decisions/`](docs/decisions/) | Architecture Decision Record |
 | [`docs/archive/`](docs/archive/) | Legacy資料・廃止済み設計・実験記録 |
 
-ドキュメント全体の索引は[`docs/README.md`](docs/README.md)を参照してください。
+Roadmapは[`roadmap/SIMULATION_ROADMAP.md`](roadmap/SIMULATION_ROADMAP.md)と[`roadmap/VIEW_ROADMAP.md`](roadmap/VIEW_ROADMAP.md)、ドキュメント全体の索引は[`docs/README.md`](docs/README.md)を参照してください。
 
 ## Legacy
 
