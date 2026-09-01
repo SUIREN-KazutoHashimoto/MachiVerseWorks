@@ -1,6 +1,6 @@
 # MachiVerseWorks.Server
 
-Headless ServerはASP.NET Core / Kestrel上で1つの`SimulationWorld`をserver-authoritativeに実行し、HTTP health endpointとProtocol 2.x binary WebSocketを提供します。
+Headless ServerはASP.NET Core / Kestrel上で1つの`SimulationWorld`をserver-authoritativeに実行し、HTTP health endpointとProtocol 2.x binary WebSocketを提供します。現在のServer Protocol上限は [`ProtocolVersion.Current`](../MachiVerseWorks.Protocol/ProtocolVersion.cs) の **2.16** です。
 
 ## Runtime boundary
 
@@ -76,23 +76,38 @@ Internet越しではClientからKestrelのHTTP originを直接公開せず、Clo
 
 ## Published domains
 
-negotiated minorに応じて次のread model / messageを配信します。
+negotiated minorに応じて次のread model / messageを配信します。message ID / binary layout / compatibilityの正本は[`../../docs/architecture/protocol.md`](../../docs/architecture/protocol.md)です。
 
-- Agent (2.0)
-- Road Network (2.1、revision付きread model)
-- Pedestrian (2.2)
-- Vehicle (2.3)
-- Intersection Control (2.4)
-- Population statistics / Person debug (2.5、専用publish/inspect boundary)
-- Railway Infrastructure (2.6、revision付きread model、必要ならmulti-frame)
-- Railway Operations (2.7、visible Train + related Service / Timetable)
-- Multimodal Transit (2.8、Line / Stop / Pattern / realtime Bus・Taxi / arrival estimate、現行はworld-wide delivery)
+| Minimum Protocol | Domain |
+| --- | --- |
+| 2.0 | Agent |
+| 2.1 | Road Network |
+| 2.2 | Pedestrian |
+| 2.3 | Vehicle |
+| 2.4 | Intersection Control |
+| 2.5 | Population statistics / Person debug |
+| 2.6 | Railway Infrastructure |
+| 2.7 | Railway Operations |
+| 2.8 | Multimodal Transit |
+| 2.10 | Economy |
+| 2.11 | Logistics / Freight |
+| 2.12 | Power |
+| 2.13 | Water / Sewer |
+| 2.14 | Gas |
+| 2.15 | Optical Communication |
+| 2.16 | Radio / Spectrum |
 
-1回のtraffic snapshot publishではSimulation lock下でimmutable read modelをcaptureし、lock外でmessage planning / encoding / network I/Oを行います。Agent / Road / Pedestrian / Vehicle / Intersection / RailwayはClient別`SubscribeVolume`でfilterしますが、Multimodal Transitは現行2.8ではvolume filterせずsnapshot全体を配信します。slow Clientはconnection単位のdelivery task / timeoutで隔離します。
+Protocol 2.9は新しいServer→Client domain snapshotではなく、Client→Serverの`ClearPersonInspection`を追加します。
 
-Road snapshotとRailway Operations snapshotが1 MiBのsingle-frame上限を超える場合は、送信前に検出してsubscription-localなstructured Errorへ変換します。Railway Infrastructureはentity境界でchunkできます。
+1回のpublishではSimulation lock下でdetached / immutable read modelをcaptureし、可能な処理はlock外でmessage planning / encoding / network I/Oを行います。各domainのspatial filtering、world-wide delivery、aggregate publish、payload上限はdomainごとの現行contractに従います。
+
+Road snapshotと一部dynamic snapshotが1 MiBのsingle-frame上限を超える場合は、対応codec / publisherの契約に従い送信前にstructured Errorへ変換します。Railway Infrastructureはentity境界でchunkできます。
 
 Protocol 1.xの`SubscribeArea`や2D rectangle互換経路は提供しません。
+
+## Roadmap boundary
+
+Server-authoritative state / command / Protocol / Save / Administration境界の将来計画は[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)で管理します。Browser側のInspector、Dashboard、editor、表示・UXは[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)へ分離します。
 
 ## ローカル起動
 
