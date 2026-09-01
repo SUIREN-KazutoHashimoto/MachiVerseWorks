@@ -9,17 +9,14 @@ public sealed partial class SimulationWorld
     private readonly Dictionary<ToponymId, NaturalToponym> _naturalToponyms = [];
 
     public WorldEnvironmentConfig WorldEnvironment => Config.WorldEnvironment;
-
     public RegionalEnvironmentSample QueryEnvironment(WorldPoint position) => EnvironmentGenerator.Sample(position);
-
-    public IReadOnlyList<SettlementCandidateRegion> SelectSettlementCandidates(WorldVolume volume, int count) =>
-        EnvironmentGenerator.SelectSettlementCandidates(volume, count);
-
+    public IReadOnlyList<SettlementCandidateRegion> SelectSettlementCandidates(WorldVolume volume, int count) => EnvironmentGenerator.SelectSettlementCandidates(volume, count);
     public TerrainPartition GetTerrainPartition(WorldPoint position) => GetTerrainPartition(position.X, position.Y);
 
     public TerrainPartition GetTerrainPartition(double x, double y)
     {
-        if (!double.IsFinite(x) || !double.IsFinite(y)) throw new ArgumentOutOfRangeException(nameof(x), "Terrain coordinates must be finite.");
+        if (!double.IsFinite(x)) throw new ArgumentOutOfRangeException(nameof(x), x, "Terrain coordinates must be finite.");
+        if (!double.IsFinite(y)) throw new ArgumentOutOfRangeException(nameof(y), y, "Terrain coordinates must be finite.");
         var partitionSize = Math.Max(DefaultTerrainPartitionSizeMeters, Config.WorldEnvironment.TerrainDetailScaleMeters * 32d);
         var partitionX = checked((long)Math.Floor(x / partitionSize));
         var partitionY = checked((long)Math.Floor(y / partitionSize));
@@ -34,20 +31,36 @@ public sealed partial class SimulationWorld
     }
 
     public TerrainSurfaceSample QueryTerrainSurface(double x, double y) => GetTerrainPartition(x, y).Surface.Sample(x, y);
-
     public TerrainVolumeSample QueryTerrainVolume(WorldPoint position) => GetTerrainPartition(position).Volume.Sample(position);
-
-    public IReadOnlyList<TerrainSurfaceIntersection> QueryTerrainSurfaces(double x, double y, double minimumZ, double maximumZ) =>
-        GetTerrainPartition(x, y).Volume.GetSurfaces(x, y, minimumZ, maximumZ);
-
-    public WorldPoint SnapToGround(WorldPoint position) => TerrainConstraintEvaluator.SnapToGround(GetTerrainPartition(position), position);
+    public IReadOnlyList<TerrainSurfaceIntersection> QueryTerrainSurfaces(double x, double y, double minimumZ, double maximumZ) => GetTerrainPartition(x, y).Volume.GetSurfaces(x, y, minimumZ, maximumZ);
+    public WorldPoint SnapToGround(WorldPoint position)
+    {
+        var partition = GetTerrainPartition(position);
+        return TerrainConstraintEvaluator.SnapToGround(partition.Surface, position);
+    }
 
     public TerrainConstraintResult EvaluateTerrainConstraint(WorldVolume footprint, TerrainConstraintKind kind)
     {
-        var center = new WorldPoint((footprint.MinX + footprint.MaxX) * 0.5d, (footprint.MinY + footprint.MaxY) * 0.5d, footprint.MinZ);
-        var partition = GetTerrainPartition(center);
-        if (!partition.Bounds.Contains(center)) throw new InvalidOperationException("Terrain partition does not contain the requested footprint center.");
-        return TerrainConstraintEvaluator.Evaluate(partition, footprint, kind);
+        var centerX = (footprint.MinX + footprint.MaxX) * 0.5d;
+        var centerY = (footprint.MinY + footprint.MaxY) * 0.5d;
+        var centerPartition = GetTerrainPartition(centerX, centerY);
+        if (footprint.MinX >= centerPartition.Bounds.MinX && footprint.MaxX <= centerPartition.Bounds.MaxX
+            && footprint.MinY >= centerPartition.Bounds.MinY && footprint.MaxY <= centerPartition.Bounds.MaxY)
+        {
+            return TerrainConstraintEvaluator.Evaluate(centerPartition.Surface, centerPartition.Volume, footprint, kind);
+        }
+
+        var margin = Math.Max(4d, Config.WorldEnvironment.TerrainDetailScaleMeters / 16d);
+        var bounds = new WorldVolume(
+            footprint.MinX - margin,
+            footprint.MinY - margin,
+            Config.WorldEnvironment.SeaLevelMeters - 12_000d,
+            footprint.MaxX + margin,
+            footprint.MaxY + margin,
+            Config.WorldEnvironment.SeaLevelMeters + 12_000d);
+        var surface = new TerrainSurface(EnvironmentGenerator, bounds);
+        var volume = new TerrainVolume(surface);
+        return TerrainConstraintEvaluator.Evaluate(surface, volume, footprint, kind);
     }
 
     public IReadOnlyList<GeographicFeature> GetGeographicFeatures(WorldVolume volume, int maximumFeatures = 128)
@@ -123,9 +136,14 @@ public sealed partial class SimulationWorld
             if (!Enum.IsDefined(feature.Type)) throw new ArgumentOutOfRangeException(nameof(checkpoint));
             ArgumentNullException.ThrowIfNull(feature.Geometry);
             if (feature.Geometry.Count == 0) throw new ArgumentException("Geographic features must contain geometry.", nameof(checkpoint));
-            if (!double.IsFinite(feature.MinimumElevationMeters) || !double.IsFinite(feature.MaximumElevationMeters) || feature.MaximumElevationMeters < feature.MinimumElevationMeters)
-                throw new ArgumentOutOfRangeException(nameof(checkpoint));
+            if (!double.IsFinite(feature.AreaSquareMeters) || feature.AreaSquareMeters <= 0d) throw new ArgumentOutOfRangeException(nameof(checkpoint), "Geographic feature area must be finite and positive.");
+            if (!double.IsFinite(feature.MinimumElevationMeters) || !double.IsFinite(feature.MaximumElevationMeters) || feature.MaximumElevationMeters < feature.MinimumElevationMeters) throw new ArgumentOutOfRangeException(nameof(checkpoint));
             foreach (var point in feature.Geometry) ValidatePoint(point);
+            if (feature.ParentId is { } parentId && parentId == feature.Id) throw new ArgumentException("Geographic features cannot parent themselves.", nameof(checkpoint));
+        }
+        foreach (var feature in worldEnvironment.Features)
+        {
+            if (feature.ParentId is { } parentId && !featureIds.Contains(parentId)) throw new ArgumentException("Geographic feature references a missing parent.", nameof(checkpoint));
         }
         var toponymIds = new HashSet<ToponymId>();
         foreach (var toponym in worldEnvironment.Toponyms)
@@ -136,6 +154,7 @@ public sealed partial class SimulationWorld
             if (string.IsNullOrWhiteSpace(toponym.Name) || toponym.Name.Length > 128) throw new ArgumentException("Toponym names must be non-empty and bounded.", nameof(checkpoint));
             ArgumentNullException.ThrowIfNull(toponym.Provenance);
             if (!featureIds.Contains(toponym.Provenance.SourceFeatureId)) throw new ArgumentException("Toponym provenance references a missing geographic feature.", nameof(checkpoint));
+            if (string.IsNullOrWhiteSpace(toponym.Provenance.GeneratorKey) || toponym.Provenance.GeneratorKey.Length > 128) throw new ArgumentException("Toponym provenance generator key must be non-empty and bounded.", nameof(checkpoint));
         }
     }
 }
