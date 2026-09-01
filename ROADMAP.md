@@ -1,15 +1,14 @@
 MachiVerseWorks の作業を、**実際に完了判定できる小さな Task** に分けて管理します。
 
-> **現在:** Phase 25 — Gas Infrastructure（実装・検証完了 / `develop` 統合待ち）
-> **次の実装タスク:** PR #171 を `develop` へ統合し、統合後に Phase 25 を正式 closeout する
+> **現在:** Phase 26 — Optical Communication Infrastructure（実装・検証完了 / `develop` 統合待ち）
+> **次の実装タスク:** PR #172 を `develop` へ統合し、統合後に Phase 26 を正式 closeout する
 
 ## 全体の現在地
 
 | Phase | 内容 | 状態 |
 | --- | --- | --- |
-| 0〜24 | Foundation / Simulation / Infrastructure | ✅ 完了 |
-| 25 | Gas Infrastructure | ▶️ 実装・検証完了 / `develop` 統合待ち |
-| 26 | Optical Communication Infrastructure | ⏳ 待機 |
+| 0〜25 | Foundation / Simulation / Infrastructure | ✅ 完了 |
+| 26 | Optical Communication Infrastructure | ▶️ 実装・検証完了 / `develop` 統合待ち |
 | 27 | Radio & Spectrum Foundation | ⏳ 待機 |
 | 28 | Urban Growth & City Generation | ⏳ 待機 |
 | 29 | City Management UI | ⏳ 待機 |
@@ -68,7 +67,7 @@ Phase 0〜24 の詳細 Task・closeout 証跡・当時の計画状態は、履�
 
 ## Phase 25 — Gas Infrastructure
 
-> **状態: ▶️ 実装・検証完了 / `develop` 統合待ち**
+> **状態: ✅ 完了**
 > **依存:** Phase 10 / 21 / 22 / 23
 > 配管によるガス供給と、LPガス等を想定した物流による配達供給を同じ都市需要へ接続する。標準の配管Simulationは接続・capacity中心とし、圧力・流量等の詳細物理計算は交換可能なsolver境界の外側へ分離する。
 
@@ -100,42 +99,51 @@ Phase 0〜24 の詳細 Task・closeout 証跡・当時の計画状態は、履�
 
 ### Phase 25 実装状況
 
-- PR #171 で実装・検証を完了し、`develop` 統合待ち。
+- PR #171 を `develop` へ統合済み。
 - Pipeline outage / recovery、Delivered Gas stockout / Shipment / replenishment / recoveryをE2Eで検証する。
 - Delivered Gas checkpointは参照先Gas commodityの`Consumer` inventory存在を復元時に検証する。
 - `IGasSupplySolver` の結果はWorld stateへ適用する前に、未知・重複ID、非有限値、負値、request上限超過を拒否する。
-- Phase正式closeoutはPR #171を`develop`へ統合し、merge commitと最終runを記録した後に行う。
 
 ---
 
 ## Phase 26 — Optical Communication Infrastructure
 
-> **状態: ⬜ 未着手**
+> **状態: ▶️ 実装・検証完了 / `develop` 統合待ち**
 > **依存:** Phase 10 / 21 / 23
 > 光ファイバーを中心とする固定通信のphysical topology、access、traffic demand、bandwidth、congestion、障害を都市Entityへ接続する。標準Simulationはroutingとcapacity中心とし、光損失・分散等の詳細伝送計算は交換可能なsolver境界の外側へ分離する。
 
-- ⬜ **P26-001** — Optical Communicationの責務、traffic / bandwidth単位、簡易solverと詳細光伝送solverの境界を仕様化する
-- ⬜ **P26-002** — OpticalNode / FiberLinkのstable IDと3D topologyを実装する
-- ⬜ **P26-003** — Exchange / CoreGateway / AggregationNode / AccessNodeの最小Infrastructureモデルを実装する
-- ⬜ **P26-004** — Building / Establishmentをfixed communication accessへ関連付ける契約を実装する
-- ⬜ **P26-005** — Building用途・Population / Industry activityからcommunication traffic demandを計算する最小ruleを実装する
-- ⬜ **P26-006** — topology routingとbottleneck capacityを考慮する交換可能な簡易Optical Network solverを実装する
-- ⬜ **P26-007** — capacity超過時のcongestion・available bandwidth・簡易latency stateを実装する
-- ⬜ **P26-008** — Fiber cut・node停止・停電による通信outageと復旧を実装する
-- ⬜ **P26-009** — 将来のRadio Site / Base Station等がbackhaulとしてOptical Networkへ接続できる参照境界を実装する
-- ⬜ **P26-010** — Optical topologyの3D spatial queryと参照整合性validationを実装する
-- ⬜ **P26-011** — Optical Communication stateをcheckpoint / Save Dataへ含める
-- ⬜ **P26-012** — Optical topology・traffic・capacity・congestion・outageをProtocol / Serverで配信する
-- ⬜ **P26-013** — Web ClientでFiber / node / access / congestion / outageをdebug可視化する
-- ⬜ **P26-014** — traffic増加・Fiber cut・停電・backhaul復旧を検証するdeterministic E2Eを追加する
-- ⬜ **P26-015** — 大規模Optical node/link/loadのrouting・tick・topology benchmarkを記録する
-- ⬜ **P26-016** — Optical Communication Infrastructureのspecification / architecture / ROADMAPを同期する
+- ✅ **P26-001** — Optical Communicationの責務、traffic / bandwidth単位、簡易solverと詳細光伝送solverの境界を仕様化する
+- ✅ **P26-002** — OpticalNode / FiberLinkのstable IDと3D topologyを実装する
+- ✅ **P26-003** — Exchange / CoreGateway / AggregationNode / AccessNodeの最小Infrastructureモデルを実装する
+- ✅ **P26-004** — Building / Establishmentをfixed communication accessへ関連付ける契約を実装する
+- ✅ **P26-005** — Building用途・Population / Industry activityからcommunication traffic demandを計算する最小ruleを実装する
+- ✅ **P26-006** — topology routingとbottleneck capacityを考慮する交換可能な簡易Optical Network solverを実装する
+- ✅ **P26-007** — capacity超過時のcongestion・available bandwidth・簡易latency stateを実装する
+- ✅ **P26-008** — Fiber cut・node停止・停電による通信outageと復旧を実装する
+- ✅ **P26-009** — 将来のRadio Site / Base Station等がbackhaulとしてOptical Networkへ接続できる参照境界を実装する
+- ✅ **P26-010** — Optical topologyの3D spatial queryと参照整合性validationを実装する
+- ✅ **P26-011** — Optical Communication stateをcheckpoint / Save Dataへ含める
+- ✅ **P26-012** — Optical topology・traffic・capacity・congestion・outageをProtocol / Serverで配信する
+- ✅ **P26-013** — Web ClientでFiber / node / access / congestion / outageをdebug可視化する
+- ✅ **P26-014** — traffic増加・Fiber cut・停電・backhaul復旧を検証するdeterministic E2Eを追加する
+- ✅ **P26-015** — 大規模Optical node/link/loadのrouting・tick・topology benchmarkを記録する
+- ✅ **P26-016** — Optical Communication Infrastructureのspecification / architecture / ROADMAPを同期する
 
 ### Phase 26 完了条件
 
-- Building / IndustryがOptical Networkへ接続され、traffic demandとlink / node capacityに応じてbandwidth・congestion・outage stateが変化する。
-- Radio等の後続domainがbackhaulとして参照できる安定した通信Infrastructure境界を持つ。
-- 詳細な光伝送物理を標準完了条件に含めず、将来のExtensionが高精度solverを差し替えられる。
+- ✅ Building / IndustryがOptical Networkへ接続され、traffic demandとlink / node capacityに応じてbandwidth・congestion・outage stateが変化する。
+- ✅ Radio等の後続domainがbackhaulとして参照できる安定した通信Infrastructure境界を持つ。
+- ✅ 詳細な光伝送物理を標準完了条件に含めず、将来のExtensionが高精度solverを差し替えられる。
+- ✅ Protocol 2.15 / Server / Web debugでbandwidth・congestion・簡易latency・equipment power・backhaul stateを観測できる。
+- ✅ deterministic E2EでFiber reroute・停電・backhaul outage/recoveryを検証し、1k / 5k Optical load benchmarkをCIで記録する。
+
+### Phase 26 実装状況
+
+- PR #172 でSimulation / Save / Protocol 2.15 / Server / Web / E2E / benchmark / docsを実装。
+- 標準solverはstable ID順のdeterministic shortest-pathとbottleneck capacity allocationを使用し、85%以上のFiber利用率をcongestionとして観測する。
+- 簡易latencyはroute hop数とFiber utilizationから決定論的に算出し、詳細な光損失・分散・波長設計は標準solverの対象外とする。
+- Save Format 11のoptional `OpticalCheckpoint`として保存・復元し、旧Saveとの互換性を維持する。
+- Phase正式closeoutはPR #172を`develop`へ統合し、merge commitと最終runを記録した後に行う。
 
 ---
 
@@ -317,38 +325,3 @@ Phase 0〜24 の詳細 Task・closeout 証跡・当時の計画状態は、履�
 - 標準の軽量Infrastructure solverを維持したまま、Extensionが高精度な物理solverを安全に差し替えられる。
 - Extension固有stateがSave Dataと衝突せず、missing/incompatible extensionを安全に扱える。
 - `ja-JP`以外のlocaleを主要UIへ追加でき、Protocol / Save / Simulationへ翻訳済み文言を持ち込まない。
-
----
-
-## Phase 9から継続する計画済み項目
-
-Phase 9では「3D座標を正本として扱える基盤」までを完了とし、具体的な物理・地形ルールは後続へ分離していた。Phase 10〜31へ直接割り当てられない項目も消さず、現行Backlogとして保持する。
-
-| Phase 9で非対象とした項目 | 現在の扱い |
-| --- | --- |
-| 道路・線路・建物ごとの高度制約 | Phase 10 / 11 / 17の3D geometry・topology・validationで扱う |
-| 地下・高架を考慮したpathfinding | Phase 12で扱う |
-| 旧Save formatから新formatへのmigration | Phase 30で扱う |
-| 重力・落下・ジャンプ等の垂直物理 | 継続Backlog（Phase未割当） |
-| 飛行・空中移動等のairborne movement | 継続Backlog（Phase未割当） |
-| terrain model / terrain collision | 継続Backlog（Phase未割当） |
-| ground snapping / surface追従 | 継続Backlog（Phase未割当） |
-
-### 継続Backlog（Phase未割当）
-
-以下は計画済みだが、Phase 10〜31の完了に必須とはしない。着手時に独立Phaseまたは既存Phaseへの追加Taskとして分解する。
-
-- Physics Foundation — 重力、落下、ジャンプ、垂直速度・加速度、物理stateのSave / Protocol / E2E
-- Airborne Movement — 飛行可能Entity、空中経路、飛行高度ルール、3D空間交通との競合境界
-- Terrain Foundation — terrain height / surface / slopeの正本モデル、3D spatial query、Save / Protocol / Web描画
-- Terrain Interaction — terrain collision、ground snapping、surface追従、道路・建物・Pedestrianとの接続
-
-## 新規Backlogの扱い
-
-Phase 10以降の実装中に新しい大テーマが見つかった場合は、既存Phaseへ無理に詰め込まない。
-
-1. 既存Phaseの完了に必須なら、そのPhaseへ独立Taskとして追加する。
-2. 完了に必須でない大テーマなら、このROADMAP末尾へBacklogとして記録する。
-3. 着手時にWhat / Whyを`docs/specifications/`、Howを`docs/architecture/`またはADRへ切り分ける。
-4. 実装・保存・配信・描画・検証のどこまでをPhase完了条件とするか明示する。
-5. Phase完了時に、残件が暗黙に持ち越されていないことを確認する。

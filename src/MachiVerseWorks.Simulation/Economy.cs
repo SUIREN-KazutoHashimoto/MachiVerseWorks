@@ -106,7 +106,8 @@ public sealed record EconomyCheckpoint(
     LogisticsCheckpoint? Logistics = null,
     PowerCheckpoint? Power = null,
     WaterSewerCheckpoint? WaterSewer = null,
-    GasCheckpoint? Gas = null);
+    GasCheckpoint? Gas = null,
+    OpticalCheckpoint? Optical = null);
 
 public readonly record struct SimulationCompanyCheckpoint(
     CompanyId Id,

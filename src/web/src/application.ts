@@ -25,6 +25,8 @@ import { WaterSewerDebugOverlay } from './water-sewer-debug.ts';
 import { WATER_SEWER_SNAPSHOT_MESSAGE_TYPE, type WaterSewerProtocolMessage, type WaterSewerSnapshotMessage } from './water-sewer-protocol.ts';
 import { GasDebugOverlay } from './gas-debug.ts';
 import { GAS_SNAPSHOT_MESSAGE_TYPE, type GasProtocolMessage, type GasSnapshotMessage } from './gas-protocol.ts';
+import { OpticalDebugOverlay } from './optical-debug.ts';
+import { OPTICAL_SNAPSHOT_MESSAGE_TYPE, type OpticalProtocolMessage, type OpticalSnapshotMessage } from './optical-protocol.ts';
 
 export class Application {
   private readonly localizer = initializeLocalization();
@@ -44,6 +46,7 @@ export class Application {
   private readonly powerDebug: PowerDebugOverlay;
   private readonly waterSewerDebug: WaterSewerDebugOverlay;
   private readonly gasDebug: GasDebugOverlay;
+  private readonly opticalDebug: OpticalDebugOverlay;
   private readonly connection: MachiVerseConnection;
   private animationFrame = 0;
   private lastSubscriptionAt = Number.NEGATIVE_INFINITY;
@@ -63,6 +66,7 @@ export class Application {
     this.powerDebug = new PowerDebugOverlay(host);
     this.waterSewerDebug = new WaterSewerDebugOverlay(host);
     this.gasDebug = new GasDebugOverlay(host, this.localizer);
+    this.opticalDebug = new OpticalDebugOverlay(host);
     this.connection = new MachiVerseConnection(
       this.config.serverUrl,
       { minimumDelayMs: this.config.reconnectMinimumDelayMs, maximumDelayMs: this.config.reconnectMaximumDelayMs },
@@ -74,7 +78,7 @@ export class Application {
         onDisconnected: () => {
           this.store.clear(); this.pedestrians.clear(); this.vehicles.clear(); this.intersections.clear(); this.railway.clear(); this.railwayOperations.clear(); this.view.clearRoadNetwork();
           this.ui.setAgentCount(0); this.ui.clearPopulation(); this.ui.clearRailwayOperations(); this.ui.clearMultimodalTransit(); this.ui.clearEconomy();
-          this.logisticsDebug.clear(); this.powerDebug.clear(); this.waterSewerDebug.clear(); this.gasDebug.clear(); this.ui.setProtocol(null);
+          this.logisticsDebug.clear(); this.powerDebug.clear(); this.waterSewerDebug.clear(); this.gasDebug.clear(); this.opticalDebug.clear(); this.ui.setProtocol(null);
         },
         onHelloAck: (version) => { this.ui.clearError(); this.ui.setProtocol(version); },
         ...(performanceMetrics === null ? {} : { onFrameDecoded: (metrics: { readonly frameBytes: number; readonly decodeTimeMs: number }) => performanceMetrics.recordDecode(metrics.frameBytes, metrics.decodeTimeMs) }),
@@ -90,7 +94,7 @@ export class Application {
   public start(): void { if (this.disposed) throw new Error('Application is disposed.'); this.connection.connect(); this.animationFrame = window.requestAnimationFrame(this.animate); }
   public dispose(): void {
     if (this.disposed) return;
-    this.disposed = true; window.cancelAnimationFrame(this.animationFrame); window.removeEventListener('resize', this.handleResize); this.connection.disconnect(); this.audio.dispose(); this.railway.dispose(); this.railwayOperations.dispose(); this.logisticsDebug.dispose(); this.powerDebug.dispose(); this.waterSewerDebug.dispose(); this.gasDebug.dispose(); this.view.dispose(); this.ui.dispose();
+    this.disposed = true; window.cancelAnimationFrame(this.animationFrame); window.removeEventListener('resize', this.handleResize); this.connection.disconnect(); this.audio.dispose(); this.railway.dispose(); this.railwayOperations.dispose(); this.logisticsDebug.dispose(); this.powerDebug.dispose(); this.waterSewerDebug.dispose(); this.gasDebug.dispose(); this.opticalDebug.dispose(); this.view.dispose(); this.ui.dispose();
   }
   private readonly handleResize = (): void => { this.view.resize(); };
 
@@ -111,7 +115,7 @@ export class Application {
 
   private updatePerformanceUi(now: number, metrics: ClientPerformanceMetrics): void { if (now - this.lastPerformanceUiAt < 500) return; this.lastPerformanceUiAt = now; this.ui.setPerformanceMetrics(metrics.snapshot()); }
 
-  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage | MultimodalTransitProtocolMessage | EconomyProtocolMessage | LogisticsProtocolMessage | PowerProtocolMessage | WaterSewerProtocolMessage | GasProtocolMessage): void {
+  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage | MultimodalTransitProtocolMessage | EconomyProtocolMessage | LogisticsProtocolMessage | PowerProtocolMessage | WaterSewerProtocolMessage | GasProtocolMessage | OpticalProtocolMessage): void {
     switch (message.type) {
       case MessageType.AgentSpawn: this.applyAgentSpawn(message); return;
       case MessageType.AgentUpdate: this.applyAgentUpdate(message); return;
@@ -134,6 +138,7 @@ export class Application {
       case POWER_SNAPSHOT_MESSAGE_TYPE: this.applyPower(message); return;
       case WATER_SEWER_SNAPSHOT_MESSAGE_TYPE: this.applyWaterSewer(message); return;
       case GAS_SNAPSHOT_MESSAGE_TYPE: this.applyGas(message); return;
+      case OPTICAL_SNAPSHOT_MESSAGE_TYPE: this.applyOptical(message); return;
       case MessageType.Hello:
       case MessageType.HelloAck:
       case MessageType.SubscribeVolume:
@@ -156,6 +161,7 @@ export class Application {
   private applyPower(message: PowerSnapshotMessage): void { this.powerDebug.apply(message); }
   private applyWaterSewer(message: WaterSewerSnapshotMessage): void { this.waterSewerDebug.apply(message); }
   private applyGas(message: GasSnapshotMessage): void { this.gasDebug.apply(message); }
+  private applyOptical(message: OpticalSnapshotMessage): void { this.opticalDebug.apply(message); }
   private updateEntityAudioPosition(message: AgentStateMessage): void { if (this.audio.hasEntityEmitters(message.agentId)) this.audio.updateEntityPosition(message.agentId, { x: message.x, y: message.y, z: message.z }); }
 
   private handleProtocolError(message: ProtocolErrorMessage): void {

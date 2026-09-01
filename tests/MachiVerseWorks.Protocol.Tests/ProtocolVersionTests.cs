@@ -6,9 +6,9 @@ namespace MachiVerseWorks.Protocol.Tests;
 public sealed class ProtocolVersionTests
 {
     [TestMethod]
-    public void CurrentProtocolIs214AndAdvertisesGas()
+    public void CurrentProtocolIs215AndAdvertisesOptical()
     {
-        Assert.AreEqual(new ProtocolVersion(2, 14), ProtocolVersion.Current);
+        Assert.AreEqual(new ProtocolVersion(2, 15), ProtocolVersion.Current);
         Assert.IsTrue(ProtocolVersion.Current.SupportsMultimodalTransit);
         Assert.IsTrue(ProtocolVersion.Current.SupportsPersonInspectionClear);
         Assert.IsTrue(ProtocolVersion.Current.SupportsEconomy);
@@ -16,6 +16,7 @@ public sealed class ProtocolVersionTests
         Assert.IsTrue(ProtocolVersion.Current.SupportsPower);
         Assert.IsTrue(ProtocolVersion.Current.SupportsWaterSewer);
         Assert.IsTrue(ProtocolVersion.Current.SupportsGas);
+        Assert.IsTrue(ProtocolVersion.Current.SupportsOptical);
         Assert.IsFalse(new ProtocolVersion(2, 7).SupportsMultimodalTransit);
         Assert.IsFalse(new ProtocolVersion(2, 8).SupportsPersonInspectionClear);
         Assert.IsFalse(new ProtocolVersion(2, 9).SupportsEconomy);
@@ -23,13 +24,14 @@ public sealed class ProtocolVersionTests
         Assert.IsFalse(new ProtocolVersion(2, 11).SupportsPower);
         Assert.IsFalse(new ProtocolVersion(2, 12).SupportsWaterSewer);
         Assert.IsFalse(new ProtocolVersion(2, 13).SupportsGas);
+        Assert.IsFalse(new ProtocolVersion(2, 14).SupportsOptical);
     }
 
     [TestMethod]
     public void NegotiationKeepsAcceptedRequestedMinorAsTheConnectionVersion()
     {
-        var supported = new ProtocolVersion(2, 14);
-        var requested = new ProtocolVersion(2, 13);
+        var supported = new ProtocolVersion(2, 15);
+        var requested = new ProtocolVersion(2, 14);
 
         var accepted = supported.TryNegotiate(requested, out var negotiated);
 
@@ -40,10 +42,10 @@ public sealed class ProtocolVersionTests
     [TestMethod]
     public void NegotiationRejectsNewerMinorAndDifferentMajor()
     {
-        var supported = new ProtocolVersion(2, 14);
+        var supported = new ProtocolVersion(2, 15);
 
-        Assert.IsFalse(supported.TryNegotiate(new ProtocolVersion(2, 15), out _));
-        Assert.IsFalse(supported.TryNegotiate(new ProtocolVersion(1, 14), out _));
+        Assert.IsFalse(supported.TryNegotiate(new ProtocolVersion(2, 16), out _));
+        Assert.IsFalse(supported.TryNegotiate(new ProtocolVersion(1, 15), out _));
         Assert.IsFalse(supported.TryNegotiate(new ProtocolVersion(3, 0), out _));
     }
 }

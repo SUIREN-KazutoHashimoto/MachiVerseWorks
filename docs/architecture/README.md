@@ -29,6 +29,7 @@ MachiVerseWorks の技術アーキテクチャを管理します。
 - [`multimodal-transit.md`](multimodal-transit.md): 共通Journey、Bus / Taxi Road Traffic再利用、Passenger、Save Format 10、Protocol 2.8
 - [`server-administration-console.md`](server-administration-console.md): stdin / AdminCommandQueue / authoritative runtime boundary、read-model invalidation、Remote Admin再利用境界
 - [`economy.md`](economy.md): Company / Employment / Household economy、economic tick、Save Format 11、Protocol 2.10、Web debug / benchmark境界
+- [`optical-communication.md`](optical-communication.md): Optical topology、capacity-aware routing、power dependency、Protocol 2.15、Web debug / E2E / benchmark境界
 - [`protocol.md`](protocol.md): Server / Web Client 間 binary protocol の versioning と wire layout
 - [`headless-server.md`](headless-server.md): Headless Server の lifecycle、WebSocket、command queue、snapshot publish
 - [`web-client.md`](web-client.md): Web Clientのconnection、EntityStore、subscription、rendering
