@@ -2,7 +2,7 @@
 
 この文書は MachiVerseWorks の多言語対応を将来追加しやすくするため、実装時に守るルールを定めます。
 
-現時点では日本語のみで開発して構いません。ただし、後から翻訳対応するときに Simulation / Protocol / Save Data の互換性を壊さないことを優先します。
+現時点では日本語のみで開発して構いません。ただし、後から翻訳対応するときに Simulation / Protocol / Save Data の互換性を壊さないことを優先します。Localizationの実装計画・Task状態は [`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md) の **View Phase 5 — Localization** を正本とします。
 
 ## 1. ユーザー向け文字列
 
@@ -151,4 +151,4 @@ unused key 検出は false positive が多い場合があるため、導入時�
 3. default locale を `ja-JP` とする。
 4. i18n library はまだ固定しない。
 
-Web Client の実装開始時に、この文書を基準として実際の i18n service を構築します。
+Web Client の実装開始時に、この文書を基準として実際の i18n service を構築します。計画や完了状態を変更する場合は [`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md) も同期します。
