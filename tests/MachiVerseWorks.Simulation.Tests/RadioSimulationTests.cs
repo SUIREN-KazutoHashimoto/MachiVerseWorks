@@ -8,8 +8,8 @@ public sealed class RadioSimulationTests
     [TestMethod]
     public void BuildingObstructionAddsDeterministicLoss()
     {
-        var clear = CreatePointToPointWorld(addObstruction: false, out _, out _, out var clearLink);
-        var blocked = CreatePointToPointWorld(addObstruction: true, out _, out _, out var blockedLink);
+        var clear = CreatePointToPointWorld(addObstruction: false, out _, out _, out _, out var clearLink);
+        var blocked = CreatePointToPointWorld(addObstruction: true, out _, out _, out _, out var blockedLink);
         clear.Step();
         blocked.Step();
 
@@ -22,13 +22,11 @@ public sealed class RadioSimulationTests
     [TestMethod]
     public void OverlappingEmissionInterferenceReducesSinrDeterministically()
     {
-        var world = CreatePointToPointWorld(addObstruction: false, out var targetReceiver, out _, out var targetLink);
-        var band = world.CreateSpectrumBand("interference", 5_000d, 5_500d);
-        var channel = world.CreateRadioChannel(band, 5_205d, 20d);
+        var world = CreatePointToPointWorld(addObstruction: false, out var targetReceiver, out _, out var targetChannel, out var targetLink);
         var interfererSite = world.CreateRadioSite(new WorldPoint(120d, 80d, 0d), RadioSiteKind.Macro);
         var antenna = world.CreateRadioAntenna(interfererSite, new WorldVector(0d, 0d, 25d), new WorldVector(1d, 0d, 0d), 15d, RadioAntennaPatternKind.Directional, 120d, 20d);
         var transmitter = world.CreateRadioTransmitter(interfererSite, antenna, 46d);
-        var emission = world.CreateRadioEmission(transmitter, channel, 43d, 0.6d, isInService: false);
+        var emission = world.CreateRadioEmission(transmitter, targetChannel, 43d, 0.6d, isInService: false);
 
         world.Step();
         Assert.IsTrue(world.TryGetRadioLinkSnapshot(targetLink, out var withoutInterference));
@@ -47,7 +45,7 @@ public sealed class RadioSimulationTests
     [TestMethod]
     public void PowerAndOpticalBackhaulOutagesStopAndRecoverRadioLink()
     {
-        var world = CreatePointToPointWorld(addObstruction: false, out _, out var sourceSite, out var link);
+        var world = CreatePointToPointWorld(addObstruction: false, out _, out var sourceSite, out _, out var link);
         var building = world.CreateBuilding(new WorldVolume(-15d, -15d, -1d, 15d, 15d, 12d), BuildingKind.Commercial);
         var powerSource = world.CreatePowerNode(new WorldPoint(-30d, 0d, 0d), PowerNodeKind.GeneratorBus);
         var powerLoad = world.CreatePowerNode(new WorldPoint(0d, 0d, 0d), PowerNodeKind.Load);
@@ -88,7 +86,7 @@ public sealed class RadioSimulationTests
     [TestMethod]
     public void CheckpointRestoresExplicitRadioEntitiesAndStableIds()
     {
-        var world = CreatePointToPointWorld(addObstruction: true, out _, out var sourceSite, out var link);
+        var world = CreatePointToPointWorld(addObstruction: true, out _, out var sourceSite, out _, out var link);
         world.Step();
         var checkpoint = world.CreateCheckpoint();
 
@@ -130,19 +128,19 @@ public sealed class RadioSimulationTests
         Assert.AreEqual(950d, candidates[0].CenterFrequencyMegahertz, 1e-9);
     }
 
-    private static SimulationWorld CreatePointToPointWorld(bool addObstruction, out RadioReceiverId receiverId, out RadioSiteId sourceSite, out RadioLinkId linkId)
+    private static SimulationWorld CreatePointToPointWorld(bool addObstruction, out RadioReceiverId receiverId, out RadioSiteId sourceSite, out RadioChannelId channelId, out RadioLinkId linkId)
     {
         var world = new SimulationWorld(new SimulationConfig(tickRate: 1, seed: 2801));
         if (addObstruction) world.CreateBuilding(new WorldVolume(450d, -60d, 0d, 550d, 60d, 80d), BuildingKind.Commercial);
         var band = world.CreateSpectrumBand("radio-test", 5_000d, 5_500d);
-        var channel = world.CreateRadioChannel(band, 5_200d, 20d);
+        channelId = world.CreateRadioChannel(band, 5_200d, 20d);
         sourceSite = world.CreateRadioSite(new WorldPoint(0d, 0d, 0d), RadioSiteKind.PointToPoint);
         var receiverSite = world.CreateRadioSite(new WorldPoint(1_000d, 0d, 0d), RadioSiteKind.PointToPoint);
         var sourceAntenna = world.CreateRadioAntenna(sourceSite, new WorldVector(0d, 0d, 25d), new WorldVector(1d, 0d, 0d), 15d, RadioAntennaPatternKind.Directional, 60d, 25d);
         var receiverAntenna = world.CreateRadioAntenna(receiverSite, new WorldVector(0d, 0d, 25d), new WorldVector(-1d, 0d, 0d), 10d, RadioAntennaPatternKind.Directional, 60d, 25d);
         var transmitter = world.CreateRadioTransmitter(sourceSite, sourceAntenna, 46d);
         receiverId = world.CreateRadioReceiver(receiverSite, receiverAntenna, 5_000d, 5_500d, -110d);
-        var emission = world.CreateRadioEmission(transmitter, channel, 43d, 0.5d);
+        var emission = world.CreateRadioEmission(transmitter, channelId, 43d, 0.5d);
         linkId = world.CreateRadioLink(emission, receiverId, 6d);
         return world;
     }
