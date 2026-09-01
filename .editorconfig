@@ -29,3 +29,5 @@ csharp_space_after_cast = false
 
 [src/MachiVerseWorks.Simulation/SimulationWorld.Gas.cs]
 dotnet_diagnostic.CA1512.severity = none
+# IGasSupplySolver is an intentional substitution boundary; keep the field interface-typed.
+dotnet_diagnostic.CA1859.severity = none
