@@ -155,6 +155,13 @@ public sealed partial class SimulationWorld
         return false;
     }
 
+    public GasNodeSnapshot[] QueryGasNodes(WorldVolume volume) =>
+        _gasNodes
+            .Where(item => volume.Contains(item.Position))
+            .OrderBy(static item => item.Id.Value)
+            .Select(static item => new GasNodeSnapshot(item.Id, item.Kind, item.Position))
+            .ToArray();
+
     public GasSnapshot CreateGasSnapshot() => new(
         CreateGasStatistics(),
         _gasNodes.OrderBy(static item => item.Id.Value).Select(static item => new GasNodeSnapshot(item.Id, item.Kind, item.Position)).ToArray(),
@@ -185,7 +192,9 @@ public sealed partial class SimulationWorld
 
     private void StepGas(SimulationTime nextTime)
     {
-        foreach (var point in _gasServicePoints) point.DemandCubicMetersPerDay = point.BaseDemandCubicMetersPerDay;
+        var demandContext = CreateGasDemandContext();
+        foreach (var point in _gasServicePoints)
+            point.DemandCubicMetersPerDay = CalculateGasDemand(point, nextTime, demandContext);
 
         var request = new GasSupplyRequest(
             _gasNodes.Select(static item => new GasSupplyNode(item.Id)).ToArray(),
@@ -218,6 +227,80 @@ public sealed partial class SimulationWorld
                 : GetDeliveredGasAvailability(point);
             ApplyGasServiceResult(point, served);
         }
+    }
+
+    private GasDemandContext CreateGasDemandContext()
+    {
+        var residentsByBuilding = new Dictionary<BuildingId, int>();
+        for (var index = 0; index < _population.PersonCount; index++)
+        {
+            if (_population.GetPersonAt(index).Residence.BuildingId is not { } buildingId) continue;
+            residentsByBuilding[buildingId] = residentsByBuilding.GetValueOrDefault(buildingId) + 1;
+        }
+
+        var requiredWorkersByEstablishment = new Dictionary<EstablishmentId, int>();
+        foreach (var job in _economyJobs)
+            requiredWorkersByEstablishment[job.EstablishmentId] = checked(requiredWorkersByEstablishment.GetValueOrDefault(job.EstablishmentId) + job.RequiredWorkerCount);
+
+        var filledWorkersByEstablishment = new Dictionary<EstablishmentId, int>();
+        foreach (var employment in _economyEmployments.Values)
+        {
+            if (!_economyJobIndex.TryGetValue(employment.JobId, out var job)) continue;
+            filledWorkersByEstablishment[job.EstablishmentId] = filledWorkersByEstablishment.GetValueOrDefault(job.EstablishmentId) + 1;
+        }
+        return new GasDemandContext(residentsByBuilding, requiredWorkersByEstablishment, filledWorkersByEstablishment);
+    }
+
+    private double CalculateGasDemand(GasServicePointStateData point, SimulationTime time, GasDemandContext context)
+    {
+        var hour = time.Elapsed.TotalHours % 24d;
+        if (hour < 0d) hour += 24d;
+        var timeFactor = hour switch
+        {
+            < 6d => 0.8d,
+            < 9d => 1.2d,
+            < 17d => 0.9d,
+            < 22d => 1.25d,
+            _ => 0.9d,
+        };
+
+        var useFactor = 1d;
+        if (point.BuildingId is { } buildingId && TryGetBuildingSnapshot(buildingId, out var building))
+        {
+            useFactor *= building.Kind switch
+            {
+                BuildingKind.Residential => 1.1d,
+                BuildingKind.Commercial => 0.9d,
+                BuildingKind.Industrial => 1.45d,
+                BuildingKind.Civic => 1.05d,
+                BuildingKind.MixedUse => 1.15d,
+                _ => 1d,
+            };
+            var residents = context.ResidentsByBuilding.GetValueOrDefault(buildingId);
+            if (residents > 0) useFactor *= Math.Min(4d, 1d + (residents * 0.15d));
+        }
+
+        if (point.EstablishmentId is { } establishmentId
+            && _economyEstablishmentIndex.TryGetValue(establishmentId, out var establishment)
+            && _economyCompanyIndex.TryGetValue(establishment.CompanyId, out var company))
+        {
+            useFactor *= company.Sector switch
+            {
+                IndustrySector.Manufacturing => 1.5d,
+                IndustrySector.Retail => 1.05d,
+                IndustrySector.Services => 0.85d,
+                IndustrySector.Transport => 1.1d,
+                IndustrySector.Public => 1.05d,
+                _ => 1d,
+            };
+            var required = context.RequiredWorkersByEstablishment.GetValueOrDefault(establishmentId);
+            if (required > 0)
+            {
+                var filled = context.FilledWorkersByEstablishment.GetValueOrDefault(establishmentId);
+                useFactor *= 0.65d + (0.35d * Math.Min(1d, (double)filled / required));
+            }
+        }
+        return point.BaseDemandCubicMetersPerDay * timeFactor * useFactor;
     }
 
     private double GetDeliveredGasAvailability(GasServicePointStateData point)
@@ -385,4 +468,9 @@ public sealed partial class SimulationWorld
     private static void ValidateGasNonNegativeFinite(double value, string name) { if (!IsNonNegativeFinite(value)) throw new ArgumentOutOfRangeException(name, value, "Value must be finite and non-negative."); }
     private static void ValidateGasEnum<T>(T value, string name) where T : struct, Enum { if (!Enum.IsDefined(value)) throw new ArgumentOutOfRangeException(name, value, "Gas enum value is not defined."); }
     private static void EnsureGasIdCapacity(ulong nextId, string name) { if (nextId == ulong.MaxValue) throw new OverflowException($"{name} ID capacity has been exhausted."); }
+
+    private readonly record struct GasDemandContext(
+        IReadOnlyDictionary<BuildingId, int> ResidentsByBuilding,
+        IReadOnlyDictionary<EstablishmentId, int> RequiredWorkersByEstablishment,
+        IReadOnlyDictionary<EstablishmentId, int> FilledWorkersByEstablishment);
 }
