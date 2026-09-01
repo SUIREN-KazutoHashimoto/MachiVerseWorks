@@ -10,6 +10,7 @@
 - [`simulation-core-poc.md`](simulation-core-poc.md): 現行Simulation Core基盤仕様
 - [`headless-server-poc.md`](headless-server-poc.md): Headless Server / 3D subscription基盤
 - [`server-administration-console.md`](server-administration-console.md): Server Administration commandとauthoritative control境界
+- [`remote-mcp-administration.md`](remote-mcp-administration.md): Remote MCPの認証・scope・Tool・制限・HTTPS deployment契約
 - [`web-client-poc.md`](web-client-poc.md): Web Client + Audio Client Foundationの3D基盤
 - [`save-data.md`](save-data.md): checkpoint state、validation、migration、Save Data互換性
 
