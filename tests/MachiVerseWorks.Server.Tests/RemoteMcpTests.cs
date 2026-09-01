@@ -307,11 +307,11 @@ public sealed class RemoteMcpTests
         return result.StructuredContent.Value;
     }
 
-    private static async Task AssertMcpProtocolFailureAsync(Task task)
+    private static async Task AssertMcpProtocolFailureAsync(ValueTask<CallToolResult> call)
     {
         try
         {
-            await task;
+            await call;
             Assert.Fail("Expected an MCP protocol failure.");
         }
         catch (McpProtocolException)
