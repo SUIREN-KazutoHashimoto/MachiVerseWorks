@@ -158,7 +158,7 @@ internal sealed class RailwayOperationsStore
     {
         var formations = _formations.Values.OrderBy(static value => value.Id.Value).ToArray();
         var routes = _routes.Values.OrderBy(static value => value.Id.Value).Select(static value => value.CreateSnapshot()).ToArray();
-        var timetables = _timetables.Values.OrderBy(static value => value.Id.Value).Select(static value => new TimetableSnapshot(value.Id, value.Stops.ToArray())).ToArray();
+        var timetables = _timetables.Values.OrderBy(static value => new TimetableSnapshot(value.Id, value.Stops.ToArray())).ToArray();
         var services = _services.Values.OrderBy(static value => value.Id.Value).Select(static value => value.CreateSnapshot()).ToArray();
         var trains = _trains.Values.OrderBy(static value => value.Id.Value).Select(static value => value.CreateSnapshot()).ToArray();
         return new RailwayOperationsSnapshot(formations, routes, timetables, services, trains);
@@ -174,7 +174,7 @@ internal sealed class RailwayOperationsStore
             return true;
         }
 
-        snapshot = default;
+        snapshot = null!;
         return false;
     }
 
