@@ -32,6 +32,10 @@ internal sealed class PopulationPublishService(
                     var inspectedIds = pending
                         .SelectMany(static item => EnumeratePersonIds(item))
                         .ToHashSet();
+                    var inspectedVehicleIds = pending
+                        .Where(static item => item.EntityInspection.Target is { EntityType: ProtocolEntityType.Vehicle })
+                        .Select(static item => item.EntityInspection.Target!.Value.EntityId)
+                        .ToHashSet();
                     var inspectedTrainIds = pending
                         .Where(static item => item.EntityInspection.Target is { EntityType: ProtocolEntityType.Train })
                         .Select(static item => item.EntityInspection.Target!.Value.EntityId)
@@ -39,6 +43,7 @@ internal sealed class PopulationPublishService(
                     var requiresRegional = pending.Any(static item => item.EntityInspection.Target is { EntityType: ProtocolEntityType.Settlement or ProtocolEntityType.Parcel or ProtocolEntityType.Building });
 
                     var snapshot = observationSource.CapturePopulationPublishSnapshot(inspectedIds);
+                    var vehicles = observationSource.CaptureVehicleSnapshots(inspectedVehicleIds);
                     var trains = observationSource.CaptureTrainSnapshots(inspectedTrainIds);
                     PersistentRegionalEvolutionSnapshotMessage? regional = null;
                     if (requiresRegional && observationSource.CapturePersistentRegionalEvolutionSnapshot() is { } regionalSource)
@@ -47,7 +52,7 @@ internal sealed class PopulationPublishService(
                     var statistics = PopulationMessageMapper.Create(snapshot.Statistics);
                     foreach (var delivery in pending)
                     {
-                        deliveryScheduler.StartReserved(delivery.Connection.Id, () => PublishConnectionAsync(delivery, snapshot, statistics, trains, regional, stoppingToken));
+                        deliveryScheduler.StartReserved(delivery.Connection.Id, () => PublishConnectionAsync(delivery, snapshot, statistics, vehicles, trains, regional, stoppingToken));
                     }
                 }
                 catch
@@ -93,6 +98,7 @@ internal sealed class PopulationPublishService(
         PendingPopulationDelivery delivery,
         PopulationPublishSnapshot snapshot,
         PopulationStatisticsMessage statistics,
+        IReadOnlyDictionary<ulong, VehicleSnapshot> vehicles,
         IReadOnlyDictionary<ulong, TrainSnapshot> trains,
         PersistentRegionalEvolutionSnapshotMessage? regional,
         CancellationToken cancellationToken)
@@ -128,7 +134,7 @@ internal sealed class PopulationPublishService(
             if (delivery.EntityInspection.Target is { } target
                 && inspections.IsCurrent(connection.Id, delivery.EntityInspection))
             {
-                var entityMessage = EntityInspectionMessageMapper.Create(target, snapshot, trains, regional);
+                var entityMessage = EntityInspectionMessageMapper.Create(target, snapshot, vehicles, trains, regional);
                 _ = await connection.SendIfEntityInspectionCurrentAsync(
                     entityMessage,
                     connection.NegotiatedVersion,
