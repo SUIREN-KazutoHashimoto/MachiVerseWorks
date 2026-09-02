@@ -1,5 +1,6 @@
 using System.Net.WebSockets;
 using MachiVerseWorks.Protocol;
+using MachiVerseWorks.Simulation;
 
 namespace MachiVerseWorks.Server;
 
@@ -11,9 +12,11 @@ namespace MachiVerseWorks.Server;
 internal sealed class RegionalGenerationPublishService(
     IObservationSource observationSource,
     ServerOptions options,
-    ClientConnectionRegistry connections) : BackgroundService
+    ClientConnectionRegistry connections,
+    ObservationDeliveryCoordinator deliveryCoordinator,
+    ILogger<RegionalGenerationPublishService> logger) : BackgroundService
 {
-    private static readonly TimeSpan ClientSendTimeout = TimeSpan.FromSeconds(5);
+    private readonly Dictionary<Guid, (ulong Generation, ulong Revision)> _delivered = [];
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -22,28 +25,46 @@ internal sealed class RegionalGenerationPublishService(
         {
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
-                var targets = connections.CreateSnapshot().Where(static connection =>
+                var currentConnections = connections.CreateSnapshot();
+                PruneDeliveryState(currentConnections);
+                var targets = currentConnections.Where(static connection =>
                     connection.HandshakeCompleted
                     && connection.NegotiatedVersion.SupportsRegionalGeneration
                     && connection.Socket.State == WebSocketState.Open).ToArray();
                 if (targets.Length == 0) continue;
 
-                var snapshot = observationSource.CaptureRegionalGenerationSnapshot();
-                if (snapshot is null) continue;
-                var message = RegionalGenerationMessageMapper.ToProtocol(snapshot);
+                var observation = observationSource.CaptureRegionalGenerationObservation();
+                var revision = (observation.Generation, observation.Revision);
+                if (targets.All(connection => _delivered.TryGetValue(connection.Id, out var delivered) && delivered == revision))
+                    continue;
+
+                var message = RegionalGenerationMessageMapper.ToProtocol(
+                    observation.Snapshot ?? CreateEmptySnapshot(observation.TickCount));
+                try
+                {
+                    // The Regional Generation contract is a single Protocol 2.18 frame. Validate once before
+                    // scheduling so an oversized authoritative payload never gets misclassified as a Client failure.
+                    _ = RegionalGenerationProtocolCodec.Serialize(message, ProtocolVersion.Current);
+                }
+                catch (ArgumentOutOfRangeException exception)
+                {
+                    logger.LogError(exception,
+                        "Regional Generation observation generation {Generation} revision {Revision} cannot fit the Protocol 2.18 single-frame contract; delivery was skipped without disconnecting Clients.",
+                        observation.Generation,
+                        observation.Revision);
+                    continue;
+                }
 
                 foreach (var connection in targets)
                 {
-                    try
+                    if (_delivered.TryGetValue(connection.Id, out var delivered) && delivered == revision) continue;
+                    if (deliveryCoordinator.TrySchedule(
+                        connection,
+                        ObservationDeliveryLane.Snapshot,
+                        message,
+                        stoppingToken))
                     {
-                        using var sendCancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-                        sendCancellation.CancelAfter(ClientSendTimeout);
-                        _ = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation.Token);
-                    }
-                    catch (Exception exception) when (exception is WebSocketException or OperationCanceledException or ObjectDisposedException or ArgumentOutOfRangeException)
-                    {
-                        connection.Abort();
-                        connections.Remove(connection.Id);
+                        _delivered[connection.Id] = revision;
                     }
                 }
             }
@@ -52,4 +73,29 @@ internal sealed class RegionalGenerationPublishService(
         {
         }
     }
+
+    private void PruneDeliveryState(IReadOnlyList<ClientConnection> currentConnections)
+    {
+        if (_delivered.Count == 0) return;
+        var active = currentConnections.Select(static connection => connection.Id).ToHashSet();
+        foreach (var connectionId in _delivered.Keys.Where(id => !active.Contains(id)).ToArray())
+            _delivered.Remove(connectionId);
+    }
+
+    private static RegionalGenerationSnapshot CreateEmptySnapshot(ulong tickCount) => new(
+        new WorldVolume(-1d, -1d, 0d, 1d, 1d, 1d),
+        RegionalGenerationQualityPreset.Draft,
+        WorldSeed: 1,
+        Iterations: 0,
+        Settlements: [],
+        GrowthEvents: [],
+        Corridors: [],
+        Districts: [],
+        Parcels: [],
+        Buildings: [],
+        Pois: [],
+        Toponyms: [],
+        RoadSigns: [],
+        Quality: new RegionalQualityReport(0d, 0d, 0d, 0d, 0d, 0d, 0d, 0d, 0d),
+        TickCount: tickCount);
 }
