@@ -134,10 +134,11 @@ internal static class ObservationGatewayServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         services.AddSingleton<IObservationSource, SimulationObservationSource>();
         services.AddSingleton<ObservationCache>();
+        services.AddSingleton<SnapshotDeliveryScheduler>();
         services.AddSingleton<ClientConnectionRegistry>();
+        services.AddSingleton<ObservationDeliveryCoordinator>();
         services.AddSingleton<ObservationRequestQueue>();
         services.AddSingleton<EntityInspectionRegistry>();
-        services.AddSingleton<SnapshotDeliveryScheduler>();
         services.AddSingleton<WebSocketSessionHandler>();
         services.AddHostedService<ObservationRequestProcessor>();
         services.AddHostedService<SnapshotPublishService>();
