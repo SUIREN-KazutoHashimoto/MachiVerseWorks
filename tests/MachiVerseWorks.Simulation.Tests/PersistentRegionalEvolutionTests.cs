@@ -42,6 +42,44 @@ public sealed class PersistentRegionalEvolutionTests
     }
 
     [TestMethod]
+    public void MaterializedWorldEvolutionRemainsDeterministicAndCheckpointSafe()
+    {
+        var first = CreateWorld(31004);
+        var second = CreateWorld(31004);
+        first.ConfigurePersistentRegionalEvolution(new PersistentRegionalEvolutionOptions(ticksPerYear: 1));
+        second.ConfigurePersistentRegionalEvolution(new PersistentRegionalEvolutionOptions(ticksPerYear: 1));
+        first.InitializeRegionalWorld(
+            CreateVolume(),
+            new RegionalGenerationOptions(RegionalGenerationQualityPreset.Draft, settlementCount: 2, iterationBudget: 1),
+            out _);
+        second.InitializeRegionalWorld(
+            CreateVolume(),
+            new RegionalGenerationOptions(RegionalGenerationQualityPreset.Draft, settlementCount: 2, iterationBudget: 1),
+            out _);
+        var initialBuildingCount = first.BuildingCount;
+        var initialPersonCount = first.PersonCount;
+
+        first.AdvancePersistentRegionalEvolutionYears(12);
+        second.AdvancePersistentRegionalEvolutionYears(12);
+
+        var expected = first.CreatePersistentRegionalEvolutionSnapshot();
+        var duplicate = second.CreatePersistentRegionalEvolutionSnapshot();
+        Assert.AreEqual(12, expected.CurrentYear);
+        Assert.AreEqual(JsonSerializer.Serialize(expected), JsonSerializer.Serialize(duplicate));
+        Assert.IsTrue(first.RoadNodeCount > 0);
+        Assert.IsTrue(first.BuildingCount >= initialBuildingCount);
+        Assert.IsTrue(first.PersonCount >= initialPersonCount);
+        Assert.IsTrue(expected.Settlements.All(static item => item.Accessibility is >= 0d and <= 1d));
+
+        var restored = SimulationWorld.RestoreCheckpoint(first.CreateCheckpoint());
+        var restoredEvolution = restored.CreatePersistentRegionalEvolutionSnapshot();
+        Assert.AreEqual(JsonSerializer.Serialize(expected), JsonSerializer.Serialize(restoredEvolution));
+        Assert.AreEqual(first.BuildingCount, restored.BuildingCount);
+        Assert.AreEqual(first.PersonCount, restored.PersonCount);
+        Assert.AreEqual(first.CompanyCount, restored.CompanyCount);
+    }
+
+    [TestMethod]
     public void CheckpointRoundTripPreservesAuthoritativeEvolution()
     {
         var world = CreateWorld(31002);
