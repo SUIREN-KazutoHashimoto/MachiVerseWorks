@@ -2,10 +2,12 @@ import * as THREE from 'three';
 
 import type { ReadonlyEntityStore } from './entity-store.ts';
 import type { ReadonlyPedestrianStore } from './pedestrian-store.ts';
+import { PhysicalWorldRenderer, type PhysicalWorldRenderingMetrics } from './physical-world-renderer.ts';
 import type { ReadonlyRoadNetworkStore } from './road-network-store.ts';
 import { LaneDirection, RoadNodeKind, type Lane, type WorldVolume } from './protocol.ts';
 import type { ReadonlyIntersectionControlStore, ReadonlyVehicleStore } from './traffic-store.ts';
 import { SignalIndication } from './traffic-protocol.ts';
+import type { ReadonlyWorldEnvironmentStore } from './world-environment-store.ts';
 
 const CAMERA_HEIGHT = 500;
 const CAMERA_TILT_DISTANCE = 250;
@@ -23,11 +25,20 @@ export interface WorldPosition {
   readonly z: number;
 }
 
+export interface WorldViewRenderingMetrics {
+  readonly frameTimeMs: number;
+  readonly drawCalls: number;
+  readonly geometries: number;
+  readonly textures: number;
+  readonly physicalWorld: PhysicalWorldRenderingMetrics;
+}
+
 export class WorldView {
   public readonly scene = new THREE.Scene();
   public readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 2_000);
   public readonly renderer = new THREE.WebGLRenderer({ antialias: true });
 
+  private readonly physicalWorldRenderer: PhysicalWorldRenderer;
   private readonly agentRenderer: AgentRenderer;
   private readonly pedestrianRenderer: PedestrianRenderer;
   private readonly vehicleRenderer: VehicleRenderer;
@@ -37,6 +48,7 @@ export class WorldView {
   private dragPointerId: number | null = null;
   private lastPointerX = 0;
   private lastPointerY = 0;
+  private lastFrameTimeMs = 0;
 
   public constructor(private readonly host: HTMLElement) {
     this.scene.background = new THREE.Color(0x0b1020);
@@ -48,9 +60,7 @@ export class WorldView {
     this.renderer.domElement.setAttribute('aria-label', 'MachiVerseWorks world view');
     this.host.append(this.renderer.domElement);
 
-    const grid = new THREE.GridHelper(2_000, 40, 0x334155, 0x1e293b);
-    this.scene.add(grid);
-
+    this.physicalWorldRenderer = new PhysicalWorldRenderer(this.scene);
     this.roadRenderer = new RoadNetworkRenderer(this.scene);
     this.agentRenderer = new AgentRenderer(this.scene);
     this.pedestrianRenderer = new PedestrianRenderer(this.scene);
@@ -79,7 +89,9 @@ export class WorldView {
     vehicles: ReadonlyVehicleStore | null = null,
     intersections: ReadonlyIntersectionControlStore | null = null,
     roadNetwork: ReadonlyRoadNetworkStore | null = null,
+    worldEnvironment: ReadonlyWorldEnvironmentStore | null = null,
   ): void {
+    if (worldEnvironment !== null) this.physicalWorldRenderer.update(worldEnvironment);
     if (roadNetwork !== null) this.roadRenderer.update(roadNetwork);
     this.agentRenderer.update(store, now);
     this.pedestrianRenderer.update(pedestrians, now);
@@ -87,7 +99,24 @@ export class WorldView {
     const intersectionCount = this.intersectionRenderer.update(intersections, now);
     this.renderer.domElement.dataset.vehicleCount = String(vehicleCount);
     this.renderer.domElement.dataset.intersectionControlCount = String(intersectionCount);
+    const renderStartedAt = performance.now();
     this.renderer.render(this.scene, this.camera);
+    this.lastFrameTimeMs = Math.max(0, performance.now() - renderStartedAt);
+    const metrics = this.getRenderingMetrics();
+    this.renderer.domElement.dataset.physicalWorldFrameTimeMs = metrics.frameTimeMs.toFixed(3);
+    this.renderer.domElement.dataset.physicalWorldDrawCalls = String(metrics.drawCalls);
+    this.renderer.domElement.dataset.physicalWorldGeometryBytes = String(metrics.physicalWorld.geometryByteLength);
+    this.renderer.domElement.dataset.terrainTriangles = String(metrics.physicalWorld.terrainTriangles);
+  }
+
+  public getRenderingMetrics(): WorldViewRenderingMetrics {
+    return Object.freeze({
+      frameTimeMs: this.lastFrameTimeMs,
+      drawCalls: this.renderer.info.render.calls,
+      geometries: this.renderer.info.memory.geometries,
+      textures: this.renderer.info.memory.textures,
+      physicalWorld: this.physicalWorldRenderer.metrics,
+    });
   }
 
   public getSubscriptionVolume(): WorldVolume { return computeOrthographicSubscriptionVolume(this.camera, SUBSCRIPTION_PADDING); }
@@ -104,6 +133,7 @@ export class WorldView {
   }
 
   public dispose(): void {
+    this.physicalWorldRenderer.dispose();
     this.roadRenderer.dispose();
     this.agentRenderer.dispose();
     this.pedestrianRenderer.dispose();
