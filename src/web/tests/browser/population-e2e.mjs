@@ -47,7 +47,7 @@ ui.onClearPersonInspection(() => connection.clearPersonInspection());
 try {
   connection.connect();
   await waitUntil(() => connectionState === 'connected', 'Protocol connection');
-  assert(protocolVersion?.major === 2 && protocolVersion?.minor === 16, 'current Browser connection negotiates Protocol 2.16');
+  assert(protocolVersion?.major === 2 && protocolVersion?.minor === 17, 'current Browser connection negotiates Protocol 2.17');
   await waitUntil(() => populationStatistics !== null, 'PopulationStatistics');
   assert(populationStatistics.householdCount === 1, 'PopulationStatistics contains one Household');
   assert(populationStatistics.personCount === 1, 'PopulationStatistics contains one Person');
