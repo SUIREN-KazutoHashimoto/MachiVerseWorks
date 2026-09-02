@@ -46,7 +46,6 @@ internal sealed class WorldEnvironmentPublishService(
 
                     _ = deliveryCoordinator.TrySchedule(
                         target.Connection,
-                        stoppingToken,
                         async sendCancellation =>
                         {
                             var key = new EncodedObservationCacheKey(
@@ -60,7 +59,8 @@ internal sealed class WorldEnvironmentPublishService(
                                 key,
                                 cache,
                                 sendCancellation);
-                        });
+                        },
+                        stoppingToken);
                 }
             }
         }
