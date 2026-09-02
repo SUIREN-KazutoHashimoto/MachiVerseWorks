@@ -1,4 +1,5 @@
 using System.Net.WebSockets;
+using MachiVerseWorks.Protocol;
 
 namespace MachiVerseWorks.Server;
 
@@ -25,15 +26,17 @@ internal sealed class PersistentRegionalEvolutionPublishService(
                 var captured = observationSource.CapturePersistentRegionalEvolutionSnapshot();
                 if (captured is null) continue;
                 var message = PersistentRegionalEvolutionMessageMapper.ToProtocol(captured.Value.Evolution, captured.Value.Interactions);
+                var chunks = PersistentRegionalEvolutionProtocolChunker.Split(message);
                 foreach (var connection in targets)
                 {
                     try
                     {
                         using var sendCancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
                         sendCancellation.CancelAfter(ClientSendTimeout);
-                        _ = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation.Token);
+                        foreach (var chunk in chunks)
+                            _ = await connection.SendAsync(chunk, connection.NegotiatedVersion, sendCancellation.Token);
                     }
-                    catch (Exception exception) when (exception is WebSocketException or OperationCanceledException or ObjectDisposedException)
+                    catch (Exception exception) when (exception is WebSocketException or OperationCanceledException or ObjectDisposedException or ArgumentOutOfRangeException)
                     {
                         connection.Abort();
                         connections.Remove(connection.Id);
