@@ -33,5 +33,6 @@ public enum MessageType : ushort
     SpectrumSnapshot = 791,
     WorldEnvironmentSnapshot = 800,
     RegionalGenerationSnapshot = 810,
+    PersistentRegionalEvolutionSnapshot = 820,
     Error = 900,
 }
