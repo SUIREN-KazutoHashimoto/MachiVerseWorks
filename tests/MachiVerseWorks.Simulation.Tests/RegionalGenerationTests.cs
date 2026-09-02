@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace MachiVerseWorks.Simulation.Tests;
@@ -16,17 +17,7 @@ public sealed class RegionalGenerationTests
         var first = firstWorld.GenerateRegionalGeneration(volume, new RegionalGenerationOptions(RegionalGenerationQualityPreset.Standard));
         var second = secondWorld.GenerateRegionalGeneration(volume, new RegionalGenerationOptions(RegionalGenerationQualityPreset.Standard));
 
-        CollectionAssert.AreEqual(first.Settlements.ToArray(), second.Settlements.ToArray());
-        CollectionAssert.AreEqual(first.GrowthEvents.ToArray(), second.GrowthEvents.ToArray());
-        CollectionAssert.AreEqual(first.Corridors.ToArray(), second.Corridors.ToArray());
-        CollectionAssert.AreEqual(first.Districts.ToArray(), second.Districts.ToArray());
-        CollectionAssert.AreEqual(first.Parcels.ToArray(), second.Parcels.ToArray());
-        CollectionAssert.AreEqual(first.Buildings.ToArray(), second.Buildings.ToArray());
-        CollectionAssert.AreEqual(first.Pois.ToArray(), second.Pois.ToArray());
-        CollectionAssert.AreEqual(first.Toponyms.ToArray(), second.Toponyms.ToArray());
-        CollectionAssert.AreEqual(first.RoadSigns.ToArray(), second.RoadSigns.ToArray());
-        Assert.AreEqual(first.Quality, second.Quality);
-        Assert.AreEqual(first.Iterations, second.Iterations);
+        Assert.AreEqual(JsonSerializer.Serialize(first), JsonSerializer.Serialize(second));
     }
 
     [TestMethod]
@@ -88,12 +79,7 @@ public sealed class RegionalGenerationTests
         var restoredCheckpoint = restored.CreateCheckpoint();
 
         Assert.IsTrue(restored.HasRegionalGeneration);
-        CollectionAssert.AreEqual(expected.Settlements.ToArray(), actual.Settlements.ToArray());
-        CollectionAssert.AreEqual(expected.GrowthEvents.ToArray(), actual.GrowthEvents.ToArray());
-        CollectionAssert.AreEqual(expected.Corridors.ToArray(), actual.Corridors.ToArray());
-        CollectionAssert.AreEqual(expected.Parcels.ToArray(), actual.Parcels.ToArray());
-        CollectionAssert.AreEqual(expected.Toponyms.ToArray(), actual.Toponyms.ToArray());
-        Assert.AreEqual(expected.Quality, actual.Quality);
+        Assert.AreEqual(JsonSerializer.Serialize(expected), JsonSerializer.Serialize(actual));
         Assert.IsNotNull(checkpoint.Economy?.RegionalGeneration);
         Assert.IsNotNull(restoredCheckpoint.Economy?.RegionalGeneration);
     }
