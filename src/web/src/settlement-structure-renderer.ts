@@ -194,7 +194,7 @@ export class SettlementStructureRenderer {
     for (const sign of snapshot.roadSigns) appendPosition(positions, sign.x, sign.y, sign.z + 2.5);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    const material = new THREE.PointsMaterial({ color: 0xfde68a, size: 8, sizeAttenuated: false });
+    const material = new THREE.PointsMaterial({ color: 0xfde68a, size: 8, sizeAttenuation: false });
     const points = new THREE.Points(geometry, material);
     points.name = 'regional-road-signs';
     points.frustumCulled = false;
