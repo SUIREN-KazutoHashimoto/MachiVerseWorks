@@ -92,7 +92,26 @@ public sealed class RegionalMaterializationTests
         world.GenerateRegionalGeneration(CreateVolume(), new RegionalGenerationOptions(RegionalGenerationQualityPreset.Draft, settlementCount: 2));
         world.CreateBuilding(new WorldVolume(0d, 0d, 0d, 10d, 10d, 10d));
 
-        Assert.ThrowsException<InvalidOperationException>(() => world.MaterializeRegionalGeneration());
+        AssertThrows<InvalidOperationException>(() => world.MaterializeRegionalGeneration());
+    }
+
+    private static void AssertThrows<TException>(Action action)
+        where TException : Exception
+    {
+        try
+        {
+            action();
+        }
+        catch (TException)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            Assert.Fail($"Expected {typeof(TException).Name}, but got {exception.GetType().Name}: {exception.Message}");
+        }
+
+        Assert.Fail($"Expected {typeof(TException).Name}, but no exception was thrown.");
     }
 
     private static WorldEnvironmentConfig CreateConfig(ulong worldSeed) => new(
