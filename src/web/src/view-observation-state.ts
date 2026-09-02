@@ -1,5 +1,7 @@
 import { EntityStore, type ReadonlyEntityStore } from './entity-store.ts';
 import { PedestrianStore, type ReadonlyPedestrianStore } from './pedestrian-store.ts';
+import { PERSISTENT_REGIONAL_EVOLUTION_SNAPSHOT_MESSAGE_TYPE, type PersistentRegionalEvolutionSnapshotMessage } from './persistent-regional-evolution-protocol.ts';
+import { PersistentRegionalEvolutionStore, type ReadonlyPersistentRegionalEvolutionStore } from './persistent-regional-evolution-store.ts';
 import { MessageType, type ProtocolMessage } from './protocol.ts';
 import { RegionalGenerationStore, type ReadonlyRegionalGenerationStore } from './regional-generation-store.ts';
 import { REGIONAL_GENERATION_SNAPSHOT_MESSAGE_TYPE, type RegionalGenerationSnapshotMessage } from './regional-generation-protocol.ts';
@@ -17,6 +19,7 @@ export interface ReadonlyViewObservationState {
   readonly roadNetwork: ReadonlyRoadNetworkStore;
   readonly worldEnvironment: ReadonlyWorldEnvironmentStore;
   readonly regionalGeneration: ReadonlyRegionalGenerationStore;
+  readonly persistentRegionalEvolution: ReadonlyPersistentRegionalEvolutionStore;
 }
 
 /** Single writable ingress for observation messages used by the View. */
@@ -28,6 +31,7 @@ export class ViewObservationState implements ReadonlyViewObservationState {
   private readonly roadNetworkStore = new RoadNetworkStore();
   private readonly worldEnvironmentStore = new WorldEnvironmentStore();
   private readonly regionalGenerationStore = new RegionalGenerationStore();
+  private readonly persistentRegionalEvolutionStore = new PersistentRegionalEvolutionStore();
 
   public get entities(): ReadonlyEntityStore { return this.entityStore; }
   public get pedestrians(): ReadonlyPedestrianStore { return this.pedestrianStore; }
@@ -36,8 +40,9 @@ export class ViewObservationState implements ReadonlyViewObservationState {
   public get roadNetwork(): ReadonlyRoadNetworkStore { return this.roadNetworkStore; }
   public get worldEnvironment(): ReadonlyWorldEnvironmentStore { return this.worldEnvironmentStore; }
   public get regionalGeneration(): ReadonlyRegionalGenerationStore { return this.regionalGenerationStore; }
+  public get persistentRegionalEvolution(): ReadonlyPersistentRegionalEvolutionStore { return this.persistentRegionalEvolutionStore; }
 
-  public apply(message: ProtocolMessage | TrafficProtocolMessage | WorldEnvironmentSnapshotMessage | RegionalGenerationSnapshotMessage, receivedAt = performance.now()): boolean {
+  public apply(message: ProtocolMessage | TrafficProtocolMessage | WorldEnvironmentSnapshotMessage | RegionalGenerationSnapshotMessage | PersistentRegionalEvolutionSnapshotMessage, receivedAt = performance.now()): boolean {
     switch (message.type) {
       case MessageType.AgentSpawn:
         this.entityStore.spawn(message, receivedAt);
@@ -78,6 +83,9 @@ export class ViewObservationState implements ReadonlyViewObservationState {
       case REGIONAL_GENERATION_SNAPSHOT_MESSAGE_TYPE:
         this.regionalGenerationStore.replace(message);
         return true;
+      case PERSISTENT_REGIONAL_EVOLUTION_SNAPSHOT_MESSAGE_TYPE:
+        this.persistentRegionalEvolutionStore.replace(message);
+        return true;
       default:
         return false;
     }
@@ -92,5 +100,6 @@ export class ViewObservationState implements ReadonlyViewObservationState {
     this.roadNetworkStore.clear();
     this.worldEnvironmentStore.clear();
     this.regionalGenerationStore.clear();
+    this.persistentRegionalEvolutionStore.clear();
   }
 }
