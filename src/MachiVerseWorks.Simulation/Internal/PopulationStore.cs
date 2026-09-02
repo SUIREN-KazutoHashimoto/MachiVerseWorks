@@ -73,6 +73,52 @@ internal sealed class PopulationStore
         return true;
     }
 
+    public void ReplaceBuildingReferences(BuildingId buildingId, TripEndpoint replacement)
+    {
+        for (var index = 0; index < households.Count; index++)
+        {
+            var household = households[index];
+            if (household.Residence.BuildingId == buildingId) household.Residence = replacement;
+        }
+
+        for (var index = 0; index < persons.Count; index++)
+        {
+            var person = persons[index];
+            if (person.Residence.BuildingId == buildingId) person.Residence = replacement;
+            if (person.CurrentLocation.BuildingId == buildingId) person.CurrentLocation = replacement;
+            if (person.Destination is { } destination && destination.BuildingId == buildingId) person.Destination = replacement;
+            for (var scheduleIndex = 0; scheduleIndex < person.Schedule.Length; scheduleIndex++)
+            {
+                var window = person.Schedule[scheduleIndex];
+                if (window.Destination is { } scheduled && scheduled.BuildingId == buildingId)
+                    person.Schedule[scheduleIndex] = window with { Destination = replacement };
+            }
+        }
+    }
+
+    public void ReplacePoiReferences(PoiId poiId, TripEndpoint replacement)
+    {
+        for (var index = 0; index < households.Count; index++)
+        {
+            var household = households[index];
+            if (household.Residence.PoiId == poiId) household.Residence = replacement;
+        }
+
+        for (var index = 0; index < persons.Count; index++)
+        {
+            var person = persons[index];
+            if (person.Residence.PoiId == poiId) person.Residence = replacement;
+            if (person.CurrentLocation.PoiId == poiId) person.CurrentLocation = replacement;
+            if (person.Destination is { } destination && destination.PoiId == poiId) person.Destination = replacement;
+            for (var scheduleIndex = 0; scheduleIndex < person.Schedule.Length; scheduleIndex++)
+            {
+                var window = person.Schedule[scheduleIndex];
+                if (window.Destination is { } scheduled && scheduled.PoiId == poiId)
+                    person.Schedule[scheduleIndex] = window with { Destination = replacement };
+            }
+        }
+    }
+
     public TripRequestId PeekTripRequestId()
     {
         EnsureCapacity(nextTripRequestId, "Trip request");
