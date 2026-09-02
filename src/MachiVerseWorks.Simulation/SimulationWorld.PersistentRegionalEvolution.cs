@@ -35,7 +35,7 @@ public sealed partial class SimulationWorld
 
     public void AdvancePersistentRegionalEvolutionYears(int years)
     {
-        if (years < 0) throw new ArgumentOutOfRangeException(nameof(years));
+        ArgumentOutOfRangeException.ThrowIfNegative(years);
         EnsurePersistentRegionalEvolution();
         _persistentRegionalEvolution = PersistentRegionalEvolutionEngine.AdvanceYears(
             _persistentRegionalEvolution!, _regionalGeneration!, years, CreateRegionalEvolutionDrivers);
