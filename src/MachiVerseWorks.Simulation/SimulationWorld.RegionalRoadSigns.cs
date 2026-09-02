@@ -64,7 +64,7 @@ public sealed partial class SimulationWorld
     private static double DistanceToRoadSegment(
         WorldPoint point,
         RoadSegmentSnapshot segment,
-        IReadOnlyDictionary<RoadNodeId, RoadNodeSnapshot> nodeById)
+        Dictionary<RoadNodeId, RoadNodeSnapshot> nodeById)
     {
         var start = nodeById[segment.StartNodeId].Position;
         var end = nodeById[segment.EndNodeId].Position;
