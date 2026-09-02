@@ -26,6 +26,16 @@ internal sealed class RegionalGenerationFixtureService(
                         settlementCount: 2,
                         iterationBudget: 1));
             }
+
+            // Phase 31 overlays must travel through the same live Server/Gateway/Web path as the
+            // Phase 30 geometry. Advancing the deterministic E2E fixture gives the browser a
+            // non-trivial authoritative evolution snapshot whose stable IDs can be joined back to
+            // the RegionalGeneration baseline without View-side semantic inference.
+            if (!world.HasPersistentRegionalEvolution)
+            {
+                _ = world.CreatePersistentRegionalEvolutionSnapshot();
+                world.AdvancePersistentRegionalEvolutionYears(25);
+            }
             return true;
         });
         return Task.CompletedTask;
