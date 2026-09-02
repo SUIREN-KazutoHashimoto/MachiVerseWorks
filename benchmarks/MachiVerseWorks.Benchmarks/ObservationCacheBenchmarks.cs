@@ -42,7 +42,10 @@ public class ObservationCacheBenchmarks
             64d,
             agents,
             [],
+            [],
+            new IntersectionControlSnapshot([], 100),
             new RoadNetworkReadModel(3, new RoadNetworkSnapshot([], [], [], [], [])),
+            new RailwayInfrastructureReadModel(4, new RailwayInfrastructureSnapshot([], [], [], [], [], [], [], [])),
             observationGeneration: 2,
             observationRevision: 80);
         _volume = new WorldVolume(120d, 120d, -10d, 520d, 520d, 10d);
