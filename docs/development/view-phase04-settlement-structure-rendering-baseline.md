@@ -1,8 +1,15 @@
 # View Phase 4 Settlement & Structure Rendering baseline
 
-View Phase 4 の client-side baseline は、Simulation Phase 30 が Protocol 2.18 で公開する `RegionalGenerationSnapshot` を唯一の semantic source として扱う。
+View Phase 4 は、Simulation が公開する read-only regional observation をそのまま presentation state へ写像する。
+
+- Simulation Phase 30 / Protocol 2.18 `RegionalGenerationSnapshot` — Settlement / District / Parcel / Building / POI / naming / Road Sign の baseline geometry と stable relation
+- Simulation Phase 31 / Protocol 2.19 `PersistentRegionalEvolutionSnapshot` — Settlement classification / trend、Parcel development、Building lifecycle、regional relation / event / flow の persistent evolution state
+
+View はこれらの semantic state を人口・jobs・密度・位置等から再計算しない。
 
 ## Read model boundary
+
+### Protocol 2.18 baseline
 
 Web Client は `RegionalGenerationSnapshot` から次を lossless に受け取る。
 
@@ -18,9 +25,23 @@ Web Client は `RegionalGenerationSnapshot` から次を lossless に受け取�
 
 `RegionalGenerationStore` は District→Settlement、Parcel→District / Settlement、Building→Parcel / District / Settlement、POI→Building / Settlement を authoritative stable ID だけで解決する。Renderer も Settlement / District / Parcel / Building / POI の relation metadata を描画 primitive と同じ revision で保持し、後続の Selection / Inspector が別の推測 index を作らなくてよい境界にする。
 
+### Protocol 2.19 persistent evolution
+
+`PersistentRegionalEvolutionStore` は Simulation Phase 31 の snapshot を別revisionとして保持する。
+
+- Settlement: position / population / jobs / service / density / accessibility / influence radius / `SettlementScale` / `SettlementTrend` / active state / established year / dormant year
+- Parcel: development demand / land value / development state / current Building relation
+- Building: use / built year / last changed year / condition / occupancy / capacity / `BuildingLifecycleStatus`
+- Service catchment / infrastructure demand
+- Regional relation
+- Regional evolution event
+- Commuting / freight flow
+
+Phase 30 geometry と Phase 31 evolution state は同じ stable ID で結合する。View は Phase 31 snapshot を受信しても別の都市モデルを生成せず、既存の Settlement / Parcel / Building presentation revisionへ authoritative evolution state を重ねる。
+
 ## Presentation mapping
 
-`SettlementStructureRenderer` は同一 read model から次を描画する。
+`SettlementStructureRenderer` は Phase 30 baseline から次を描画する。
 
 - corridor: authoritative `RegionalCorridorKind`
 - settlement marker: authoritative `RegionalRole` と `influenceRadiusMeters`
@@ -31,60 +52,112 @@ Web Client は `RegionalGenerationSnapshot` から次を lossless に受け取�
 - human toponym: authoritative name / stable provenance ID
 - road sign: authoritative position / kind / text / destination relation
 
-Settlement marker の大きさ等は presentation-only な visual mapping であり、都市分類を生成しない。高密度な中心Settlement、低密度なSettlement、農業系Settlement等も別のView modelへ分岐せず、同じ snapshot / renderer contract内で個別のstable IDを保ったまま並存させる。
+Protocol 2.19 evolution が存在する場合は、同じ描画primitiveへ次を反映する。
+
+- Settlement marker: authoritative `SettlementScale` / `SettlementTrend` / active state / current influence radius
+- Parcel: authoritative current development state / demand / land value metadata
+- Building: authoritative current use / condition / occupancy / lifecycle status
+- Regional relation: authoritative relation kind / strength / active state / since year
+- root revision metadata: authoritative `currentYear`
+
+Building `Demolished` は既存stable ID relationを失わず、geometryをpresentation上で極小化してdemolition stateを識別できるようにする。`Vacant` / `Renovating` / `Repurposing` / `Abandoned` も lifecycle status をvisual mappingへ反映する。
 
 ## Classification rule
 
 View は人口、jobs、位置、密度、影響半径等から City / Town / Village / Hamlet を推測しない。
 
-現行 Protocol 2.18 `ProtocolSettlement` には Settlement environment / origin / role / economy は存在するが、City / Town / Village / Hamlet に相当する明示的 semantic classification は存在しない。その値が Simulation observation として追加されるまでは View 側へ代替 rule を実装しない。
+Protocol 2.18 `ProtocolSettlement` 自体には City / Town / Village / Hamlet に相当する明示分類は存在しないが、Simulation Phase 31 / Protocol 2.19 は authoritative `SettlementScale` を公開する。
 
-このため `V4-002` は upstream semantic classification待ちである。また `V4-005` に含まれる Village / Hamlet を意味的に区別した最終visual representationも同じauthoritative classification待ちとする。提供済みrole / zone / building bounds等だけで、性質の異なる複数Settlementを単一read modelから同時表示するView-local baselineまでは先行実装する。
+- `Hamlet`
+- `Village`
+- `Town`
+- `City`
+- `Metropolis`
+
+View はこの値だけを都市規模分類として使用する。人口閾値等のView-side fallback ruleは実装しない。Protocol 2.19が未配送の2.18接続では、既存`RegionalRole`表現を維持し、City / Town / Village / Hamletという意味ラベルを捏造しない。
+
+## Protocol negotiation
+
+Web Client のcurrent protocolは2.19とする。
+
+並行開発中の現行`develop` Serverは2.18であり、高いminorを自動downgradeせず `UnsupportedProtocolVersion` を返してconnectionをcloseする。このためWeb Clientは最初に2.19を要求し、同一majorのserver-provided `supportedVersion` が2.19未満なら一度だけそのminorへfallbackして再接続する。
+
+これにより次を両立する。
+
+- Simulation Phase 31 Serverでは2.19 Persistent Regional Evolutionを受信する
+- 現行develop Serverでは2.18 Regional Generationまでの機能を維持する
+- major mismatchやclientより新しいversionへはfallbackしない
 
 ## Current integration dependency
 
-Phase 30 baseline には `RegionalGenerationMessageMapper` と Protocol 2.18 codec が存在する。しかし現行 Gateway の `IObservationSource` には Regional Generation snapshot のcapture契約がなく、`AddObservationGateway` にも Regional Generation publish service が登録されていない。`ObservationProtocolAdapter` のserialize対応だけではWeb Clientまでsnapshotは到達しない。
+Simulation Phase 31 branchには次が実装されている。
 
-したがって次を明確に分離する。
+- Protocol 2.19 `PersistentRegionalEvolutionSnapshot`
+- `PersistentRegionalEvolutionMessageMapper`
+- `IObservationSource.CapturePersistentRegionalEvolutionSnapshot`
+- `PersistentRegionalEvolutionPublishService`
 
-- View-local Browser baseline: authoritative Protocol 2.18 と同じread model shapeを入力し、実ブラウザ/Three.js上でrenderer contractを検証する。
-- live Gateway integration: Simulationからcaptureした実snapshotをGateway経由でWeb Clientへ配送し、同じrendererへ適用する。Gateway delivery contract実装後に追加する。
+したがってPhase 31 evolution contractそのものはView側で実装・検証可能になった。
 
-前者のfixtureを後者の代替やPhase完了証跡として扱わない。
+一方、Phase 30 baseline `RegionalGenerationSnapshot` については、現行Gatewayおよび確認したPhase 31 Server構成に専用のlive publish serviceが存在しない。Protocol serializer / mapperが存在しても、baseline District / Parcel / Building bounds等がWebへ自動配送される経路はまだ成立していない。
 
-Simulation Phase 31 の建設、用途変更、vacancy、demolition、Settlement の成長・停滞・衰退も同様に、authoritative observation が公開されるまで View 側で推測しない。Store は snapshot replacement ごとに同じ renderer contract を更新できるため、Phase 31 source は別の都市 model を作らずこの境界へ統合する。
+したがって次を分離する。
+
+- View-local Browser baseline: Protocol 2.18 / 2.19と同じread model shapeを入力し、実ブラウザ/Three.js上でrenderer contractを検証する
+- live Gateway integration: Simulationから実RegionalGeneration baseline + PersistentRegionalEvolutionをGateway経由でWeb Clientへ配送し、同じrendererへ適用する
+
+前者を後者の代替やPhase全体の完了証跡として扱わない。
 
 ## Current Phase 4 task status
 
-- `V4-001`: client-side 3D rendering baselineとBrowser-level rendering確認を実装。live Gateway integrationはdelivery contract待ち。
-- `V4-002`: City / Town / Village / Hamlet authoritative classification待ち。
+- `V4-001`: client-side 3D rendering baselineとBrowser-level rendering確認を実装。live RegionalGeneration delivery待ち。
+- `V4-002`: Protocol 2.19 `SettlementScale` のHamlet / Village / Town / City / Metropolisをauthoritative値のまま表示するclient実装・testを追加。live integration待ち。
 - `V4-003`: stable ID relation index、renderer relation metadata、unit / Browser-level検証を実装。live delivery経由の最終確認待ち。
-- `V4-004`: Simulation Phase 31 state transition observation待ち。
-- `V4-005`: heterogeneous multi-Settlementの同一read model baselineとBrowser-level検証を実装。Village / Hamlet等の意味分類を使う最終表現は`V4-002`依存。
-- `V4-006`: Simulation Phase 31 persistent regional observationを使うlive E2E待ち。
-- `V4-007`: 本文書と回帰testでclient baselineを記録。Phase全体の最終closeoutは上流依存解消後に行う。
+- `V4-004`: Protocol 2.19 Parcel development / Building lifecycle / Settlement trendを既存geometryへ反映するclient実装・testを追加。live integration待ち。
+- `V4-005`: heterogeneous multi-Settlement baselineに加え、CityとHamlet等のauthoritative `SettlementScale` を同一read model contractで同時表示するBrowser-level検証を追加。live integration待ち。
+- `V4-006`: Phase 31 relation / trend / active stateを複数Settlementへ個別適用し、単一都市へ固定集約しないBrowser-level検証を追加。実Simulation→Gateway→Web E2E待ち。
+- `V4-007`: 本文書とunit / Browser regressionでclient baselineを記録。Phase全体の最終closeoutはlive integration後に行う。
 
 ## Regression coverage
 
-`src/web/tests/regional-generation-protocol.test.mjs` は次を固定する。
+`src/web/tests/regional-generation-protocol.test.mjs`
 
 - Protocol 2.18 gate
-- 64-bit stable ID の exact decode
-- broken stable-ID relation の拒否
+- 64-bit stable ID exact decode
+- broken stable-ID relation rejection
 
-`src/web/tests/regional-generation-store.test.mjs` は Settlement / District / Parcel / Building / POI relation を stable ID で必要な範囲まで辿れること、および connection reset 相当の clear で state が破棄されることを固定する。
+`src/web/tests/regional-generation-store.test.mjs`
 
-`src/web/tests/settlement-structure-renderer.test.mjs` は次を固定する。
+- Settlement / District / Parcel / Building / POI stable-ID traversal
+- connection reset相当のclear
 
-- 異なるrole / influence radius / land-use / building densityを持つ複数Settlementを単一read modelで同時描画し、単一都市へ集約しない
-- Settlement / District / Parcel / Building / POI のstable ID relationをrenderer revisionと同時に保持する
-- clear後にrelation metadataを破棄する
+`src/web/tests/persistent-regional-evolution-protocol.test.mjs`
 
-`src/web/tests/browser/view-phase04-e2e.mjs` と `scripts/run-view-phase04-e2e.sh` は実Chrome / Chromium上で次を確認する。
+- Protocol 2.19 gate
+- 64-bit stable ID exact decode
+- authoritative SettlementScale / SettlementTrend / BuildingLifecycleStatus / RegionalRelationKind
+- broken stable-ID relation rejection
+
+`src/web/tests/persistent-regional-evolution-store.test.mjs`
+
+- Parcel / Building / Settlement stable-ID traversal
+- Relation / Event grouping
+- snapshot replacementとclear
+
+`src/web/tests/persistent-regional-evolution-renderer.test.mjs`
+
+- Phase 30 geometryを維持したままPhase 31 revisionだけでSettlement scale / trendを更新
+- Parcel redevelopment stateの反映
+- Building demolished / active lifecycleの描画差分
+- Regional relation stable-ID metadata
+
+`src/web/tests/browser/view-phase04-e2e.mjs` と `scripts/run-view-phase04-e2e.sh`
 
 - Settlement / Corridor / District / Parcel / Building / POI / Toponym / Road SignがThree.js sceneへ生成され、実draw callが発生する
-- 離れた複数Settlementが1つへ集約されず、Simulation提供role等の差をpresentationへ反映する
+- 離れた複数Settlementが1つへ集約されない
+- City / Hamlet等のauthoritative `SettlementScale` とtrend / active stateを保持する
 - Parcel→District / Settlement、Building→Parcel / District / Settlement、POI→Building等のstable ID relationを`bigint`のまま保持する
+- Building demolitionとregional relationを実ブラウザ上で反映する
 - browser canvas上でhuman Toponym spriteを生成できる
 
 このBrowser E2EはView-local rendering boundaryの証跡であり、Simulation→Gateway→Webのlive Regional Generation deliveryを証明するものではない。
@@ -95,4 +168,6 @@ Issue #298 に記録済みのとおり、Simulation の `RoadSignKind.RockSlope 
 
 ## Version handling
 
-View Phase 4 は wire contract を受けるため Web Client の negotiated Protocol version を 2.18 へ更新する。アプリケーション release version を示すルート `VERSION` はこの実装では変更しない。
+View Phase 4 はWeb Clientのcurrent negotiated Protocolを2.19へ進める。Protocol 2.18 Serverへのminor fallbackはconnection-local compatibilityであり、semantic stateをView側で補完するものではない。
+
+アプリケーションrelease versionを示すルート `VERSION` はこの実装では変更しない。
