@@ -90,17 +90,26 @@ public sealed class WorldEnvironmentTests
     [TestMethod]
     public void CavitySurfacesRemainBelowPrimaryGround()
     {
-        var world = new SimulationWorld(new SimulationConfig(worldEnvironment: CreateConfig(29008)));
+        var config = CreateConfig(29008);
+        var world = new SimulationWorld(new SimulationConfig(worldEnvironment: config));
+        var searchVolume = new WorldVolume(-1_000_000d, -1_000_000d, -12_000d, 1_000_000d, 1_000_000d, 12_000d);
+        var land = world.SelectSettlementCandidates(searchVolume, 1).Single();
+        var cellSize = Math.Max(48d, config.TerrainDetailScaleMeters * 0.3d);
+        var originCellX = checked((long)Math.Floor(land.Center.X / cellSize));
+        var originCellY = checked((long)Math.Floor(land.Center.Y / cellSize));
         double? cavityGroundZ = null;
         IReadOnlyList<TerrainSurfaceIntersection>? cavitySurfaces = null;
 
-        for (var y = -100_000d; y <= 100_000d && cavityGroundZ is null; y += 2_048d)
+        for (var offsetY = -16; offsetY <= 16 && cavityGroundZ is null; offsetY++)
         {
-            for (var x = -100_000d; x <= 100_000d; x += 2_048d)
+            for (var offsetX = -16; offsetX <= 16; offsetX++)
             {
-                var surfaces = world.QueryTerrainSurfaces(x, y, -12_000d, 12_000d);
+                var x = (originCellX + offsetX + 0.5d) * cellSize;
+                var y = (originCellY + offsetY + 0.5d) * cellSize;
+                var ground = world.QueryTerrainSurface(x, y);
+                var surfaces = world.QueryTerrainSurfaces(x, y, ground.Position.Z - 500d, ground.Position.Z + 1d);
                 if (!surfaces.Any(static item => item.IsCavityBoundary)) continue;
-                cavityGroundZ = surfaces.Single(static item => item.IsPrimaryGroundSurface).Z;
+                cavityGroundZ = ground.Position.Z;
                 cavitySurfaces = surfaces;
                 break;
             }
