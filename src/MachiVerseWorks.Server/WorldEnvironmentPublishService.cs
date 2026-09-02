@@ -1,4 +1,6 @@
 using System.Net.WebSockets;
+using MachiVerseWorks.Protocol;
+using MachiVerseWorks.Simulation;
 
 namespace MachiVerseWorks.Server;
 
@@ -20,27 +22,40 @@ internal sealed class WorldEnvironmentPublishService(
                     .Where(static connection => connection.HandshakeCompleted
                         && connection.NegotiatedVersion.SupportsWorldEnvironment
                         && connection.Socket.State == WebSocketState.Open)
+                    .Select(connection => connection.TryCaptureSubscription(out var subscription)
+                        ? new EnvironmentPublishTarget(connection, subscription.Volume)
+                        : null)
+                    .Where(static target => target is not null)
+                    .Select(static target => target!)
                     .ToArray();
+                if (targets.Length == 0) continue;
 
-                foreach (var connection in targets)
+                var messages = new Dictionary<WorldVolume, WorldEnvironmentSnapshotMessage>();
+                foreach (var target in targets)
                 {
-                    if (!connection.TryCaptureSubscription(out var subscription)) continue;
+                    if (!messages.TryGetValue(target.Volume, out var message))
+                    {
+                        var snapshot = simulation.Read(world => world.CreateDetailedWorldEnvironmentSnapshot(target.Volume));
+                        message = WorldEnvironmentMessageMapper.ToProtocol(snapshot);
+                        messages.Add(target.Volume, message);
+                    }
+
                     try
                     {
-                        var snapshot = simulation.Read(world => world.CreateDetailedWorldEnvironmentSnapshot(subscription.Volume));
-                        var message = WorldEnvironmentMessageMapper.ToProtocol(snapshot);
                         using var sendCancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
                         sendCancellation.CancelAfter(ClientSendTimeout);
-                        _ = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation.Token);
+                        _ = await target.Connection.SendAsync(message, target.Connection.NegotiatedVersion, sendCancellation.Token);
                     }
                     catch (Exception exception) when (exception is WebSocketException or OperationCanceledException or ObjectDisposedException)
                     {
-                        connection.Abort();
-                        connections.Remove(connection.Id);
+                        target.Connection.Abort();
+                        connections.Remove(target.Connection.Id);
                     }
                 }
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
     }
+
+    private sealed record EnvironmentPublishTarget(ClientConnection Connection, WorldVolume Volume);
 }
