@@ -50,7 +50,7 @@ SimulationTickService ─────────► SimulationRuntime
                           Observation Gateway
 ```
 
-Observation Gatewayの詳細は[`observation-gateway.md`](observation-gateway.md)を参照する。
+Observation Gatewayの詳細は[`observation-gateway.md`](observation-gateway.md)、実装計画・Task状態は[`../../roadmap/GATEWAY_ROADMAP.md`](../../roadmap/GATEWAY_ROADMAP.md)を参照する。
 
 ## State ownership
 
@@ -268,6 +268,6 @@ Administration / Managementではunknown command、invalid number / enum、missi
 - editor / runtime control / configuration / Save UIはManagement Roadmapで管理する
 - AnalyticsはView / Managementの必須責務へ混在させない
 
-将来のSimulation / Observation contractは[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)、read-only View実装は[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)、Management UIは[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)を参照する。
+将来のSimulation semantic source / authoritative command contractは[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)、Observation Request / subscription / cache / delivery / Protocol adaptationは[`../../roadmap/GATEWAY_ROADMAP.md`](../../roadmap/GATEWAY_ROADMAP.md)、read-only View実装は[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)、Management UIは[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)を参照する。
 
 binary layoutは[`protocol.md`](protocol.md)、Observation Gatewayは[`observation-gateway.md`](observation-gateway.md)、Web側state適用は[`web-client.md`](web-client.md)、Administration command grammarは[`../specifications/server-administration-console.md`](../specifications/server-administration-console.md)を参照する。
