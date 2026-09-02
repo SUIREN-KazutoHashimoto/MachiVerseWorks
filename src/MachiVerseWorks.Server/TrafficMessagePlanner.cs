@@ -12,7 +12,8 @@ internal static class VehicleSnapshotMessagePlanner
     public static VehicleSnapshotMessagePlan Create(
         VehicleSnapshot[] snapshots,
         IReadOnlySet<ulong> knownVehicleIds,
-        ulong tickCount)
+        ulong tickCount,
+        bool forceFullSnapshot = false)
     {
         ArgumentNullException.ThrowIfNull(snapshots);
         ArgumentNullException.ThrowIfNull(knownVehicleIds);
@@ -20,6 +21,34 @@ internal static class VehicleSnapshotMessagePlanner
         Array.Sort(orderedSnapshots, static (left, right) => left.Id.Value.CompareTo(right.Id.Value));
         var current = new HashSet<ulong>(orderedSnapshots.Length);
         var messages = new List<IProtocolMessage>(orderedSnapshots.Length + knownVehicleIds.Count);
+        if (forceFullSnapshot)
+        {
+            var removals = knownVehicleIds.ToArray();
+            Array.Sort(removals);
+            foreach (var id in removals) messages.Add(new VehicleRemoveMessage(id, tickCount));
+            foreach (var snapshot in orderedSnapshots)
+            {
+                var id = snapshot.Id.Value;
+                current.Add(id);
+                var state = (ProtocolVehicleMovementState)snapshot.State;
+                messages.Add(new VehicleSpawnMessage(
+                    id,
+                    snapshot.LaneId.Value,
+                    snapshot.Position.X,
+                    snapshot.Position.Y,
+                    snapshot.Position.Z,
+                    snapshot.Forward.X,
+                    snapshot.Forward.Y,
+                    snapshot.Forward.Z,
+                    snapshot.SpeedMetersPerSecond,
+                    snapshot.Dimensions.LengthMeters,
+                    snapshot.Dimensions.WidthMeters,
+                    snapshot.Dimensions.HeightMeters,
+                    state,
+                    snapshot.TickCount));
+            }
+            return new VehicleSnapshotMessagePlan(messages, current);
+        }
         foreach (var snapshot in orderedSnapshots)
         {
             var id = snapshot.Id.Value;
