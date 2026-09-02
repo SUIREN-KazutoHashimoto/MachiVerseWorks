@@ -81,7 +81,7 @@ internal sealed class PopulationPublishService(
             {
                 continue;
             }
-            var entityInspection = connection.NegotiatedVersion.SupportsPersistentRegionalEvolution
+            var entityInspection = connection.NegotiatedVersion.SupportsEntityInspection
                 ? inspections.Capture(connection.Id)
                 : default;
             pending.Add(new PendingPopulationDelivery(connection, connection.CaptureInspectionState(), entityInspection));
@@ -116,14 +116,25 @@ internal sealed class PopulationPublishService(
                     new EntityObservationCacheKey(EntityObservationKind.Person, personId, revision),
                     () => PopulationMessageMapper.Create(person));
                 var personKey = new EncodedObservationCacheKey("person", connection.NegotiatedVersion, revision, ObservationCacheIdentity.ForEntity(personId));
-                _ = await connection.SendCachedAsync(personMessage, connection.NegotiatedVersion, personKey, cache, sendCancellation.Token);
+                _ = await connection.SendCachedIfInspectionCurrentAsync(
+                    personMessage,
+                    connection.NegotiatedVersion,
+                    personKey,
+                    cache,
+                    delivery.Inspection,
+                    sendCancellation.Token);
             }
 
             if (delivery.EntityInspection.Target is { } target
                 && inspections.IsCurrent(connection.Id, delivery.EntityInspection))
             {
                 var entityMessage = EntityInspectionMessageMapper.Create(target, snapshot, trains, regional);
-                _ = await connection.SendAsync(entityMessage, connection.NegotiatedVersion, sendCancellation.Token);
+                _ = await connection.SendIfEntityInspectionCurrentAsync(
+                    entityMessage,
+                    connection.NegotiatedVersion,
+                    inspections,
+                    delivery.EntityInspection,
+                    sendCancellation.Token);
             }
         }
         catch (Exception exception) when (exception is WebSocketException or OperationCanceledException or ObjectDisposedException)
