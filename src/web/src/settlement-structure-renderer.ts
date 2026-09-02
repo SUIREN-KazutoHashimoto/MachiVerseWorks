@@ -1,6 +1,14 @@
 import * as THREE from 'three';
 
 import {
+  BuildingLifecycleStatus,
+  RegionalRelationKind,
+  SettlementScale,
+  SettlementTrend,
+  type PersistentRegionalEvolutionSnapshotMessage,
+} from './persistent-regional-evolution-protocol.ts';
+import type { ReadonlyPersistentRegionalEvolutionStore } from './persistent-regional-evolution-store.ts';
+import {
   GeneratedBuildingUse,
   ParcelDevelopmentState,
   RegionalCorridorKind,
@@ -35,12 +43,13 @@ export interface SettlementStructureStableRelations {
 }
 
 /**
- * Maps the authoritative Regional Generation read model to presentation primitives.
- * It deliberately does not infer settlement class, zone, building use, or development state.
+ * Maps authoritative Regional Generation geometry plus optional Protocol 2.19 evolution state to presentation primitives.
+ * Settlement scale/trend and lifecycle state are consumed as provided by Simulation; this renderer never reclassifies them.
  */
 export class SettlementStructureRenderer {
   private readonly root = new THREE.Group();
   private renderedRevision = -1;
+  private renderedEvolutionRevision = -1;
   private lastMetrics: SettlementStructureRenderingMetrics = emptyMetrics();
   private lastRelations: SettlementStructureStableRelations = emptyRelations();
 
@@ -52,9 +61,11 @@ export class SettlementStructureRenderer {
   public get metrics(): SettlementStructureRenderingMetrics { return this.lastMetrics; }
   public get relations(): SettlementStructureStableRelations { return this.lastRelations; }
 
-  public update(store: ReadonlyRegionalGenerationStore): void {
-    if (store.revision === this.renderedRevision) return;
+  public update(store: ReadonlyRegionalGenerationStore, evolution: ReadonlyPersistentRegionalEvolutionStore | null = null): void {
+    const evolutionRevision = evolution?.revision ?? -1;
+    if (store.revision === this.renderedRevision && evolutionRevision === this.renderedEvolutionRevision) return;
     this.renderedRevision = store.revision;
+    this.renderedEvolutionRevision = evolutionRevision;
     this.clearRoot();
     const snapshot = store.snapshot;
     if (snapshot === null) {
@@ -62,7 +73,7 @@ export class SettlementStructureRenderer {
       this.lastRelations = emptyRelations();
       return;
     }
-    this.renderSnapshot(snapshot);
+    this.renderSnapshot(snapshot, evolution);
   }
 
   public dispose(): void {
@@ -71,13 +82,15 @@ export class SettlementStructureRenderer {
     this.scene.remove(this.root);
   }
 
-  private renderSnapshot(snapshot: RegionalGenerationSnapshotMessage): void {
+  private renderSnapshot(snapshot: RegionalGenerationSnapshotMessage, evolution: ReadonlyPersistentRegionalEvolutionStore | null): void {
+    this.root.userData.currentYear = evolution?.snapshot?.currentYear ?? null;
     this.lastRelations = createRelations(snapshot);
     this.addCorridors(snapshot);
+    this.addEvolutionRelations(evolution?.snapshot ?? null);
     this.addDistricts(snapshot);
-    this.addParcels(snapshot);
-    this.addBuildings(snapshot);
-    this.addSettlements(snapshot);
+    this.addParcels(snapshot, evolution);
+    this.addBuildings(snapshot, evolution);
+    this.addSettlements(snapshot, evolution);
     this.addPois(snapshot);
     this.addRoadSigns(snapshot);
     const labelCount = this.addToponymLabels(snapshot);
@@ -115,6 +128,33 @@ export class SettlementStructureRenderer {
     }
   }
 
+  private addEvolutionRelations(snapshot: PersistentRegionalEvolutionSnapshotMessage | null): void {
+    if (snapshot === null || snapshot.relations.length === 0) return;
+    const settlements = new Map(snapshot.settlements.map((item) => [item.settlementId, item] as const));
+    const groups = new Map<RegionalRelationKind, number[]>();
+    const metadata = [];
+    for (const relation of snapshot.relations) {
+      const from = settlements.get(relation.fromSettlementId);
+      const to = settlements.get(relation.toSettlementId);
+      if (from === undefined || to === undefined) continue;
+      const positions = groups.get(relation.kind) ?? [];
+      appendPosition(positions, from.x, from.y, from.z + 3);
+      appendPosition(positions, to.x, to.y, to.z + 3);
+      groups.set(relation.kind, positions);
+      metadata.push(Object.freeze({ relationId: relation.relationId, fromSettlementId: relation.fromSettlementId, toSettlementId: relation.toSettlementId, kind: relation.kind, strength: relation.strength, isActive: relation.isActive, sinceYear: relation.sinceYear }));
+    }
+    for (const [kind, positions] of groups) {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      const material = new THREE.LineBasicMaterial({ color: regionalRelationColor(kind), transparent: true, opacity: 0.58 });
+      const lines = new THREE.LineSegments(geometry, material);
+      lines.name = `regional-evolution-relations-${String(kind)}`;
+      lines.frustumCulled = false;
+      lines.userData.relations = metadata;
+      this.root.add(lines);
+    }
+  }
+
   private addDistricts(snapshot: RegionalGenerationSnapshotMessage): void {
     const positions: number[] = [];
     for (const district of snapshot.districts) appendBoundsOutline(positions, district, district.maxZ + PRESENTATION_OFFSET * 0.5);
@@ -128,7 +168,7 @@ export class SettlementStructureRenderer {
     this.root.add(lines);
   }
 
-  private addParcels(snapshot: RegionalGenerationSnapshotMessage): void {
+  private addParcels(snapshot: RegionalGenerationSnapshotMessage, evolution: ReadonlyPersistentRegionalEvolutionStore | null): void {
     const geometry = new THREE.BoxGeometry(1, 1, 1);
     const material = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.24, depthWrite: false });
     const mesh = new THREE.InstancedMesh(geometry, material, Math.max(1, snapshot.parcels.length));
@@ -137,18 +177,23 @@ export class SettlementStructureRenderer {
     mesh.count = snapshot.parcels.length;
     mesh.frustumCulled = false;
     mesh.userData.relations = this.lastRelations.parcels;
+    mesh.userData.evolution = snapshot.parcels.map((parcel) => {
+      const current = evolution?.getParcel(parcel.parcelId);
+      return current === undefined ? null : Object.freeze({ parcelId: current.parcelId, settlementId: current.settlementId, developmentDemand: current.developmentDemand, landValue: current.landValue, developmentState: current.developmentState, buildingId: current.buildingId });
+    });
     for (let index = 0; index < snapshot.parcels.length; index += 1) {
       const parcel = snapshot.parcels[index];
+      const current = evolution?.getParcel(parcel.parcelId);
       boundsMatrix(parcel, Math.max(0.35, parcel.maxZ - parcel.minZ), matrix, PRESENTATION_OFFSET * 0.25);
       mesh.setMatrixAt(index, matrix);
-      mesh.setColorAt(index, zoneColor(parcel.zone, parcel.developmentState));
+      mesh.setColorAt(index, zoneColor(parcel.zone, (current?.developmentState ?? parcel.developmentState) as ParcelDevelopmentState));
     }
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor !== null) mesh.instanceColor.needsUpdate = true;
     this.root.add(mesh);
   }
 
-  private addBuildings(snapshot: RegionalGenerationSnapshotMessage): void {
+  private addBuildings(snapshot: RegionalGenerationSnapshotMessage, evolution: ReadonlyPersistentRegionalEvolutionStore | null): void {
     const geometry = new THREE.BoxGeometry(1, 1, 1);
     const material = new THREE.MeshBasicMaterial({ vertexColors: true });
     const mesh = new THREE.InstancedMesh(geometry, material, Math.max(1, snapshot.buildings.length));
@@ -157,18 +202,26 @@ export class SettlementStructureRenderer {
     mesh.count = snapshot.buildings.length;
     mesh.frustumCulled = false;
     mesh.userData.relations = this.lastRelations.buildings;
+    mesh.userData.evolution = snapshot.buildings.map((building) => {
+      const current = evolution?.getBuilding(building.buildingId);
+      return current === undefined ? null : Object.freeze({ buildingId: current.buildingId, parcelId: current.parcelId, use: current.use, condition: current.condition, occupancy: current.occupancy, capacity: current.capacity, status: current.status, builtYear: current.builtYear, lastChangedYear: current.lastChangedYear });
+    });
     for (let index = 0; index < snapshot.buildings.length; index += 1) {
       const building = snapshot.buildings[index];
-      boundsMatrix(building, Math.max(1, building.maxZ - building.minZ), matrix, 0);
+      const current = evolution?.getBuilding(building.buildingId);
+      const status = current?.status ?? BuildingLifecycleStatus.Active;
+      const visualHeight = status === BuildingLifecycleStatus.Demolished ? 0.15 : Math.max(1, building.maxZ - building.minZ);
+      boundsMatrix(building, visualHeight, matrix, 0);
       mesh.setMatrixAt(index, matrix);
-      mesh.setColorAt(index, buildingColor(building.use));
+      const use = (current?.use ?? building.use) as GeneratedBuildingUse;
+      mesh.setColorAt(index, buildingLifecycleColor(use, status, current?.condition ?? 1));
     }
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor !== null) mesh.instanceColor.needsUpdate = true;
     this.root.add(mesh);
   }
 
-  private addSettlements(snapshot: RegionalGenerationSnapshotMessage): void {
+  private addSettlements(snapshot: RegionalGenerationSnapshotMessage, evolution: ReadonlyPersistentRegionalEvolutionStore | null): void {
     const geometry = new THREE.SphereGeometry(1, 10, 8);
     const material = new THREE.MeshBasicMaterial({ vertexColors: true });
     const mesh = new THREE.InstancedMesh(geometry, material, Math.max(1, snapshot.settlements.length));
@@ -179,15 +232,21 @@ export class SettlementStructureRenderer {
     mesh.count = snapshot.settlements.length;
     mesh.frustumCulled = false;
     mesh.userData.relations = this.lastRelations.settlements;
+    mesh.userData.evolution = snapshot.settlements.map((settlement) => {
+      const current = evolution?.getSettlement(settlement.settlementId);
+      return current === undefined ? null : Object.freeze({ settlementId: current.settlementId, scale: current.scale, trend: current.trend, isActive: current.isActive, population: current.population, jobs: current.jobs, influenceRadiusMeters: current.influenceRadiusMeters, establishedYear: current.establishedYear, dormantSinceYear: current.dormantSinceYear });
+    });
     for (let index = 0; index < snapshot.settlements.length; index += 1) {
       const settlement = snapshot.settlements[index];
-      // Scale is presentation-only and uses Simulation-provided influence radius; no City/Town/Village inference occurs here.
-      const markerRadius = clamp(Math.sqrt(settlement.influenceRadiusMeters) * 0.18, 5, 24);
-      position.set(settlement.x, settlement.z + markerRadius + PRESENTATION_OFFSET, settlement.y);
+      const current = evolution?.getSettlement(settlement.settlementId);
+      const influenceRadius = current?.influenceRadiusMeters ?? settlement.influenceRadiusMeters;
+      const scaleMultiplier = current === undefined ? 1 : settlementScaleMultiplier(current.scale);
+      const markerRadius = clamp(Math.sqrt(influenceRadius) * 0.18 * scaleMultiplier, 4, 34);
+      position.set(current?.x ?? settlement.x, (current?.z ?? settlement.z) + markerRadius + PRESENTATION_OFFSET, current?.y ?? settlement.y);
       scale.set(markerRadius, markerRadius, markerRadius);
       matrix.compose(position, IDENTITY_QUATERNION, scale);
       mesh.setMatrixAt(index, matrix);
-      mesh.setColorAt(index, settlementRoleColor(settlement.role));
+      mesh.setColorAt(index, current === undefined ? settlementRoleColor(settlement.role) : settlementEvolutionColor(current.scale, current.trend, current.isActive));
     }
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor !== null) mesh.instanceColor.needsUpdate = true;
@@ -293,6 +352,15 @@ function corridorColor(kind: RegionalCorridorKind): number {
   }
 }
 
+function regionalRelationColor(kind: RegionalRelationKind): number {
+  switch (kind) {
+    case RegionalRelationKind.Commuting: return 0x38bdf8;
+    case RegionalRelationKind.Trade: return 0xfbbf24;
+    case RegionalRelationKind.Service: return 0x4ade80;
+    case RegionalRelationKind.Metro: return 0xc084fc;
+  }
+}
+
 function settlementRoleColor(role: RegionalRole): THREE.Color {
   const color = new THREE.Color();
   switch (role) {
@@ -304,6 +372,36 @@ function settlementRoleColor(role: RegionalRole): THREE.Color {
     case RegionalRole.Port: return color.setHex(0x22d3ee);
     case RegionalRole.TransportHub: return color.setHex(0xfb923c);
     case RegionalRole.Resource: return color.setHex(0xf0abfc);
+  }
+}
+
+function settlementEvolutionColor(scale: SettlementScale, trend: SettlementTrend, isActive: boolean): THREE.Color {
+  const color = new THREE.Color();
+  switch (scale) {
+    case SettlementScale.Hamlet: color.setHex(0x86efac); break;
+    case SettlementScale.Village: color.setHex(0x4ade80); break;
+    case SettlementScale.Town: color.setHex(0x38bdf8); break;
+    case SettlementScale.City: color.setHex(0x818cf8); break;
+    case SettlementScale.Metropolis: color.setHex(0xe879f9); break;
+  }
+  switch (trend) {
+    case SettlementTrend.Growing: color.lerp(new THREE.Color(0x22c55e), 0.22); break;
+    case SettlementTrend.Stable: break;
+    case SettlementTrend.Declining: color.lerp(new THREE.Color(0xef4444), 0.30); break;
+    case SettlementTrend.Recovering: color.lerp(new THREE.Color(0x22d3ee), 0.28); break;
+    case SettlementTrend.Dormant: color.multiplyScalar(0.42); break;
+  }
+  if (!isActive) color.multiplyScalar(0.55);
+  return color;
+}
+
+function settlementScaleMultiplier(scale: SettlementScale): number {
+  switch (scale) {
+    case SettlementScale.Hamlet: return 0.75;
+    case SettlementScale.Village: return 0.9;
+    case SettlementScale.Town: return 1;
+    case SettlementScale.City: return 1.14;
+    case SettlementScale.Metropolis: return 1.3;
   }
 }
 
@@ -334,6 +432,18 @@ function buildingColor(use: GeneratedBuildingUse): THREE.Color {
     case GeneratedBuildingUse.Civic: return color.setHex(0xf9a8d4);
     case GeneratedBuildingUse.Transport: return color.setHex(0xfdba74);
     case GeneratedBuildingUse.Utility: return color.setHex(0x67e8f9);
+  }
+}
+
+function buildingLifecycleColor(use: GeneratedBuildingUse, status: BuildingLifecycleStatus, condition: number): THREE.Color {
+  const color = buildingColor(use).multiplyScalar(0.55 + clamp(condition, 0, 1) * 0.45);
+  switch (status) {
+    case BuildingLifecycleStatus.Active: return color;
+    case BuildingLifecycleStatus.Vacant: return color.multiplyScalar(0.58);
+    case BuildingLifecycleStatus.Renovating: return color.lerp(new THREE.Color(0xffffff), 0.38);
+    case BuildingLifecycleStatus.Repurposing: return color.lerp(new THREE.Color(0xc084fc), 0.42);
+    case BuildingLifecycleStatus.Abandoned: return color.setHex(0x475569);
+    case BuildingLifecycleStatus.Demolished: return color.setHex(0x7f1d1d);
   }
 }
 
