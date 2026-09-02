@@ -8,7 +8,7 @@
 - 人口統計、経済分析、交通分析、heatmap、trend等の分析処理はViewへ含めず、将来のAnalytics Listener / analysis clientとして別途設計します。
 - Observation Gatewayのarchitectureは[`../docs/architecture/observation-gateway.md`](../docs/architecture/observation-gateway.md)を正本とします。
 
-> **現在:** View Phase 4 — Settlement & Structure Rendering（Simulation / Gateway依存待ち）  
+> **現在:** View Phase 5 — Infrastructure & Dynamic Entity Fidelity  
 > **進め方:** View固有の基盤はPhase 1から進め、Simulationから移管された描画Taskは依存するSimulation semantic sourceとGateway delivery contractが実装できた時点で順次着手する
 
 ## 最上位原則
@@ -31,8 +31,8 @@
 | 1 | Read-Only View Foundation | 現行read-only Protocol / Gateway Phase 1境界 | ✅ 完了 |
 | 2 | Camera & Observation Navigation | Gateway subscription contract | ✅ 完了 |
 | 3 | Physical World Rendering | Simulation Phase 29 source + Gateway delivery | ✅ 完了 |
-| 4 | Settlement & Structure Rendering | Simulation Phase 30 baseline / Phase 31 evolution + Gateway delivery | ⏳ Simulation / Gateway依存待ち |
-| 5 | Infrastructure & Dynamic Entity Fidelity | 各Simulation domain source / Gateway delivery contract | ⏳ View基盤待ち |
+| 4 | Settlement & Structure Rendering | Simulation Phase 30 baseline / Phase 31 evolution + Gateway delivery | ✅ 完了 |
+| 5 | Infrastructure & Dynamic Entity Fidelity | 各Simulation domain source / Gateway delivery contract | ⏳ 実装待ち |
 | 6 | Large World Rendering & Rendering LOD | Simulation Phase 29〜31 source / Gateway Phase 2〜3 | ⏳ Simulation / Gateway依存待ち |
 | 7 | Object Selection & Inspector | Gateway Phase 4 Current / Relations | ⏳ Gateway依存待ち |
 | 8 | Temporal Observation | Simulation semantic history / schedule + Gateway Phase 4 | ⏳ Simulation / Gateway依存待ち |
@@ -171,17 +171,19 @@ Viewを完全read-onlyなPresentation clientとして固定し、Gatewayから�
 
 ## View Phase 4 — Settlement & Structure Rendering
 
-> **状態: ⏳ Simulation / Gateway依存待ち**  
+> **状態: ✅ 完了**  
 > **必須依存:** View Phase 3、Simulation Phase 30 `P30-028`のSettlement / Parcel / Zone / naming baseline source、対応Gateway delivery contract  
 > **統合依存:** Simulation Phase 31 Persistent Regional source（`V4-004` / `V4-006`の動的変化表示）
 
-- ⬜ **V4-001** — Settlement network / Parcel / Zone / development / urban naming / Road Signを3D可視化する（旧`P30-028`のView部分）
-- ⬜ **V4-002** — City / Town / Village / Hamlet等の分類はSimulation提供値だけを使用して表示する
-- ⬜ **V4-003** — Building / POI / Parcel / District / Settlement relationをstable ID参照に基づき表示する
-- ⬜ **V4-004** — Simulation Phase 31が公開する建設・用途変更・vacancy・demolition等のstate transitionを描画へ反映する
-- ⬜ **V4-005** — 高密度中心市街地、低密度郊外、農村、Village / Hamlet、遠隔集落のvisual representationを同じread model契約から成立させる
-- ⬜ **V4-006** — Simulation Phase 31の複数Settlementが連続市街地化・分離・成長・衰退してもView側で単一都市へ固定集約しないことをE2E確認する
-- ⬜ **V4-007** — Settlement / Structure rendering baselineを記録する
+- ✅ **V4-001** — Settlement network / Parcel / Zone / development / urban naming / Road Signを3D可視化する（旧`P30-028`のView部分）
+- ✅ **V4-002** — City / Town / Village / Hamlet等の分類はSimulation提供値だけを使用して表示する
+- ✅ **V4-003** — Building / POI / Parcel / District / Settlement relationをstable ID参照に基づき表示する
+- ✅ **V4-004** — Simulation Phase 31が公開する建設・用途変更・vacancy・demolition等のstate transitionを描画へ反映する
+- ✅ **V4-005** — 高密度中心市街地、低密度郊外、農村、Village / Hamlet、遠隔集落のvisual representationを同じread model契約から成立させる
+- ✅ **V4-006** — Simulation Phase 31の複数Settlementが連続市街地化・分離・成長・衰退してもView側で単一都市へ固定集約しないことをE2E確認する
+- ✅ **V4-007** — Settlement / Structure rendering baselineを記録する
+
+Phase 4 closeoutでは、checked-in rendering baselineに加えて、実ServerからPhase 30 `RegionalGenerationSnapshot`とPhase 31 `PersistentRegionalEvolutionSnapshot`を受信するBrowser E2Eでstable ID joinとThree.js描画を検証する。
 
 ### View Phase 4 完了条件
 
@@ -194,7 +196,7 @@ Viewを完全read-onlyなPresentation clientとして固定し、Gatewayから�
 
 ## View Phase 5 — Infrastructure & Dynamic Entity Fidelity
 
-> **状態: ⏳ View基盤待ち**  
+> **状態: ⏳ 実装待ち**  
 > **必須依存:** View Phase 1、対象domainのSimulation semantic source / Gateway delivery contract  
 > **統合依存:** View Phase 3 / 4（Terrain / Settlement上へ統合表示する場合）
 
