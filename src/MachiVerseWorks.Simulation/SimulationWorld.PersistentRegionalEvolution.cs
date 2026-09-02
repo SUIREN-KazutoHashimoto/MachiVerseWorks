@@ -42,6 +42,7 @@ public sealed partial class SimulationWorld
             var previous = _persistentRegionalEvolution!;
             var next = PersistentRegionalEvolutionEngine.AdvanceYears(
                 previous, _regionalGeneration!, 1, CreateRegionalEvolutionDrivers);
+            next = ApplyPersistentRegionalRedevelopment(next);
             next = ApplyPersistentRegionalWorldChanges(previous, next);
             _persistentRegionalEvolution = RecalculatePersistentRegionalSpatialState(next);
         }
@@ -58,6 +59,7 @@ public sealed partial class SimulationWorld
             var previous = _persistentRegionalEvolution;
             var next = PersistentRegionalEvolutionEngine.AdvanceYears(
                 previous, _regionalGeneration, 1, CreateRegionalEvolutionDrivers);
+            next = ApplyPersistentRegionalRedevelopment(next);
             next = ApplyPersistentRegionalWorldChanges(previous, next);
             _persistentRegionalEvolution = RecalculatePersistentRegionalSpatialState(next);
         }
