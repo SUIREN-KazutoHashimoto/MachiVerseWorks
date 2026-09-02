@@ -28,7 +28,7 @@ public sealed class RegionalGenerationProtocolCodecTests
     [TestMethod]
     public void RegionalSnapshotRequiresProtocol218()
     {
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() =>
+        AssertThrows<ArgumentOutOfRangeException>(() =>
             RegionalGenerationProtocolCodec.Serialize(CreateMessage(), new ProtocolVersion(2, 17)));
     }
 
@@ -51,7 +51,7 @@ public sealed class RegionalGenerationProtocolCodecTests
             ],
         };
 
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() =>
+        AssertThrows<ArgumentOutOfRangeException>(() =>
             RegionalGenerationProtocolCodec.Serialize(message, new ProtocolVersion(2, 18)));
     }
 
@@ -61,6 +61,25 @@ public sealed class RegionalGenerationProtocolCodecTests
         Assert.AreEqual(new ProtocolVersion(2, 18), ProtocolVersion.Current);
         Assert.IsTrue(ProtocolVersion.Current.SupportsRegionalGeneration);
         Assert.IsFalse(new ProtocolVersion(2, 17).SupportsRegionalGeneration);
+    }
+
+    private static void AssertThrows<TException>(Action action)
+        where TException : Exception
+    {
+        try
+        {
+            action();
+        }
+        catch (TException)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            Assert.Fail($"Expected {typeof(TException).Name}, but got {exception.GetType().Name}: {exception.Message}");
+        }
+
+        Assert.Fail($"Expected {typeof(TException).Name}, but no exception was thrown.");
     }
 
     private static RegionalGenerationSnapshotMessage CreateMessage() => new(
