@@ -6,9 +6,9 @@ namespace MachiVerseWorks.Protocol.Tests;
 public sealed class ProtocolVersionTests
 {
     [TestMethod]
-    public void CurrentProtocolIs218AndAdvertisesRegionalGeneration()
+    public void CurrentProtocolIs219AndAdvertisesPersistentRegionalEvolution()
     {
-        Assert.AreEqual(new ProtocolVersion(2, 18), ProtocolVersion.Current);
+        Assert.AreEqual(new ProtocolVersion(2, 19), ProtocolVersion.Current);
         Assert.IsTrue(ProtocolVersion.Current.SupportsMultimodalTransit);
         Assert.IsTrue(ProtocolVersion.Current.SupportsPersonInspectionClear);
         Assert.IsTrue(ProtocolVersion.Current.SupportsEconomy);
@@ -20,6 +20,7 @@ public sealed class ProtocolVersionTests
         Assert.IsTrue(ProtocolVersion.Current.SupportsRadio);
         Assert.IsTrue(ProtocolVersion.Current.SupportsWorldEnvironment);
         Assert.IsTrue(ProtocolVersion.Current.SupportsRegionalGeneration);
+        Assert.IsTrue(ProtocolVersion.Current.SupportsPersistentRegionalEvolution);
         Assert.IsFalse(new ProtocolVersion(2, 7).SupportsMultimodalTransit);
         Assert.IsFalse(new ProtocolVersion(2, 8).SupportsPersonInspectionClear);
         Assert.IsFalse(new ProtocolVersion(2, 9).SupportsEconomy);
@@ -31,6 +32,7 @@ public sealed class ProtocolVersionTests
         Assert.IsFalse(new ProtocolVersion(2, 15).SupportsRadio);
         Assert.IsFalse(new ProtocolVersion(2, 16).SupportsWorldEnvironment);
         Assert.IsFalse(new ProtocolVersion(2, 17).SupportsRegionalGeneration);
+        Assert.IsFalse(new ProtocolVersion(2, 18).SupportsPersistentRegionalEvolution);
     }
 
     [TestMethod]
@@ -50,8 +52,8 @@ public sealed class ProtocolVersionTests
     {
         var supported = ProtocolVersion.Current;
 
-        Assert.IsFalse(supported.TryNegotiate(new ProtocolVersion(2, 19), out _));
-        Assert.IsFalse(supported.TryNegotiate(new ProtocolVersion(1, 18), out _));
+        Assert.IsFalse(supported.TryNegotiate(new ProtocolVersion(2, 20), out _));
+        Assert.IsFalse(supported.TryNegotiate(new ProtocolVersion(1, 19), out _));
         Assert.IsFalse(supported.TryNegotiate(new ProtocolVersion(3, 0), out _));
     }
 }
