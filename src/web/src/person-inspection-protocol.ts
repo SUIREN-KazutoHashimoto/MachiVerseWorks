@@ -4,7 +4,10 @@ import {
   type ProtocolVersion,
 } from './protocol.ts';
 
-export const WEB_CURRENT_PROTOCOL_VERSION: ProtocolVersion = Object.freeze({ major: 2, minor: 19 });
+/** Protocol version currently integrated on develop and used by direct compatibility harnesses. */
+export const WEB_CURRENT_PROTOCOL_VERSION: ProtocolVersion = Object.freeze({ major: 2, minor: 18 });
+/** Highest protocol minor this View branch can negotiate when the server supports Phase 31 observations. */
+export const WEB_MAXIMUM_PROTOCOL_VERSION: ProtocolVersion = Object.freeze({ major: 2, minor: 19 });
 export const CLEAR_PERSON_INSPECTION_MESSAGE_TYPE = 5;
 
 export function encodeClearPersonInspection(version: ProtocolVersion): ArrayBuffer {
