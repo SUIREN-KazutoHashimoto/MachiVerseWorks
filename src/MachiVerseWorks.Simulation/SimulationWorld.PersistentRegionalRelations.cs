@@ -2,6 +2,15 @@ namespace MachiVerseWorks.Simulation;
 
 public sealed partial class SimulationWorld
 {
+    private PersistentRegionalEvolutionSnapshot ApplyPersistentRegionalWorldChangesWithoutRelationRecording(
+        PersistentRegionalEvolutionSnapshot current)
+    {
+        current = MaterializeRegionalDevelopment(current);
+        current = DetectEmergentSettlements(current);
+        ApplyRegionalHouseholdMobility(current);
+        return current;
+    }
+
     private PersistentRegionalEvolutionSnapshot RecalculatePersistentRegionalRelations(
         PersistentRegionalEvolutionSnapshot previous,
         PersistentRegionalEvolutionSnapshot current)
