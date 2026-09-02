@@ -43,9 +43,11 @@ internal sealed class SimulationPublishSnapshot
         RailwayInfrastructureReadModel railwayInfrastructure,
         TrainSnapshot[]? trains = null,
         RailwayOperationsSnapshot? railwayOperations = null,
-        MultimodalTransitSnapshot? multimodalTransit = null)
+        MultimodalTransitSnapshot? multimodalTransit = null,
+        ulong observationGeneration = 1)
     {
         TickCount = tickCount;
+        ObservationGeneration = observationGeneration;
         SpatialCellSize = spatialCellSize;
         ArgumentNullException.ThrowIfNull(agents);
         ArgumentNullException.ThrowIfNull(pedestrians);
@@ -64,6 +66,7 @@ internal sealed class SimulationPublishSnapshot
     }
 
     public ulong TickCount { get; }
+    public ulong ObservationGeneration { get; }
     public double SpatialCellSize { get; }
     public RoadNetworkReadModel RoadNetwork { get; }
     public RailwayInfrastructureReadModel RailwayInfrastructure { get; }
