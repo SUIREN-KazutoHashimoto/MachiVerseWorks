@@ -1,5 +1,12 @@
 import * as THREE from 'three';
 
+import {
+  BuildingLifecycleStatus,
+  PERSISTENT_REGIONAL_EVOLUTION_SNAPSHOT_MESSAGE_TYPE,
+  SettlementScale,
+  SettlementTrend,
+} from '../../src/persistent-regional-evolution-protocol.ts';
+import { PersistentRegionalEvolutionStore } from '../../src/persistent-regional-evolution-store.ts';
 import { REGIONAL_GENERATION_SNAPSHOT_MESSAGE_TYPE } from '../../src/regional-generation-protocol.ts';
 import { RegionalGenerationStore } from '../../src/regional-generation-store.ts';
 import { SettlementStructureRenderer } from '../../src/settlement-structure-renderer.ts';
@@ -18,11 +25,13 @@ webgl.setSize(1024, 768, false);
 viewport.appendChild(webgl.domElement);
 
 const store = new RegionalGenerationStore();
+const evolution = new PersistentRegionalEvolutionStore();
 const settlementRenderer = new SettlementStructureRenderer(scene);
 
 try {
   store.replace(createSnapshot());
-  settlementRenderer.update(store);
+  evolution.replace(createEvolutionSnapshot());
+  settlementRenderer.update(store, evolution);
   webgl.render(scene, camera);
 
   const metrics = settlementRenderer.metrics;
@@ -35,8 +44,16 @@ try {
   assert(metrics.labels === 7, 'Expected all named Settlement/District/Corridor/POI labels.');
   assert(metrics.roadSigns === 1, 'Expected one Road Sign.');
 
+  const regionalRoot = requireObject('regional-generation', THREE.Group);
+  assert(regionalRoot.userData.currentYear === 25, 'Protocol 2.19 current year was not applied to the rendering revision.');
+
   const settlements = requireObject('regional-settlements', THREE.InstancedMesh);
   assert(settlements.count === 2, 'Settlement instances were collapsed.');
+  assert(settlements.userData.evolution[0].scale === SettlementScale.City, 'Authoritative City classification was not retained.');
+  assert(settlements.userData.evolution[0].trend === SettlementTrend.Growing, 'Authoritative Settlement trend was not retained.');
+  assert(settlements.userData.evolution[1].scale === SettlementScale.Hamlet, 'Authoritative Hamlet classification was not retained.');
+  assert(settlements.userData.evolution[1].isActive === false, 'Dormant Settlement activity state was not retained.');
+
   const firstMatrix = new THREE.Matrix4();
   const secondMatrix = new THREE.Matrix4();
   settlements.getMatrixAt(0, firstMatrix);
@@ -49,7 +66,7 @@ try {
   const secondColor = new THREE.Color();
   settlements.getColorAt(0, firstColor);
   settlements.getColorAt(1, secondColor);
-  assert(firstColor.getHex() !== secondColor.getHex(), 'Simulation-provided Settlement roles did not produce distinct presentation.');
+  assert(firstColor.getHex() !== secondColor.getHex(), 'Authoritative Settlement scale/trend did not produce distinct presentation.');
 
   const parcels = requireObject('regional-parcels', THREE.InstancedMesh);
   const buildings = requireObject('regional-buildings', THREE.InstancedMesh);
@@ -57,10 +74,22 @@ try {
   assert(parcels.userData.relations[0].parcelId === 301n, 'Parcel stable ID was not retained in the renderer.');
   assert(parcels.userData.relations[0].districtId === 201n, 'Parcel→District relation was not retained.');
   assert(parcels.userData.relations[0].settlementId === 101n, 'Parcel→Settlement relation was not retained.');
+  assert(parcels.userData.evolution[0].developmentState === 3, 'Authoritative Parcel redevelopment state was not applied.');
   assert(buildings.userData.relations[1].parcelId === 302n, 'Building→Parcel relation was not retained.');
+  assert(buildings.userData.evolution[1].status === BuildingLifecycleStatus.Demolished, 'Authoritative Building demolition state was not applied.');
   assert(pois.userData.relations[1].buildingId === 402n, 'POI→Building relation was not retained.');
   assert(store.getSettlementForBuilding(402n)?.settlementId === 102n, 'Building→Settlement traversal did not preserve the authoritative stable IDs.');
   assert(store.getDistrictForBuilding(402n)?.districtId === 202n, 'Building→District traversal did not preserve the authoritative stable IDs.');
+
+  const demolishedMatrix = new THREE.Matrix4();
+  buildings.getMatrixAt(1, demolishedMatrix);
+  const demolishedScale = new THREE.Vector3();
+  demolishedMatrix.decompose(new THREE.Vector3(), new THREE.Quaternion(), demolishedScale);
+  assert(demolishedScale.y < 0.2, 'Demolished Building was not reduced to the lifecycle presentation baseline.');
+
+  const metroRelations = requireObject('regional-evolution-relations-3', THREE.LineSegments);
+  assert(metroRelations.userData.relations[0].fromSettlementId === 101n, 'Regional relation source stable ID was not retained.');
+  assert(metroRelations.userData.relations[0].toSettlementId === 102n, 'Regional relation destination stable ID was not retained.');
 
   const roadSigns = requireObject('regional-road-signs', THREE.Points);
   assert(roadSigns.userData.labels[0].roadSignId === '701', 'Road Sign stable ID was not retained.');
@@ -78,7 +107,8 @@ try {
   result.dataset.buildings = String(metrics.buildings);
   result.dataset.labels = String(metrics.labels);
   result.dataset.roadSigns = String(metrics.roadSigns);
-  result.textContent = `View Phase 4 browser E2E passed: draws=${result.dataset.drawCalls}, geometries=${result.dataset.geometries}, settlements=${result.dataset.settlements}, parcels=${result.dataset.parcels}, buildings=${result.dataset.buildings}, labels=${result.dataset.labels}, signs=${result.dataset.roadSigns}`;
+  result.dataset.currentYear = String(regionalRoot.userData.currentYear);
+  result.textContent = `View Phase 4 browser E2E passed: draws=${result.dataset.drawCalls}, geometries=${result.dataset.geometries}, settlements=${result.dataset.settlements}, parcels=${result.dataset.parcels}, buildings=${result.dataset.buildings}, labels=${result.dataset.labels}, signs=${result.dataset.roadSigns}, year=${result.dataset.currentYear}`;
 } catch (error) {
   const normalized = error instanceof Error ? error : new Error(String(error));
   result.dataset.status = 'failed';
@@ -96,6 +126,36 @@ function requireObject(name, type) {
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+function createEvolutionSnapshot() {
+  return Object.freeze({
+    type: PERSISTENT_REGIONAL_EVOLUTION_SNAPSHOT_MESSAGE_TYPE,
+    currentYear: 25,
+    tickCount: 84n,
+    settlements: Object.freeze([
+      Object.freeze({ settlementId: 101n, x: 0, y: 0, z: 2, population: 25_000, jobs: 14_000, serviceIndex: 0.82, density: 0.74, accessibility: 0.91, influenceRadiusMeters: 4_600, scale: SettlementScale.City, trend: SettlementTrend.Growing, isActive: true, establishedYear: 0, dormantSinceYear: null }),
+      Object.freeze({ settlementId: 102n, x: 2_000, y: 1_200, z: 8, population: 18, jobs: 5, serviceIndex: 0.12, density: 0.05, accessibility: 0.24, influenceRadiusMeters: 500, scale: SettlementScale.Hamlet, trend: SettlementTrend.Dormant, isActive: false, establishedYear: 0, dormantSinceYear: 24 }),
+    ]),
+    parcels: Object.freeze([
+      Object.freeze({ parcelId: 301n, settlementId: 101n, developmentDemand: 0.91, landValue: 0.88, developmentState: 3, buildingId: 401n }),
+      Object.freeze({ parcelId: 302n, settlementId: 102n, developmentDemand: 0.12, landValue: 0.15, developmentState: 2, buildingId: 402n }),
+    ]),
+    buildings: Object.freeze([
+      Object.freeze({ buildingId: 401n, parcelId: 301n, use: 1, builtYear: 0, lastChangedYear: 25, condition: 0.92, occupancy: 0.86, capacity: 240, status: BuildingLifecycleStatus.Active }),
+      Object.freeze({ buildingId: 402n, parcelId: 302n, use: 4, builtYear: -18, lastChangedYear: 25, condition: 0.06, occupancy: 0, capacity: 12, status: BuildingLifecycleStatus.Demolished }),
+    ]),
+    serviceCatchments: Object.freeze([]),
+    infrastructureDemands: Object.freeze([]),
+    relations: Object.freeze([
+      Object.freeze({ relationId: 801n, fromSettlementId: 101n, toSettlementId: 102n, kind: 3, strength: 0.63, isActive: true, sinceYear: 20 }),
+    ]),
+    events: Object.freeze([
+      Object.freeze({ eventId: 901n, year: 25, kind: 9, settlementId: 102n, buildingId: 402n, reason: 'Abandoned->Demolished' }),
+    ]),
+    commutingFlows: Object.freeze([]),
+    freightFlows: Object.freeze([]),
+  });
 }
 
 function createSnapshot() {
