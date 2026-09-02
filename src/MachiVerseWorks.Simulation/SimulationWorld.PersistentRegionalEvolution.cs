@@ -42,7 +42,8 @@ public sealed partial class SimulationWorld
             var previous = _persistentRegionalEvolution!;
             var next = PersistentRegionalEvolutionEngine.AdvanceYears(
                 previous, _regionalGeneration!, 1, CreateRegionalEvolutionDrivers);
-            _persistentRegionalEvolution = ApplyPersistentRegionalWorldChanges(previous, next);
+            next = ApplyPersistentRegionalWorldChanges(previous, next);
+            _persistentRegionalEvolution = RecalculatePersistentRegionalSpatialState(next);
         }
     }
 
@@ -57,7 +58,8 @@ public sealed partial class SimulationWorld
             var previous = _persistentRegionalEvolution;
             var next = PersistentRegionalEvolutionEngine.AdvanceYears(
                 previous, _regionalGeneration, 1, CreateRegionalEvolutionDrivers);
-            _persistentRegionalEvolution = ApplyPersistentRegionalWorldChanges(previous, next);
+            next = ApplyPersistentRegionalWorldChanges(previous, next);
+            _persistentRegionalEvolution = RecalculatePersistentRegionalSpatialState(next);
         }
         _persistentRegionalEvolution = _persistentRegionalEvolution with { TickCount = nextTime.TickCount };
     }
@@ -71,12 +73,18 @@ public sealed partial class SimulationWorld
         var establishmentPressure = Math.Clamp(_economyEstablishments.Count / Math.Max(1d, _persistentRegionalEvolution?.Settlements.Count ?? 1) / 20d, 0d, 1d);
         var localPopulationPressure = Math.Clamp(settlement.Population / 20_000d, 0d, 1d);
         var localJobPressure = Math.Clamp(settlement.Jobs / 10_000d, 0d, 1d);
+        var networkConnectivity = MeasureRegionalConnectivity(settlement);
+        var logistics = CreateLogisticsSnapshot();
+        var logisticsPressure = Math.Clamp(
+            logistics.Statistics.ActiveShipmentCount / Math.Max(1d, _persistentRegionalEvolution?.Settlements.Count ?? 1) / 8d,
+            0d,
+            1d);
         return new RegionalEvolutionDrivers(
             Math.Clamp(localPopulationPressure * 0.7 + employmentRatio * 0.3, 0d, 1d),
             Math.Clamp(localJobPressure * 0.65 + establishmentPressure * 0.35, 0d, 1d),
             Math.Clamp(settlement.ServiceIndex * 0.8 + establishmentPressure * 0.2, 0d, 1d),
-            Math.Clamp((settlement.Accessibility + localJobPressure) * 0.5, 0d, 1d),
-            settlement.Accessibility,
+            Math.Clamp(logisticsPressure * 0.6d + networkConnectivity * 0.4d, 0d, 1d),
+            networkConnectivity,
             Math.Clamp(1d - _regionalGeneration!.Quality.CongestionRisk * 0.5 - _regionalGeneration.Quality.FloodExposure * 0.25, 0d, 1d));
     }
 
@@ -86,7 +94,8 @@ public sealed partial class SimulationWorld
         if (_regionalGeneration is null)
             throw new InvalidOperationException("Regional generation must be initialized before persistent regional evolution.");
         var currentYear = checked((int)Math.Min(int.MaxValue, Time.TickCount / _persistentRegionalEvolutionOptions.TicksPerYear));
-        _persistentRegionalEvolution = PersistentRegionalEvolutionEngine.Initialize(_regionalGeneration, currentYear) with { TickCount = Time.TickCount };
+        var initialized = PersistentRegionalEvolutionEngine.Initialize(_regionalGeneration, currentYear) with { TickCount = Time.TickCount };
+        _persistentRegionalEvolution = RecalculatePersistentRegionalSpatialState(initialized);
     }
 
     private PersistentRegionalEvolutionCheckpoint? CreatePersistentRegionalEvolutionCheckpoint() =>
