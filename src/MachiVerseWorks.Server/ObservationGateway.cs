@@ -22,7 +22,7 @@ internal interface IObservationSource
     (GasSnapshot Gas, LogisticsSnapshot Logistics) CaptureGasSnapshot();
     OpticalSnapshot CaptureOpticalSnapshot();
     RadioSnapshot CaptureRadioSnapshot();
-    WorldEnvironmentSnapshot CaptureWorldEnvironmentSnapshot(WorldVolume volume);
+    VersionedObservation<WorldEnvironmentSnapshot> CaptureWorldEnvironmentSnapshot(WorldVolume volume);
     bool PersonExists(ulong personId);
 }
 
@@ -51,8 +51,8 @@ internal sealed class SimulationObservationSource(SimulationRuntime simulation) 
     public OpticalSnapshot CaptureOpticalSnapshot() => simulation.Read(static world => world.CreateOpticalSnapshot());
     public RadioSnapshot CaptureRadioSnapshot() => simulation.Read(static world => world.CreateRadioSnapshot());
 
-    public WorldEnvironmentSnapshot CaptureWorldEnvironmentSnapshot(WorldVolume volume) =>
-        simulation.Read(world => world.CreateDetailedWorldEnvironmentSnapshot(volume));
+    public VersionedObservation<WorldEnvironmentSnapshot> CaptureWorldEnvironmentSnapshot(WorldVolume volume) =>
+        simulation.CaptureWorldEnvironmentSnapshot(volume);
 
     public bool PersonExists(ulong personId) =>
         personId != 0 && simulation.TryGetPersonSnapshot(new PersonId(personId), out _);
@@ -111,6 +111,7 @@ internal static class ObservationGatewayServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
         services.AddSingleton<IObservationSource, SimulationObservationSource>();
+        services.AddSingleton<ObservationCache>();
         services.AddSingleton<ClientConnectionRegistry>();
         services.AddSingleton<ObservationRequestQueue>();
         services.AddSingleton<WebSocketSessionHandler>();

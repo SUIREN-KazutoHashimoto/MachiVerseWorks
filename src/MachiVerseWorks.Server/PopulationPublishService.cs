@@ -8,7 +8,8 @@ internal readonly record struct PendingPopulationDelivery(ClientConnection Conne
 internal sealed class PopulationPublishService(
     IObservationSource observationSource,
     ServerOptions options,
-    ClientConnectionRegistry connections) : BackgroundService
+    ClientConnectionRegistry connections,
+    ObservationCache cache) : BackgroundService
 {
     private static readonly TimeSpan ClientSendTimeout = TimeSpan.FromSeconds(5);
     private readonly SnapshotDeliveryScheduler _deliveryScheduler = new();
@@ -78,13 +79,19 @@ internal sealed class PopulationPublishService(
         try
         {
             await Task.Yield();
+            var revision = new ObservationRevision(snapshot.ObservationGeneration, snapshot.ObservationRevision);
             using var sendCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             sendCancellation.CancelAfter(ClientSendTimeout);
-            _ = await connection.SendAsync(statistics, connection.NegotiatedVersion, sendCancellation.Token);
+            var statisticsKey = new EncodedObservationCacheKey("population-statistics", connection.NegotiatedVersion, revision, "global");
+            _ = await connection.SendCachedAsync(statistics, connection.NegotiatedVersion, statisticsKey, cache, sendCancellation.Token);
             if (delivery.InspectedPersonId is { } personId && snapshot.InspectedPersons.TryGetValue(personId, out var person))
             {
+                var personMessage = cache.GetOrCreateEntity(
+                    new EntityObservationCacheKey(EntityObservationKind.Person, personId, revision),
+                    () => PopulationMessageMapper.Create(person));
+                var personKey = new EncodedObservationCacheKey("person", connection.NegotiatedVersion, revision, ObservationCacheIdentity.ForEntity(personId));
                 sendCancellation.CancelAfter(ClientSendTimeout);
-                _ = await connection.SendAsync(PopulationMessageMapper.Create(person), connection.NegotiatedVersion, sendCancellation.Token);
+                _ = await connection.SendCachedAsync(personMessage, connection.NegotiatedVersion, personKey, cache, sendCancellation.Token);
             }
         }
         catch (Exception exception) when (exception is WebSocketException or OperationCanceledException or ObjectDisposedException)

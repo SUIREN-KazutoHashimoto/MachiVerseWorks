@@ -11,8 +11,8 @@ GatewayはSimulationの意味的正本ではありません。Activity、Status�
 
 Gateway Roadmapの分離は責務と進捗管理の分離であり、直ちに別process / repository / deploy unitへ分離することを意味しません。現行では`MachiVerseWorks.Server`内のObservation側責務を明確化し、将来必要なら独立deploy可能な境界へ育てます。
 
-> **現在:** Gateway Phase 1 — Observation Boundary Foundation 完了  
-> **次の実装タスク:** Gateway Phase 2 `G2-001` — Entity Observation CacheをEntity ID + authoritative observation revisionで共有する  
+> **現在:** Gateway Phase 2 — Shared Observation Cache & Request Deduplication 完了  
+> **次の実装タスク:** Gateway Phase 3 `G3-001` — desired subscription / committed delivery revisionを分離する  
 > **並行可能:** Simulation Phase 30 / View Phase 2
 
 ## 最上位原則
@@ -31,8 +31,8 @@ Gateway Roadmapの分離は責務と進捗管理の分離であり、直ちに�
 | Gateway Phase | 内容 | 主な依存 | 状態 |
 | --- | --- | --- | --- |
 | 1 | Observation Boundary Foundation | 現行SimulationRuntime / Server publish / Protocol 2.x | ✅ 完了 |
-| 2 | Shared Observation Cache & Request Deduplication | Gateway Phase 1 | ⬜ 未着手 |
-| 3 | Subscription, Delivery & Resynchronization | Gateway Phase 1 / 2 | ⏳ 待機 |
+| 2 | Shared Observation Cache & Request Deduplication | Gateway Phase 1 | ✅ 完了 |
+| 3 | Subscription, Delivery & Resynchronization | Gateway Phase 1 / 2 | ⬜ 未着手 |
 | 4 | Generic Entity & Temporal Observation | Gateway Phase 1 / Simulation semantic observation | ⏳ Simulation依存待ち |
 | 5 | Historical Observation & Replay Delivery | Gateway Phase 3 / Simulation Phase 35 | ⏳ Simulation依存待ち |
 | 6 | Gateway Fidelity, Scalability & Closeout | Gateway Phase 1〜5 | ⏳ 待機 |
@@ -109,19 +109,25 @@ Phase 1では`IObservationSource` / `SimulationObservationSource`をSimulationRu
 
 ## Gateway Phase 2 — Shared Observation Cache & Request Deduplication
 
-> **状態: ⬜ 未着手**  
+> **状態: ✅ 完了**  
 > **必須依存:** Gateway Phase 1
 
 同じauthoritative observationを複数Client / requestで再生成・再encodeし続けない共有cache基盤を作る。
 
-- ⬜ **G2-001** — Entity Observation CacheをEntity ID + authoritative observation revisionで共有する（旧`OBS-004`）
-- ⬜ **G2-002** — Spatial Observation Cacheをchunk / region + revisionで共有する（旧`OBS-004`）
-- ⬜ **G2-003** — Terrain / Road / Railway / Building topology等のStatic Revision Cacheを共通化する（旧`OBS-004`）
-- ⬜ **G2-004** — tick / revision / generationを使うcache invalidation / eviction contractを実装する（旧`OBS-004` / `OBS-007`）
-- ⬜ **G2-005** — 同一revisionの同一Observation Requestを重複生成しないin-flight request deduplicationを実装する（旧`OBS-005`）
-- ⬜ **G2-006** — negotiated Protocol version + observation revision単位の再利用可能encoded payload cacheを実装する（旧`OBS-006`）
-- ⬜ **G2-007** — cache disabled / miss / hit / rebuild / dedup経路でpayload semanticsが一致するequivalence testを追加する
-- ⬜ **G2-008** — cache hit率、CPU、allocation、encoding回数、memory budgetをbenchmarkし基準値を記録する（旧`OBS-010`）
+- ✅ **G2-001** — Entity Observation CacheをEntity ID + authoritative observation revisionで共有する（旧`OBS-004`）
+- ✅ **G2-002** — Spatial Observation Cacheをchunk / region + revisionで共有する（旧`OBS-004`）
+- ✅ **G2-003** — Terrain / Road / Railway / Building topology等のStatic Revision Cacheを共通化する（旧`OBS-004`）
+- ✅ **G2-004** — tick / revision / generationを使うcache invalidation / eviction contractを実装する（旧`OBS-004` / `OBS-007`）
+- ✅ **G2-005** — 同一revisionの同一Observation Requestを重複生成しないin-flight request deduplicationを実装する（旧`OBS-005`）
+- ✅ **G2-006** — negotiated Protocol version + observation revision単位の再利用可能encoded payload cacheを実装する（旧`OBS-006`）
+- ✅ **G2-007** — cache disabled / miss / hit / rebuild / dedup経路でpayload semanticsが一致するequivalence testを追加する
+- ✅ **G2-008** — cache hit率、CPU、allocation、encoding回数、memory budgetをbenchmarkし基準値を記録する（旧`OBS-010`）
+
+Phase 2ではGateway-owned singleton `ObservationCache`を追加し、Entity / Spatial / Static / encoded payloadのcache namespaceを分離した。Simulation側にはWorld replacement単位の`ObservationGeneration`とtick・authoritative mutation・fixture適用で進む`ObservationRevision`を追加し、snapshotと同じlock内でmarkerを取得する。Road / Railway read modelはtopology revision、dynamic spatial / Person inspectionはobservation revisionを使用する。
+
+同一keyの生成は`Lazy`によるsingle-flightでdeduplicateし、new generation観測後に遅れて到着したold generation requestはshared cacheをbypassする。encoded frameはnegotiated Protocol versionをkeyへ含め、connection-local known-IDでmessage種別が変わるAgent / Pedestrian / Vehicle deliveryは共有対象から除外する。上限はEntity 32,768、Spatial 4,096、Static 2,048、encoded 8,192 entries / 64 MiBとし、dynamic cacheはcurrentを含む直近3 revisionを保持する。
+
+`ObservationCacheTests`でdisabled / miss / hit / rebuild / generation / concurrent dedup / wire byte equivalence / memory boundを固定し、`ObservationCacheBenchmarks`と`ObservationCacheBenchmarkRunner`、`gateway-observation-cache-benchmark.yml`でCPU・allocation・hit rate・build / encoding count・encoded bytes / memory budgetをPR artifactへ記録する。詳細は[`../docs/architecture/observation-cache.md`](../docs/architecture/observation-cache.md)を参照する。
 
 ### Gateway Phase 2 完了条件
 
@@ -134,7 +140,7 @@ Phase 1では`IObservationSource` / `SimulationObservationSource`をSimulationRu
 
 ## Gateway Phase 3 — Subscription, Delivery & Resynchronization
 
-> **状態: ⏳ 待機**  
+> **状態: ⬜ 未着手**  
 > **必須依存:** Gateway Phase 1  
 > **並行可能依存:** Gateway Phase 2
 

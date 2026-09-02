@@ -16,10 +16,11 @@ internal static class VehicleSnapshotMessagePlanner
     {
         ArgumentNullException.ThrowIfNull(snapshots);
         ArgumentNullException.ThrowIfNull(knownVehicleIds);
-        Array.Sort(snapshots, static (left, right) => left.Id.Value.CompareTo(right.Id.Value));
-        var current = new HashSet<ulong>(snapshots.Length);
-        var messages = new List<IProtocolMessage>(snapshots.Length + knownVehicleIds.Count);
-        foreach (var snapshot in snapshots)
+        var orderedSnapshots = snapshots.ToArray();
+        Array.Sort(orderedSnapshots, static (left, right) => left.Id.Value.CompareTo(right.Id.Value));
+        var current = new HashSet<ulong>(orderedSnapshots.Length);
+        var messages = new List<IProtocolMessage>(orderedSnapshots.Length + knownVehicleIds.Count);
+        foreach (var snapshot in orderedSnapshots)
         {
             var id = snapshot.Id.Value;
             current.Add(id);

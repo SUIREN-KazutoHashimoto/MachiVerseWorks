@@ -3,8 +3,6 @@ using MachiVerseWorks.Simulation;
 
 namespace MachiVerseWorks.Server;
 
-internal sealed record PopulationPublishSnapshot(PopulationStatistics Statistics, IReadOnlyDictionary<ulong, PersonSnapshot> InspectedPersons);
-
 internal sealed class SimulationRuntime
 {
     private readonly object _gate = new();
@@ -22,6 +20,8 @@ internal sealed class SimulationRuntime
     private RailwayInfrastructureReadModel? _railwayReadModel;
     private ulong _roadRevision = 1;
     private ulong _railwayRevision = 1;
+    private ulong _observationGeneration = 1;
+    private ulong _observationRevision = 1;
 
     public SimulationRuntime(ServerOptions options, IConfiguration configuration)
     {
@@ -51,6 +51,8 @@ internal sealed class SimulationRuntime
     public TimeSpan TickInterval { get { lock (_gate) return TimeSpan.FromSeconds(_world.Config.TickDurationSeconds); } }
     public double SpatialCellSize { get { lock (_gate) return _world.Config.SpatialCellSize; } }
     public ulong TickCount { get { lock (_gate) return _world.Time.TickCount; } }
+    public ulong ObservationGeneration { get { lock (_gate) return _observationGeneration; } }
+    public ulong ObservationRevision { get { lock (_gate) return _observationRevision; } }
     public bool IsPaused { get { lock (_gate) return _paused; } }
     public int ActiveAgentCount { get { lock (_gate) return _world.ActiveAgentCount; } }
     public int ActivePedestrianCount { get { lock (_gate) return _world.ActivePedestrianCount; } }
@@ -60,7 +62,17 @@ internal sealed class SimulationRuntime
     public int HouseholdCount { get { lock (_gate) { EnsureFixtures(); return _world.HouseholdCount; } } }
     public int PersonCount { get { lock (_gate) { EnsureFixtures(); return _world.PersonCount; } } }
 
-    public void Step() { lock (_gate) { EnsureFixtures(); if (!_paused) _world.Step(); } }
+    public void Step()
+    {
+        lock (_gate)
+        {
+            EnsureFixtures();
+            if (_paused) return;
+            _world.Step();
+            AdvanceObservationRevision();
+        }
+    }
+
     public bool Pause() { lock (_gate) { if (_paused) return false; _paused = true; return true; } }
     public bool Resume() { lock (_gate) { if (!_paused) return false; _paused = false; return true; } }
     public ulong StepPaused(int count)
@@ -70,7 +82,11 @@ internal sealed class SimulationRuntime
         {
             EnsureFixtures();
             if (!_paused) throw new InvalidOperationException("Simulation must be paused before manual stepping.");
-            for (var index = 0; index < count; index++) _world.Step();
+            for (var index = 0; index < count; index++)
+            {
+                _world.Step();
+                AdvanceObservationRevision();
+            }
             return _world.Time.TickCount;
         }
     }
@@ -90,6 +106,7 @@ internal sealed class SimulationRuntime
             var result = operation(_world);
             if (roadTopologyChanged) { _roadRevision = checked(_roadRevision + 1); _roadReadModel = null; }
             if (railwayTopologyChanged) { _railwayRevision = checked(_railwayRevision + 1); _railwayReadModel = null; }
+            AdvanceObservationRevision();
             return result;
         }
     }
@@ -101,6 +118,8 @@ internal sealed class SimulationRuntime
         lock (_gate)
         {
             _world = world;
+            _observationGeneration = checked(_observationGeneration + 1);
+            _observationRevision = 1;
             _roadRevision = checked(_roadRevision + 1);
             _railwayRevision = checked(_railwayRevision + 1);
             _roadReadModel = null;
@@ -127,38 +146,54 @@ internal sealed class SimulationRuntime
             var persons = new Dictionary<ulong, PersonSnapshot>(inspectedPersonIds.Count);
             foreach (var personId in inspectedPersonIds)
                 if (_world.TryGetPersonSnapshot(new PersonId(personId), out var person)) persons.Add(personId, person);
-            return new PopulationPublishSnapshot(statistics, persons);
+            return new PopulationPublishSnapshot(_observationGeneration, _observationRevision, _world.Time.TickCount, statistics, persons);
+        }
+    }
+
+    public VersionedObservation<WorldEnvironmentSnapshot> CaptureWorldEnvironmentSnapshot(WorldVolume volume)
+    {
+        lock (_gate)
+        {
+            EnsureFixtures();
+            return new VersionedObservation<WorldEnvironmentSnapshot>(
+                _observationGeneration,
+                _observationRevision,
+                _world.CreateDetailedWorldEnvironmentSnapshot(volume));
         }
     }
 
     public SimulationPublishSnapshot CapturePublishSnapshot()
     {
-        ulong tickCount; AgentSnapshot[] agents; PedestrianSnapshot[] pedestrians; VehicleSnapshot[] vehicles; TrainSnapshot[] trains; RailwayOperationsSnapshot railwayOperations; MultimodalTransitSnapshot multimodalTransit; IntersectionControlSnapshot intersectionControl; RoadNetworkReadModel roadReadModel; RailwayInfrastructureReadModel railwayReadModel; double spatialCellSize;
+        ulong tickCount; ulong observationGeneration; ulong observationRevision; AgentSnapshot[] agents; PedestrianSnapshot[] pedestrians; VehicleSnapshot[] vehicles; TrainSnapshot[] trains; RailwayOperationsSnapshot railwayOperations; MultimodalTransitSnapshot multimodalTransit; IntersectionControlSnapshot intersectionControl; RoadNetworkReadModel roadReadModel; RailwayInfrastructureReadModel railwayReadModel; double spatialCellSize;
         lock (_gate)
         {
             EnsureFixtures();
-            tickCount = _world.Time.TickCount; spatialCellSize = _world.Config.SpatialCellSize;
+            tickCount = _world.Time.TickCount; observationGeneration = _observationGeneration; observationRevision = _observationRevision; spatialCellSize = _world.Config.SpatialCellSize;
             agents = _world.CreateAllAgentSnapshots(); pedestrians = _world.CreateAllPedestrianSnapshots(); vehicles = _world.CreateAllVehicleSnapshots(); trains = _world.CreateTrainSnapshot(); railwayOperations = _world.CreateRailwayOperationsSnapshot(); multimodalTransit = _world.CreateMultimodalTransitSnapshot(); intersectionControl = _world.CreateIntersectionControlSnapshot();
             _roadReadModel ??= new RoadNetworkReadModel(_roadRevision, _world.CreateRoadNetworkSnapshot());
             _railwayReadModel ??= new RailwayInfrastructureReadModel(_railwayRevision, _world.CreateRailwayInfrastructureSnapshot());
             roadReadModel = _roadReadModel; railwayReadModel = _railwayReadModel;
         }
-        return new SimulationPublishSnapshot(tickCount, spatialCellSize, agents, pedestrians, vehicles, intersectionControl, roadReadModel, railwayReadModel, trains, railwayOperations, multimodalTransit);
+        return new SimulationPublishSnapshot(tickCount, spatialCellSize, agents, pedestrians, vehicles, intersectionControl, roadReadModel, railwayReadModel, trains, railwayOperations, multimodalTransit, observationGeneration, observationRevision);
     }
 
     private static bool ReadFixture(IConfiguration configuration, string key) => bool.TryParse(configuration[key], out var value) && value;
 
     private void EnsureFixtures()
     {
-        if (_pedestrianFixturePending) { SeedPedestrianFixture(_world); _pedestrianFixturePending = false; _roadRevision = checked(_roadRevision + 1); _roadReadModel = null; }
-        if (_roadTrafficFixturePending) { SeedRoadTrafficFixture(_world); _roadTrafficFixturePending = false; _roadRevision = checked(_roadRevision + 1); _roadReadModel = null; }
-        if (_trafficFixturePending) { SeedTrafficFixture(_world); _trafficFixturePending = false; _roadRevision = checked(_roadRevision + 1); _roadReadModel = null; }
-        if (_populationFixturePending) { SeedPopulationFixture(_world); _populationFixturePending = false; }
-        if (_railwayFixturePending) { RailwayInfrastructureFixtures.SeedDeterministic(_world); _railwayFixturePending = false; _railwayRevision = checked(_railwayRevision + 1); _railwayReadModel = null; }
-        if (_railwayOperationsFixturePending) { RailwayOperationsFixtures.SeedDeterministic(_world); _railwayOperationsFixturePending = false; _railwayRevision = checked(_railwayRevision + 1); _railwayReadModel = null; }
-        if (_multimodalTransitFixturePending) { MultimodalTransitFixtures.SeedDeterministic(_world); _multimodalTransitFixturePending = false; _roadRevision = checked(_roadRevision + 1); _railwayRevision = checked(_railwayRevision + 1); _roadReadModel = null; _railwayReadModel = null; }
-        if (_economyFixturePending) { SeedEconomyFixture(_world); _economyFixturePending = false; }
+        var changed = false;
+        if (_pedestrianFixturePending) { SeedPedestrianFixture(_world); _pedestrianFixturePending = false; _roadRevision = checked(_roadRevision + 1); _roadReadModel = null; changed = true; }
+        if (_roadTrafficFixturePending) { SeedRoadTrafficFixture(_world); _roadTrafficFixturePending = false; _roadRevision = checked(_roadRevision + 1); _roadReadModel = null; changed = true; }
+        if (_trafficFixturePending) { SeedTrafficFixture(_world); _trafficFixturePending = false; _roadRevision = checked(_roadRevision + 1); _roadReadModel = null; changed = true; }
+        if (_populationFixturePending) { SeedPopulationFixture(_world); _populationFixturePending = false; changed = true; }
+        if (_railwayFixturePending) { RailwayInfrastructureFixtures.SeedDeterministic(_world); _railwayFixturePending = false; _railwayRevision = checked(_railwayRevision + 1); _railwayReadModel = null; changed = true; }
+        if (_railwayOperationsFixturePending) { RailwayOperationsFixtures.SeedDeterministic(_world); _railwayOperationsFixturePending = false; _railwayRevision = checked(_railwayRevision + 1); _railwayReadModel = null; changed = true; }
+        if (_multimodalTransitFixturePending) { MultimodalTransitFixtures.SeedDeterministic(_world); _multimodalTransitFixturePending = false; _roadRevision = checked(_roadRevision + 1); _railwayRevision = checked(_railwayRevision + 1); _roadReadModel = null; _railwayReadModel = null; changed = true; }
+        if (_economyFixturePending) { SeedEconomyFixture(_world); _economyFixturePending = false; changed = true; }
+        if (changed) AdvanceObservationRevision();
     }
+
+    private void AdvanceObservationRevision() => _observationRevision = checked(_observationRevision + 1);
 
     private static void SeedPopulationFixture(SimulationWorld world)
     {
