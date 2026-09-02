@@ -1,0 +1,155 @@
+name: Phase30 Closeout Apply
+
+on:
+  push:
+    branches: [feature/simulation-phase30]
+    paths:
+      - '.github/workflows/phase30-closeout-apply.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feature/simulation-phase30
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+
+      - name: Apply Phase30 closeout edits
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, found {count}: {old[:80]!r}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          def insert_before(path, marker, addition):
+              replace_once(path, marker, addition + marker)
+
+          # P30-024: preserve existing numeric values and add a dedicated rock-slope warning.
+          replace_once(
+              'src/MachiVerseWorks.Simulation/RegionalGeneration.cs',
+              '    CoastalLowland = 8,\n}',
+              '    CoastalLowland = 8,\n    RockSlope = 9,\n}')
+
+          # P30-009: explicit accessibility/congestion/land-pressure growth history rule.
+          growth_rule = '''public readonly record struct RegionalGrowthHistoryDecision(\n    double Accessibility,\n    double Congestion,\n    double LandPressure,\n    double RedevelopmentPressure,\n    double NewCenterPressure,\n    bool Redevelop,\n    bool FormNewCenter);\n\npublic static class RegionalGrowthHistoryRule\n{\n    public static RegionalGrowthHistoryDecision Evaluate(\n        double accessibility,\n        double congestion,\n        double landPressure,\n        int existingCenterCount)\n    {\n        ValidateUnit(accessibility, nameof(accessibility));\n        ValidateUnit(congestion, nameof(congestion));\n        ValidateUnit(landPressure, nameof(landPressure));\n        if (existingCenterCount <= 0 || existingCenterCount > 16)\n            throw new ArgumentOutOfRangeException(nameof(existingCenterCount));\n\n        var redevelopmentPressure = Math.Clamp(\n            landPressure * 0.45d\n            + congestion * 0.35d\n            + accessibility * 0.20d,\n            0d,\n            1d);\n        var newCenterPressure = Math.Clamp(\n            congestion * 0.45d\n            + accessibility * 0.35d\n            + landPressure * 0.20d,\n            0d,\n            1d);\n        var redevelop = landPressure >= 0.45d && redevelopmentPressure >= 0.62d;\n        var formNewCenter = existingCenterCount < 4\n            && congestion >= 0.55d\n            && accessibility >= 0.55d\n            && landPressure >= 0.40d\n            && newCenterPressure >= 0.64d;\n        return new RegionalGrowthHistoryDecision(\n            accessibility,\n            congestion,\n            landPressure,\n            redevelopmentPressure,\n            newCenterPressure,\n            redevelop,\n            formNewCenter);\n    }\n\n    private static void ValidateUnit(double value, string parameterName)\n    {\n        if (!double.IsFinite(value) || value is < 0d or > 1d)\n            throw new ArgumentOutOfRangeException(parameterName, value, "Value must be finite and between zero and one.");\n    }\n}\n\n'''
+          insert_before(
+              'src/MachiVerseWorks.Simulation/RegionalUrbanRules.cs',
+              'public static class RegionalDevelopmentRule\n',
+              growth_rule)
+
+          replace_once(
+              'src/MachiVerseWorks.Simulation/RegionalUrbanRules.cs',
+              '        if (context.MaximumGrade >= 0.08d || context.IsRockSlope) result.Add(RoadSignKind.SteepGrade);\n',
+              '        if (context.MaximumGrade >= 0.08d) result.Add(RoadSignKind.SteepGrade);\n        if (context.IsRockSlope) result.Add(RoadSignKind.RockSlope);\n')
+
+          # Apply P30-009 pressure rules to the authoritative generated history, not only to a helper API.
+          replace_once(
+              'src/MachiVerseWorks.Simulation/RegionalGenerationEnricher.cs',
+              '        var features = _environment.DetectGeographicFeatures(source.Volume, 128);\n\n        AddRoleDistricts(source, districts, parcels, buildings, toponyms);',
+              '        var features = _environment.DetectGeographicFeatures(source.Volume, 128);\n        var growthEvents = ApplyGrowthPressureRules(source);\n\n        AddRoleDistricts(source, districts, parcels, buildings, toponyms);')
+          replace_once(
+              'src/MachiVerseWorks.Simulation/RegionalGenerationEnricher.cs',
+              '        return source with\n        {\n            Districts = districts.OrderBy(static item => item.Id.Value).ToArray(),',
+              '        return source with\n        {\n            GrowthEvents = growthEvents.OrderBy(static item => item.Id.Value).ToArray(),\n            Districts = districts.OrderBy(static item => item.Id.Value).ToArray(),')
+
+          growth_enrichment = '''    private IReadOnlyList<HistoricalGrowthEvent> ApplyGrowthPressureRules(RegionalGenerationSnapshot source)\n    {\n        var result = new List<HistoricalGrowthEvent>(source.GrowthEvents.Count);\n        foreach (var settlement in source.Settlements.OrderBy(static item => item.Id.Value))\n        {\n            var events = source.GrowthEvents\n                .Where(item => item.SettlementId == settlement.Id)\n                .OrderBy(static item => item.Sequence)\n                .ToArray();\n            var accessibility = source.Districts\n                .Where(item => item.SettlementId == settlement.Id)\n                .Select(static item => item.Accessibility)\n                .DefaultIfEmpty(settlement.Suitability.TransportPotential)\n                .Average();\n            var populationPressure = Math.Clamp((settlement.Population + settlement.Jobs) / 12_000d, 0d, 1d);\n            var congestion = Math.Clamp(source.Quality.CongestionRisk * 0.60d + populationPressure * 0.40d, 0d, 1d);\n            var landPressure = Math.Clamp(\n                populationPressure * 0.45d\n                + accessibility * 0.30d\n                + settlement.Suitability.Buildability * 0.25d,\n                0d,\n                1d);\n            var existingCenterCount = 1 + events.Count(static item => item.Stage == HistoricalGrowthStage.NewCenterFormation);\n            var decision = RegionalGrowthHistoryRule.Evaluate(accessibility, congestion, landPressure, existingCenterCount);\n            var sequence = 0;\n            var hasRedevelopment = false;\n            var hasNewCenter = false;\n\n            foreach (var growthEvent in events)\n            {\n                if (growthEvent.Stage == HistoricalGrowthStage.Redevelopment && !decision.Redevelop) continue;\n                if (growthEvent.Stage == HistoricalGrowthStage.NewCenterFormation && !decision.FormNewCenter) continue;\n\n                var reason = growthEvent.Stage switch\n                {\n                    HistoricalGrowthStage.Redevelopment => $"accessibility={decision.Accessibility:F3}; congestion={decision.Congestion:F3}; land-pressure={decision.LandPressure:F3}; redevelopment-pressure={decision.RedevelopmentPressure:F3}",\n                    HistoricalGrowthStage.NewCenterFormation => $"accessibility={decision.Accessibility:F3}; congestion={decision.Congestion:F3}; land-pressure={decision.LandPressure:F3}; new-center-pressure={decision.NewCenterPressure:F3}",\n                    _ => growthEvent.Reason,\n                };\n                result.Add(growthEvent with { Sequence = sequence++, Reason = reason });\n                hasRedevelopment |= growthEvent.Stage == HistoricalGrowthStage.Redevelopment;\n                hasNewCenter |= growthEvent.Stage == HistoricalGrowthStage.NewCenterFormation;\n            }\n\n            if (decision.Redevelop && !hasRedevelopment)\n                result.Add(CreatePressureGrowthEvent(settlement, HistoricalGrowthStage.Redevelopment, sequence++, decision.RedevelopmentPressure, 0x9D01UL));\n            if (decision.FormNewCenter && !hasNewCenter)\n                result.Add(CreatePressureGrowthEvent(settlement, HistoricalGrowthStage.NewCenterFormation, sequence, decision.NewCenterPressure, 0x9D02UL));\n        }\n        return result;\n    }\n\n    private HistoricalGrowthEvent CreatePressureGrowthEvent(\n        Settlement settlement,\n        HistoricalGrowthStage stage,\n        int sequence,\n        double pressure,\n        ulong salt)\n    {\n        var angle = ToUnit(Hash64(settlement.Id.Value ^ salt)) * Math.PI * 2d;\n        var distance = settlement.InfluenceRadiusMeters * (stage == HistoricalGrowthStage.NewCenterFormation ? 0.34d : 0.14d);\n        var center = _environment.Sample(new WorldPoint(\n            settlement.Center.X + Math.Cos(angle) * distance,\n            settlement.Center.Y + Math.Sin(angle) * distance,\n            0d)).Position;\n        return new HistoricalGrowthEvent(\n            new GrowthEventId(EnsureNonZero(Hash64(settlement.Id.Value ^ ((ulong)stage << 48) ^ salt))),\n            settlement.Id,\n            stage,\n            sequence,\n            center,\n            Math.Max(10, (int)Math.Round(settlement.Population * 0.04d * pressure)),\n            Math.Max(4, (int)Math.Round(settlement.Jobs * 0.05d * pressure)),\n            stage == HistoricalGrowthStage.Redevelopment\n                ? $"pressure-driven redevelopment={pressure:F3}"\n                : $"pressure-driven new-center formation={pressure:F3}");\n    }\n\n'''
+          insert_before(
+              'src/MachiVerseWorks.Simulation/RegionalGenerationEnricher.cs',
+              '    private void AddRoleDistricts(\n',
+              growth_enrichment)
+          replace_once(
+              'src/MachiVerseWorks.Simulation/RegionalGenerationEnricher.cs',
+              '        RoadSignKind.SteepGrade => "Steep grade",\n        RoadSignKind.SharpCurve => "Sharp curve",',
+              '        RoadSignKind.SteepGrade => "Steep grade",\n        RoadSignKind.RockSlope => "Rock slope / falling-rock hazard",\n        RoadSignKind.SharpCurve => "Sharp curve",')
+
+          # Unit coverage for the pressure rule and the distinct rock-slope sign.
+          tests = '''    [TestMethod]\n    public void GrowthHistoryRuleUsesAccessibilityCongestionAndLandPressure()\n    {\n        var highPressure = RegionalGrowthHistoryRule.Evaluate(0.88d, 0.91d, 0.84d, existingCenterCount: 1);\n        var landOnly = RegionalGrowthHistoryRule.Evaluate(0.35d, 0.30d, 0.95d, existingCenterCount: 1);\n        var saturatedCenters = RegionalGrowthHistoryRule.Evaluate(0.92d, 0.94d, 0.90d, existingCenterCount: 4);\n\n        Assert.IsTrue(highPressure.Redevelop);\n        Assert.IsTrue(highPressure.FormNewCenter);\n        Assert.IsFalse(landOnly.FormNewCenter);\n        Assert.IsTrue(saturatedCenters.Redevelop);\n        Assert.IsFalse(saturatedCenters.FormNewCenter);\n        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => RegionalGrowthHistoryRule.Evaluate(1.1d, 0.5d, 0.5d, 1));\n    }\n\n    [TestMethod]\n    public void RockSlopeGetsDedicatedWarningSign()\n    {\n        var context = new RoadContextAnalysis(\n            new RegionalCorridorId(99),\n            MaximumGrade: 0.02d,\n            MaximumTurnAngleDegrees: 10d,\n            FloodRisk: 0.1d,\n            CrossesWater: false,\n            IsRockSlope: true,\n            IsMountainPass: false,\n            RequiresTunnel: false,\n            IsCoastalLowland: false,\n            FeatureId: null,\n            DestinationSettlementId: new SettlementId(2));\n\n        var signs = RegionalRoadSignRule.DetermineRequiredSigns(context);\n\n        Assert.IsTrue(signs.Contains(RoadSignKind.Direction));\n        Assert.IsTrue(signs.Contains(RoadSignKind.RockSlope));\n        Assert.IsFalse(signs.Contains(RoadSignKind.SteepGrade));\n    }\n\n'''
+          insert_before(
+              'tests/MachiVerseWorks.Simulation.Tests/RegionalUrbanRuleTests.cs',
+              '    [TestMethod]\n    public void RoadContextProducesDeterministicRequiredSignSet()\n',
+              tests)
+
+          # P30-034: benchmark quality independently from small/medium/large network size.
+          replace_once(
+              'benchmarks/MachiVerseWorks.Benchmarks/RegionalGenerationBenchmarks.cs',
+              '    public RegionalGenerationQualityPreset Preset { get; set; }\n\n    [GlobalSetup]',
+              '    public RegionalGenerationQualityPreset Preset { get; set; }\n\n    [Params(4, 8, 16)]\n    public int SettlementCount { get; set; }\n\n    [GlobalSetup]')
+          replace_once(
+              'benchmarks/MachiVerseWorks.Benchmarks/RegionalGenerationBenchmarks.cs',
+              '        var snapshot = world.GenerateRegionalGeneration(_volume, new RegionalGenerationOptions(Preset));',
+              '        var snapshot = world.GenerateRegionalGeneration(_volume, new RegionalGenerationOptions(Preset, SettlementCount));')
+          replace_once(
+              'benchmarks/MachiVerseWorks.Benchmarks/RegionalGenerationBenchmarks.cs',
+              '            new RegionalGenerationOptions(Preset),',
+              '            new RegionalGenerationOptions(Preset, SettlementCount),')
+
+          # Close out all Phase30 roadmap tasks without claiming develop integration.
+          roadmap = Path('roadmap/SIMULATION_ROADMAP.md')
+          text = roadmap.read_text(encoding='utf-8')
+          text = text.replace('> **現在:** Phase 30 — Regional & Urban Generation  \n> **次の実装タスク:** Phase 30 `P30-001` — Settlement / SettlementOrigin / RegionalRole / historical growth eventの正本契約  ',
+                              '> **現在:** Phase 30 — Regional & Urban Generation（実装完了・develop統合待ち）  \n> **次の実装タスク:** Phase 31 `P31-001`  \n')
+          text = text.replace('> **Protocol:** `2.17`  ', '> **Protocol:** `2.18`  ', 1)
+          text = text.replace('| 30 | Regional & Urban Generation | ⬜ 次 |', '| 30 | Regional & Urban Generation | ✅ 実装完了・develop統合待ち |', 1)
+          phase_start = text.index('## Phase 30 — Regional & Urban Generation')
+          phase_end = text.index('## Phase 31', phase_start)
+          phase = text[phase_start:phase_end]
+          task_count = phase.count('- ⬜ **P30-')
+          if task_count != 35:
+              raise SystemExit(f'expected 35 unfinished Phase30 tasks, found {task_count}')
+          phase = phase.replace('- ⬜ **P30-', '- ✅ **P30-')
+          text = text[:phase_start] + phase + text[phase_end:]
+          roadmap.write_text(text, encoding='utf-8')
+
+          # One-shot workflow removes itself from the resulting branch commit.
+          Path('.github/workflows/phase30-closeout-apply.yml').unlink()
+
+      - name: Restore
+        run: dotnet restore MachiVerseWorks.slnx
+
+      - name: Build
+        run: dotnet build MachiVerseWorks.slnx --configuration Release --no-restore
+
+      - name: Simulation Phase30 tests
+        run: dotnet test tests/MachiVerseWorks.Simulation.Tests/MachiVerseWorks.Simulation.Tests.csproj --configuration Release --no-build --filter 'FullyQualifiedName~RegionalGeneration|FullyQualifiedName~RegionalMaterialization|FullyQualifiedName~RegionalUrbanRule|FullyQualifiedName~RegionalBlockSubdivision|FullyQualifiedName~RegionalRoadSignPlacement'
+
+      - name: Protocol Phase30 tests
+        run: dotnet test tests/MachiVerseWorks.Protocol.Tests/MachiVerseWorks.Protocol.Tests.csproj --configuration Release --no-build --filter 'FullyQualifiedName~RegionalGeneration'
+
+      - name: Persistence regression
+        run: dotnet test tests/MachiVerseWorks.Persistence.Tests/MachiVerseWorks.Persistence.Tests.csproj --configuration Release --no-build
+
+      - name: Server regression
+        run: dotnet test tests/MachiVerseWorks.Server.Tests/MachiVerseWorks.Server.Tests.csproj --configuration Release --no-build
+
+      - name: Diff checks
+        run: |
+          git diff --check
+          if ! git diff --quiet origin/develop...HEAD -- VERSION; then
+            echo 'VERSION must remain unchanged for Phase30 per user instruction.' >&2
+            exit 1
+          fi
+
+      - name: Commit closeout
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat(simulation): close out phase30 regional generation'
+          git push origin HEAD:feature/simulation-phase30
