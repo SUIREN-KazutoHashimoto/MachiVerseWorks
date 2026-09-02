@@ -54,8 +54,9 @@ public static class MultimodalTransitFixtures
         var busWest = world.CreateBusStop(lane, new WorldPoint(-55d, roadY, 0d));
         var busEast = world.CreateBusStop(lane, new WorldPoint(55d, roadY, 0d));
         var busLine = world.CreateTransitLine(TransitMode.Bus);
+        var initialBusDwellTicks = checked((ulong)world.Config.TickRate * 20UL);
         var busPattern = world.CreateTransitServicePattern(busLine, [
-            new TransitPatternStopSnapshot(busWest, 0, 20),
+            new TransitPatternStopSnapshot(busWest, 0, initialBusDwellTicks),
             new TransitPatternStopSnapshot(busEast, 300, 20),
         ]);
         var busTrip = world.CreateTransitTrip(busPattern, world.Time.TickCount + 1);
