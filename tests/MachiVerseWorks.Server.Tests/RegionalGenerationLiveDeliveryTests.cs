@@ -2,13 +2,14 @@ using System.Net.WebSockets;
 using MachiVerseWorks.Protocol;
 using MachiVerseWorks.Simulation;
 using Microsoft.Extensions.DependencyInjection;
-using Xunit;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace MachiVerseWorks.Server.Tests;
 
+[TestClass]
 public sealed class RegionalGenerationLiveDeliveryTests
 {
-    [Fact]
+    [TestMethod]
     public async Task Protocol218ClientReceivesAuthoritativeRegionalGenerationWithStableRelations()
     {
         await using var host = await ServerTestHost.StartAsync(initialAgentCount: 0, snapshotRate: 30);
@@ -24,32 +25,35 @@ public sealed class RegionalGenerationLiveDeliveryTests
         var version = new ProtocolVersion(2, 18);
         await ServerTestHost.SendAsync(socket, new HelloMessage(), version);
         var hello = await ReceiveFrameAsync(socket, TimeSpan.FromSeconds(3));
-        Assert.Equal(MessageType.HelloAck, hello.Header.MessageType);
+        Assert.AreEqual(MessageType.HelloAck, hello.Header.MessageType);
 
         var regionalFrame = await ReceiveUntilAsync(socket, MessageType.RegionalGenerationSnapshot, TimeSpan.FromSeconds(5));
-        Assert.True(RegionalGenerationProtocolCodec.TryDeserialize(regionalFrame.Frame, out var envelope, out var error), error.ToString());
-        var message = Assert.IsType<RegionalGenerationSnapshotMessage>(envelope!.Message);
+        Assert.IsTrue(RegionalGenerationProtocolCodec.TryDeserialize(regionalFrame.Frame, out var envelope, out var error), error.ToString());
+        Assert.IsNotNull(envelope);
+        var message = envelope.Message as RegionalGenerationSnapshotMessage;
+        Assert.IsNotNull(message);
 
-        Assert.Equal(authoritative.WorldSeed, message.WorldSeed);
-        Assert.Equal(authoritative.TickCount, message.TickCount);
-        Assert.Equal(authoritative.Settlements.Count, message.Settlements.Count);
-        Assert.Equal(authoritative.Parcels.Count, message.Parcels.Count);
-        Assert.Equal(authoritative.Buildings.Count, message.Buildings.Count);
+        Assert.AreEqual(authoritative.WorldSeed, message.WorldSeed);
+        Assert.AreEqual(authoritative.TickCount, message.TickCount);
+        Assert.AreEqual(authoritative.Settlements.Count, message.Settlements.Count);
+        Assert.AreEqual(authoritative.Parcels.Count, message.Parcels.Count);
+        Assert.AreEqual(authoritative.Buildings.Count, message.Buildings.Count);
 
         var settlementIds = message.Settlements.Select(static item => item.Id).ToHashSet();
         var districtIds = message.Districts.Select(static item => item.Id).ToHashSet();
         var parcelIds = message.Parcels.Select(static item => item.Id).ToHashSet();
-        Assert.All(message.Corridors, corridor =>
+        foreach (var corridor in message.Corridors)
         {
-            Assert.Contains(corridor.FromSettlementId, settlementIds);
-            Assert.Contains(corridor.ToSettlementId, settlementIds);
-        });
-        Assert.All(message.Parcels, parcel =>
+            CollectionAssert.Contains(settlementIds.ToList(), corridor.FromSettlementId);
+            CollectionAssert.Contains(settlementIds.ToList(), corridor.ToSettlementId);
+        }
+        foreach (var parcel in message.Parcels)
         {
-            Assert.Contains(parcel.SettlementId, settlementIds);
-            Assert.Contains(parcel.DistrictId, districtIds);
-        });
-        Assert.All(message.Buildings, building => Assert.Contains(building.ParcelId, parcelIds));
+            CollectionAssert.Contains(settlementIds.ToList(), parcel.SettlementId);
+            CollectionAssert.Contains(districtIds.ToList(), parcel.DistrictId);
+        }
+        foreach (var building in message.Buildings)
+            CollectionAssert.Contains(parcelIds.ToList(), building.ParcelId);
     }
 
     private static async Task<(ProtocolFrameHeader Header, byte[] Frame)> ReceiveUntilAsync(
@@ -85,7 +89,7 @@ public sealed class RegionalGenerationLiveDeliveryTests
         }
 
         var frame = stream.ToArray();
-        Assert.True(ProtocolFrameHeader.TryRead(frame, out var header, out var error), error.ToString());
+        Assert.IsTrue(ProtocolFrameHeader.TryRead(frame, out var header, out var error), error.ToString());
         return (header, frame);
     }
 }
