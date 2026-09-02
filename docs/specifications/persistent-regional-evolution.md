@@ -37,13 +37,13 @@ Actual employment assignments are used to derive cross-settlement commuting flow
 
 Parcel development demand is recomputed from current Settlement population/jobs/accessibility/services and land value. High-demand vacant parcels may materialize a real Building and optional POI, road access and economic capacity.
 
-Building lifecycle tracks built year, condition, occupancy, use, capacity and status. Aging can produce vacancy, abandonment, renovation and demolition state transitions. Major transitions are recorded as stable regional evolution events.
+Building lifecycle tracks built year, condition, occupancy, use, capacity and status. Aging can produce vacancy, abandonment, renovation and demolition state transitions. Demolished lifecycle entries release their Parcel back to a vacant state so later demand can produce redevelopment, while high-demand low-occupancy buildings may be repurposed. Major transitions are recorded as stable regional evolution events.
 
 ## Services, infrastructure and polycentric relations
 
 Commerce, education and medical service catchments are derived per active Settlement. Road, transit and utility demand signals are derived from population, jobs, density, services and accessibility.
 
-Settlement relations are derived from proximity, functional complementarity and accessibility. Commuting, trade, service and metro relations may form or disappear over time. The model does not choose a privileged global center and applies the same rules to urban, suburban, rural and remote settlements.
+Settlement relations are derived from proximity, functional complementarity and accessibility. Commuting, trade, service and metro relations may form or disappear over time. In addition, `RegionalPolycentricInteractionRules` evaluates every active Settlement pair using the same deterministic rule and exposes competition, complementarity and specialization strengths plus a dominant interaction mode. Pair ordering is stable by Settlement id and no privileged global center is selected, so urban, suburban, rural and remote settlements can remain distinct centers with different functions.
 
 ## Persistence and observation
 
