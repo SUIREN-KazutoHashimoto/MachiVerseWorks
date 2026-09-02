@@ -27,10 +27,8 @@ internal sealed class EconomyPublishService(
                 {
                     _ = deliveryCoordinator.TrySchedule(
                         connection,
-                        async sendCancellation =>
-                        {
-                            _ = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation);
-                        },
+                        ObservationDeliveryLane.Economy,
+                        message,
                         stoppingToken);
                 }
             }

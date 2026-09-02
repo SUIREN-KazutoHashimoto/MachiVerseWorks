@@ -24,10 +24,8 @@ internal sealed class OpticalPublishService(
                 {
                     _ = deliveryCoordinator.TrySchedule(
                         connection,
-                        async sendCancellation =>
-                        {
-                            _ = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation);
-                        },
+                        ObservationDeliveryLane.Optical,
+                        message,
                         stoppingToken);
                 }
             }

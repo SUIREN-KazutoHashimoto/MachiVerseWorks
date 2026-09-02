@@ -30,21 +30,55 @@ public sealed class GatewayPhase3ReviewTests
     }
 
     [TestMethod]
-    public async Task DefaultDeliveryYieldsToWaitingSnapshotLane()
+    public void RemovingConnectionBetweenReserveAndStartCancelsReservedDelivery()
+    {
+        var scheduler = new SnapshotDeliveryScheduler();
+        var registry = new ClientConnectionRegistry(scheduler);
+        using var socket = new BlockingWebSocket();
+        using var connection = registry.Register(socket);
+        var deliveryFactoryInvoked = false;
+
+        Assert.IsTrue(scheduler.TryReserve(connection.Id, ObservationDeliveryLane.Snapshot));
+        Assert.IsTrue(registry.Remove(connection.Id));
+        Assert.AreEqual(1, scheduler.TrackedConnectionCount);
+
+        var started = scheduler.StartReserved(
+            connection.Id,
+            () =>
+            {
+                deliveryFactoryInvoked = true;
+                return Task.CompletedTask;
+            });
+
+        Assert.IsFalse(started);
+        Assert.IsFalse(deliveryFactoryInvoked);
+        Assert.AreEqual(0, scheduler.TrackedConnectionCount);
+    }
+
+    [TestMethod]
+    public async Task DomainDeliveryLanesYieldToEachOtherUnderContention()
     {
         var scheduler = new SnapshotDeliveryScheduler();
         var connectionId = Guid.NewGuid();
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        Assert.IsTrue(scheduler.TryReserve(connectionId, ObservationDeliveryLane.Default));
+        Assert.IsTrue(scheduler.TryReserve(connectionId, ObservationDeliveryLane.Economy));
         scheduler.StartReserved(connectionId, () => release.Task);
-        Assert.IsFalse(scheduler.TryReserve(connectionId, ObservationDeliveryLane.Snapshot));
+        Assert.IsFalse(scheduler.TryReserve(connectionId, ObservationDeliveryLane.Logistics));
+        Assert.IsFalse(scheduler.TryReserve(connectionId, ObservationDeliveryLane.Power));
 
         release.SetResult();
         await WaitUntilAsync(() => scheduler.InFlightCount == 0, TimeSpan.FromSeconds(1));
 
-        Assert.IsFalse(scheduler.TryReserve(connectionId, ObservationDeliveryLane.Default));
-        Assert.IsTrue(scheduler.TryReserve(connectionId, ObservationDeliveryLane.Snapshot));
+        Assert.IsFalse(scheduler.TryReserve(connectionId, ObservationDeliveryLane.Economy));
+        Assert.IsTrue(scheduler.TryReserve(connectionId, ObservationDeliveryLane.Logistics));
+        scheduler.ReleaseReservation(connectionId);
+
+        Assert.IsFalse(scheduler.TryReserve(connectionId, ObservationDeliveryLane.Economy));
+        Assert.IsTrue(scheduler.TryReserve(connectionId, ObservationDeliveryLane.Power));
+        scheduler.ReleaseReservation(connectionId);
+
+        Assert.IsTrue(scheduler.TryReserve(connectionId, ObservationDeliveryLane.Economy));
         scheduler.ReleaseReservation(connectionId);
     }
 

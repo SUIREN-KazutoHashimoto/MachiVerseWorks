@@ -12,6 +12,20 @@ namespace MachiVerseWorks.Benchmarks;
 [Config(typeof(GatewayDeliveryBenchmarkConfig))]
 public class GatewayDeliveryBenchmarks
 {
+    private static readonly ObservationDeliveryLane[] ContendedLanes =
+    [
+        ObservationDeliveryLane.Snapshot,
+        ObservationDeliveryLane.Population,
+        ObservationDeliveryLane.Economy,
+        ObservationDeliveryLane.Logistics,
+        ObservationDeliveryLane.Power,
+        ObservationDeliveryLane.WaterSewer,
+        ObservationDeliveryLane.Gas,
+        ObservationDeliveryLane.Optical,
+        ObservationDeliveryLane.Radio,
+        ObservationDeliveryLane.WorldEnvironment,
+    ];
+
     private EntityPublishSnapshot _snapshot = null!;
     private ClientSubscriptionState[] _subscriptions = null!;
     private Guid[] _connectionIds = null!;
@@ -101,31 +115,34 @@ public class GatewayDeliveryBenchmarks
         var handoffs = 0;
         foreach (var connectionId in _connectionIds)
         {
-            var releaseSnapshot = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            if (!scheduler.TryReserve(connectionId, ObservationDeliveryLane.Snapshot)) continue;
+            var releaseFirst = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (!scheduler.TryReserve(connectionId, ContendedLanes[0])) continue;
             scheduler.StartReserved(connectionId, async () =>
             {
                 await Task.Yield();
-                await releaseSnapshot.Task;
+                await releaseFirst.Task;
             });
 
-            if (!scheduler.TryReserve(connectionId, ObservationDeliveryLane.Population)) handoffs++;
-            releaseSnapshot.SetResult();
-            while (!scheduler.TryReserve(connectionId, ObservationDeliveryLane.Population)) await Task.Yield();
-            handoffs++;
-
-            var releasePopulation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            scheduler.StartReserved(connectionId, async () =>
+            for (var laneIndex = 1; laneIndex < ContendedLanes.Length; laneIndex++)
             {
-                await Task.Yield();
-                await releasePopulation.Task;
-            });
+                if (!scheduler.TryReserve(connectionId, ContendedLanes[laneIndex])) handoffs++;
+            }
 
-            if (!scheduler.TryReserve(connectionId, ObservationDeliveryLane.Snapshot)) handoffs++;
-            releasePopulation.SetResult();
-            while (!scheduler.TryReserve(connectionId, ObservationDeliveryLane.Snapshot)) await Task.Yield();
-            handoffs++;
-            scheduler.ReleaseReservation(connectionId);
+            releaseFirst.SetResult();
+            while (scheduler.InFlightCount != 0) await Task.Yield();
+
+            for (var laneIndex = 1; laneIndex < ContendedLanes.Length; laneIndex++)
+            {
+                while (!scheduler.TryReserve(connectionId, ContendedLanes[laneIndex])) await Task.Yield();
+                handoffs++;
+                scheduler.ReleaseReservation(connectionId);
+            }
+
+            if (scheduler.TryReserve(connectionId, ContendedLanes[0]))
+            {
+                handoffs++;
+                scheduler.ReleaseReservation(connectionId);
+            }
         }
 
         return handoffs;

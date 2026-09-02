@@ -40,10 +40,8 @@ internal sealed class WaterSewerPublishService(
                 {
                     _ = deliveryCoordinator.TrySchedule(
                         connection,
-                        async sendCancellation =>
-                        {
-                            _ = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation);
-                        },
+                        ObservationDeliveryLane.WaterSewer,
+                        message,
                         stoppingToken);
                 }
             }

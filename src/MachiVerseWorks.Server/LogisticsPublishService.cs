@@ -27,10 +27,8 @@ internal sealed class LogisticsPublishService(
                 {
                     _ = deliveryCoordinator.TrySchedule(
                         connection,
-                        async sendCancellation =>
-                        {
-                            _ = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation);
-                        },
+                        ObservationDeliveryLane.Logistics,
+                        message,
                         stoppingToken);
                 }
             }

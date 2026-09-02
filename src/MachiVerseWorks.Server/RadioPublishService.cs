@@ -24,11 +24,9 @@ internal sealed class RadioPublishService(
                 {
                     _ = deliveryCoordinator.TrySchedule(
                         connection,
-                        async sendCancellation =>
-                        {
-                            _ = await connection.SendAsync(messages.Radio, connection.NegotiatedVersion, sendCancellation);
-                            _ = await connection.SendAsync(messages.Spectrum, connection.NegotiatedVersion, sendCancellation);
-                        },
+                        ObservationDeliveryLane.Radio,
+                        messages.Radio,
+                        messages.Spectrum,
                         stoppingToken);
                 }
             }

@@ -36,10 +36,8 @@ internal sealed class PowerPublishService(
                 {
                     _ = deliveryCoordinator.TrySchedule(
                         connection,
-                        async sendCancellation =>
-                        {
-                            _ = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation);
-                        },
+                        ObservationDeliveryLane.Power,
+                        message,
                         stoppingToken);
                 }
             }

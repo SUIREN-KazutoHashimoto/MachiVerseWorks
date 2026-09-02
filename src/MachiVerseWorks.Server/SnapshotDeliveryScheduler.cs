@@ -4,16 +4,20 @@ namespace MachiVerseWorks.Server;
 
 internal enum ObservationDeliveryLane
 {
-    Default = 0,
-    Snapshot = 1,
-    Population = 2,
+    Snapshot = 0,
+    Population = 1,
+    Economy = 2,
+    Logistics = 3,
+    Power = 4,
+    WaterSewer = 5,
+    Gas = 6,
+    Optical = 7,
+    Radio = 8,
+    WorldEnvironment = 9,
 }
 
 internal sealed class SnapshotDeliveryScheduler
 {
-    private const byte SnapshotWaitingBit = 1 << 0;
-    private const byte PopulationWaitingBit = 1 << 1;
-
     private sealed class DeliverySlot
     {
         public DeliverySlot(ObservationDeliveryLane lane)
@@ -24,8 +28,9 @@ internal sealed class SnapshotDeliveryScheduler
 
         public ObservationDeliveryLane Lane { get; set; }
         public bool Reserved { get; set; }
+        public bool DiscardRequested { get; set; }
         public Task? Delivery { get; set; }
-        public byte WaitingLaneMask { get; set; }
+        public ushort WaitingLaneMask { get; set; }
     }
 
     private readonly object _gate = new();
@@ -68,20 +73,22 @@ internal sealed class SnapshotDeliveryScheduler
                 return true;
             }
 
+            if (slot.DiscardRequested) return false;
+
             var waitingBit = GetWaitingBit(lane);
             if (slot.Reserved || slot.Delivery is not null)
             {
-                if (waitingBit != 0 && slot.Lane != lane)
+                if (slot.Lane != lane)
                     slot.WaitingLaneMask |= waitingBit;
                 return false;
             }
 
             if (slot.WaitingLaneMask != 0)
             {
-                if (waitingBit == 0 || (slot.WaitingLaneMask & waitingBit) == 0)
+                if ((slot.WaitingLaneMask & waitingBit) == 0)
                     return false;
 
-                slot.WaitingLaneMask = (byte)(slot.WaitingLaneMask & ~waitingBit);
+                slot.WaitingLaneMask = (ushort)(slot.WaitingLaneMask & ~waitingBit);
             }
 
             slot.Lane = lane;
@@ -90,7 +97,7 @@ internal sealed class SnapshotDeliveryScheduler
         }
     }
 
-    public void StartReserved(Guid connectionId, Func<Task> deliveryFactory)
+    public bool StartReserved(Guid connectionId, Func<Task> deliveryFactory)
     {
         ArgumentNullException.ThrowIfNull(deliveryFactory);
 
@@ -102,6 +109,12 @@ internal sealed class SnapshotDeliveryScheduler
                 || slot.Delivery is not null)
             {
                 throw new InvalidOperationException($"Connection {connectionId} does not have a pending snapshot delivery reservation.");
+            }
+
+            if (slot.DiscardRequested)
+            {
+                _slots.Remove(connectionId);
+                return false;
             }
 
             try
@@ -119,6 +132,7 @@ internal sealed class SnapshotDeliveryScheduler
         }
 
         _ = ObserveCompletionAsync(connectionId, delivery);
+        return true;
     }
 
     public void ReleaseReservation(Guid connectionId)
@@ -133,13 +147,25 @@ internal sealed class SnapshotDeliveryScheduler
             }
 
             slot.Reserved = false;
-            if (slot.WaitingLaneMask == 0) _slots.Remove(connectionId);
+            if (slot.DiscardRequested || slot.WaitingLaneMask == 0) _slots.Remove(connectionId);
         }
     }
 
     public void Discard(Guid connectionId)
     {
-        lock (_gate) _slots.Remove(connectionId);
+        lock (_gate)
+        {
+            if (!_slots.TryGetValue(connectionId, out var slot)) return;
+
+            if (slot.Reserved && slot.Delivery is null)
+            {
+                slot.DiscardRequested = true;
+                slot.WaitingLaneMask = 0;
+                return;
+            }
+
+            _slots.Remove(connectionId);
+        }
     }
 
     public bool TrySchedule(Guid connectionId, Func<Task> deliveryFactory)
@@ -149,8 +175,7 @@ internal sealed class SnapshotDeliveryScheduler
     {
         ArgumentNullException.ThrowIfNull(deliveryFactory);
         if (!TryReserve(connectionId, lane)) return false;
-        StartReserved(connectionId, deliveryFactory);
-        return true;
+        return StartReserved(connectionId, deliveryFactory);
     }
 
     public Task[] CreateInFlightSnapshot()
@@ -180,17 +205,18 @@ internal sealed class SnapshotDeliveryScheduler
         }
     }
 
-    private static byte GetWaitingBit(ObservationDeliveryLane lane) => lane switch
+    private static ushort GetWaitingBit(ObservationDeliveryLane lane)
     {
-        ObservationDeliveryLane.Snapshot => SnapshotWaitingBit,
-        ObservationDeliveryLane.Population => PopulationWaitingBit,
-        _ => 0,
-    };
+        var laneIndex = (int)lane;
+        if ((uint)laneIndex >= 16)
+            throw new ArgumentOutOfRangeException(nameof(lane), lane, "Observation delivery lanes must fit in the scheduler waiting mask.");
+        return (ushort)(1 << laneIndex);
+    }
 
     private void ReleaseSlotAfterReservationFailure(Guid connectionId, DeliverySlot slot)
     {
         slot.Reserved = false;
-        if (slot.WaitingLaneMask == 0) _slots.Remove(connectionId);
+        if (slot.DiscardRequested || slot.WaitingLaneMask == 0) _slots.Remove(connectionId);
     }
 
     private async Task ObserveCompletionAsync(Guid connectionId, Task delivery)
@@ -214,7 +240,7 @@ internal sealed class SnapshotDeliveryScheduler
                     && ReferenceEquals(slot.Delivery, delivery))
                 {
                     slot.Delivery = null;
-                    if (slot.WaitingLaneMask == 0) _slots.Remove(connectionId);
+                    if (slot.DiscardRequested || slot.WaitingLaneMask == 0) _slots.Remove(connectionId);
                 }
             }
         }

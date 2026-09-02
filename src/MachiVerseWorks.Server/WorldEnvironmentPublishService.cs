@@ -44,22 +44,17 @@ internal sealed class WorldEnvironmentPublishService(
                         messages.Add(target.Volume, cachedMessage);
                     }
 
-                    _ = deliveryCoordinator.TrySchedule(
+                    var key = new EncodedObservationCacheKey(
+                        "world-environment",
+                        target.Connection.NegotiatedVersion,
+                        cachedMessage.Revision,
+                        ObservationCacheIdentity.ForVolume(target.Volume));
+                    _ = deliveryCoordinator.TryScheduleCached(
                         target.Connection,
-                        async sendCancellation =>
-                        {
-                            var key = new EncodedObservationCacheKey(
-                                "world-environment",
-                                target.Connection.NegotiatedVersion,
-                                cachedMessage.Revision,
-                                ObservationCacheIdentity.ForVolume(target.Volume));
-                            _ = await target.Connection.SendCachedAsync(
-                                cachedMessage.Message,
-                                target.Connection.NegotiatedVersion,
-                                key,
-                                cache,
-                                sendCancellation);
-                        },
+                        ObservationDeliveryLane.WorldEnvironment,
+                        cachedMessage.Message,
+                        key,
+                        cache,
                         stoppingToken);
                 }
             }

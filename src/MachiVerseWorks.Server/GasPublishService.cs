@@ -25,10 +25,8 @@ internal sealed class GasPublishService(
                 {
                     _ = deliveryCoordinator.TrySchedule(
                         connection,
-                        async sendCancellation =>
-                        {
-                            _ = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation);
-                        },
+                        ObservationDeliveryLane.Gas,
+                        message,
                         stoppingToken);
                 }
             }
