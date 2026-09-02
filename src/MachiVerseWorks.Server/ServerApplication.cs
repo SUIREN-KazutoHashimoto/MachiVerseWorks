@@ -23,11 +23,9 @@ public static class ServerApplication
         builder.Services.AddSingleton<RemoteMcpAdminGateway>();
         builder.Services.AddSingleton(new WebSocketOriginPolicy(options.AllowedWebSocketOrigins));
         builder.Services.AddSingleton<SimulationRuntime>();
-        builder.Services.AddSingleton<ClientConnectionRegistry>();
-        builder.Services.AddSingleton<ObservationRequestQueue>();
+        builder.Services.AddObservationGateway();
         builder.Services.AddSingleton<AdminCommandQueue>();
         builder.Services.AddSingleton<E2eMetrics>();
-        builder.Services.AddSingleton<WebSocketSessionHandler>();
         builder.Services.AddHostedService<LogisticsFixtureHostedService>();
         builder.Services.AddHostedService<PowerFixtureHostedService>();
         builder.Services.AddHostedService<WaterSewerFixtureHostedService>();
@@ -35,19 +33,8 @@ public static class ServerApplication
         builder.Services.AddHostedService<OpticalFixtureHostedService>();
         builder.Services.AddHostedService<RadioFixtureHostedService>();
         builder.Services.AddHostedService<SimulationTickService>();
-        builder.Services.AddHostedService<ObservationRequestProcessor>();
         builder.Services.AddHostedService<AdminCommandExecutorV2>();
         builder.Services.AddHostedService<ServerConsoleService>();
-        builder.Services.AddHostedService<SnapshotPublishService>();
-        builder.Services.AddHostedService<PopulationPublishService>();
-        builder.Services.AddHostedService<EconomyPublishService>();
-        builder.Services.AddHostedService<LogisticsPublishService>();
-        builder.Services.AddHostedService<PowerPublishService>();
-        builder.Services.AddHostedService<WaterSewerPublishService>();
-        builder.Services.AddHostedService<GasPublishService>();
-        builder.Services.AddHostedService<OpticalPublishService>();
-        builder.Services.AddHostedService<RadioPublishService>();
-        builder.Services.AddHostedService<WorldEnvironmentPublishService>();
 
         if (mcpOptions.Enabled)
         {
