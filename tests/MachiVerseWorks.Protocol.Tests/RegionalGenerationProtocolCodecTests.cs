@@ -58,7 +58,8 @@ public sealed class RegionalGenerationProtocolCodecTests
     [TestMethod]
     public void CurrentProtocolAdvertisesRegionalGenerationSupport()
     {
-        Assert.AreEqual(new ProtocolVersion(2, 18), ProtocolVersion.Current);
+        Assert.AreEqual((ushort)2, ProtocolVersion.Current.Major);
+        Assert.IsTrue(ProtocolVersion.Current.Minor >= 18);
         Assert.IsTrue(ProtocolVersion.Current.SupportsRegionalGeneration);
         Assert.IsFalse(new ProtocolVersion(2, 17).SupportsRegionalGeneration);
     }

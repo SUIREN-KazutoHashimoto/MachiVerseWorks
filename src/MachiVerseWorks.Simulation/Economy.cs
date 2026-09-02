@@ -110,7 +110,8 @@ public sealed record EconomyCheckpoint(
     OpticalCheckpoint? Optical = null,
     RadioCheckpoint? Radio = null,
     WorldEnvironmentCheckpoint? WorldEnvironment = null,
-    RegionalGenerationCheckpoint? RegionalGeneration = null);
+    RegionalGenerationCheckpoint? RegionalGeneration = null,
+    PersistentRegionalEvolutionCheckpoint? RegionalEvolution = null);
 
 public readonly record struct SimulationCompanyCheckpoint(
     CompanyId Id,
