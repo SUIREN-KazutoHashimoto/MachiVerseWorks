@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "fixture": "View Phase 4 Settlement & Structure Rendering",
+  "static": {
+    "exact": {
+      "settlements": 2,
+      "parcels": 2,
+      "buildings": 2,
+      "labels": 7,
+      "road_signs": 1
+    },
+    "minimum": {
+      "draw_calls": 1,
+      "geometries": 1
+    }
+  },
+  "evolution": {
+    "exact": {
+      "evolution_current_year": 25,
+      "evolution_settlements": 2
+    },
+    "minimum": {
+      "evolution_draw_calls": 1
+    }
+  }
+}
