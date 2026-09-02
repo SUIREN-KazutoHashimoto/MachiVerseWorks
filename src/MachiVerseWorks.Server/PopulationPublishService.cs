@@ -61,7 +61,7 @@ internal sealed class PopulationPublishService(
             if (!connection.HandshakeCompleted
                 || !connection.NegotiatedVersion.SupportsPopulation
                 || connection.Socket.State != WebSocketState.Open
-                || !deliveryScheduler.TryReserve(connection.Id))
+                || !deliveryScheduler.TryReserve(connection.Id, ObservationDeliveryLane.Population))
             {
                 continue;
             }
