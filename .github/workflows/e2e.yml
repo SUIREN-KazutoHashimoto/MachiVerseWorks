@@ -138,6 +138,11 @@ jobs:
             script: scripts/run-phase29-e2e.sh
             artifacts: .artifacts/phase29-e2e
             timeout: 20
+          - id: view-physical-world
+            name: view-physical-world-rendering
+            script: scripts/run-view-phase03-e2e.sh
+            artifacts: .artifacts/view-phase03-e2e
+            timeout: 20
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
