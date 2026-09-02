@@ -10,6 +10,7 @@ public enum ProtocolEntityType : byte
     Settlement = 3,
     Parcel = 4,
     Building = 5,
+    Vehicle = 6,
 }
 
 public sealed record InspectEntityMessage(ProtocolEntityType EntityType, ulong EntityId) : IObservationRequestMessage
