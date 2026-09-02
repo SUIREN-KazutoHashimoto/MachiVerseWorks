@@ -3,7 +3,7 @@ using System.Net.WebSockets;
 namespace MachiVerseWorks.Server;
 
 internal sealed class GasPublishService(
-    SimulationRuntime simulation,
+    IObservationSource observationSource,
     ServerOptions options,
     ClientConnectionRegistry connections) : BackgroundService
 {
@@ -18,7 +18,7 @@ internal sealed class GasPublishService(
             {
                 var targets = connections.CreateSnapshot().Where(static connection => connection.HandshakeCompleted && connection.NegotiatedVersion.SupportsGas && connection.Socket.State == WebSocketState.Open).ToArray();
                 if (targets.Length == 0) continue;
-                var snapshots = simulation.Read(static world => (Gas: world.CreateGasSnapshot(), Logistics: world.CreateLogisticsSnapshot()));
+                var snapshots = observationSource.CaptureGasSnapshot();
                 var snapshot = snapshots.Gas;
                 if (snapshot.Nodes.Count == 0 && snapshot.Pipelines.Count == 0 && snapshot.Sources.Count == 0 && snapshot.ImportTerminals.Count == 0 && snapshot.Storages.Count == 0 && snapshot.ServicePoints.Count == 0) continue;
                 var message = GasMessageMapper.Create(snapshot, snapshots.Logistics);
