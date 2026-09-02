@@ -149,6 +149,28 @@ internal sealed class WebSocketSessionHandler(ClientConnectionRegistry connectio
                 }
                 await observationRequests.WriteAsync(new ClearPersonInspectionObservationRequest(connection.Id), cancellationToken);
                 return true;
+            case InspectEntityMessage inspectEntity:
+                if (!connection.NegotiatedVersion.SupportsPersistentRegionalEvolution)
+                {
+                    return await RejectRecoverableAsync(connection, [new ProtocolErrorParameter(ProtocolErrorParameterKeys.MessageType, ((ushort)envelope.Message.Type).ToString(CultureInfo.InvariantCulture))], cancellationToken);
+                }
+                if (inspectEntity.EntityType == ProtocolEntityType.Person && !options.EnablePersonInspection)
+                {
+                    return await RejectRecoverableAsync(connection, [new ProtocolErrorParameter(ProtocolErrorParameterKeys.Field, "entityId"), new ProtocolErrorParameter(ProtocolErrorParameterKeys.DetailCode, "inspectionDisabled")], cancellationToken);
+                }
+                if (inspectEntity.EntityType == ProtocolEntityType.Person && !observationSource.PersonExists(inspectEntity.EntityId))
+                {
+                    return await RejectRecoverableAsync(connection, [new ProtocolErrorParameter(ProtocolErrorParameterKeys.Field, "entityId"), new ProtocolErrorParameter(ProtocolErrorParameterKeys.DetailCode, "personNotFound")], cancellationToken);
+                }
+                await observationRequests.WriteAsync(new InspectEntityObservationRequest(connection.Id, inspectEntity.EntityType, inspectEntity.EntityId), cancellationToken);
+                return true;
+            case ClearEntityInspectionMessage:
+                if (!connection.NegotiatedVersion.SupportsPersistentRegionalEvolution)
+                {
+                    return await RejectRecoverableAsync(connection, [new ProtocolErrorParameter(ProtocolErrorParameterKeys.MessageType, ((ushort)envelope.Message.Type).ToString(CultureInfo.InvariantCulture))], cancellationToken);
+                }
+                await observationRequests.WriteAsync(new ClearEntityInspectionObservationRequest(connection.Id), cancellationToken);
+                return true;
             default:
                 return await RejectRecoverableAsync(connection, [new ProtocolErrorParameter(ProtocolErrorParameterKeys.MessageType, ((ushort)envelope.Message.Type).ToString(CultureInfo.InvariantCulture))], cancellationToken);
         }

@@ -166,6 +166,18 @@ internal sealed class RailwayOperationsStore
 
     public TrainSnapshot[] CreateTrainSnapshot() => _trainOrder.Select(static train => train.CreateSnapshot()).ToArray();
 
+    public bool TryGetTrainSnapshot(TrainId id, out TrainSnapshot snapshot)
+    {
+        if (_trains.TryGetValue(id, out var train))
+        {
+            snapshot = train.CreateSnapshot();
+            return true;
+        }
+
+        snapshot = null!;
+        return false;
+    }
+
     public void Restore(
         ulong nextFormationId,
         IReadOnlyList<TrainFormationSnapshot> formations,
@@ -199,9 +211,9 @@ internal sealed class RailwayOperationsStore
             }
             _services.Add(service.Id, ServiceState.FromSnapshot(service, distances));
         }
-        foreach (var snapshot in trains)
+        foreach (var snapshotItem in trains)
         {
-            var train = TrainState.FromSnapshot(snapshot);
+            var train = TrainState.FromSnapshot(snapshotItem);
             _trains.Add(train.Id, train);
             _trainOrder.Add(train);
             if (train.CurrentBlockId is { } block && !_blockOwners.TryAdd(block, train.Id)) throw new InvalidOperationException("Saved railway operations contain a block ownership conflict.");

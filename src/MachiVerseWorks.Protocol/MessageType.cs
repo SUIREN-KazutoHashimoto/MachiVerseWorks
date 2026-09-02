@@ -7,6 +7,8 @@ public enum MessageType : ushort
     SubscribeVolume = 3,
     InspectPerson = 4,
     ClearPersonInspection = 5,
+    InspectEntity = 6,
+    ClearEntityInspection = 7,
     AgentSpawn = 100,
     AgentUpdate = 101,
     AgentRemove = 102,
@@ -34,5 +36,6 @@ public enum MessageType : ushort
     WorldEnvironmentSnapshot = 800,
     RegionalGenerationSnapshot = 810,
     PersistentRegionalEvolutionSnapshot = 820,
+    EntityInspectionSnapshot = 830,
     Error = 900,
 }

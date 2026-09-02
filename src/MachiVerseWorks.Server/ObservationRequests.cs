@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using MachiVerseWorks.Protocol;
 using MachiVerseWorks.Simulation;
 
 namespace MachiVerseWorks.Server;
@@ -12,6 +13,8 @@ internal abstract record ObservationRequest(Guid ConnectionId);
 internal sealed record SubscribeVolumeObservationRequest(Guid ConnectionId, WorldVolume Volume) : ObservationRequest(ConnectionId);
 internal sealed record InspectPersonObservationRequest(Guid ConnectionId, ulong PersonId) : ObservationRequest(ConnectionId);
 internal sealed record ClearPersonInspectionObservationRequest(Guid ConnectionId) : ObservationRequest(ConnectionId);
+internal sealed record InspectEntityObservationRequest(Guid ConnectionId, ProtocolEntityType EntityType, ulong EntityId) : ObservationRequest(ConnectionId);
+internal sealed record ClearEntityInspectionObservationRequest(Guid ConnectionId) : ObservationRequest(ConnectionId);
 
 internal sealed class ObservationRequestQueue
 {
@@ -35,6 +38,7 @@ internal sealed class ObservationRequestQueue
 internal sealed class ObservationRequestProcessor(
     ObservationRequestQueue queue,
     ClientConnectionRegistry connections,
+    EntityInspectionRegistry inspections,
     ILogger<ObservationRequestProcessor> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -55,6 +59,12 @@ internal sealed class ObservationRequestProcessor(
                         break;
                     case ClearPersonInspectionObservationRequest:
                         connection.ClearPersonInspection();
+                        break;
+                    case InspectEntityObservationRequest inspectEntity:
+                        inspections.Set(connection.Id, new EntityInspectionTarget(inspectEntity.EntityType, inspectEntity.EntityId));
+                        break;
+                    case ClearEntityInspectionObservationRequest:
+                        inspections.Clear(connection.Id);
                         break;
                     default:
                         ServerLog.UnsupportedObservationRequest(logger, request.GetType().Name);

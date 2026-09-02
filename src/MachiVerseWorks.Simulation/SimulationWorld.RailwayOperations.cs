@@ -48,6 +48,9 @@ public sealed partial class SimulationWorld
 
     public TrainSnapshot[] CreateTrainSnapshot() => RailwayOperations.CreateTrainSnapshot();
 
+    public bool TryGetTrainSnapshot(TrainId id, out TrainSnapshot snapshot) =>
+        RailwayOperations.TryGetTrainSnapshot(id, out snapshot);
+
     private RailwayOperationsStore RailwayOperations => _railwayOperations ??= new RailwayOperationsStore(_railway.CreateSnapshot());
 
     private void StepRailwayOperations(double deltaSeconds, ulong tickCount)

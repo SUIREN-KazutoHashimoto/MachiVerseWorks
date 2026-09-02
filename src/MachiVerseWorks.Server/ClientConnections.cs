@@ -312,6 +312,25 @@ internal sealed class ClientConnection : IDisposable
         finally { EndSend(); }
     }
 
+    public async Task<ProtocolSendMetrics?> SendIfEntityInspectionCurrentAsync(
+        IProtocolMessage message,
+        ProtocolVersion version,
+        EntityInspectionRegistry inspections,
+        EntityInspectionSelection inspection,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(inspections);
+        BeginSend();
+        try
+        {
+            var encodeStarted = Stopwatch.GetTimestamp();
+            var frame = ObservationProtocolAdapter.Serialize(message, version);
+            var encodeTimeMs = Stopwatch.GetElapsedTime(encodeStarted).TotalMilliseconds;
+            return await SendFrameIfEntityInspectionCurrentAsync(frame, encodeTimeMs, inspections, inspection, cancellationToken);
+        }
+        finally { EndSend(); }
+    }
+
     public void Abort() => Socket.Abort();
 
     public void Dispose()
@@ -358,6 +377,38 @@ internal sealed class ClientConnection : IDisposable
                 if (Socket.State != WebSocketState.Open) throw new WebSocketException(WebSocketError.InvalidState);
                 sendStarted = Stopwatch.GetTimestamp();
                 sendTask = Socket.SendAsync(new ArraySegment<byte>(frame), WebSocketMessageType.Binary, endOfMessage: true, cancellationToken);
+            }
+
+            await sendTask;
+            return new ProtocolSendMetrics(frame.Length, encodeTimeMs, Stopwatch.GetElapsedTime(sendStarted).TotalMilliseconds);
+        }
+        finally { _sendGate.Release(); }
+    }
+
+    private async Task<ProtocolSendMetrics?> SendFrameIfEntityInspectionCurrentAsync(
+        byte[] frame,
+        double encodeTimeMs,
+        EntityInspectionRegistry inspections,
+        EntityInspectionSelection inspection,
+        CancellationToken cancellationToken)
+    {
+        await _sendGate.WaitAsync(cancellationToken);
+        try
+        {
+            long sendStarted = 0;
+            if (!inspections.TryStartCurrentSend(
+                    Id,
+                    inspection,
+                    () =>
+                    {
+                        if (Socket.State != WebSocketState.Open) throw new WebSocketException(WebSocketError.InvalidState);
+                        sendStarted = Stopwatch.GetTimestamp();
+                        return Socket.SendAsync(new ArraySegment<byte>(frame), WebSocketMessageType.Binary, endOfMessage: true, cancellationToken);
+                    },
+                    out var sendTask)
+                || sendTask is null)
+            {
+                return null;
             }
 
             await sendTask;
