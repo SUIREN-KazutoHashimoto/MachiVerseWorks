@@ -76,7 +76,7 @@ public sealed partial class SimulationWorld
         var networkConnectivity = MeasureRegionalConnectivity(settlement);
         var logistics = CreateLogisticsSnapshot();
         var logisticsPressure = Math.Clamp(
-            logistics.Statistics.ActiveShipmentCount / Math.Max(1d, _persistentRegionalEvolution?.Settlements.Count ?? 1) / 8d,
+            logistics.Statistics.InTransitShipmentCount / Math.Max(1d, _persistentRegionalEvolution?.Settlements.Count ?? 1) / 8d,
             0d,
             1d);
         return new RegionalEvolutionDrivers(
