@@ -7,7 +7,7 @@
 - 人口統計、経済分析、交通分析、heatmap、trend等の分析処理はViewへ含めず、将来のAnalytics Listener / analysis clientとして別途設計します。
 - Observation Gatewayのarchitectureは[`../docs/architecture/observation-gateway.md`](../docs/architecture/observation-gateway.md)を正本とします。
 
-> **現在:** View Phase 1 — Read-Only View Foundation  
+> **現在:** View Phase 2 — Camera & Observation Navigation  
 > **進め方:** View固有の基盤はPhase 1から進め、Simulationから移管された描画Taskは依存するSimulation Phase / read modelが実装できた時点で順次着手する
 
 ## 最上位原則
@@ -27,8 +27,8 @@
 
 | View Phase | 内容 | 主な必須Simulation依存 | 状態 |
 | --- | --- | --- | --- |
-| 1 | Read-Only View Foundation | 現行read-only Protocol / Observation boundary | ▶️ 基盤着手可能 |
-| 2 | Camera & Observation Navigation | Observation subscription contract | ⏳ 待機 |
+| 1 | Read-Only View Foundation | 現行read-only Protocol / Observation boundary | ✅ 完了 |
+| 2 | Camera & Observation Navigation | Observation subscription contract | ▶️ 着手可能 |
 | 3 | Physical World Rendering | Simulation Phase 29 observation contract | ⏳ Simulation依存待ち |
 | 4 | Settlement & Structure Rendering | Simulation Phase 30 baseline / Phase 31 evolution | ⏳ Simulation依存待ち |
 | 5 | Infrastructure & Dynamic Entity Fidelity | 各Simulation domain observation contract | ⏳ View基盤待ち |
@@ -100,20 +100,20 @@ Simulation Phaseがcloseoutした際は、対応する未着手View Taskが実�
 
 ## View Phase 1 — Read-Only View Foundation
 
-> **状態: ▶️ 基盤着手可能**  
+> **状態: ✅ 完了**  
 > **必須依存:** 現行Server / read-only Protocol message flow  
 > **並行可能依存:** Simulation Roadmap `OBS-001` / `OBS-003` のObservation / mutation境界整理
 
 Viewを完全read-onlyなPresentation clientとして固定し、Observation Gatewayから受け取ったread modelだけで描画できる基盤を作る。
 
-- ⬜ **V1-001** — View / Observation Gateway / Managementの責務境界と禁止事項をWeb Client architecture / module dependencyへ反映する
-- ⬜ **V1-002** — Protocol messageをView-local rendering stateへ一方向適用する共通state boundaryを整理する
-- ⬜ **V1-003** — View-local stateをCamera / Selection / rendering resource / audio resource / cache / interpolationへ限定する契約を実装・testする
-- ⬜ **V1-004** — authoritative observationとprevious/current visual interpolation stateを型・module境界で分離する
-- ⬜ **V1-005** — reconnect / resync時にconnection-local View stateを安全に破棄し、新authoritative observationから再構築する
-- ⬜ **V1-006** — Viewからmutation Protocol / Administration APIへ到達しないことをdependency / E2Eで検証する
-- ⬜ **V1-007** — View未接続 / 単一View / 複数View接続でSimulation state digestが一致する基礎E2Eを整備する
-- ⬜ **V1-008** — Read-Only View Foundationのarchitecture / test / Roadmapを同期する
+- ✅ **V1-001** — View / Observation Gateway / Managementの責務境界と禁止事項をWeb Client architecture / module dependencyへ反映する
+- ✅ **V1-002** — Protocol messageをView-local rendering stateへ一方向適用する共通state boundaryを整理する
+- ✅ **V1-003** — View-local stateをCamera / Selection / rendering resource / audio resource / cache / interpolationへ限定する契約を実装・testする
+- ✅ **V1-004** — authoritative observationとprevious/current visual interpolation stateを型・module境界で分離する
+- ✅ **V1-005** — reconnect / resync時にconnection-local View stateを安全に破棄し、新authoritative observationから再構築する
+- ✅ **V1-006** — Viewからmutation Protocol / Administration APIへ到達しないことをdependency / E2Eで検証する
+- ✅ **V1-007** — View未接続 / 単一View / 複数View接続でSimulation state digestが一致する基礎E2Eを整備する
+- ✅ **V1-008** — Read-Only View Foundationのarchitecture / test / Roadmapを同期する
 
 ### View Phase 1 完了条件
 
@@ -126,7 +126,7 @@ Viewを完全read-onlyなPresentation clientとして固定し、Observation Gat
 
 ## View Phase 2 — Camera & Observation Navigation
 
-> **状態: ⏳ 待機**  
+> **状態: ▶️ 着手可能**  
 > **必須依存:** View Phase 1 / Observation Gateway subscription contract  
 > **並行可能依存:** `OBS-004`〜`OBS-007`のcache / dedup / resync最適化
 
