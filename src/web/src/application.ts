@@ -5,6 +5,7 @@ import { loadClientConfig } from './config.ts';
 import { MachiVerseConnection } from './connection.ts';
 import { initializeLocalization, type LocaleParameters } from './localization.ts';
 import { MultimodalTransitMessageType, type MultimodalTransitProtocolMessage, type MultimodalTransitSnapshotMessage } from './multimodal-transit.ts';
+import { PERSISTENT_REGIONAL_EVOLUTION_SNAPSHOT_MESSAGE_TYPE, type PersistentRegionalEvolutionSnapshotMessage } from './persistent-regional-evolution-protocol.ts';
 import { PopulationMessageType, type PopulationProtocolMessage, type PopulationStatisticsMessage, type PersonDebugMessage } from './population-protocol.ts';
 import { MessageType, ProtocolErrorCode, type AgentStateMessage, type ProtocolErrorMessage, type ProtocolMessage, type WorldVolume } from './protocol.ts';
 import { REGIONAL_GENERATION_SNAPSHOT_MESSAGE_TYPE, type RegionalGenerationSnapshotMessage } from './regional-generation-protocol.ts';
@@ -117,7 +118,7 @@ export class Application {
   private readonly animate = (now: number): void => {
     if (this.disposed) return;
     const performanceMetrics = this.performanceMetrics; if (performanceMetrics !== null) performanceMetrics.recordAnimationFrame(now);
-    this.navigation.update(now); this.updateSubscription(now); this.regionalGeneration.update(this.observation.regionalGeneration); this.view.render(this.observation.entities, now, this.observation.pedestrians, this.observation.vehicles, this.observation.intersections, this.observation.roadNetwork, this.observation.worldEnvironment); this.audio.syncListenerFromCamera(this.view.camera); this.updateAudio(now); if (performanceMetrics !== null) this.updatePerformanceUi(now, performanceMetrics); this.animationFrame = window.requestAnimationFrame(this.animate);
+    this.navigation.update(now); this.updateSubscription(now); this.regionalGeneration.update(this.observation.regionalGeneration, this.observation.persistentRegionalEvolution); this.view.render(this.observation.entities, now, this.observation.pedestrians, this.observation.vehicles, this.observation.intersections, this.observation.roadNetwork, this.observation.worldEnvironment); this.audio.syncListenerFromCamera(this.view.camera); this.updateAudio(now); if (performanceMetrics !== null) this.updatePerformanceUi(now, performanceMetrics); this.animationFrame = window.requestAnimationFrame(this.animate);
   };
 
   private updateSubscription(now: number): void {
@@ -131,7 +132,7 @@ export class Application {
 
   private updatePerformanceUi(now: number, metrics: ClientPerformanceMetrics): void { if (now - this.lastPerformanceUiAt < 500) return; this.lastPerformanceUiAt = now; this.ui.setPerformanceMetrics(metrics.snapshot()); }
 
-  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage | MultimodalTransitProtocolMessage | EconomyProtocolMessage | LogisticsProtocolMessage | PowerProtocolMessage | WaterSewerProtocolMessage | GasProtocolMessage | OpticalProtocolMessage | RadioProtocolMessage | WorldEnvironmentSnapshotMessage | RegionalGenerationSnapshotMessage): void {
+  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage | MultimodalTransitProtocolMessage | EconomyProtocolMessage | LogisticsProtocolMessage | PowerProtocolMessage | WaterSewerProtocolMessage | GasProtocolMessage | OpticalProtocolMessage | RadioProtocolMessage | WorldEnvironmentSnapshotMessage | RegionalGenerationSnapshotMessage | PersistentRegionalEvolutionSnapshotMessage): void {
     switch (message.type) {
       case MessageType.AgentSpawn:
       case MessageType.AgentUpdate:
@@ -151,6 +152,7 @@ export class Application {
         this.observation.apply(message); return;
       case WORLD_ENVIRONMENT_SNAPSHOT_MESSAGE_TYPE:
       case REGIONAL_GENERATION_SNAPSHOT_MESSAGE_TYPE:
+      case PERSISTENT_REGIONAL_EVOLUTION_SNAPSHOT_MESSAGE_TYPE:
         this.observation.apply(message); return;
       case PopulationMessageType.PopulationStatistics: this.applyPopulationStatistics(message); return;
       case PopulationMessageType.PersonDebug: this.applyPersonDebug(message); return;
