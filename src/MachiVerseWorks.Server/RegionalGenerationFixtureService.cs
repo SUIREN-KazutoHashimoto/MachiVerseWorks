@@ -20,7 +20,7 @@ internal sealed class RegionalGenerationFixtureService(
             if (!world.TryCreateRegionalGenerationSnapshot(out _))
             {
                 _ = world.GenerateRegionalGeneration(
-                    new WorldVolume(-2_000d, -2_000d, 0d, 2_000d, 2_000d, 200d),
+                    new WorldVolume(-500_000d, -500_000d, -12_000d, 500_000d, 500_000d, 12_000d),
                     new RegionalGenerationOptions(
                         RegionalGenerationQualityPreset.Draft,
                         settlementCount: 2,
