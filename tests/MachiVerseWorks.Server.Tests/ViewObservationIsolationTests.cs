@@ -12,6 +12,12 @@ namespace MachiVerseWorks.Server.Tests;
 public sealed class ViewObservationIsolationTests
 {
     private static readonly SubscribeVolumeMessage FullTestVolume = new(-100d, -100d, -100d, 100d, 100d, 100d);
+    private static readonly SubscribeVolumeMessage[] NavigationVolumes =
+    [
+        new(-60d, -140d, -80d, 140d, 60d, 120d),
+        new(999_900d, -2_000_100d, -100d, 1_000_100d, -1_999_900d, 100d),
+        new(-100d, -100d, 900d, 100d, 100d, 1_100d),
+    ];
 
     [TestMethod]
     [DataRow(1)]
@@ -33,10 +39,17 @@ public sealed class ViewObservationIsolationTests
                 await ServerTestHost.HandshakeAsync(socket);
                 await ServerTestHost.SendAsync(socket, FullTestVolume, ProtocolVersion.Current);
                 await ReceiveUntilAgentSnapshotAsync(socket);
+
+                foreach (var navigationVolume in NavigationVolumes)
+                {
+                    await ServerTestHost.SendAsync(socket, navigationVolume, ProtocolVersion.Current);
+                    await ServerTestHost.SendAsync(socket, FullTestVolume, ProtocolVersion.Current);
+                    await ReceiveUntilAgentSnapshotAsync(socket);
+                }
             }
 
             var afterDigest = ComputeDigest(simulation.CaptureCheckpoint());
-            Assert.AreEqual(beforeDigest, afterDigest, $"{viewConnectionCount} read-only View connection(s) changed authoritative simulation state.");
+            Assert.AreEqual(beforeDigest, afterDigest, $"{viewConnectionCount} read-only View connection(s) changed authoritative simulation state while navigating subscriptions.");
         }
         finally
         {

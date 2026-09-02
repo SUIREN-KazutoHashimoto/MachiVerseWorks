@@ -30,6 +30,18 @@ test('spawn, 3D update interpolation, and remove are applied', () => {
   assert.equal(store.size, 0);
 });
 
+test('sampleById returns the interpolated authoritative observation without scanning the store', () => {
+  const store = new EntityStore();
+  store.spawn(snapshot(0, 10, 1n), 0);
+  store.update(snapshot(10, 30, 2n), 100);
+
+  const halfway = store.sampleById(7n, 150);
+  assert.ok(halfway !== undefined);
+  assert.equal(halfway.x, 5);
+  assert.equal(halfway.z, 20);
+  assert.equal(store.sampleById(99n, 150), undefined);
+});
+
 test('unknown updates do not implicitly create an entity', () => {
   const store = new EntityStore();
   assert.equal(store.update(snapshot(10, 30, 2n), 100), false);

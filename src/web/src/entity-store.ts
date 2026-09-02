@@ -25,6 +25,7 @@ export interface SampledAgent {
 export interface ReadonlyEntityStore {
   readonly size: number;
   writeSampledPositions(now: number, target: Float32Array): number;
+  sampleById(agentId: bigint, now?: number): SampledAgent | undefined;
   sample(now?: number): IterableIterator<SampledAgent>;
 }
 
@@ -71,20 +72,27 @@ export class EntityStore implements ReadonlyEntityStore {
     return offset / 3;
   }
 
+  public sampleById(agentId: bigint, now = performance.now()): SampledAgent | undefined {
+    const agent = this.agents.get(agentId);
+    if (agent === undefined) return undefined;
+    const position = this.interpolation.sample(agentId, now);
+    if (position === undefined) return undefined;
+    return {
+      agentId,
+      x: position.x,
+      y: position.y,
+      z: position.z,
+      velocityX: agent.velocityX,
+      velocityY: agent.velocityY,
+      velocityZ: agent.velocityZ,
+      tickCount: agent.tickCount,
+    };
+  }
+
   public *sample(now = performance.now()): IterableIterator<SampledAgent> {
-    for (const [agentId, agent] of this.agents) {
-      const position = this.interpolation.sample(agentId, now);
-      if (position === undefined) continue;
-      yield {
-        agentId,
-        x: position.x,
-        y: position.y,
-        z: position.z,
-        velocityX: agent.velocityX,
-        velocityY: agent.velocityY,
-        velocityZ: agent.velocityZ,
-        tickCount: agent.tickCount,
-      };
+    for (const agentId of this.agents.keys()) {
+      const sampled = this.sampleById(agentId, now);
+      if (sampled !== undefined) yield sampled;
     }
   }
 }
