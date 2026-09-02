@@ -56,20 +56,15 @@ internal sealed class ObservationRequestProcessor(
                         break;
                     case InspectPersonObservationRequest inspect:
                         connection.SetInspectedPerson(inspect.PersonId);
-                        inspections.Set(connection.Id, new EntityInspectionTarget(ProtocolEntityType.Person, inspect.PersonId));
                         break;
                     case ClearPersonInspectionObservationRequest:
                         connection.ClearPersonInspection();
-                        inspections.Clear(connection.Id);
                         break;
                     case InspectEntityObservationRequest inspectEntity:
                         inspections.Set(connection.Id, new EntityInspectionTarget(inspectEntity.EntityType, inspectEntity.EntityId));
-                        if (inspectEntity.EntityType == ProtocolEntityType.Person) connection.SetInspectedPerson(inspectEntity.EntityId);
-                        else connection.ClearPersonInspection();
                         break;
                     case ClearEntityInspectionObservationRequest:
                         inspections.Clear(connection.Id);
-                        connection.ClearPersonInspection();
                         break;
                     default:
                         ServerLog.UnsupportedObservationRequest(logger, request.GetType().Name);
