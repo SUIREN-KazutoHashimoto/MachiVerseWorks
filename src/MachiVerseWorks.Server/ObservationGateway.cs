@@ -27,6 +27,7 @@ internal interface IObservationSource
     OpticalSnapshot CaptureOpticalSnapshot();
     RadioSnapshot CaptureRadioSnapshot();
     VersionedObservation<WorldEnvironmentSnapshot> CaptureWorldEnvironmentSnapshot(WorldVolume volume);
+    RegionalGenerationSnapshot? CaptureRegionalGenerationSnapshot() => null;
     (PersistentRegionalEvolutionSnapshot Evolution, RegionalInteractionSnapshot Interactions)? CapturePersistentRegionalEvolutionSnapshot();
     bool PersonExists(ulong personId);
 }
@@ -104,6 +105,10 @@ internal sealed class SimulationObservationSource(SimulationRuntime simulation) 
 
     public VersionedObservation<WorldEnvironmentSnapshot> CaptureWorldEnvironmentSnapshot(WorldVolume volume) =>
         simulation.CaptureWorldEnvironmentSnapshot(volume);
+
+    public RegionalGenerationSnapshot? CaptureRegionalGenerationSnapshot() =>
+        simulation.Read<RegionalGenerationSnapshot?>(static world =>
+            world.TryCreateRegionalGenerationSnapshot(out var snapshot) ? snapshot : null);
 
     public (PersistentRegionalEvolutionSnapshot Evolution, RegionalInteractionSnapshot Interactions)? CapturePersistentRegionalEvolutionSnapshot() =>
         simulation.Read<(PersistentRegionalEvolutionSnapshot Evolution, RegionalInteractionSnapshot Interactions)?>(static world =>
@@ -191,6 +196,7 @@ internal static class ObservationGatewayServiceCollectionExtensions
         services.AddHostedService<OpticalPublishService>();
         services.AddHostedService<RadioPublishService>();
         services.AddHostedService<WorldEnvironmentPublishService>();
+        services.AddHostedService<RegionalGenerationPublishService>();
         services.AddHostedService<PersistentRegionalEvolutionPublishService>();
         return services;
     }
