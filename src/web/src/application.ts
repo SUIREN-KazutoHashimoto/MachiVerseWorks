@@ -12,6 +12,7 @@ import { RailwayOperationsLayer, RailwayOperationsMessageType, type RailwayOpera
 import { isRetryableSubscriptionDetailCode } from './subscription-error-policy.ts';
 import { ClientUi } from './ui.ts';
 import { TrafficMessageType, type TrafficProtocolMessage } from './traffic-protocol.ts';
+import { ViewNavigationController, type ViewNavigationTarget } from './view-navigation.ts';
 import { WorldView } from './world-view.ts';
 import { ECONOMY_SNAPSHOT_MESSAGE_TYPE, type EconomyProtocolMessage, type EconomySnapshotMessage } from './economy-protocol.ts';
 import { LogisticsDebugOverlay } from './logistics-debug.ts';
@@ -36,6 +37,7 @@ export class Application {
   private readonly ambient = new AmbientSystem(this.audio);
   private readonly performanceMetrics = import.meta.env.DEV ? new ClientPerformanceMetrics() : null;
   private readonly view: WorldView;
+  private readonly navigation: ViewNavigationController;
   private readonly railway: RailwayInfrastructureLayer;
   private readonly railwayOperations: RailwayOperationsLayer;
   private readonly ui: ClientUi;
@@ -57,6 +59,7 @@ export class Application {
   public constructor(host: HTMLElement) {
     const performanceMetrics = this.performanceMetrics;
     this.view = new WorldView(host);
+    this.navigation = new ViewNavigationController(this.view.camera, this.view.renderer.domElement);
     this.railway = new RailwayInfrastructureLayer(this.view.scene);
     this.railwayOperations = new RailwayOperationsLayer(this.view.scene);
     this.ui = new ClientUi(host, this.localizer, performanceMetrics !== null);
@@ -92,17 +95,24 @@ export class Application {
 
   public get state(): ReadonlyViewObservationState { return this.observation; }
 
+  public jumpTo(target: ViewNavigationTarget): boolean { return this.navigation.jump(target); }
+  public focus(target: ViewNavigationTarget): boolean { return this.navigation.focus(target); }
+  public follow(target: ViewNavigationTarget): boolean { return this.navigation.follow(target); }
+  public clearFollow(): void { this.navigation.clearFollow(); }
+  public focusEntity(entityId: bigint, preferredZoom?: number): boolean { return this.navigation.focusEntity(entityId, this.observation.entities, performance.now(), preferredZoom); }
+  public followEntity(entityId: bigint, preferredZoom?: number): boolean { return this.navigation.followEntity(entityId, this.observation.entities, performance.now(), preferredZoom); }
+
   public start(): void { if (this.disposed) throw new Error('Application is disposed.'); this.connection.connect(); this.animationFrame = window.requestAnimationFrame(this.animate); }
   public dispose(): void {
     if (this.disposed) return;
-    this.disposed = true; window.cancelAnimationFrame(this.animationFrame); window.removeEventListener('resize', this.handleResize); this.connection.disconnect(); this.audio.dispose(); this.railway.dispose(); this.railwayOperations.dispose(); this.logisticsDebug.dispose(); this.powerDebug.dispose(); this.waterSewerDebug.dispose(); this.gasDebug.dispose(); this.opticalDebug.dispose(); this.radioDebug.dispose(); this.view.dispose(); this.ui.dispose();
+    this.disposed = true; window.cancelAnimationFrame(this.animationFrame); window.removeEventListener('resize', this.handleResize); this.connection.disconnect(); this.navigation.dispose(); this.audio.dispose(); this.railway.dispose(); this.railwayOperations.dispose(); this.logisticsDebug.dispose(); this.powerDebug.dispose(); this.waterSewerDebug.dispose(); this.gasDebug.dispose(); this.opticalDebug.dispose(); this.radioDebug.dispose(); this.view.dispose(); this.ui.dispose();
   }
   private readonly handleResize = (): void => { this.view.resize(); };
 
   private readonly animate = (now: number): void => {
     if (this.disposed) return;
     const performanceMetrics = this.performanceMetrics; if (performanceMetrics !== null) performanceMetrics.recordAnimationFrame(now);
-    this.updateSubscription(now); this.view.render(this.observation.entities, now, this.observation.pedestrians, this.observation.vehicles, this.observation.intersections, this.observation.roadNetwork); this.audio.syncListenerFromCamera(this.view.camera); this.updateAudio(now); if (performanceMetrics !== null) this.updatePerformanceUi(now, performanceMetrics); this.animationFrame = window.requestAnimationFrame(this.animate);
+    this.navigation.update(now); this.updateSubscription(now); this.view.render(this.observation.entities, now, this.observation.pedestrians, this.observation.vehicles, this.observation.intersections, this.observation.roadNetwork); this.audio.syncListenerFromCamera(this.view.camera); this.updateAudio(now); if (performanceMetrics !== null) this.updatePerformanceUi(now, performanceMetrics); this.animationFrame = window.requestAnimationFrame(this.animate);
   };
 
   private updateSubscription(now: number): void {

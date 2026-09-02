@@ -12,6 +12,12 @@ namespace MachiVerseWorks.Server.Tests;
 public sealed class ViewObservationIsolationTests
 {
     private static readonly SubscribeVolumeMessage FullTestVolume = new(-100d, -100d, -100d, 100d, 100d, 100d);
+    private static readonly SubscribeVolumeMessage[] NavigationVolumes =
+    [
+        new(9_900d, -100d, -100d, 10_100d, 100d, 100d),
+        new(999_900d, -2_000_100d, -100d, 1_000_100d, -1_999_900d, 100d),
+        new(-100d, -100d, 900d, 100d, 100d, 1_100d),
+    ];
 
     [TestMethod]
     [DataRow(1)]
@@ -32,11 +38,20 @@ public sealed class ViewObservationIsolationTests
                 sockets.Add(socket);
                 await ServerTestHost.HandshakeAsync(socket);
                 await ServerTestHost.SendAsync(socket, FullTestVolume, ProtocolVersion.Current);
-                await ReceiveUntilAgentSnapshotAsync(socket);
+                var knownAgentId = await ReceiveUntilVisibleAgentAsync(socket);
+
+                foreach (var navigationVolume in NavigationVolumes)
+                {
+                    await ServerTestHost.SendAsync(socket, navigationVolume, ProtocolVersion.Current);
+                    await ReceiveUntilAgentRemoveAsync(socket, knownAgentId);
+
+                    await ServerTestHost.SendAsync(socket, FullTestVolume, ProtocolVersion.Current);
+                    await ReceiveUntilAgentSpawnAsync(socket, knownAgentId);
+                }
             }
 
             var afterDigest = ComputeDigest(simulation.CaptureCheckpoint());
-            Assert.AreEqual(beforeDigest, afterDigest, $"{viewConnectionCount} read-only View connection(s) changed authoritative simulation state.");
+            Assert.AreEqual(beforeDigest, afterDigest, $"{viewConnectionCount} read-only View connection(s) changed authoritative simulation state while navigating subscriptions.");
         }
         finally
         {
@@ -50,14 +65,38 @@ public sealed class ViewObservationIsolationTests
         return Convert.ToHexString(SHA256.HashData(canonicalBytes));
     }
 
-    private static async Task ReceiveUntilAgentSnapshotAsync(ClientWebSocket socket)
+    private static async Task<ulong> ReceiveUntilVisibleAgentAsync(ClientWebSocket socket)
     {
         for (var index = 0; index < 64; index++)
         {
             var message = (await ServerTestHost.ReceiveAsync(socket, TimeSpan.FromSeconds(3))).Message;
-            if (message is AgentSpawnMessage or AgentUpdateMessage) return;
+            if (message is AgentSpawnMessage spawn) return spawn.AgentId;
+            if (message is AgentUpdateMessage update) return update.AgentId;
         }
 
-        Assert.Fail("Expected an agent observation snapshot was not received.");
+        Assert.Fail("Expected an initial visible agent observation was not received.");
+        return 0;
+    }
+
+    private static async Task ReceiveUntilAgentRemoveAsync(ClientWebSocket socket, ulong agentId)
+    {
+        for (var index = 0; index < 64; index++)
+        {
+            var message = (await ServerTestHost.ReceiveAsync(socket, TimeSpan.FromSeconds(3))).Message;
+            if (message is AgentRemoveMessage remove && remove.AgentId == agentId) return;
+        }
+
+        Assert.Fail($"Expected AgentRemove for agent {agentId} after the navigation subscription was not received.");
+    }
+
+    private static async Task ReceiveUntilAgentSpawnAsync(ClientWebSocket socket, ulong agentId)
+    {
+        for (var index = 0; index < 64; index++)
+        {
+            var message = (await ServerTestHost.ReceiveAsync(socket, TimeSpan.FromSeconds(3))).Message;
+            if (message is AgentSpawnMessage spawn && spawn.AgentId == agentId) return;
+        }
+
+        Assert.Fail($"Expected AgentSpawn for agent {agentId} after restoring the full subscription was not received.");
     }
 }

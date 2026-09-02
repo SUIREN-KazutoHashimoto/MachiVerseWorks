@@ -8,7 +8,7 @@
 - 人口統計、経済分析、交通分析、heatmap、trend等の分析処理はViewへ含めず、将来のAnalytics Listener / analysis clientとして別途設計します。
 - Observation Gatewayのarchitectureは[`../docs/architecture/observation-gateway.md`](../docs/architecture/observation-gateway.md)を正本とします。
 
-> **現在:** View Phase 2 — Camera & Observation Navigation  
+> **現在:** View Phase 3 — Physical World Rendering（Simulation / Gateway依存待ち）  
 > **進め方:** View固有の基盤はPhase 1から進め、Simulationから移管された描画Taskは依存するSimulation semantic sourceとGateway delivery contractが実装できた時点で順次着手する
 
 ## 最上位原則
@@ -29,7 +29,7 @@
 | View Phase | 内容 | 主な必須依存 | 状態 |
 | --- | --- | --- | --- |
 | 1 | Read-Only View Foundation | 現行read-only Protocol / Gateway Phase 1境界 | ✅ 完了 |
-| 2 | Camera & Observation Navigation | Gateway subscription contract | ⏳ Gateway統合待ち |
+| 2 | Camera & Observation Navigation | Gateway subscription contract | ✅ 完了 |
 | 3 | Physical World Rendering | Simulation Phase 29 source + Gateway delivery | ⏳ Simulation / Gateway依存待ち |
 | 4 | Settlement & Structure Rendering | Simulation Phase 30 baseline / Phase 31 evolution + Gateway delivery | ⏳ Simulation / Gateway依存待ち |
 | 5 | Infrastructure & Dynamic Entity Fidelity | 各Simulation domain source / Gateway delivery contract | ⏳ View基盤待ち |
@@ -129,17 +129,17 @@ Viewを完全read-onlyなPresentation clientとして固定し、Gatewayから�
 
 ## View Phase 2 — Camera & Observation Navigation
 
-> **状態: ⏳ Gateway統合待ち**  
+> **状態: ✅ 完了**  
 > **必須依存:** View Phase 1 / Gateway Phase 1のObservation Request / subscription boundary  
 > **並行可能依存:** Gateway Phase 2 / 3のcache / dedup / delivery / resync最適化
 
-- ⬜ **V2-001** — pan / zoom / rotate / altitudeを含むWorld navigationを整理する
-- ⬜ **V2-002** — View frustum / focus targetからread-only `SubscribeVolume`等のObservation Requestを生成する
-- ⬜ **V2-003** — ほぼ同一subscriptionの再送抑制とCamera移動時の安定した更新を実装する
-- ⬜ **V2-004** — Entity / Settlement / GeographicFeatureへのfocus / follow / jumpをView-local navigationとして実装する
-- ⬜ **V2-005** — World overviewから遠隔Settlementまで、原点からの距離に依存せず直接jump / focusできるnavigationを実装する
-- ⬜ **V2-006** — reconnect後に最新desired observationだけを再要求する
-- ⬜ **V2-007** — Camera操作・subscription変更でSimulation state digestが変化しないE2Eを追加する
+- ✅ **V2-001** — pan / zoom / rotate / altitudeを含むWorld navigationを整理する
+- ✅ **V2-002** — View frustum / focus targetからread-only `SubscribeVolume`等のObservation Requestを生成する
+- ✅ **V2-003** — ほぼ同一subscriptionの再送抑制とCamera移動時の安定した更新を実装する
+- ✅ **V2-004** — Entity / Settlement / GeographicFeatureへのfocus / follow / jumpをView-local navigationとして実装する
+- ✅ **V2-005** — World overviewから遠隔Settlementまで、原点からの距離に依存せず直接jump / focusできるnavigationを実装する
+- ✅ **V2-006** — reconnect後に最新desired observationだけを再要求する
+- ✅ **V2-007** — Camera操作・subscription変更でSimulation state digestが変化しないE2Eを追加する
 
 ### View Phase 2 完了条件
 

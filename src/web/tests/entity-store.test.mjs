@@ -30,6 +30,29 @@ test('spawn, 3D update interpolation, and remove are applied', () => {
   assert.equal(store.size, 0);
 });
 
+test('sampleById returns the interpolated authoritative observation without scanning the store', () => {
+  const store = new EntityStore();
+  store.spawn(snapshot(0, 10, 1n), 0);
+  store.update(snapshot(10, 30, 2n), 100);
+
+  const halfway = store.sampleById(7n, 150);
+  assert.ok(halfway !== undefined);
+  assert.equal(halfway.x, 5);
+  assert.equal(halfway.z, 20);
+  assert.equal(store.sampleById(99n, 150), undefined);
+});
+
+test('writeSampledPositionById writes into a reusable caller-owned buffer', () => {
+  const store = new EntityStore();
+  store.spawn(snapshot(0, 10, 1n), 0);
+  store.update(snapshot(10, 30, 2n), 100);
+  const position = new Float64Array(3);
+
+  assert.equal(store.writeSampledPositionById(7n, 150, position), true);
+  assert.deepEqual([...position], [5, 0, 20]);
+  assert.equal(store.writeSampledPositionById(99n, 150, position), false);
+});
+
 test('unknown updates do not implicitly create an entity', () => {
   const store = new EntityStore();
   assert.equal(store.update(snapshot(10, 30, 2n), 100), false);
