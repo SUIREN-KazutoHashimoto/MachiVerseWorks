@@ -1,4 +1,4 @@
-import { VisualInterpolationState } from './visual-interpolation-state.ts';
+import { VisualInterpolationState, type MutablePositionBuffer } from './visual-interpolation-state.ts';
 
 export interface AgentSnapshot {
   readonly agentId: bigint;
@@ -25,6 +25,7 @@ export interface SampledAgent {
 export interface ReadonlyEntityStore {
   readonly size: number;
   writeSampledPositions(now: number, target: Float32Array): number;
+  writeSampledPositionById(agentId: bigint, now: number, target: MutablePositionBuffer, offset?: number): boolean;
   sampleById(agentId: bigint, now?: number): SampledAgent | undefined;
   sample(now?: number): IterableIterator<SampledAgent>;
 }
@@ -33,6 +34,7 @@ export interface ReadonlyEntityStore {
 export class EntityStore implements ReadonlyEntityStore {
   private readonly agents = new Map<bigint, AgentSnapshot>();
   private readonly interpolation = new VisualInterpolationState<bigint>();
+  private readonly sampledPosition = new Float64Array(3);
 
   public get size(): number { return this.agents.size; }
 
@@ -72,16 +74,22 @@ export class EntityStore implements ReadonlyEntityStore {
     return offset / 3;
   }
 
+  public writeSampledPositionById(agentId: bigint, now: number, target: MutablePositionBuffer, offset = 0): boolean {
+    if (!this.agents.has(agentId)) return false;
+    if (!Number.isInteger(offset) || offset < 0 || offset + 2 >= target.length) {
+      throw new RangeError('Target position buffer does not have enough space for an XYZ position.');
+    }
+    return this.interpolation.writeSampledPosition(agentId, now, target, offset);
+  }
+
   public sampleById(agentId: bigint, now = performance.now()): SampledAgent | undefined {
     const agent = this.agents.get(agentId);
-    if (agent === undefined) return undefined;
-    const position = this.interpolation.sample(agentId, now);
-    if (position === undefined) return undefined;
+    if (agent === undefined || !this.writeSampledPositionById(agentId, now, this.sampledPosition)) return undefined;
     return {
       agentId,
-      x: position.x,
-      y: position.y,
-      z: position.z,
+      x: this.sampledPosition[0],
+      y: this.sampledPosition[1],
+      z: this.sampledPosition[2],
       velocityX: agent.velocityX,
       velocityY: agent.velocityY,
       velocityZ: agent.velocityZ,
