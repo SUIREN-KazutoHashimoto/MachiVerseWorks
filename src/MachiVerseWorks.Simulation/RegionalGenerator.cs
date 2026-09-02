@@ -827,7 +827,7 @@ public sealed class RegionalGenerator
         if (!string.IsNullOrWhiteSpace(naturalName))
         {
             var stem = naturalName.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
-            return index % 3 switch
+            return (index % 3) switch
             {
                 0 => stem,
                 1 => stem + "ton",
