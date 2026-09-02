@@ -130,6 +130,14 @@ internal sealed class ServerTestHost : IAsyncDisposable
         {
             decoded = WorldEnvironmentProtocolCodec.TryDeserialize(frame, out envelope, out error);
         }
+        else if (header.MessageType == MessageType.RegionalGenerationSnapshot)
+        {
+            decoded = RegionalGenerationProtocolCodec.TryDeserialize(frame, out envelope, out error);
+        }
+        else if (header.MessageType == MessageType.PersistentRegionalEvolutionSnapshot)
+        {
+            decoded = PersistentRegionalEvolutionProtocolCodec.TryDeserialize(frame, out envelope, out error);
+        }
         else
         {
             decoded = ProtocolCodec.TryDeserialize(frame, out envelope, out error);
