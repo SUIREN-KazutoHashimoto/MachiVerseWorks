@@ -23,7 +23,6 @@ public static class ServerApplication
         builder.Services.AddSingleton<RemoteMcpAdminGateway>();
         builder.Services.AddSingleton(new WebSocketOriginPolicy(options.AllowedWebSocketOrigins));
         builder.Services.AddSingleton<SimulationRuntime>();
-        builder.Services.AddObservationGateway();
         builder.Services.AddSingleton<AdminCommandQueue>();
         builder.Services.AddSingleton<E2eMetrics>();
         builder.Services.AddHostedService<LogisticsFixtureHostedService>();
@@ -35,6 +34,7 @@ public static class ServerApplication
         builder.Services.AddHostedService<SimulationTickService>();
         builder.Services.AddHostedService<AdminCommandExecutorV2>();
         builder.Services.AddHostedService<ServerConsoleService>();
+        builder.Services.AddObservationGateway();
 
         if (mcpOptions.Enabled)
         {
