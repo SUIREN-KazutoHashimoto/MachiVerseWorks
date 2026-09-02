@@ -7,21 +7,21 @@ internal sealed class ObservationDeliveryCoordinator(
 {
     public bool TrySchedule(
         ClientConnection connection,
-        CancellationToken cancellationToken,
-        Func<CancellationToken, Task> delivery)
+        Func<CancellationToken, Task> delivery,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(connection);
         ArgumentNullException.ThrowIfNull(delivery);
         return deliveryScheduler.TrySchedule(
             connection.Id,
             ObservationDeliveryLane.Default,
-            () => DeliverAsync(connection, cancellationToken, delivery));
+            () => DeliverAsync(connection, delivery, cancellationToken));
     }
 
     private async Task DeliverAsync(
         ClientConnection connection,
-        CancellationToken cancellationToken,
-        Func<CancellationToken, Task> delivery)
+        Func<CancellationToken, Task> delivery,
+        CancellationToken cancellationToken)
     {
         try
         {
