@@ -5,7 +5,12 @@ public sealed partial class SimulationWorld
     public RegionalInteractionSnapshot CreateRegionalInteractionSnapshot()
     {
         EnsurePersistentRegionalEvolution();
-        var settlements = _persistentRegionalEvolution!.Settlements;
+        return CreateRegionalInteractionSnapshot(_persistentRegionalEvolution!.Settlements);
+    }
+
+    private RegionalInteractionSnapshot CreateRegionalInteractionSnapshot(
+        IReadOnlyList<SettlementEvolutionState> settlements)
+    {
         var commuting = new Dictionary<(SettlementId From, SettlementId To), int>();
         foreach (var employment in _economyEmployments.Values.OrderBy(static item => item.PersonId.Value))
         {
