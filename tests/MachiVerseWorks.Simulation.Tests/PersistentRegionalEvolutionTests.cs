@@ -42,6 +42,33 @@ public sealed class PersistentRegionalEvolutionTests
     }
 
     [TestMethod]
+    public void OneHundredTwentyYearCycleRecordsDeclineThenRegrowthAcrossSettlements()
+    {
+        var world = CreateWorld(31005);
+        var generated = world.GenerateRegionalGeneration(
+            CreateVolume(),
+            new RegionalGenerationOptions(RegionalGenerationQualityPreset.Draft, settlementCount: 4, iterationBudget: 1));
+        var initial = PersistentRegionalEvolutionEngine.Initialize(generated);
+        var declined = PersistentRegionalEvolutionEngine.AdvanceYears(
+            initial,
+            generated,
+            60,
+            static _ => new RegionalEvolutionDrivers(0d, 0d, 0d, 0d, 0d, 0d));
+        var recovered = PersistentRegionalEvolutionEngine.AdvanceYears(
+            declined,
+            generated,
+            60,
+            static _ => new RegionalEvolutionDrivers(1d, 1d, 1d, 1d, 1d, 1d));
+
+        Assert.AreEqual(120, recovered.CurrentYear);
+        Assert.IsTrue(recovered.Settlements.Count >= 4);
+        Assert.IsTrue(recovered.Events.Any(static item => item.Kind == RegionalEvolutionEventKind.Decline && item.Year <= 60));
+        Assert.IsTrue(recovered.Events.Any(static item => item.Kind == RegionalEvolutionEventKind.Growth && item.Year > 60));
+        Assert.IsTrue(recovered.Settlements.Any(item =>
+            item.Population > declined.Settlements.First(before => before.SettlementId == item.SettlementId).Population));
+    }
+
+    [TestMethod]
     public void MaterializedWorldEvolutionRemainsDeterministicAndCheckpointSafe()
     {
         var first = CreateWorld(31004);
