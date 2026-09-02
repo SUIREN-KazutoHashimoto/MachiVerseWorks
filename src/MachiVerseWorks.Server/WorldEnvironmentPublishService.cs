@@ -5,7 +5,7 @@ using MachiVerseWorks.Simulation;
 namespace MachiVerseWorks.Server;
 
 internal sealed class WorldEnvironmentPublishService(
-    SimulationRuntime simulation,
+    IObservationSource observationSource,
     ServerOptions options,
     ClientConnectionRegistry connections) : BackgroundService
 {
@@ -35,7 +35,7 @@ internal sealed class WorldEnvironmentPublishService(
                 {
                     if (!messages.TryGetValue(target.Volume, out var message))
                     {
-                        var snapshot = simulation.Read(world => world.CreateDetailedWorldEnvironmentSnapshot(target.Volume));
+                        var snapshot = observationSource.CaptureWorldEnvironmentSnapshot(target.Volume);
                         message = WorldEnvironmentMessageMapper.ToProtocol(snapshot);
                         messages.Add(target.Volume, message);
                     }
