@@ -7,7 +7,8 @@ namespace MachiVerseWorks.Server;
 internal sealed class WorldEnvironmentPublishService(
     IObservationSource observationSource,
     ServerOptions options,
-    ClientConnectionRegistry connections) : BackgroundService
+    ClientConnectionRegistry connections,
+    ObservationCache cache) : BackgroundService
 {
     private static readonly TimeSpan ClientSendTimeout = TimeSpan.FromSeconds(5);
 
@@ -30,21 +31,30 @@ internal sealed class WorldEnvironmentPublishService(
                     .ToArray();
                 if (targets.Length == 0) continue;
 
-                var messages = new Dictionary<WorldVolume, WorldEnvironmentSnapshotMessage>();
+                var messages = new Dictionary<WorldVolume, EnvironmentPublishMessage>();
                 foreach (var target in targets)
                 {
-                    if (!messages.TryGetValue(target.Volume, out var message))
+                    if (!messages.TryGetValue(target.Volume, out var cachedMessage))
                     {
-                        var snapshot = observationSource.CaptureWorldEnvironmentSnapshot(target.Volume);
-                        message = WorldEnvironmentMessageMapper.ToProtocol(snapshot);
-                        messages.Add(target.Volume, message);
+                        var observed = observationSource.CaptureWorldEnvironmentSnapshot(target.Volume);
+                        var revision = new ObservationRevision(observed.ObservationGeneration, observed.ObservationRevision);
+                        var message = cache.GetOrCreateSpatial(
+                            new SpatialObservationCacheKey(SpatialObservationKind.WorldEnvironment, target.Volume, revision),
+                            () => WorldEnvironmentMessageMapper.ToProtocol(observed.Value));
+                        cachedMessage = new EnvironmentPublishMessage(message, revision);
+                        messages.Add(target.Volume, cachedMessage);
                     }
 
                     try
                     {
                         using var sendCancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
                         sendCancellation.CancelAfter(ClientSendTimeout);
-                        _ = await target.Connection.SendAsync(message, target.Connection.NegotiatedVersion, sendCancellation.Token);
+                        var key = new EncodedObservationCacheKey(
+                            "world-environment",
+                            target.Connection.NegotiatedVersion,
+                            cachedMessage.Revision,
+                            ObservationCacheIdentity.ForVolume(target.Volume));
+                        _ = await target.Connection.SendCachedAsync(cachedMessage.Message, target.Connection.NegotiatedVersion, key, cache, sendCancellation.Token);
                     }
                     catch (Exception exception) when (exception is WebSocketException or OperationCanceledException or ObjectDisposedException)
                     {
@@ -58,4 +68,5 @@ internal sealed class WorldEnvironmentPublishService(
     }
 
     private sealed record EnvironmentPublishTarget(ClientConnection Connection, WorldVolume Volume);
+    private sealed record EnvironmentPublishMessage(WorldEnvironmentSnapshotMessage Message, ObservationRevision Revision);
 }
