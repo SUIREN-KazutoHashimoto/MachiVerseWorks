@@ -102,11 +102,6 @@ export class WorldView {
     const renderStartedAt = performance.now();
     this.renderer.render(this.scene, this.camera);
     this.lastFrameTimeMs = Math.max(0, performance.now() - renderStartedAt);
-    const metrics = this.getRenderingMetrics();
-    this.renderer.domElement.dataset.physicalWorldFrameTimeMs = metrics.frameTimeMs.toFixed(3);
-    this.renderer.domElement.dataset.physicalWorldDrawCalls = String(metrics.drawCalls);
-    this.renderer.domElement.dataset.physicalWorldGeometryBytes = String(metrics.physicalWorld.geometryByteLength);
-    this.renderer.domElement.dataset.terrainTriangles = String(metrics.physicalWorld.terrainTriangles);
   }
 
   public getRenderingMetrics(): WorldViewRenderingMetrics {
