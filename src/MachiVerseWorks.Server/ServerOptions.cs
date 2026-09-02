@@ -28,6 +28,7 @@ internal sealed class ServerOptions
         TimeSpan helloTimeout,
         TimeSpan frameReceiveTimeout,
         TimeSpan closeTimeout,
+        TimeSpan observationDeliveryTimeout,
         int requestRateLimitPerSecond,
         int requestRateLimitBurst,
         int invalidRequestStrikeLimit,
@@ -56,6 +57,7 @@ internal sealed class ServerOptions
         HelloTimeout = helloTimeout;
         FrameReceiveTimeout = frameReceiveTimeout;
         CloseTimeout = closeTimeout;
+        ObservationDeliveryTimeout = observationDeliveryTimeout;
         RequestRateLimitPerSecond = requestRateLimitPerSecond;
         RequestRateLimitBurst = requestRateLimitBurst;
         InvalidRequestStrikeLimit = invalidRequestStrikeLimit;
@@ -85,6 +87,7 @@ internal sealed class ServerOptions
     public TimeSpan HelloTimeout { get; }
     public TimeSpan FrameReceiveTimeout { get; }
     public TimeSpan CloseTimeout { get; }
+    public TimeSpan ObservationDeliveryTimeout { get; }
     public int RequestRateLimitPerSecond { get; }
     public int RequestRateLimitBurst { get; }
     public int InvalidRequestStrikeLimit { get; }
@@ -124,6 +127,7 @@ internal sealed class ServerOptions
         var helloTimeout = ReadDurationMilliseconds(configuration, "Server:HelloTimeoutMilliseconds", 5_000, 100, 60_000);
         var frameReceiveTimeout = ReadDurationMilliseconds(configuration, "Server:FrameReceiveTimeoutMilliseconds", 10_000, 100, 120_000);
         var closeTimeout = ReadDurationMilliseconds(configuration, "Server:CloseTimeoutMilliseconds", 2_000, 100, 30_000);
+        var observationDeliveryTimeout = ReadDurationMilliseconds(configuration, "Server:ObservationDeliveryTimeoutMilliseconds", 5_000, 100, 60_000);
         var requestRateLimitPerSecond = ReadInt32(configuration, "Server:RequestRateLimitPerSecond", 30);
         if (requestRateLimitPerSecond is <= 0 or > 1_000) throw new InvalidOperationException("Server:RequestRateLimitPerSecond must be between 1 and 1000.");
         var requestRateLimitBurst = ReadInt32(configuration, "Server:RequestRateLimitBurst", 60);
@@ -155,7 +159,7 @@ internal sealed class ServerOptions
         return new ServerOptions(
             listenAddress, port, snapshotRate, maximumSubscriptionCellCount, allowedWebSocketOrigins,
             allowInsecureRemoteAccess, enablePersonInspection, enableRemoteDiagnostics, consoleEnabled, maximumWebSocketConnections,
-            helloTimeout, frameReceiveTimeout, closeTimeout, requestRateLimitPerSecond, requestRateLimitBurst,
+            helloTimeout, frameReceiveTimeout, closeTimeout, observationDeliveryTimeout, requestRateLimitPerSecond, requestRateLimitBurst,
             invalidRequestStrikeLimit, invalidRequestStrikeWindow,
             tickRate, seed, spatialCellSize, initialAgentCount,
             spawnMinX, spawnMinY, spawnMinZ, spawnMaxX, spawnMaxY, spawnMaxZ);

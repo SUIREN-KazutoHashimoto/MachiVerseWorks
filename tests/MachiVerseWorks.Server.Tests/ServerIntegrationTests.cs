@@ -50,7 +50,8 @@ public sealed class ServerIntegrationTests
         ulong? spawnedAgentId = null;
         AgentSpawnMessage? spawnMessage = null;
         var sawUpdate = false;
-        for (var index = 0; index < 32 && !sawUpdate; index++)
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (DateTime.UtcNow < deadline && !sawUpdate)
         {
             var message = (await ServerTestHost.ReceiveAsync(socket, TimeSpan.FromSeconds(3))).Message;
             switch (message)

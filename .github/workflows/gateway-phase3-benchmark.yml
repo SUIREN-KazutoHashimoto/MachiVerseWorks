@@ -1,0 +1,46 @@
+name: Gateway Phase3 Benchmark
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - 'src/MachiVerseWorks.Server/**'
+      - 'src/MachiVerseWorks.Protocol/**'
+      - 'benchmarks/MachiVerseWorks.Benchmarks/GatewayDeliveryBenchmarks.cs'
+      - '.github/workflows/gateway-phase3-benchmark.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gateway-phase3-benchmark-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  delivery:
+    name: viewers-broad-reconnect-fairness
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore MachiVerseWorks.slnx
+      - name: Run Gateway Phase3 benchmark
+        env:
+          MACHIVERSE_BENCHMARK_ARTIFACTS: ${{ github.workspace }}/.artifacts/benchmarks/gateway-phase3
+        run: dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-restore -- --filter '*GatewayDeliveryBenchmarks*' --job short
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: benchmark-gateway-phase3
+          path: .artifacts/benchmarks/gateway-phase3
+          if-no-files-found: warn
+          retention-days: 14
