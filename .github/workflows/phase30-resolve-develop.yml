@@ -121,7 +121,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git diff --cached --check
+          git diff --cached origin/develop --check
           test "$(grep -c -- '- ✅ \*\*P30-' roadmap/SIMULATION_ROADMAP.md)" -eq 35
           test "$(grep -c -- '- ⬜ \*\*P30-' roadmap/SIMULATION_ROADMAP.md)" -eq 0
           test ! -e .github/workflows/phase30-sync-develop.yml
