@@ -20,6 +20,15 @@ public sealed class EntityInspectionProtocolCodecTests
     }
 
     [TestMethod]
+    public void Protocol219CannotSerializeEntityInspection()
+    {
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            EntityInspectionProtocolCodec.Serialize(
+                new InspectEntityMessage(ProtocolEntityType.Settlement, 1),
+                new ProtocolVersion(2, 19)));
+    }
+
+    [TestMethod]
     public void EntitySnapshotRoundTripsBoundedReadModel()
     {
         var source = new EntityInspectionSnapshotMessage(
