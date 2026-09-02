@@ -95,7 +95,13 @@ internal sealed class PopulationPublishService(
                     new EntityObservationCacheKey(EntityObservationKind.Person, personId, revision),
                     () => PopulationMessageMapper.Create(person));
                 var personKey = new EncodedObservationCacheKey("person", connection.NegotiatedVersion, revision, ObservationCacheIdentity.ForEntity(personId));
-                _ = await connection.SendCachedAsync(personMessage, connection.NegotiatedVersion, personKey, cache, sendCancellation.Token);
+                _ = await connection.SendCachedIfInspectionCurrentAsync(
+                    personMessage,
+                    connection.NegotiatedVersion,
+                    personKey,
+                    cache,
+                    delivery.Inspection,
+                    sendCancellation.Token);
             }
         }
         catch (Exception exception) when (exception is WebSocketException or OperationCanceledException or ObjectDisposedException)

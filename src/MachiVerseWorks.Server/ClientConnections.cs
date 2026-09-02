@@ -292,6 +292,26 @@ internal sealed class ClientConnection : IDisposable
         finally { EndSend(); }
     }
 
+    public async Task<ProtocolSendMetrics?> SendCachedIfInspectionCurrentAsync(
+        IProtocolMessage message,
+        ProtocolVersion version,
+        EncodedObservationCacheKey cacheKey,
+        ObservationCache cache,
+        ClientInspectionState inspection,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(cache);
+        BeginSend();
+        try
+        {
+            var encodeStarted = Stopwatch.GetTimestamp();
+            var frame = cache.GetOrEncode(cacheKey, () => ObservationProtocolAdapter.Serialize(message, version));
+            var encodeTimeMs = Stopwatch.GetElapsedTime(encodeStarted).TotalMilliseconds;
+            return await SendFrameIfInspectionCurrentAsync(frame, encodeTimeMs, inspection, cancellationToken);
+        }
+        finally { EndSend(); }
+    }
+
     public void Abort() => Socket.Abort();
 
     public void Dispose()
@@ -315,6 +335,32 @@ internal sealed class ClientConnection : IDisposable
             if (Socket.State != WebSocketState.Open) throw new WebSocketException(WebSocketError.InvalidState);
             var sendStarted = Stopwatch.GetTimestamp();
             await Socket.SendAsync(new ArraySegment<byte>(frame), WebSocketMessageType.Binary, endOfMessage: true, cancellationToken);
+            return new ProtocolSendMetrics(frame.Length, encodeTimeMs, Stopwatch.GetElapsedTime(sendStarted).TotalMilliseconds);
+        }
+        finally { _sendGate.Release(); }
+    }
+
+    private async Task<ProtocolSendMetrics?> SendFrameIfInspectionCurrentAsync(
+        byte[] frame,
+        double encodeTimeMs,
+        ClientInspectionState inspection,
+        CancellationToken cancellationToken)
+    {
+        await _sendGate.WaitAsync(cancellationToken);
+        try
+        {
+            Task sendTask;
+            long sendStarted;
+            lock (_stateGate)
+            {
+                if (_inspectionRevision != inspection.Revision || _inspectedPersonId != inspection.PersonId)
+                    return null;
+                if (Socket.State != WebSocketState.Open) throw new WebSocketException(WebSocketError.InvalidState);
+                sendStarted = Stopwatch.GetTimestamp();
+                sendTask = Socket.SendAsync(new ArraySegment<byte>(frame), WebSocketMessageType.Binary, endOfMessage: true, cancellationToken);
+            }
+
+            await sendTask;
             return new ProtocolSendMetrics(frame.Length, encodeTimeMs, Stopwatch.GetElapsedTime(sendStarted).TotalMilliseconds);
         }
         finally { _sendGate.Release(); }
@@ -360,7 +406,14 @@ internal readonly record struct ClientSubscriptionState(
 internal sealed class ClientConnectionRegistry
 {
     private readonly ConcurrentDictionary<Guid, ClientConnection> _connections = new();
+    private readonly SnapshotDeliveryScheduler? _deliveryScheduler;
     private int _connectionCount;
+
+    public ClientConnectionRegistry(SnapshotDeliveryScheduler? deliveryScheduler = null)
+    {
+        _deliveryScheduler = deliveryScheduler;
+    }
+
     public int Count => Volatile.Read(ref _connectionCount);
     public ClientConnection Register(WebSocket socket) => Register(socket, int.MaxValue);
 
@@ -375,6 +428,14 @@ internal sealed class ClientConnectionRegistry
     }
 
     public bool TryGet(Guid id, out ClientConnection? connection) => _connections.TryGetValue(id, out connection);
-    public bool Remove(Guid id) { if (!_connections.TryRemove(id, out _)) return false; Interlocked.Decrement(ref _connectionCount); return true; }
+
+    public bool Remove(Guid id)
+    {
+        if (!_connections.TryRemove(id, out _)) return false;
+        _deliveryScheduler?.Discard(id);
+        Interlocked.Decrement(ref _connectionCount);
+        return true;
+    }
+
     public ClientConnection[] CreateSnapshot() => _connections.Values.ToArray();
 }
