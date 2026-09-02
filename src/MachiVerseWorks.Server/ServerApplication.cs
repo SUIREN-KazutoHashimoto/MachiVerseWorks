@@ -31,6 +31,7 @@ public static class ServerApplication
         builder.Services.AddHostedService<GasFixtureHostedService>();
         builder.Services.AddHostedService<OpticalFixtureHostedService>();
         builder.Services.AddHostedService<RadioFixtureHostedService>();
+        builder.Services.AddHostedService<RegionalGenerationFixtureService>();
         builder.Services.AddHostedService<SimulationTickService>();
         builder.Services.AddHostedService<AdminCommandExecutorV2>();
         builder.Services.AddHostedService<ServerConsoleService>();
