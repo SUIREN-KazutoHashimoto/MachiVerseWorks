@@ -58,6 +58,8 @@ public static class EntityInspectionProtocolCodec
     public const int MaximumRelations = 32;
     public const int MaximumRecentEvents = 32;
     public const int MaximumPlannedEvents = 16;
+    public const int MaximumRecentYears = 32;
+    public const int MaximumPlannedYears = 16;
 
     private const int InspectPayloadLength = 9;
     private const int MaximumNameLength = 96;
@@ -210,6 +212,20 @@ public static class EntityInspectionProtocolCodec
             if (!ValidEvent(item, requireId: true)) return false;
         foreach (var item in message.PlannedFuture)
             if (!ValidEvent(item, requireId: false)) return false;
+
+        if (message.CurrentYear is { } currentYear)
+        {
+            foreach (var item in message.RecentPast)
+            {
+                if (item.Year is { } year
+                    && (year > currentYear || (long)currentYear - year >= MaximumRecentYears)) return false;
+            }
+            foreach (var item in message.PlannedFuture)
+            {
+                if (item.Year is { } year
+                    && (year < currentYear || (long)year - currentYear > MaximumPlannedYears)) return false;
+            }
+        }
         return true;
     }
 
