@@ -91,25 +91,24 @@ public sealed class WorldEnvironmentTests
     public void CavitySurfacesRemainBelowPrimaryGround()
     {
         var world = new SimulationWorld(new SimulationConfig(worldEnvironment: CreateConfig(29008)));
-        TerrainSurfaceSample? cavityGround = null;
+        double? cavityGroundZ = null;
         IReadOnlyList<TerrainSurfaceIntersection>? cavitySurfaces = null;
 
-        for (var y = -200_000d; y <= 200_000d && cavityGround is null; y += 20_000d)
+        for (var y = -100_000d; y <= 100_000d && cavityGroundZ is null; y += 2_048d)
         {
-            for (var x = -200_000d; x <= 200_000d; x += 20_000d)
+            for (var x = -100_000d; x <= 100_000d; x += 2_048d)
             {
-                var ground = world.QueryTerrainSurface(x, y);
-                var surfaces = world.QueryTerrainSurfaces(x, y, ground.Position.Z - 500d, ground.Position.Z + 50d);
+                var surfaces = world.QueryTerrainSurfaces(x, y, -12_000d, 12_000d);
                 if (!surfaces.Any(static item => item.IsCavityBoundary)) continue;
-                cavityGround = ground;
+                cavityGroundZ = surfaces.Single(static item => item.IsPrimaryGroundSurface).Z;
                 cavitySurfaces = surfaces;
                 break;
             }
         }
 
-        Assert.IsNotNull(cavityGround);
+        Assert.IsNotNull(cavityGroundZ);
         Assert.IsNotNull(cavitySurfaces);
-        Assert.IsTrue(cavitySurfaces.Where(static item => item.IsCavityBoundary).All(item => item.Z < cavityGround.Value.Position.Z));
+        Assert.IsTrue(cavitySurfaces.Where(static item => item.IsCavityBoundary).All(item => item.Z < cavityGroundZ.Value));
     }
 
     [TestMethod]
