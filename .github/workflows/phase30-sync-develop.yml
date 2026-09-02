@@ -1,0 +1,69 @@
+name: Phase30 Sync Develop
+
+on:
+  push:
+    branches: [feature/simulation-phase30]
+    paths:
+      - '.github/workflows/phase30-sync-develop.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  sync-validate-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout Phase30
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feature/simulation-phase30
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+
+      - name: Merge latest develop without committing
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin develop
+          git merge --no-commit --no-ff origin/develop
+          rm .github/workflows/phase30-sync-develop.yml
+          git add -A
+
+          if ! git diff --cached --quiet origin/develop -- VERSION; then
+            echo 'Phase30 must not carry a VERSION delta against latest develop.' >&2
+            git diff --cached origin/develop -- VERSION >&2
+            exit 1
+          fi
+
+      - name: Restore merged tree
+        run: dotnet restore MachiVerseWorks.slnx
+
+      - name: Build merged tree
+        run: dotnet build MachiVerseWorks.slnx --configuration Release --no-restore
+
+      - name: Test merged tree
+        run: dotnet test MachiVerseWorks.slnx --configuration Release --no-build --logger trx --results-directory TestResults
+
+      - name: Phase30 invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --cached --check
+          test "$(grep -c -- '- ✅ \*\*P30-' roadmap/SIMULATION_ROADMAP.md)" -eq 35
+          test "$(grep -c -- '- ⬜ \*\*P30-' roadmap/SIMULATION_ROADMAP.md)" -eq 0
+          test ! -e .github/workflows/phase30-sync-develop.yml
+          test ! -e phase30-closeout-diagnostic.txt
+
+      - name: Commit and push validated merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          git commit -m "Merge branch 'develop' into feature/simulation-phase30"
+          git push origin HEAD:feature/simulation-phase30
