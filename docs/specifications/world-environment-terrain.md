@@ -69,7 +69,7 @@ Detailed Terrainの正本はheightfieldだけに限定しない。`TerrainVolume
 - `Rock`
 - `Void`
 
-地下のdeterministic cavityを`Void`として扱い、同じXYに対してground surface、water surface、cavity floor/ceilingなど複数surfaceを返せる。
+地下のdeterministic cavityを`Void`として扱い、同じXYに対してground surface、water surface、cavity floor/ceilingなど複数surfaceを返せる。OceanだけでなくLake / River / Tributary / Floodplainのregional hydrologyもvolume上のWaterとしてsurface contractと一致させる。cavity floor / ceilingはprimary groundより下に収め、同一座標のsurface intersectionとmatter queryが矛盾しないことを要求する。
 
 Phase29ではcave/overhangの完全なmesh生成は行わないが、将来の地下空間・複雑地形を表現できるquery contractを先に固定する。
 
@@ -85,6 +85,8 @@ Phase29ではcave/overhangの完全なmesh生成は行わないが、将来の�
 
 baseline slope limitはRailway 4°、Building 8°、Road 12°、Generic 18°。これは最終的な土木工学モデルではなく、Phase29以降のnetwork/building placementが共通terrain APIを参照するための初期契約である。
 
+Water / Void判定はXYのsurface分類だけでなく、対象`WorldVolume.MinZ..MaxZ`との実際の3D交差で評価する。したがって河川上空のbridge相当footprintを地表水だけを理由に拒否せず、地下footprint内のcavityは検出できる。
+
 `SnapToGround`は任意XYZを同じXYのprimary ground surfaceへsnapする。
 
 ## GeographicFeature
@@ -99,7 +101,7 @@ baseline slope limitはRailway 4°、Building 8°、Road 12°、Generic 18°。�
 - Cape / Bay / Coast / Island / Peninsula
 - Cave
 
-各featureはstable ID、type、3D bounds、geometry、area、optional parent、最低/最高標高を持つ。同一seed/config/対象volumeでは検出結果とstable IDが一致する。
+各featureはstable ID、type、3D bounds、geometry、area、optional parent、最低/最高標高を持つ。同一seed/config/対象volumeでは検出結果とstable IDが一致する。geometryを含む値比較は構造比較とし、別processで再生成した同一featureやSave復元後の同一featureを等価として扱える。
 
 ## 自然地名
 
@@ -110,7 +112,7 @@ baseline slope limitはRailway 4°、Building 8°、Road 12°、Generic 18°。�
 - optional parent Toponym ID
 - generator key
 
-Phase29 baselineのgenerator keyは`phase29-natural-v1`。
+Phase29 baselineのgenerator keyは`phase29-natural-v1`。Save / Protocol復元時はsource featureだけでなくoptional parent Toponymも存在することを検証する。
 
 ## Save / restore
 
@@ -119,10 +121,12 @@ Phase29 baselineのgenerator keyは`phase29-natural-v1`。
 保存対象:
 
 - `WorldEnvironmentConfig`
-- 既にmaterializeされた`GeographicFeature`
-- `NaturalToponym`とprovenance
+- authoritative workflowでmaterializeされた`GeographicFeature`
+- authoritative workflowでmaterializeされた`NaturalToponym`とprovenance
 
-Terrain partition cache自体は保存しない。config/seedから再生成可能なderived cacheだからである。
+read-only observationのためにdeterministic生成したfeature / toponymやTerrain partition cacheはSave対象へ自動materializeしない。`SubscribeVolume`、Camera、View接続の有無がcheckpoint内容を変えてはならない。未materializeの自然feature / toponymはconfig/seed/volumeから同一結果を再生成する。
+
+Save Dataはfeature数、featureごとのgeometry点数、toponym数に明示上限を持ち、JSONをDTOへmaterializeする前のnested scanでも同じ上限を適用する。
 
 ## Observation / Protocol
 
@@ -136,7 +140,9 @@ Protocol 2.17で`WorldEnvironmentSnapshot`（message type 800）を追加する�
 - NaturalToponym / provenance
 - simulation tick
 
-payloadは1 MiB frame上限内で、sample / feature / geometry / text件数をcodecで制限する。Viewはこのsnapshotをread-onlyで描画・debug表示するだけで、terrainや地名を再生成しない。
+payloadは1 MiB frame上限内で、sample / feature / geometry / text件数をcodecで制限する。byte discriminantは既知enum範囲だけを受理し、feature / toponym参照整合性も検証する。Viewはこのsnapshotをread-onlyで描画・debug表示するだけで、terrainや地名を再生成しない。
+
+同一publish cycleで同じ`SubscribeVolume`を要求する複数clientについて、Serverは同一environment snapshotを重複生成せず共有する。共有・cacheの有無はSimulation stateへ影響してはならない。
 
 ## Reproducibility
 
