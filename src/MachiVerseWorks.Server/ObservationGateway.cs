@@ -23,6 +23,7 @@ internal interface IObservationSource
     OpticalSnapshot CaptureOpticalSnapshot();
     RadioSnapshot CaptureRadioSnapshot();
     VersionedObservation<WorldEnvironmentSnapshot> CaptureWorldEnvironmentSnapshot(WorldVolume volume);
+    (PersistentRegionalEvolutionSnapshot Evolution, RegionalInteractionSnapshot Interactions) CapturePersistentRegionalEvolutionSnapshot();
     bool PersonExists(ulong personId);
 }
 
@@ -54,6 +55,9 @@ internal sealed class SimulationObservationSource(SimulationRuntime simulation) 
     public VersionedObservation<WorldEnvironmentSnapshot> CaptureWorldEnvironmentSnapshot(WorldVolume volume) =>
         simulation.CaptureWorldEnvironmentSnapshot(volume);
 
+    public (PersistentRegionalEvolutionSnapshot Evolution, RegionalInteractionSnapshot Interactions) CapturePersistentRegionalEvolutionSnapshot() =>
+        simulation.Read(static world => (world.CreatePersistentRegionalEvolutionSnapshot(), world.CreateRegionalInteractionSnapshot()));
+
     public bool PersonExists(ulong personId) =>
         personId != 0 && simulation.TryGetPersonSnapshot(new PersonId(personId), out _);
 }
@@ -83,6 +87,7 @@ internal static class ObservationProtocolAdapter
             SpectrumSnapshotMessage spectrum => RadioProtocolCodec.Serialize(spectrum, version),
             WorldEnvironmentSnapshotMessage worldEnvironment => WorldEnvironmentProtocolCodec.Serialize(worldEnvironment, version),
             RegionalGenerationSnapshotMessage regionalGeneration => RegionalGenerationProtocolCodec.Serialize(regionalGeneration, version),
+            PersistentRegionalEvolutionSnapshotMessage regionalEvolution => PersistentRegionalEvolutionProtocolCodec.Serialize(regionalEvolution, version),
             InspectPersonMessage or PopulationStatisticsMessage or PersonDebugMessage => PopulationProtocolCodec.Serialize(message, version),
             _ => ProtocolCodec.Serialize(message, version),
         };
@@ -126,6 +131,7 @@ internal static class ObservationGatewayServiceCollectionExtensions
         services.AddHostedService<OpticalPublishService>();
         services.AddHostedService<RadioPublishService>();
         services.AddHostedService<WorldEnvironmentPublishService>();
+        services.AddHostedService<PersistentRegionalEvolutionPublishService>();
         return services;
     }
 }
