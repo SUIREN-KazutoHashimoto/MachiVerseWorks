@@ -88,6 +88,62 @@ public sealed class WorldEnvironmentTests
     }
 
     [TestMethod]
+    public void CavitySurfacesRemainBelowPrimaryGround()
+    {
+        var world = new SimulationWorld(new SimulationConfig(worldEnvironment: CreateConfig(29008)));
+        TerrainSurfaceSample? cavityGround = null;
+        IReadOnlyList<TerrainSurfaceIntersection>? cavitySurfaces = null;
+
+        for (var y = -200_000d; y <= 200_000d && cavityGround is null; y += 20_000d)
+        {
+            for (var x = -200_000d; x <= 200_000d; x += 20_000d)
+            {
+                var ground = world.QueryTerrainSurface(x, y);
+                var surfaces = world.QueryTerrainSurfaces(x, y, ground.Position.Z - 500d, ground.Position.Z + 50d);
+                if (!surfaces.Any(static item => item.IsCavityBoundary)) continue;
+                cavityGround = ground;
+                cavitySurfaces = surfaces;
+                break;
+            }
+        }
+
+        Assert.IsNotNull(cavityGround);
+        Assert.IsNotNull(cavitySurfaces);
+        Assert.IsTrue(cavitySurfaces.Where(static item => item.IsCavityBoundary).All(item => item.Z < cavityGround.Value.Position.Z));
+    }
+
+    [TestMethod]
+    public void ElevatedFootprintDoesNotIntersectSurfaceWater()
+    {
+        var world = new SimulationWorld(new SimulationConfig(worldEnvironment: CreateConfig(29009)));
+        TerrainSurfaceSample? wetSurface = null;
+
+        for (var y = -500_000d; y <= 500_000d && wetSurface is null; y += 50_000d)
+        {
+            for (var x = -500_000d; x <= 500_000d; x += 50_000d)
+            {
+                var sample = world.QueryTerrainSurface(x, y);
+                if (sample.SurfaceWater == SurfaceWaterKind.None) continue;
+                wetSurface = sample;
+                break;
+            }
+        }
+
+        Assert.IsNotNull(wetSurface);
+        var wet = wetSurface.Value;
+        var footprint = new WorldVolume(
+            wet.Position.X - 1d,
+            wet.Position.Y - 1d,
+            wet.Position.Z + 1_000d,
+            wet.Position.X + 1d,
+            wet.Position.Y + 1d,
+            wet.Position.Z + 1_010d);
+        var result = world.EvaluateTerrainConstraint(footprint, TerrainConstraintKind.Road);
+
+        Assert.IsFalse(result.IntersectsWater);
+    }
+
+    [TestMethod]
     public void GeographicFeaturesAndToponymsHaveStableIdentityAndProvenance()
     {
         var config = CreateConfig(29006);
@@ -111,25 +167,31 @@ public sealed class WorldEnvironmentTests
     }
 
     [TestMethod]
-    public void CheckpointRestoresEnvironmentConfigFeaturesAndTerrain()
+    public void CheckpointPreservesConfigAndRegeneratesDerivedFeaturesAndTerrain()
     {
         var config = CreateConfig(29007);
         var world = new SimulationWorld(new SimulationConfig(tickRate: 2, seed: 73, worldEnvironment: config));
         var volume = new WorldVolume(-300_000d, -300_000d, -10_000d, 300_000d, 300_000d, 10_000d);
-        _ = world.GetGeographicFeatures(volume, 48);
+        var expectedSnapshot = world.CreateDetailedWorldEnvironmentSnapshot(volume, 4, 4, 48);
         var expectedTerrain = world.QueryTerrainSurface(12_345d, 67_890d);
         world.Step();
+        var checkpoint = world.CreateCheckpoint();
 
-        var restored = SimulationWorld.RestoreCheckpoint(world.CreateCheckpoint());
+        var restored = SimulationWorld.RestoreCheckpoint(checkpoint);
+        var actualSnapshot = restored.CreateDetailedWorldEnvironmentSnapshot(volume, 4, 4, 48);
         var actualTerrain = restored.QueryTerrainSurface(12_345d, 67_890d);
         var restoredCheckpoint = restored.CreateCheckpoint();
 
         Assert.AreEqual(config, restored.WorldEnvironment);
         Assert.AreEqual(expectedTerrain, actualTerrain);
+        CollectionAssert.AreEqual(expectedSnapshot.Features.ToArray(), actualSnapshot.Features.ToArray());
+        CollectionAssert.AreEqual(expectedSnapshot.Toponyms.ToArray(), actualSnapshot.Toponyms.ToArray());
         Assert.IsNotNull(restoredCheckpoint.Economy?.WorldEnvironment);
         Assert.AreEqual(config, restoredCheckpoint.Economy!.WorldEnvironment!.Config);
-        Assert.IsTrue(restoredCheckpoint.Economy.WorldEnvironment.Features.Count > 0);
-        Assert.AreEqual(restoredCheckpoint.Economy.WorldEnvironment.Features.Count, restoredCheckpoint.Economy.WorldEnvironment.Toponyms.Count);
+        Assert.AreEqual(0, checkpoint.Economy!.WorldEnvironment!.Features.Count);
+        Assert.AreEqual(0, checkpoint.Economy.WorldEnvironment.Toponyms.Count);
+        Assert.AreEqual(0, restoredCheckpoint.Economy.WorldEnvironment.Features.Count);
+        Assert.AreEqual(0, restoredCheckpoint.Economy.WorldEnvironment.Toponyms.Count);
     }
 
     [TestMethod]
