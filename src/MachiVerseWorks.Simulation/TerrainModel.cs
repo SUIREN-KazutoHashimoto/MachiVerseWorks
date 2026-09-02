@@ -136,13 +136,21 @@ public sealed class TerrainVolume
 
     public TerrainVolumeSample Sample(WorldPoint position)
     {
-        var ground = _surface.SampleHeight(position.X, position.Y);
+        var surface = _surface.Sample(position.X, position.Y);
+        var ground = surface.Position.Z;
         var signedDistance = position.Z - ground;
-        var matter = position.Z > ground
-            ? ground < _config.SeaLevelMeters && position.Z <= _config.SeaLevelMeters ? TerrainMatterKind.Water : TerrainMatterKind.Air
-            : IsInsideCavity(position.X, position.Y, position.Z, ground) ? TerrainMatterKind.Void
-            : ground - position.Z <= 3d ? TerrainMatterKind.Soil
-            : TerrainMatterKind.Rock;
+        TerrainMatterKind matter;
+        if (position.Z > ground)
+        {
+            var waterSurface = GetWaterSurfaceZ(surface);
+            matter = waterSurface is { } waterZ && position.Z <= waterZ ? TerrainMatterKind.Water : TerrainMatterKind.Air;
+        }
+        else
+        {
+            matter = IsInsideCavity(position.X, position.Y, position.Z, ground) ? TerrainMatterKind.Void
+                : ground - position.Z <= 3d ? TerrainMatterKind.Soil
+                : TerrainMatterKind.Rock;
+        }
         return new TerrainVolumeSample(position, matter, signedDistance);
     }
 
@@ -153,8 +161,9 @@ public sealed class TerrainVolume
         var result = new List<TerrainSurfaceIntersection>(4);
         if (ground.Position.Z >= minimumZ && ground.Position.Z <= maximumZ)
             result.Add(new TerrainSurfaceIntersection(ground.Position.Z, ground.Normal, ground.Material, true, false, false));
-        if (ground.Position.Z < _config.SeaLevelMeters && _config.SeaLevelMeters >= minimumZ && _config.SeaLevelMeters <= maximumZ)
-            result.Add(new TerrainSurfaceIntersection(_config.SeaLevelMeters, new WorldVector(0d, 0d, 1d), TerrainMaterialKind.Water, false, true, false));
+        var waterSurface = GetWaterSurfaceZ(ground);
+        if (waterSurface is { } waterZ && waterZ > ground.Position.Z && waterZ >= minimumZ && waterZ <= maximumZ)
+            result.Add(new TerrainSurfaceIntersection(waterZ, new WorldVector(0d, 0d, 1d), TerrainMaterialKind.Water, false, true, false));
         if (TryGetCavity(x, y, ground.Position.Z, out var center, out var radius))
         {
             var floor = center - radius;
@@ -165,6 +174,16 @@ public sealed class TerrainVolume
         result.Sort(static (left, right) => left.Z.CompareTo(right.Z));
         return result;
     }
+
+    private double? GetWaterSurfaceZ(TerrainSurfaceSample ground) => ground.SurfaceWater switch
+    {
+        SurfaceWaterKind.Ocean => Math.Max(ground.Position.Z, _config.SeaLevelMeters),
+        SurfaceWaterKind.Lake => ground.Position.Z + 4d,
+        SurfaceWaterKind.River => ground.Position.Z + 2d,
+        SurfaceWaterKind.Tributary => ground.Position.Z + 1d,
+        SurfaceWaterKind.Floodplain => ground.Position.Z + 0.25d,
+        _ => null,
+    };
 
     private bool IsInsideCavity(double x, double y, double z, double ground) => TryGetCavity(x, y, ground, out var center, out var radius) && z > center - radius && z < center + radius;
 
@@ -181,7 +200,8 @@ public sealed class TerrainVolume
             return false;
         }
         var depth = 18d + (ToUnit(Mix(unchecked((ulong)cellX) ^ _config.WorldSeed ^ 0xD337UL)) * 140d);
-        radius = 4d + (ToUnit(Mix(unchecked((ulong)cellY) ^ _config.WorldSeed ^ 0xA11FUL)) * 22d);
+        var requestedRadius = 4d + (ToUnit(Mix(unchecked((ulong)cellY) ^ _config.WorldSeed ^ 0xA11FUL)) * 22d);
+        radius = Math.Min(requestedRadius, depth - 2d);
         center = ground - depth;
         return true;
     }
@@ -227,14 +247,24 @@ public static class TerrainConstraintEvaluator
         var maximumSlope = 0d;
         var intersectsWater = false;
         var intersectsVoid = false;
+        var middleZ = (footprint.MinZ + footprint.MaxZ) * 0.5d;
         foreach (var (x, y) in points)
         {
             var sample = surface.Sample(x, y);
             minimumElevation = Math.Min(minimumElevation, sample.Position.Z);
             maximumElevation = Math.Max(maximumElevation, sample.Position.Z);
             maximumSlope = Math.Max(maximumSlope, sample.SlopeDegrees);
-            intersectsWater |= sample.SurfaceWater != SurfaceWaterKind.None;
-            intersectsVoid |= volume.Sample(new WorldPoint(x, y, sample.Position.Z - 2d)).Matter == TerrainMatterKind.Void;
+
+            var intersections = volume.GetSurfaces(x, y, footprint.MinZ, footprint.MaxZ);
+            intersectsWater |= intersections.Any(static item => item.IsWaterSurface);
+            intersectsVoid |= intersections.Any(static item => item.IsCavityBoundary);
+
+            foreach (var z in new[] { footprint.MinZ, middleZ, footprint.MaxZ })
+            {
+                var matter = volume.Sample(new WorldPoint(x, y, z)).Matter;
+                intersectsWater |= matter == TerrainMatterKind.Water;
+                intersectsVoid |= matter == TerrainMatterKind.Void;
+            }
         }
         var allowed = maximumSlope <= maximumAllowedSlope && !intersectsVoid && (kind == TerrainConstraintKind.Generic || !intersectsWater);
         var reason = allowed ? "terrain-compatible" : intersectsVoid ? "foundation-intersects-void" : intersectsWater && kind != TerrainConstraintKind.Generic ? "surface-water" : "slope-limit";
