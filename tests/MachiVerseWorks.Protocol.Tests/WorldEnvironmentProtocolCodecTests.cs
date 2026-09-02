@@ -71,6 +71,25 @@ public sealed class WorldEnvironmentProtocolCodecTests
     }
 
     [TestMethod]
+    public void InvalidEnvironmentDiscriminantsAreRejected()
+    {
+        var message = CreateMessage();
+        var invalidLandform = message with
+        {
+            Samples = new[] { message.Samples[0] with { Landform = byte.MaxValue } },
+        };
+        var invalidWater = message with
+        {
+            TerrainSamples = new[] { message.TerrainSamples[0] with { SurfaceWater = byte.MaxValue } },
+        };
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            WorldEnvironmentProtocolCodec.Serialize(invalidLandform, ProtocolVersion.Current));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            WorldEnvironmentProtocolCodec.Serialize(invalidWater, ProtocolVersion.Current));
+    }
+
+    [TestMethod]
     public void DecoderRejectsTruncatedFrame()
     {
         var frame = WorldEnvironmentProtocolCodec.Serialize(CreateMessage(), ProtocolVersion.Current);
