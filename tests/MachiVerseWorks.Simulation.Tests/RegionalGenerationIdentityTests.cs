@@ -6,11 +6,11 @@ namespace MachiVerseWorks.Simulation.Tests;
 public sealed class RegionalGenerationIdentityTests
 {
     [TestMethod]
-    public void DenseRegionalGenerationKeepsSettlementAndOriginIdsUnique()
+    public void DenseRegionalGenerationKeepsSettlementAndNameIdsUnique()
     {
         var environment = new WorldEnvironmentConfig(
             worldSeed: 30_036UL,
-            plateDrift: new WorldVector(0.2d, 1d, 0d),
+            geographicNorth: new WorldVector(0.2d, 1d, 0d),
             latitudeDegrees: 43d,
             continentality: 0.54d,
             maritimeInfluence: 0.46d,
@@ -38,6 +38,6 @@ public sealed class RegionalGenerationIdentityTests
             snapshot.Settlements.Select(static settlement => settlement.Id).Distinct().Count());
         Assert.AreEqual(
             snapshot.Settlements.Count,
-            snapshot.Settlements.Select(static settlement => settlement.OriginId).Distinct().Count());
+            snapshot.Settlements.Select(static settlement => settlement.NameId).Distinct().Count());
     }
 }
