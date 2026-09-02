@@ -8,10 +8,9 @@ internal sealed class WorldEnvironmentPublishService(
     IObservationSource observationSource,
     ServerOptions options,
     ClientConnectionRegistry connections,
-    ObservationCache cache) : BackgroundService
+    ObservationCache cache,
+    ObservationDeliveryCoordinator deliveryCoordinator) : BackgroundService
 {
-    private static readonly TimeSpan ClientSendTimeout = TimeSpan.FromSeconds(5);
-
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(options.SnapshotInterval);
@@ -45,22 +44,23 @@ internal sealed class WorldEnvironmentPublishService(
                         messages.Add(target.Volume, cachedMessage);
                     }
 
-                    try
-                    {
-                        using var sendCancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-                        sendCancellation.CancelAfter(ClientSendTimeout);
-                        var key = new EncodedObservationCacheKey(
-                            "world-environment",
-                            target.Connection.NegotiatedVersion,
-                            cachedMessage.Revision,
-                            ObservationCacheIdentity.ForVolume(target.Volume));
-                        _ = await target.Connection.SendCachedAsync(cachedMessage.Message, target.Connection.NegotiatedVersion, key, cache, sendCancellation.Token);
-                    }
-                    catch (Exception exception) when (exception is WebSocketException or OperationCanceledException or ObjectDisposedException)
-                    {
-                        target.Connection.Abort();
-                        connections.Remove(target.Connection.Id);
-                    }
+                    _ = deliveryCoordinator.TrySchedule(
+                        target.Connection,
+                        stoppingToken,
+                        async sendCancellation =>
+                        {
+                            var key = new EncodedObservationCacheKey(
+                                "world-environment",
+                                target.Connection.NegotiatedVersion,
+                                cachedMessage.Revision,
+                                ObservationCacheIdentity.ForVolume(target.Volume));
+                            _ = await target.Connection.SendCachedAsync(
+                                cachedMessage.Message,
+                                target.Connection.NegotiatedVersion,
+                                key,
+                                cache,
+                                sendCancellation);
+                        });
                 }
             }
         }
