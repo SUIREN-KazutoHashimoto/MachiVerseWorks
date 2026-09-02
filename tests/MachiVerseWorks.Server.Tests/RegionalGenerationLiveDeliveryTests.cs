@@ -56,6 +56,59 @@ public sealed class RegionalGenerationLiveDeliveryTests
             CollectionAssert.Contains(parcelIds.ToList(), building.ParcelId);
     }
 
+    [TestMethod]
+    public async Task RegionalBaselineIsNotPeriodicallyResentAndWorldReplacementClearsOldState()
+    {
+        await using var host = await ServerTestHost.StartAsync(initialAgentCount: 0, snapshotRate: 30);
+        var runtime = host.App.Services.GetRequiredService<SimulationRuntime>();
+        _ = runtime.Mutate(static world => world.GenerateRegionalGeneration(
+            new WorldVolume(-500_000d, -500_000d, -12_000d, 500_000d, 500_000d, 12_000d),
+            new RegionalGenerationOptions(
+                RegionalGenerationQualityPreset.Draft,
+                settlementCount: 2,
+                iterationBudget: 1)));
+
+        using var socket = await host.ConnectWebSocketAsync();
+        var version = new ProtocolVersion(2, 18);
+        await ServerTestHost.SendAsync(socket, new HelloMessage(), version);
+        _ = await ReceiveUntilAsync(socket, MessageType.HelloAck, TimeSpan.FromSeconds(3));
+        _ = await ReceiveUntilAsync(socket, MessageType.RegionalGenerationSnapshot, TimeSpan.FromSeconds(5));
+
+        await AssertNoMessageTypeAsync(socket, MessageType.RegionalGenerationSnapshot, TimeSpan.FromMilliseconds(350));
+
+        var config = runtime.Read(static world => world.Config);
+        runtime.ReplaceWorld(new SimulationWorld(config));
+
+        var clearFrame = await ReceiveUntilAsync(socket, MessageType.RegionalGenerationSnapshot, TimeSpan.FromSeconds(5));
+        Assert.IsTrue(RegionalGenerationProtocolCodec.TryDeserialize(clearFrame.Frame, out var envelope, out var error), error.ToString());
+        Assert.IsNotNull(envelope);
+        var clear = envelope.Message as RegionalGenerationSnapshotMessage;
+        Assert.IsNotNull(clear);
+        Assert.AreEqual(0, clear.Settlements.Count);
+        Assert.AreEqual(0, clear.Districts.Count);
+        Assert.AreEqual(0, clear.Parcels.Count);
+        Assert.AreEqual(0, clear.Buildings.Count);
+        Assert.AreEqual(0, clear.Pois.Count);
+        Assert.AreEqual(0, clear.Toponyms.Count);
+        Assert.AreEqual(0, clear.RoadSigns.Count);
+    }
+
+    private static async Task AssertNoMessageTypeAsync(ClientWebSocket socket, MessageType target, TimeSpan duration)
+    {
+        using var cancellation = new CancellationTokenSource(duration);
+        try
+        {
+            while (true)
+            {
+                var received = await ReceiveFrameAsync(socket, duration, cancellation.Token);
+                Assert.AreNotEqual(target, received.Header.MessageType, $"Unexpected repeated {target} delivery.");
+            }
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+        }
+    }
+
     private static async Task<(ProtocolFrameHeader Header, byte[] Frame)> ReceiveUntilAsync(
         ClientWebSocket socket,
         MessageType target,
