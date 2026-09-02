@@ -4,7 +4,7 @@ public sealed partial class SimulationWorld
 {
     private readonly Dictionary<GeneratedBuildingId, PersistentRegionalMaterializationBinding> _persistentRegionalMaterializations = [];
 
-    private IReadOnlyList<PersistentRegionalMaterializationBinding> CreatePersistentRegionalMaterializationCheckpoint() =>
+    private PersistentRegionalMaterializationBinding[] CreatePersistentRegionalMaterializationCheckpoint() =>
         _persistentRegionalMaterializations.Values
             .OrderBy(static item => item.GeneratedBuildingId.Value)
             .ToArray();
@@ -21,11 +21,16 @@ public sealed partial class SimulationWorld
     private void RemovePersistentRegionalMaterialization(GeneratedBuildingId generatedBuildingId)
     {
         if (!_persistentRegionalMaterializations.TryGetValue(generatedBuildingId, out var binding)) return;
+        if (!TryGetBuildingSnapshot(binding.BuildingId, out var removedBuilding))
+        {
+            _persistentRegionalMaterializations.Remove(generatedBuildingId);
+            return;
+        }
 
+        var removedCenter = Center(removedBuilding.Bounds);
         var replacementBuilding = CreateBuildingSnapshot()
             .Where(item => item.Id != binding.BuildingId)
-            .OrderBy(item => Distance2D(Center(item.Bounds),
-                TryGetBuildingSnapshot(binding.BuildingId, out var removed) ? Center(removed.Bounds) : Center(item.Bounds)))
+            .OrderBy(item => Distance2D(Center(item.Bounds), removedCenter))
             .ThenBy(static item => item.Id.Value)
             .FirstOrDefault();
         if (replacementBuilding.Id.Value == 0)
