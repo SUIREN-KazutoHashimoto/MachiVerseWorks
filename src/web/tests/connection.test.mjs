@@ -5,8 +5,9 @@ import {
   MachiVerseConnection,
   protocolVersionsEqual,
   resolveNegotiatedProtocolVersion,
+  resolveProtocolFallbackVersion,
 } from '../src/connection.ts';
-import { MessageType, PROTOCOL_HEADER_SIZE, PROTOCOL_MAGIC, decodeFrame } from '../src/protocol.ts';
+import { MessageType, PROTOCOL_HEADER_SIZE, PROTOCOL_MAGIC, ProtocolErrorCode, decodeFrame } from '../src/protocol.ts';
 
 const WEB_VERSION = { major: 2, minor: 16 };
 
@@ -41,6 +42,36 @@ test('HelloAck rejects versions newer than the client supports', () => {
     ),
     /unsupported protocol version/,
   );
+});
+
+test('unsupported newer minor falls back once to the server-supported same-major version', () => {
+  const fallback = resolveProtocolFallbackVersion(
+    {
+      type: MessageType.Error,
+      code: ProtocolErrorCode.UnsupportedProtocolVersion,
+      parameters: [
+        { key: 'requestedVersion', value: '2.19' },
+        { key: 'supportedVersion', value: '2.18' },
+      ],
+    },
+    { major: 2, minor: 19 },
+    { major: 2, minor: 19 },
+  );
+
+  assert.deepEqual(fallback, { major: 2, minor: 18 });
+});
+
+test('protocol fallback rejects invalid, newer, or cross-major server versions', () => {
+  const message = (value) => ({
+    type: MessageType.Error,
+    code: ProtocolErrorCode.UnsupportedProtocolVersion,
+    parameters: [{ key: 'supportedVersion', value }],
+  });
+
+  assert.equal(resolveProtocolFallbackVersion(message('2.19'), { major: 2, minor: 19 }), null);
+  assert.equal(resolveProtocolFallbackVersion(message('3.0'), { major: 2, minor: 19 }), null);
+  assert.equal(resolveProtocolFallbackVersion(message('invalid'), { major: 2, minor: 19 }), null);
+  assert.equal(resolveProtocolFallbackVersion({ type: MessageType.Error, code: ProtocolErrorCode.InvalidRequest, parameters: [{ key: 'supportedVersion', value: '2.18' }] }, { major: 2, minor: 19 }), null);
 });
 
 test('handshake sends only the latest desired observation volume accumulated while disconnected', async () => {
