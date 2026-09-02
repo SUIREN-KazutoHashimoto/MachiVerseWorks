@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using MachiVerseWorks.Protocol;
 using MachiVerseWorks.Simulation;
 
 namespace MachiVerseWorks.Server;
@@ -12,6 +13,8 @@ internal abstract record ObservationRequest(Guid ConnectionId);
 internal sealed record SubscribeVolumeObservationRequest(Guid ConnectionId, WorldVolume Volume) : ObservationRequest(ConnectionId);
 internal sealed record InspectPersonObservationRequest(Guid ConnectionId, ulong PersonId) : ObservationRequest(ConnectionId);
 internal sealed record ClearPersonInspectionObservationRequest(Guid ConnectionId) : ObservationRequest(ConnectionId);
+internal sealed record InspectEntityObservationRequest(Guid ConnectionId, ProtocolEntityType EntityType, ulong EntityId) : ObservationRequest(ConnectionId);
+internal sealed record ClearEntityInspectionObservationRequest(Guid ConnectionId) : ObservationRequest(ConnectionId);
 
 internal sealed class ObservationRequestQueue
 {
@@ -35,6 +38,7 @@ internal sealed class ObservationRequestQueue
 internal sealed class ObservationRequestProcessor(
     ObservationRequestQueue queue,
     ClientConnectionRegistry connections,
+    EntityInspectionRegistry inspections,
     ILogger<ObservationRequestProcessor> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -52,8 +56,19 @@ internal sealed class ObservationRequestProcessor(
                         break;
                     case InspectPersonObservationRequest inspect:
                         connection.SetInspectedPerson(inspect.PersonId);
+                        inspections.Set(connection.Id, new EntityInspectionTarget(ProtocolEntityType.Person, inspect.PersonId));
                         break;
                     case ClearPersonInspectionObservationRequest:
+                        connection.ClearPersonInspection();
+                        inspections.Clear(connection.Id);
+                        break;
+                    case InspectEntityObservationRequest inspectEntity:
+                        inspections.Set(connection.Id, new EntityInspectionTarget(inspectEntity.EntityType, inspectEntity.EntityId));
+                        if (inspectEntity.EntityType == ProtocolEntityType.Person) connection.SetInspectedPerson(inspectEntity.EntityId);
+                        else connection.ClearPersonInspection();
+                        break;
+                    case ClearEntityInspectionObservationRequest:
+                        inspections.Clear(connection.Id);
                         connection.ClearPersonInspection();
                         break;
                     default:
