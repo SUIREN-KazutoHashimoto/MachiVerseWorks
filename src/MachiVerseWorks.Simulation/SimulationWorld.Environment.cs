@@ -7,6 +7,7 @@ public sealed partial class SimulationWorld
     private readonly Dictionary<TerrainPartitionId, TerrainPartition> _terrainPartitions = [];
     private readonly Dictionary<GeographicFeatureId, GeographicFeature> _geographicFeatures = [];
     private readonly Dictionary<ToponymId, NaturalToponym> _naturalToponyms = [];
+    private readonly Dictionary<GeographicFeatureId, NaturalToponym> _derivedNaturalToponyms = [];
 
     public WorldEnvironmentConfig WorldEnvironment => Config.WorldEnvironment;
     public RegionalEnvironmentSample QueryEnvironment(WorldPoint position) => EnvironmentGenerator.Sample(position);
@@ -68,9 +69,8 @@ public sealed partial class SimulationWorld
         var generated = EnvironmentGenerator.DetectGeographicFeatures(volume, maximumFeatures);
         foreach (var feature in generated)
         {
-            if (!_geographicFeatures.TryAdd(feature.Id, feature)) continue;
-            var toponym = EnvironmentGenerator.CreateToponym(feature);
-            _naturalToponyms.TryAdd(toponym.Id, toponym);
+            if (_derivedNaturalToponyms.ContainsKey(feature.Id)) continue;
+            _derivedNaturalToponyms.Add(feature.Id, EnvironmentGenerator.CreateToponym(feature));
         }
         return generated;
     }
@@ -78,7 +78,8 @@ public sealed partial class SimulationWorld
     public bool TryGetNaturalToponym(GeographicFeatureId featureId, out NaturalToponym? toponym)
     {
         toponym = _naturalToponyms.Values.FirstOrDefault(item => item.FeatureId == featureId);
-        return toponym is not null;
+        if (toponym is not null) return true;
+        return _derivedNaturalToponyms.TryGetValue(featureId, out toponym);
     }
 
     public WorldEnvironmentSnapshot CreateWorldEnvironmentSnapshot(WorldVolume volume, int sampleColumns = 8, int sampleRows = 8, int maximumFeatures = 128)
@@ -97,8 +98,7 @@ public sealed partial class SimulationWorld
             }
         }
         var features = GetGeographicFeatures(volume, maximumFeatures);
-        var featureIds = features.Select(static item => item.Id).ToHashSet();
-        var toponyms = _naturalToponyms.Values.Where(item => featureIds.Contains(item.FeatureId)).OrderBy(static item => item.Id.Value).ToArray();
+        var toponyms = features.Select(EnvironmentGenerator.CreateToponym).OrderBy(static item => item.Id.Value).ToArray();
         return new WorldEnvironmentSnapshot(Config.WorldEnvironment, volume, samples, features, toponyms, Time.TickCount);
     }
 
@@ -115,6 +115,7 @@ public sealed partial class SimulationWorld
         if (checkpoint.Config != Config.WorldEnvironment) throw new ArgumentException("World environment checkpoint config does not match the simulation config.", nameof(checkpoint));
         _geographicFeatures.Clear();
         _naturalToponyms.Clear();
+        _derivedNaturalToponyms.Clear();
         foreach (var feature in checkpoint.Features.OrderBy(static item => item.Id.Value)) _geographicFeatures.Add(feature.Id, feature);
         foreach (var toponym in checkpoint.Toponyms.OrderBy(static item => item.Id.Value)) _naturalToponyms.Add(toponym.Id, toponym);
         _terrainPartitions.Clear();
@@ -155,6 +156,11 @@ public sealed partial class SimulationWorld
             ArgumentNullException.ThrowIfNull(toponym.Provenance);
             if (!featureIds.Contains(toponym.Provenance.SourceFeatureId)) throw new ArgumentException("Toponym provenance references a missing geographic feature.", nameof(checkpoint));
             if (string.IsNullOrWhiteSpace(toponym.Provenance.GeneratorKey) || toponym.Provenance.GeneratorKey.Length > 128) throw new ArgumentException("Toponym provenance generator key must be non-empty and bounded.", nameof(checkpoint));
+        }
+        foreach (var toponym in worldEnvironment.Toponyms)
+        {
+            if (toponym.Provenance.ParentToponymId is { } parentId && !toponymIds.Contains(parentId))
+                throw new ArgumentException("Toponym provenance references a missing parent toponym.", nameof(checkpoint));
         }
     }
 }
