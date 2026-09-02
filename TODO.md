@@ -9,6 +9,41 @@ Task IDと状態記号の正本は、責務に応じて以下の4 Roadmapとし�
 - `roadmap/VIEW_ROADMAP.md`
 - `roadmap/MANAGEMENT_ROADMAP.md`
 
+## Parallel Development Working Memo
+
+Simulation / Gateway / Viewを並行して進めるときの**作業順を考えるためだけの仮メモ**です。
+
+ここで使う「開発段階」はRoadmap上の正式なPhaseではなく、Task状態・完了判定・依存関係の正本にも使用しません。実際に着手できるかどうかは、各Roadmapに記載された必須依存を優先して判断します。
+
+また、同じ行にある3領域が同時に完了するまで次の行へ進めない、という意味ではありません。ある領域が先行しても、その先のPhaseの必須依存を満たしているなら先へ進めて構いません。`None` は、その段階では無理に並行作業を作らず待機してよいことを示します。
+
+| 仮の開発段階 | Simulation | Gateway | View |
+| --- | --- | --- | --- |
+| 1 | Phase 29 | Phase 1 | Phase 1 |
+| 2 | Phase 29 | Phase 2 | Phase 2 |
+| 3 | Phase 29 | Phase 3 | Phase 3 |
+| 4 | Phase 30 | Phase 4 | Phase 4 |
+| 5 | Phase 31 | Phase 4 | Phase 5 |
+| 6 | Phase 31 | Phase 4 | Phase 6 |
+| 7 | Phase 32 | Phase 4 | Phase 6 |
+| 8 | Phase 33 | Phase 4 | Phase 7 |
+| 9 | Phase 33 | Phase 4 | Phase 8 |
+| 10 | Phase 35 | Phase 5 | Phase 9 |
+| 11 | Phase 36 | Phase 6 | Phase 10 |
+| 12 | Phase 37 | None | Phase 11 |
+| 13 | Phase 38 | None | Phase 12 |
+| 14 | None | None | Phase 13 |
+
+### Memo usage
+
+- Simulation / Gateway / ViewのPhase番号を同期させる意図はない。
+- GatewayがSimulation / Viewより先行しても、Gateway Roadmap上の必須依存を満たす限りそのまま進めてよい。
+- Viewのdomain描画は、対象Simulationのauthoritative semantic sourceと必要なGateway delivery contractが揃うまで待つ。
+- Gateway Phase 4以降のようにSimulation semantic observationへ依存する箇所は、必要なsourceが未完成なら先行しない。
+- Gateway Phase 5はSimulation Phase 35のhistory / replay sourceを待つ。
+- `None` の領域に、並行化のためだけの仮実装や別正本を作らない。
+- この表とRoadmapが食い違う場合はRoadmapを優先し、必要に応じてこのメモだけを気軽に更新する。
+
 ## First Alpha Release
 
 最初のalphaリリース準備を開始する目安は次の状態とする。
