@@ -48,6 +48,6 @@ public sealed class SharedObservationSnapshotSafetyTests
         var message = RailwayOperationsMessageMapper.Create(operations, visibleTrains, world.Time.TickCount);
 
         CollectionAssert.AreEqual(sourceOrder, visibleTrains.Select(static item => item.Id.Value).ToArray());
-        CollectionAssert.AreEqual(sourceOrder.OrderBy(static id => id).ToArray(), message.Trains.Select(static item => item.TrainId).ToArray());
+        CollectionAssert.AreEqual(sourceOrder.OrderBy(static id => id).ToArray(), message.Trains.Select(static item => item.Id).ToArray());
     }
 }
