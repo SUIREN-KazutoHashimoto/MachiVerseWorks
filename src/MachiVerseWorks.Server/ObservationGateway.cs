@@ -4,6 +4,13 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace MachiVerseWorks.Server;
 
+internal readonly record struct RegionalGenerationObservation(
+    ulong Generation,
+    bool HasSnapshot,
+    ulong SourceTick,
+    RegionalGenerationSnapshot? Snapshot,
+    ulong TickCount);
+
 /// <summary>
 /// Detached, read-only boundary from the authoritative Simulation runtime into the Observation Gateway.
 /// Gateway services may consume this contract but must not retain or mutate SimulationWorld state.
@@ -27,6 +34,7 @@ internal interface IObservationSource
     OpticalSnapshot CaptureOpticalSnapshot();
     RadioSnapshot CaptureRadioSnapshot();
     VersionedObservation<WorldEnvironmentSnapshot> CaptureWorldEnvironmentSnapshot(WorldVolume volume);
+    RegionalGenerationObservation CaptureRegionalGenerationObservation() => new(0, false, 0, null, 0);
     (PersistentRegionalEvolutionSnapshot Evolution, RegionalInteractionSnapshot Interactions)? CapturePersistentRegionalEvolutionSnapshot();
     bool PersonExists(ulong personId);
 }
@@ -104,6 +112,24 @@ internal sealed class SimulationObservationSource(SimulationRuntime simulation) 
 
     public VersionedObservation<WorldEnvironmentSnapshot> CaptureWorldEnvironmentSnapshot(WorldVolume volume) =>
         simulation.CaptureWorldEnvironmentSnapshot(volume);
+
+    public RegionalGenerationObservation CaptureRegionalGenerationObservation()
+    {
+        while (true)
+        {
+            var generation = simulation.ObservationGeneration;
+            var snapshot = simulation.Read<RegionalGenerationSnapshot?>(static world =>
+                world.TryCreateRegionalGenerationSnapshot(out var captured) ? captured : null);
+            var tickCount = simulation.TickCount;
+            if (generation != simulation.ObservationGeneration) continue;
+            return new RegionalGenerationObservation(
+                generation,
+                snapshot is not null,
+                snapshot?.TickCount ?? 0UL,
+                snapshot,
+                tickCount);
+        }
+    }
 
     public (PersistentRegionalEvolutionSnapshot Evolution, RegionalInteractionSnapshot Interactions)? CapturePersistentRegionalEvolutionSnapshot() =>
         simulation.Read<(PersistentRegionalEvolutionSnapshot Evolution, RegionalInteractionSnapshot Interactions)?>(static world =>
@@ -191,6 +217,7 @@ internal static class ObservationGatewayServiceCollectionExtensions
         services.AddHostedService<OpticalPublishService>();
         services.AddHostedService<RadioPublishService>();
         services.AddHostedService<WorldEnvironmentPublishService>();
+        services.AddHostedService<RegionalGenerationPublishService>();
         services.AddHostedService<PersistentRegionalEvolutionPublishService>();
         return services;
     }

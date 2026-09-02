@@ -150,6 +150,11 @@ jobs:
             script: scripts/run-view-phase04-e2e.sh
             artifacts: .artifacts/view-phase04-e2e
             timeout: 15
+          - id: view-settlement-structure-live
+            name: view-settlement-structure-live-delivery
+            script: scripts/run-view-phase04-live-e2e.sh
+            artifacts: .artifacts/view-phase04-live-e2e
+            timeout: 20
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

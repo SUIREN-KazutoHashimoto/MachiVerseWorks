@@ -154,8 +154,11 @@ Camera移動、slow client、reconnect、World replacementを含む長時間接�
 - ✅ **G3-006** — negotiated minor version変更・旧Client接続で未対応messageを送らないcompatibility testを追加する
 - ✅ **G3-007** — subscriptionを高速に切り替えてもremove / static revision / inspect stateがeventually consistentになるE2Eを追加する
 - ✅ **G3-008** — 多数Viewer / 広範囲subscription / reconnect stormのServer負荷とfairnessを計測する
+- ✅ **G3-009** — Phase 30 `RegionalGenerationSnapshot`をProtocol 2.18+へworld-global static observationとしてlive配信し、source generation単位の再送抑止、World replacement時のempty clear、共有delivery scheduler / timeout、旧Client互換性、実Server→Web Browser E2Eを固定する
 
 Phase 3ではdesired subscriptionとcommitted delivery markerを分離し、static / dynamic / inspectionのdelivery planningをGateway-owned stateとして整理した。`SnapshotDeliveryScheduler`でconnection単位のin-flight budgetとSnapshot / Population fairnessを管理し、全Observation publisherを同じbudgetと`ObservationDeliveryTimeout`へ統合する。disconnect時はscheduler stateを破棄し、inspection payloadはsend gate取得後にrevisionを再検証して古いselectionのdebug payloadを送らない。reconnect / generation変更 / Protocol compatibility / subscription churnのregression testと、広範囲subscription・reconnect・lane contentionのbenchmarkを追加した。
+
+`G3-009`ではSimulationのdetached Phase 30 baselineを`RegionalGenerationPublishService`から配送する。immutable snapshotはconnectionごとのsource generation markerで重複送信を抑止し、Regional Generationを持たないWorldへreplacementされた場合はempty snapshotで旧authoritative stateをclearする。送信は既存のconnection-local schedulerへ統合し、slow clientが他Clientや他laneを阻害しない。Protocol 2.18未満には送らず、実Server Browser E2EでPhase 30 geometryとPhase 31 evolutionのstable ID joinまで検証する。
 
 ### Gateway Phase 3 完了条件
 
