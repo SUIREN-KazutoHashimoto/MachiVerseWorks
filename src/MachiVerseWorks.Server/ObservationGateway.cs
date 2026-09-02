@@ -16,6 +16,7 @@ internal interface IObservationSource
     SimulationPublishSnapshot CapturePublishSnapshot();
     PopulationPublishSnapshot CapturePopulationPublishSnapshot(IReadOnlySet<ulong> inspectedPersonIds);
     IReadOnlyDictionary<ulong, TrainSnapshot> CaptureTrainSnapshots(IReadOnlySet<ulong> inspectedTrainIds);
+    IReadOnlyDictionary<ulong, VehicleSnapshot> CaptureVehicleSnapshots(IReadOnlySet<ulong> inspectedVehicleIds);
     EconomySnapshot CaptureEconomySnapshot();
     LogisticsSnapshot CaptureLogisticsSnapshot();
     PowerSnapshot CapturePowerSnapshot();
@@ -48,6 +49,15 @@ internal sealed class SimulationObservationSource(SimulationRuntime simulation) 
         if (inspectedTrainIds.Count == 0) return new Dictionary<ulong, TrainSnapshot>();
         return simulation.Read(world => world.CreateTrainSnapshot()
             .Where(item => inspectedTrainIds.Contains(item.Id.Value))
+            .ToDictionary(item => item.Id.Value));
+    }
+
+    public IReadOnlyDictionary<ulong, VehicleSnapshot> CaptureVehicleSnapshots(IReadOnlySet<ulong> inspectedVehicleIds)
+    {
+        ArgumentNullException.ThrowIfNull(inspectedVehicleIds);
+        if (inspectedVehicleIds.Count == 0) return new Dictionary<ulong, VehicleSnapshot>();
+        return simulation.Read(world => world.CreateAllVehicleSnapshots()
+            .Where(item => inspectedVehicleIds.Contains(item.Id.Value))
             .ToDictionary(item => item.Id.Value));
     }
 
