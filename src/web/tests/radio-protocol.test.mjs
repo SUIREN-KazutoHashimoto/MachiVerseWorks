@@ -4,8 +4,8 @@ import { WEB_CURRENT_PROTOCOL_VERSION } from '../src/person-inspection-protocol.
 import { RADIO_SNAPSHOT_MESSAGE_TYPE, SPECTRUM_SNAPSHOT_MESSAGE_TYPE, decodeRadioFrame, isRadioFrame } from '../src/radio-protocol.ts';
 import { PROTOCOL_HEADER_SIZE, PROTOCOL_MAGIC } from '../src/protocol.ts';
 
-test('web negotiates current protocol 2.17 while retaining radio support', () => {
-  assert.deepEqual(WEB_CURRENT_PROTOCOL_VERSION, { major: 2, minor: 17 });
+test('web negotiates current protocol 2.18 while retaining radio support', () => {
+  assert.deepEqual(WEB_CURRENT_PROTOCOL_VERSION, { major: 2, minor: 18 });
 });
 
 test('decodes empty radio snapshot frame', () => {
