@@ -23,7 +23,7 @@ internal interface IObservationSource
     OpticalSnapshot CaptureOpticalSnapshot();
     RadioSnapshot CaptureRadioSnapshot();
     VersionedObservation<WorldEnvironmentSnapshot> CaptureWorldEnvironmentSnapshot(WorldVolume volume);
-    (PersistentRegionalEvolutionSnapshot Evolution, RegionalInteractionSnapshot Interactions) CapturePersistentRegionalEvolutionSnapshot();
+    (PersistentRegionalEvolutionSnapshot Evolution, RegionalInteractionSnapshot Interactions)? CapturePersistentRegionalEvolutionSnapshot();
     bool PersonExists(ulong personId);
 }
 
@@ -55,8 +55,12 @@ internal sealed class SimulationObservationSource(SimulationRuntime simulation) 
     public VersionedObservation<WorldEnvironmentSnapshot> CaptureWorldEnvironmentSnapshot(WorldVolume volume) =>
         simulation.CaptureWorldEnvironmentSnapshot(volume);
 
-    public (PersistentRegionalEvolutionSnapshot Evolution, RegionalInteractionSnapshot Interactions) CapturePersistentRegionalEvolutionSnapshot() =>
-        simulation.Read(static world => (world.CreatePersistentRegionalEvolutionSnapshot(), world.CreateRegionalInteractionSnapshot()));
+    public (PersistentRegionalEvolutionSnapshot Evolution, RegionalInteractionSnapshot Interactions)? CapturePersistentRegionalEvolutionSnapshot() =>
+        simulation.Read(static world =>
+        {
+            if (!world.TryCreatePersistentRegionalEvolutionSnapshot(out var evolution) || evolution is null) return null;
+            return (evolution, world.CreateRegionalInteractionSnapshot());
+        });
 
     public bool PersonExists(ulong personId) =>
         personId != 0 && simulation.TryGetPersonSnapshot(new PersonId(personId), out _);
