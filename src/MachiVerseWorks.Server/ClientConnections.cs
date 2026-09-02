@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net.WebSockets;
-using System.Threading.Channels;
 using MachiVerseWorks.Protocol;
 using MachiVerseWorks.Simulation;
 
@@ -281,39 +280,4 @@ internal sealed class ClientConnectionRegistry
     public bool TryGet(Guid id, out ClientConnection? connection) => _connections.TryGetValue(id, out connection);
     public bool Remove(Guid id) { if (!_connections.TryRemove(id, out _)) return false; Interlocked.Decrement(ref _connectionCount); return true; }
     public ClientConnection[] CreateSnapshot() => _connections.Values.ToArray();
-}
-
-internal abstract record ClientCommand(Guid ConnectionId);
-internal sealed record SubscribeVolumeCommand(Guid ConnectionId, WorldVolume Volume) : ClientCommand(ConnectionId);
-internal sealed record InspectPersonCommand(Guid ConnectionId, ulong PersonId) : ClientCommand(ConnectionId);
-internal sealed record ClearPersonInspectionCommand(Guid ConnectionId) : ClientCommand(ConnectionId);
-
-internal sealed class ClientCommandQueue
-{
-    private const int Capacity = 1024;
-    private readonly Channel<ClientCommand> _channel = Channel.CreateBounded<ClientCommand>(new BoundedChannelOptions(Capacity) { SingleReader = true, SingleWriter = false, FullMode = BoundedChannelFullMode.Wait });
-    public ValueTask WriteAsync(ClientCommand command, CancellationToken cancellationToken) { ArgumentNullException.ThrowIfNull(command); return _channel.Writer.WriteAsync(command, cancellationToken); }
-    public IAsyncEnumerable<ClientCommand> ReadAllAsync(CancellationToken cancellationToken) => _channel.Reader.ReadAllAsync(cancellationToken);
-}
-
-internal sealed class ClientCommandProcessor(ClientCommandQueue queue, ClientConnectionRegistry connections, ILogger<ClientCommandProcessor> logger) : BackgroundService
-{
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        try
-        {
-            await foreach (var command in queue.ReadAllAsync(stoppingToken))
-            {
-                if (!connections.TryGet(command.ConnectionId, out var connection) || connection is null) continue;
-                switch (command)
-                {
-                    case SubscribeVolumeCommand subscribe: connection.SetSubscription(subscribe.Volume); break;
-                    case InspectPersonCommand inspect: connection.SetInspectedPerson(inspect.PersonId); break;
-                    case ClearPersonInspectionCommand: connection.ClearPersonInspection(); break;
-                    default: ServerLog.UnsupportedClientCommand(logger, command.GetType().Name); break;
-                }
-            }
-        }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
-    }
 }

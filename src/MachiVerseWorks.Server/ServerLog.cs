@@ -50,4 +50,7 @@ internal static partial class ServerLog
 
     [LoggerMessage(11, LogLevel.Critical, "Unexpected snapshot delivery failure for connection {ConnectionId}.")]
     public static partial void UnexpectedSnapshotDeliveryFailure(ILogger logger, Guid connectionId, Exception exception);
+
+    [LoggerMessage(12, LogLevel.Warning, "Ignoring unsupported observation request type {RequestType}.")]
+    public static partial void UnsupportedObservationRequest(ILogger logger, string requestType);
 }

@@ -19,6 +19,8 @@ ServerとWeb Clientのbinary wire contractを管理します。Application `VERS
 
 同一majorではClientがServer current以下のminorを要求できます。negotiated minorより新しいmessageは送信しません。Protocol 1.x / `SubscribeArea` / 2D wire contractは現行経路にありません。
 
+`SubscribeVolume` / `InspectPerson` / `ClearPersonInspection`はClient→Serverのread-only Observation Requestであり、`IObservationRequestMessage`で明示的に分類します。このmarkerはwire layoutを変更せず、Observation Requestをauthoritative mutation commandとして扱わないためのProtocol責務です。Worldを変更するcommandはObservation Protocolへ追加せず、ServerのAdministration / Management command boundaryへ分離します。
+
 ## Domain codecs
 
 core frame / Agent / Road / Pedestrianは`ProtocolCodec`、domain固有の可変layoutは専用codecへ分離します。

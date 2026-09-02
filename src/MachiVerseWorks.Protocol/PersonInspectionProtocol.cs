@@ -1,6 +1,6 @@
 namespace MachiVerseWorks.Protocol;
 
-public sealed record ClearPersonInspectionMessage : IProtocolMessage
+public sealed record ClearPersonInspectionMessage : IObservationRequestMessage
 {
     public MessageType Type => MessageType.ClearPersonInspection;
 }

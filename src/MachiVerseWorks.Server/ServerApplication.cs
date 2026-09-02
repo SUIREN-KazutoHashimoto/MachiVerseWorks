@@ -24,7 +24,7 @@ public static class ServerApplication
         builder.Services.AddSingleton(new WebSocketOriginPolicy(options.AllowedWebSocketOrigins));
         builder.Services.AddSingleton<SimulationRuntime>();
         builder.Services.AddSingleton<ClientConnectionRegistry>();
-        builder.Services.AddSingleton<ClientCommandQueue>();
+        builder.Services.AddSingleton<ObservationRequestQueue>();
         builder.Services.AddSingleton<AdminCommandQueue>();
         builder.Services.AddSingleton<E2eMetrics>();
         builder.Services.AddSingleton<WebSocketSessionHandler>();
@@ -35,7 +35,7 @@ public static class ServerApplication
         builder.Services.AddHostedService<OpticalFixtureHostedService>();
         builder.Services.AddHostedService<RadioFixtureHostedService>();
         builder.Services.AddHostedService<SimulationTickService>();
-        builder.Services.AddHostedService<ClientCommandProcessor>();
+        builder.Services.AddHostedService<ObservationRequestProcessor>();
         builder.Services.AddHostedService<AdminCommandExecutorV2>();
         builder.Services.AddHostedService<ServerConsoleService>();
         builder.Services.AddHostedService<SnapshotPublishService>();
