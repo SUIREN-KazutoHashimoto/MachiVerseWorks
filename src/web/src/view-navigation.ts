@@ -61,6 +61,8 @@ export class ViewNavigationController {
   private readonly sampledTargetPosition = new Float64Array(3);
   private readonly sampledFocusPosition = new Float64Array(3);
   private readonly sampledDirection = new Float64Array(3);
+  private readonly sampledRight = new Float64Array(2);
+  private readonly sampledUp = new Float64Array(2);
   private followTarget: ViewNavigationTarget | null = null;
   private focusAltitude = 0;
   private panPointerId: number | null = null;
@@ -109,10 +111,10 @@ export class ViewNavigationController {
     this.followTarget = null;
     this.camera.updateMatrixWorld(true);
     const elements = this.camera.matrixWorld.elements;
-    const right = normalizeHorizontal(Number(elements[0]), Number(elements[2]), 1, 0);
-    const up = normalizeHorizontal(Number(elements[4]), Number(elements[6]), -right.z, right.x);
-    this.camera.position.x += right.x * deltaRight + up.x * deltaUp;
-    this.camera.position.z += right.z * deltaRight + up.z * deltaUp;
+    writeHorizontalUnit(Number(elements[0]), Number(elements[2]), 1, 0, this.sampledRight);
+    writeHorizontalUnit(Number(elements[4]), Number(elements[6]), -this.sampledRight[1], this.sampledRight[0], this.sampledUp);
+    this.camera.position.x += this.sampledRight[0] * deltaRight + this.sampledUp[0] * deltaUp;
+    this.camera.position.z += this.sampledRight[1] * deltaRight + this.sampledUp[1] * deltaUp;
     this.camera.updateMatrixWorld(true);
   }
 
@@ -263,8 +265,7 @@ export class ViewNavigationController {
   };
 
   private readonly handleWheel = (event: WheelEvent): void => {
-    const scale = Math.exp(-event.deltaY * 0.001);
-    this.zoomBy(scale);
+    this.zoomBy(Math.exp(-event.deltaY * 0.001));
     event.preventDefault();
     event.stopImmediatePropagation();
   };
@@ -317,13 +318,21 @@ export function getCameraFocusAtSimulationAltitude(camera: ViewNavigationCamera,
 
 function writeCameraFocusAtSimulationAltitude(camera: ViewNavigationCamera, simulationAltitude: number, target: MutablePositionBuffer): boolean {
   validateFinite(simulationAltitude, 'simulation altitude');
-  const direction = new Float64Array(3);
-  writeCameraWorldDirection(camera, direction);
-  if (Math.abs(direction[1]) <= DIRECTION_EPSILON) return false;
-  const distance = (simulationAltitude - camera.position.y) / direction[1];
+  camera.updateMatrixWorld(true);
+  const elements = camera.matrixWorld.elements;
+  const rawX = -Number(elements[8]);
+  const rawY = -Number(elements[9]);
+  const rawZ = -Number(elements[10]);
+  const directionLength = Math.hypot(rawX, rawY, rawZ);
+  if (!Number.isFinite(directionLength) || directionLength <= DIRECTION_EPSILON) throw new RangeError('Camera direction is invalid.');
+  const directionX = rawX / directionLength;
+  const directionY = rawY / directionLength;
+  const directionZ = rawZ / directionLength;
+  if (Math.abs(directionY) <= DIRECTION_EPSILON) return false;
+  const distance = (simulationAltitude - camera.position.y) / directionY;
   if (!Number.isFinite(distance) || distance <= 0) return false;
-  target[0] = camera.position.x + direction[0] * distance;
-  target[1] = camera.position.z + direction[2] * distance;
+  target[0] = camera.position.x + directionX * distance;
+  target[1] = camera.position.z + directionZ * distance;
   target[2] = simulationAltitude;
   return true;
 }
@@ -341,12 +350,17 @@ function writeCameraWorldDirection(camera: ViewNavigationCamera, target: Mutable
   target[2] = z / length;
 }
 
-function normalizeHorizontal(x: number, z: number, fallbackX: number, fallbackZ: number): { readonly x: number; readonly z: number } {
-  const length = Math.hypot(x, z);
-  if (Number.isFinite(length) && length > DIRECTION_EPSILON) return { x: x / length, z: z / length };
-  const fallbackLength = Math.hypot(fallbackX, fallbackZ);
-  if (!Number.isFinite(fallbackLength) || fallbackLength <= DIRECTION_EPSILON) throw new RangeError('Camera horizontal basis is invalid.');
-  return { x: fallbackX / fallbackLength, z: fallbackZ / fallbackLength };
+function writeHorizontalUnit(x: number, z: number, fallbackX: number, fallbackZ: number, target: Float64Array): void {
+  let length = Math.hypot(x, z);
+  if (Number.isFinite(length) && length > DIRECTION_EPSILON) {
+    target[0] = x / length;
+    target[1] = z / length;
+    return;
+  }
+  length = Math.hypot(fallbackX, fallbackZ);
+  if (!Number.isFinite(length) || length <= DIRECTION_EPSILON) throw new RangeError('Camera horizontal basis is invalid.');
+  target[0] = fallbackX / length;
+  target[1] = fallbackZ / length;
 }
 
 function validateSampledWorldPosition(position: MutablePositionBuffer): void {
