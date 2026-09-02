@@ -18,6 +18,10 @@ Simulationとread-only consumerのObservation Gateway、cache、delivery方針�
 - [`web-client-poc.md`](web-client-poc.md): read-only Web View + Audio Client Foundationの3D基盤
 - [`save-data.md`](save-data.md): checkpoint state、validation、migration、Save Data互換性
 
+## World / City Foundation
+
+- [`world-environment-terrain.md`](world-environment-terrain.md): deterministic Global Environment、Detailed 3D Terrain、GeographicFeature、自然地名、Save / authoritative observation source / Protocol domain payload境界
+
 ## City / Mobility / Population
 
 - [`building-poi.md`](building-poi.md): Building / POIのstable ID、3D state、参照整合性

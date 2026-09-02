@@ -1,0 +1,49 @@
+name: World Environment Benchmark
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'src/MachiVerseWorks.Simulation/**'
+      - 'benchmarks/MachiVerseWorks.Benchmarks/WorldEnvironmentBenchmarks.cs'
+      - '.github/workflows/world-environment-benchmark.yml'
+  pull_request:
+    branches: [develop]
+    paths:
+      - 'src/MachiVerseWorks.Simulation/**'
+      - 'benchmarks/MachiVerseWorks.Benchmarks/WorldEnvironmentBenchmarks.cs'
+      - '.github/workflows/world-environment-benchmark.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: world-environment-benchmark-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  world-environment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore MachiVerseWorks.slnx
+      - name: Run Global Environment / Detailed Terrain benchmark
+        env:
+          MACHIVERSE_BENCHMARK_ARTIFACTS: ${{ github.workspace }}/.artifacts/benchmarks/world-environment
+        run: dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-restore -- --filter '*WorldEnvironmentBenchmarks*' --job short
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: benchmark-world-environment
+          path: .artifacts/benchmarks/world-environment
+          if-no-files-found: warn
+          retention-days: 14

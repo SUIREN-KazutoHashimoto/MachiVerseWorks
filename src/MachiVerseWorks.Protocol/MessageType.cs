@@ -31,5 +31,6 @@ public enum MessageType : ushort
     OpticalSnapshot = 780,
     RadioSnapshot = 790,
     SpectrumSnapshot = 791,
+    WorldEnvironmentSnapshot = 800,
     Error = 900,
 }
