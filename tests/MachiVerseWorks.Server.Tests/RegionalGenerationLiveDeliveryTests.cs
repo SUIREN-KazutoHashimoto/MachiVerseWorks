@@ -15,7 +15,7 @@ public sealed class RegionalGenerationLiveDeliveryTests
         await using var host = await ServerTestHost.StartAsync(initialAgentCount: 0, snapshotRate: 30);
         var runtime = host.App.Services.GetRequiredService<SimulationRuntime>();
         var authoritative = runtime.Mutate(static world => world.GenerateRegionalGeneration(
-            new WorldVolume(-1000d, -1000d, 0d, 1000d, 1000d, 100d),
+            new WorldVolume(-500_000d, -500_000d, -12_000d, 500_000d, 500_000d, 12_000d),
             new RegionalGenerationOptions(
                 RegionalGenerationQualityPreset.Draft,
                 settlementCount: 2,
