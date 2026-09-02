@@ -63,7 +63,7 @@ public sealed record PersistentRegionalEvolutionOptions
     public const ulong DefaultTicksPerYear = EconomyDefaults.TicksPerEconomicDay * 365UL;
     public PersistentRegionalEvolutionOptions(ulong ticksPerYear = DefaultTicksPerYear)
     {
-        if (ticksPerYear == 0) throw new ArgumentOutOfRangeException(nameof(ticksPerYear));
+        ArgumentOutOfRangeException.ThrowIfZero(ticksPerYear);
         TicksPerYear = ticksPerYear;
     }
     public ulong TicksPerYear { get; }
@@ -102,8 +102,9 @@ public static class PersistentRegionalEvolutionEngine
         PersistentRegionalEvolutionSnapshot source, RegionalGenerationSnapshot generation, int years,
         Func<SettlementEvolutionState, RegionalEvolutionDrivers>? driverProvider = null)
     {
-        ArgumentNullException.ThrowIfNull(source); ArgumentNullException.ThrowIfNull(generation);
-        if (years < 0) throw new ArgumentOutOfRangeException(nameof(years));
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(generation);
+        ArgumentOutOfRangeException.ThrowIfNegative(years);
         var state = source;
         for (var i = 0; i < years; i++) state = AdvanceOneYear(state, generation, driverProvider);
         return state;
@@ -111,7 +112,8 @@ public static class PersistentRegionalEvolutionEngine
 
     public static SettlementScale Classify(int population, int jobs, double services, double density, double accessibility)
     {
-        if (population < 0 || jobs < 0) throw new ArgumentOutOfRangeException(nameof(population));
+        ArgumentOutOfRangeException.ThrowIfNegative(population);
+        ArgumentOutOfRangeException.ThrowIfNegative(jobs);
         var functional = jobs * 0.55 + population * 0.45;
         var quality = Math.Clamp((services + density + accessibility) / 3d, 0d, 1d);
         var score = functional * (0.65 + quality * 0.35);
