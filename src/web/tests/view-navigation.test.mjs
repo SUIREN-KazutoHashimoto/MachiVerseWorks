@@ -7,6 +7,7 @@ import {
   createEntityNavigationTarget,
   createStaticNavigationTarget,
   getCameraFocusAtSimulationAltitude,
+  isNavigationKeyboardInputTarget,
 } from '../src/view-navigation.ts';
 
 class FakeSurface {
@@ -100,6 +101,23 @@ test('WASD movement follows camera basis and Shift multiplies movement speed', (
   assert.ok(Math.abs(camera.position.x - 4) < 1e-6);
 });
 
+test('combined movement axes are normalized to the configured movement speed', () => {
+  const camera = createCamera();
+  camera.position.set(0, 100, 0);
+  camera.lookAt(0, 100, -100);
+  camera.updateMatrixWorld(true);
+  const navigation = new ViewNavigationController(camera, new FakeSurface());
+  const before = camera.position.clone();
+
+  navigation.setKeyState('KeyW', true);
+  navigation.setKeyState('KeyD', true);
+  navigation.setKeyState('KeyE', true);
+  navigation.update(0);
+  navigation.update(100);
+
+  assert.ok(Math.abs(camera.position.distanceTo(before) - 4) < 1e-6);
+});
+
 test('vertical movement supports E/Q and enforces minimum camera height', () => {
   const camera = createCamera();
   camera.position.set(0, 2, 0);
@@ -114,6 +132,21 @@ test('vertical movement supports E/Q and enforces minimum camera height', () => 
   navigation.setKeyState('KeyE', true);
   navigation.update(200);
   assert.ok(camera.position.y > 1.7);
+});
+
+test('form controls and editable content are excluded from navigation keyboard input', () => {
+  const form = { tagName: 'FORM', parentElement: null };
+  const button = { tagName: 'BUTTON', parentElement: form };
+  const buttonChild = { tagName: 'SPAN', parentElement: button };
+  const input = { tagName: 'INPUT', parentElement: form };
+  const editable = { tagName: 'DIV', isContentEditable: true, parentElement: null };
+  const canvas = { tagName: 'CANVAS', parentElement: null };
+
+  assert.equal(isNavigationKeyboardInputTarget(input), true);
+  assert.equal(isNavigationKeyboardInputTarget(buttonChild), true);
+  assert.equal(isNavigationKeyboardInputTarget(editable), true);
+  assert.equal(isNavigationKeyboardInputTarget(canvas), false);
+  assert.equal(isNavigationKeyboardInputTarget(null), false);
 });
 
 test('wheel changes free movement speed and follow distance by mode', () => {
