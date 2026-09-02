@@ -22,6 +22,7 @@ public sealed class PersistentRegionalEvolutionProtocolCodecTests
         Assert.AreEqual(message.Settlements[0], actual.Settlements[0]);
         Assert.AreEqual(message.Events[0], actual.Events[0]);
         Assert.AreEqual(message.CommutingFlows[0], actual.CommutingFlows[0]);
+        Assert.IsTrue(actual.IsFullSnapshot);
     }
 
     [TestMethod]
@@ -29,6 +30,34 @@ public sealed class PersistentRegionalEvolutionProtocolCodecTests
     {
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
             PersistentRegionalEvolutionProtocolCodec.Serialize(CreateMessage(), new ProtocolVersion(2, 18)));
+    }
+
+    [TestMethod]
+    public void LargeHistoryIsSplitIntoBoundedProtocolFrames()
+    {
+        var source = CreateMessage();
+        var events = Enumerable.Range(1, 5_000)
+            .Select(index => new ProtocolRegionalEvolutionEvent(
+                checked((ulong)index),
+                12,
+                0,
+                1,
+                0,
+                new string('x', 256)))
+            .ToArray();
+        var message = source with { Events = events };
+
+        var chunks = PersistentRegionalEvolutionProtocolChunker.Split(message);
+
+        Assert.IsTrue(chunks.Count > 1);
+        Assert.IsTrue(chunks[0].IsFullSnapshot);
+        Assert.IsTrue(chunks.Skip(1).All(static chunk => !chunk.IsFullSnapshot));
+        Assert.AreEqual(events.Length, chunks.Sum(static chunk => chunk.Events.Count));
+        foreach (var chunk in chunks)
+        {
+            var frame = PersistentRegionalEvolutionProtocolCodec.Serialize(chunk, ProtocolVersion.Current);
+            Assert.IsLessThanOrEqualTo((long)ProtocolFrameHeader.Size + ProtocolFrameHeader.MaxPayloadLength, frame.LongLength);
+        }
     }
 
     private static PersistentRegionalEvolutionSnapshotMessage CreateMessage() => new(
