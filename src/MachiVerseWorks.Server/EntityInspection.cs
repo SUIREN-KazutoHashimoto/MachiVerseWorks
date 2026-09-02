@@ -84,14 +84,24 @@ internal static class EntityInspectionMessageMapper
         EntityInspectionTarget target,
         PopulationPublishSnapshot population,
         IReadOnlyDictionary<ulong, TrainSnapshot> trains,
+        PersistentRegionalEvolutionSnapshotMessage? regional) =>
+        Create(target, population, new Dictionary<ulong, VehicleSnapshot>(), trains, regional);
+
+    public static EntityInspectionSnapshotMessage Create(
+        EntityInspectionTarget target,
+        PopulationPublishSnapshot population,
+        IReadOnlyDictionary<ulong, VehicleSnapshot> vehicles,
+        IReadOnlyDictionary<ulong, TrainSnapshot> trains,
         PersistentRegionalEvolutionSnapshotMessage? regional)
     {
         ArgumentNullException.ThrowIfNull(population);
+        ArgumentNullException.ThrowIfNull(vehicles);
         ArgumentNullException.ThrowIfNull(trains);
 
         return target.EntityType switch
         {
             ProtocolEntityType.Person => CreatePerson(target.EntityId, population, regional?.CurrentYear),
+            ProtocolEntityType.Vehicle => CreateVehicle(target.EntityId, population.TickCount, vehicles, regional?.CurrentYear),
             ProtocolEntityType.Train => CreateTrain(target.EntityId, population.TickCount, trains, regional?.CurrentYear),
             ProtocolEntityType.Settlement => CreateSettlement(target.EntityId, population.TickCount, regional),
             ProtocolEntityType.Parcel => CreateParcel(target.EntityId, population.TickCount, regional),
@@ -128,6 +138,39 @@ internal static class EntityInspectionMessageMapper
         AddBuildingRelation(relations, "currentLocation", debug.CurrentBuildingId);
         AddBuildingRelation(relations, "destination", debug.DestinationBuildingId);
         return Snapshot(ProtocolEntityType.Person, id, debug.TickCount, currentYear, fields, relations, []);
+    }
+
+    private static EntityInspectionSnapshotMessage CreateVehicle(
+        ulong id,
+        ulong tickCount,
+        IReadOnlyDictionary<ulong, VehicleSnapshot> vehicles,
+        int? currentYear)
+    {
+        if (!vehicles.TryGetValue(id, out var vehicle))
+            return NotFound(new EntityInspectionTarget(ProtocolEntityType.Vehicle, id), tickCount, currentYear);
+
+        var fields = new List<ProtocolInspectionField>
+        {
+            Field("laneId", vehicle.LaneId.Value),
+            Field("routeStepIndex", vehicle.RouteStepIndex),
+            Field("segmentOffset", vehicle.SegmentOffset),
+            Field("routeProgressMeters", vehicle.RouteProgressMeters),
+            Field("x", vehicle.Position.X),
+            Field("y", vehicle.Position.Y),
+            Field("z", vehicle.Position.Z),
+            Field("velocityX", vehicle.Velocity.X),
+            Field("velocityY", vehicle.Velocity.Y),
+            Field("velocityZ", vehicle.Velocity.Z),
+            Field("forwardX", vehicle.Forward.X),
+            Field("forwardY", vehicle.Forward.Y),
+            Field("forwardZ", vehicle.Forward.Z),
+            Field("speedMetersPerSecond", vehicle.SpeedMetersPerSecond),
+            Field("lengthMeters", vehicle.Dimensions.LengthMeters),
+            Field("widthMeters", vehicle.Dimensions.WidthMeters),
+            Field("heightMeters", vehicle.Dimensions.HeightMeters),
+            Field("state", vehicle.State.ToString()),
+        };
+        return Snapshot(ProtocolEntityType.Vehicle, id, vehicle.TickCount, currentYear, fields, [], []);
     }
 
     private static EntityInspectionSnapshotMessage CreateTrain(
