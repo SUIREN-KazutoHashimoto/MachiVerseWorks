@@ -137,6 +137,32 @@ public sealed record GeographicFeature(
     double MaximumElevationMeters)
 {
     public double AreaSquareMeters => Bounds.Width * Bounds.Depth;
+
+    public bool Equals(GeographicFeature? other)
+    {
+        if (ReferenceEquals(this, other)) return true;
+        return other is not null
+            && Id == other.Id
+            && Type == other.Type
+            && Bounds == other.Bounds
+            && ParentId == other.ParentId
+            && MinimumElevationMeters.Equals(other.MinimumElevationMeters)
+            && MaximumElevationMeters.Equals(other.MaximumElevationMeters)
+            && Geometry.SequenceEqual(other.Geometry);
+    }
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(Id);
+        hash.Add(Type);
+        hash.Add(Bounds);
+        hash.Add(ParentId);
+        hash.Add(MinimumElevationMeters);
+        hash.Add(MaximumElevationMeters);
+        foreach (var point in Geometry) hash.Add(point);
+        return hash.ToHashCode();
+    }
 }
 
 public sealed record ToponymProvenance(ToponymProvenanceKind Kind, GeographicFeatureId SourceFeatureId, ToponymId? ParentToponymId, string GeneratorKey);
