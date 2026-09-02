@@ -16,6 +16,18 @@ test('primary terrain observations become a 3D surface without flattening elevat
   assert.deepEqual([...mesh.indices], [0, 2, 1, 1, 2, 3]);
 });
 
+test('degenerate observation volumes collapse duplicate XY samples into an empty-triangle surface', () => {
+  const columns = createPrimaryTerrainColumns([
+    sample(25, 25, 10), sample(25, 25, 10), sample(25, 25, 10), sample(25, 25, 10),
+  ]);
+  const mesh = triangulateTerrainSurface(columns);
+
+  assert.equal(columns.length, 1);
+  assert.equal(mesh.vertexCount, 1);
+  assert.equal(mesh.triangleCount, 0);
+  assert.deepEqual([...mesh.positions], [25, 10, 25]);
+});
+
 test('geometry boundary can consume a separate cavity surface layer without deriving it', () => {
   const columns = [
     column(0, 0, 5, -20), column(100, 0, 6, -21), column(0, 100, 7, -22), column(100, 100, 8, -23),
