@@ -106,6 +106,64 @@ public readonly record struct ParcelDevelopmentDecision(
     bool Redevelop,
     double Pressure);
 
+public readonly record struct RegionalGrowthHistoryDecision(
+    double Accessibility,
+    double Congestion,
+    double LandPressure,
+    double RedevelopmentPressure,
+    double NewCenterPressure,
+    bool Redevelop,
+    bool FormNewCenter);
+
+public static class RegionalGrowthHistoryRule
+{
+    public static RegionalGrowthHistoryDecision Evaluate(
+        double accessibility,
+        double congestion,
+        double landPressure,
+        int existingCenterCount)
+    {
+        ValidateUnit(accessibility, nameof(accessibility));
+        ValidateUnit(congestion, nameof(congestion));
+        ValidateUnit(landPressure, nameof(landPressure));
+        if (existingCenterCount <= 0 || existingCenterCount > 16)
+            throw new ArgumentOutOfRangeException(nameof(existingCenterCount));
+
+        var redevelopmentPressure = Math.Clamp(
+            landPressure * 0.45d
+            + congestion * 0.35d
+            + accessibility * 0.20d,
+            0d,
+            1d);
+        var newCenterPressure = Math.Clamp(
+            congestion * 0.45d
+            + accessibility * 0.35d
+            + landPressure * 0.20d,
+            0d,
+            1d);
+        var redevelop = landPressure >= 0.45d && redevelopmentPressure >= 0.62d;
+        var formNewCenter = existingCenterCount < 4
+            && congestion >= 0.55d
+            && accessibility >= 0.55d
+            && landPressure >= 0.40d
+            && newCenterPressure >= 0.64d;
+        return new RegionalGrowthHistoryDecision(
+            accessibility,
+            congestion,
+            landPressure,
+            redevelopmentPressure,
+            newCenterPressure,
+            redevelop,
+            formNewCenter);
+    }
+
+    private static void ValidateUnit(double value, string parameterName)
+    {
+        if (!double.IsFinite(value) || value is < 0d or > 1d)
+            throw new ArgumentOutOfRangeException(parameterName, value, "Value must be finite and between zero and one.");
+    }
+}
+
 public static class RegionalDevelopmentRule
 {
     public static ParcelDevelopmentDecision Evaluate(Parcel parcel, double normalizedDemand, int buildingAgeYears)
@@ -139,7 +197,8 @@ public static class RegionalRoadSignRule
     {
         ArgumentNullException.ThrowIfNull(context);
         var result = new List<RoadSignKind> { RoadSignKind.Direction };
-        if (context.MaximumGrade >= 0.08d || context.IsRockSlope) result.Add(RoadSignKind.SteepGrade);
+        if (context.MaximumGrade >= 0.08d) result.Add(RoadSignKind.SteepGrade);
+        if (context.IsRockSlope) result.Add(RoadSignKind.RockSlope);
         if (context.MaximumTurnAngleDegrees >= 45d) result.Add(RoadSignKind.SharpCurve);
         if (context.FloodRisk >= 0.62d) result.Add(RoadSignKind.FloodWarning);
         if (context.CrossesWater) result.Add(RoadSignKind.RiverCrossing);

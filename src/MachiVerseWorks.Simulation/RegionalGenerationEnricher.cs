@@ -155,6 +155,7 @@ public sealed class RegionalGenerationEnricher
         var toponyms = source.Toponyms.ToList();
         var roadSigns = source.RoadSigns.ToList();
         var features = _environment.DetectGeographicFeatures(source.Volume, 128);
+        var growthEvents = ApplyGrowthPressureRules(source);
 
         AddRoleDistricts(source, districts, parcels, buildings, toponyms);
         AddRoadContextArtifacts(source, features, toponyms, roadSigns);
@@ -170,6 +171,7 @@ public sealed class RegionalGenerationEnricher
 
         return source with
         {
+            GrowthEvents = growthEvents.OrderBy(static item => item.Id.Value).ToArray(),
             Districts = districts.OrderBy(static item => item.Id.Value).ToArray(),
             Parcels = parcels.OrderBy(static item => item.Id.Value).ToArray(),
             Buildings = buildings.OrderBy(static item => item.Id.Value).ToArray(),
@@ -185,6 +187,84 @@ public sealed class RegionalGenerationEnricher
                 .ToArray(),
             Quality = quality,
         };
+    }
+
+    private List<HistoricalGrowthEvent> ApplyGrowthPressureRules(RegionalGenerationSnapshot source)
+    {
+        var result = new List<HistoricalGrowthEvent>(source.GrowthEvents.Count);
+        foreach (var settlement in source.Settlements.OrderBy(static item => item.Id.Value))
+        {
+            var events = source.GrowthEvents
+                .Where(item => item.SettlementId == settlement.Id)
+                .OrderBy(static item => item.Sequence)
+                .ToArray();
+            var accessibility = source.Districts
+                .Where(item => item.SettlementId == settlement.Id)
+                .Select(static item => item.Accessibility)
+                .DefaultIfEmpty(settlement.Suitability.TransportPotential)
+                .Average();
+            var populationPressure = Math.Clamp((settlement.Population + settlement.Jobs) / 12_000d, 0d, 1d);
+            var congestion = Math.Clamp(source.Quality.CongestionRisk * 0.60d + populationPressure * 0.40d, 0d, 1d);
+            var landPressure = Math.Clamp(
+                populationPressure * 0.45d
+                + accessibility * 0.30d
+                + settlement.Suitability.Buildability * 0.25d,
+                0d,
+                1d);
+            var existingCenterCount = 1 + events.Count(static item => item.Stage == HistoricalGrowthStage.NewCenterFormation);
+            var decision = RegionalGrowthHistoryRule.Evaluate(accessibility, congestion, landPressure, existingCenterCount);
+            var sequence = 0;
+            var hasRedevelopment = false;
+            var hasNewCenter = false;
+
+            foreach (var growthEvent in events)
+            {
+                if (growthEvent.Stage == HistoricalGrowthStage.Redevelopment && !decision.Redevelop) continue;
+                if (growthEvent.Stage == HistoricalGrowthStage.NewCenterFormation && !decision.FormNewCenter) continue;
+
+                var reason = growthEvent.Stage switch
+                {
+                    HistoricalGrowthStage.Redevelopment => $"accessibility={decision.Accessibility:F3}; congestion={decision.Congestion:F3}; land-pressure={decision.LandPressure:F3}; redevelopment-pressure={decision.RedevelopmentPressure:F3}",
+                    HistoricalGrowthStage.NewCenterFormation => $"accessibility={decision.Accessibility:F3}; congestion={decision.Congestion:F3}; land-pressure={decision.LandPressure:F3}; new-center-pressure={decision.NewCenterPressure:F3}",
+                    _ => growthEvent.Reason,
+                };
+                result.Add(growthEvent with { Sequence = sequence++, Reason = reason });
+                hasRedevelopment |= growthEvent.Stage == HistoricalGrowthStage.Redevelopment;
+                hasNewCenter |= growthEvent.Stage == HistoricalGrowthStage.NewCenterFormation;
+            }
+
+            if (decision.Redevelop && !hasRedevelopment)
+                result.Add(CreatePressureGrowthEvent(settlement, HistoricalGrowthStage.Redevelopment, sequence++, decision.RedevelopmentPressure, 0x9D01UL));
+            if (decision.FormNewCenter && !hasNewCenter)
+                result.Add(CreatePressureGrowthEvent(settlement, HistoricalGrowthStage.NewCenterFormation, sequence, decision.NewCenterPressure, 0x9D02UL));
+        }
+        return result;
+    }
+
+    private HistoricalGrowthEvent CreatePressureGrowthEvent(
+        Settlement settlement,
+        HistoricalGrowthStage stage,
+        int sequence,
+        double pressure,
+        ulong salt)
+    {
+        var angle = ToUnit(Hash64(settlement.Id.Value ^ salt)) * Math.PI * 2d;
+        var distance = settlement.InfluenceRadiusMeters * (stage == HistoricalGrowthStage.NewCenterFormation ? 0.34d : 0.14d);
+        var center = _environment.Sample(new WorldPoint(
+            settlement.Center.X + Math.Cos(angle) * distance,
+            settlement.Center.Y + Math.Sin(angle) * distance,
+            0d)).Position;
+        return new HistoricalGrowthEvent(
+            new GrowthEventId(EnsureNonZero(Hash64(settlement.Id.Value ^ ((ulong)stage << 48) ^ salt))),
+            settlement.Id,
+            stage,
+            sequence,
+            center,
+            Math.Max(10, (int)Math.Round(settlement.Population * 0.04d * pressure)),
+            Math.Max(4, (int)Math.Round(settlement.Jobs * 0.05d * pressure)),
+            stage == HistoricalGrowthStage.Redevelopment
+                ? $"pressure-driven redevelopment={pressure:F3}"
+                : $"pressure-driven new-center formation={pressure:F3}");
     }
 
     private void AddRoleDistricts(
@@ -418,6 +498,7 @@ public sealed class RegionalGenerationEnricher
         RoadSignKind.Direction => $"{destinationName} {Math.Max(1, (int)Math.Round(distanceMeters / 1_000d))} km",
         RoadSignKind.PlaceName => destinationName,
         RoadSignKind.SteepGrade => "Steep grade",
+        RoadSignKind.RockSlope => "Rock slope / falling-rock hazard",
         RoadSignKind.SharpCurve => "Sharp curve",
         RoadSignKind.FloodWarning => "Flood-prone area",
         RoadSignKind.RiverCrossing => "River crossing",

@@ -49,14 +49,14 @@ public sealed class RegionalGenerator
                 source,
                 source?.FeatureId,
                 null,
-                Hash(candidate.Center.X, candidate.Center.Y, 0x5101UL));
+                Hash(candidate.Center.X, candidate.Center.Y, 0x5101UL ^ ((ulong)(index + 1) << 32)));
             toponyms.Add(name);
 
             var population = CalculateInitialPopulation(suitability.TotalScore, role, index);
             var jobs = Math.Max(12, (int)Math.Round(population * GetJobRatio(role)));
             var influence = Math.Clamp(1_200d + Math.Sqrt(population) * 145d, 1_500d, 35_000d);
             settlements.Add(new Settlement(
-                new SettlementId(Hash(candidate.Center.X, candidate.Center.Y, 0x5102UL)),
+                new SettlementId(Hash(candidate.Center.X, candidate.Center.Y, 0x5102UL ^ ((ulong)(index + 1) << 32))),
                 sample.Position,
                 candidate.Environment,
                 origin,

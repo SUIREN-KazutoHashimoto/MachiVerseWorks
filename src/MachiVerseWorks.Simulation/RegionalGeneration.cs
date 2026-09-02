@@ -172,6 +172,7 @@ public enum RoadSignKind : byte
     MountainPass = 6,
     Tunnel = 7,
     CoastalLowland = 8,
+    RockSlope = 9,
 }
 
 public enum RegionalGenerationQualityPreset : byte

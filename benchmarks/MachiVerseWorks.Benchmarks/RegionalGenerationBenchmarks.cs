@@ -15,6 +15,9 @@ public class RegionalGenerationBenchmarks
         RegionalGenerationQualityPreset.HighQuality)]
     public RegionalGenerationQualityPreset Preset { get; set; }
 
+    [Params(4, 8, 16)]
+    public int SettlementCount { get; set; }
+
     [GlobalSetup]
     public void Setup()
     {
@@ -34,7 +37,7 @@ public class RegionalGenerationBenchmarks
     public double GenerateRegionalSnapshot()
     {
         var world = CreateWorld();
-        var snapshot = world.GenerateRegionalGeneration(_volume, new RegionalGenerationOptions(Preset));
+        var snapshot = world.GenerateRegionalGeneration(_volume, new RegionalGenerationOptions(Preset, SettlementCount));
         return snapshot.Quality.OverallScore
             + snapshot.Settlements.Count
             + snapshot.Corridors.Count
@@ -48,7 +51,7 @@ public class RegionalGenerationBenchmarks
         var world = CreateWorld();
         _ = world.InitializeRegionalWorld(
             _volume,
-            new RegionalGenerationOptions(Preset),
+            new RegionalGenerationOptions(Preset, SettlementCount),
             out var materialized);
         return materialized.RoadSegmentCount
             + materialized.LaneCount

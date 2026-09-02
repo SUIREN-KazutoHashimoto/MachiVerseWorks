@@ -22,6 +22,44 @@ public sealed class RegionalUrbanRuleTests
     }
 
     [TestMethod]
+    public void GrowthHistoryRuleUsesAccessibilityCongestionAndLandPressure()
+    {
+        var highPressure = RegionalGrowthHistoryRule.Evaluate(0.88d, 0.91d, 0.84d, existingCenterCount: 1);
+        var landOnly = RegionalGrowthHistoryRule.Evaluate(0.35d, 0.30d, 0.95d, existingCenterCount: 1);
+        var saturatedCenters = RegionalGrowthHistoryRule.Evaluate(0.92d, 0.94d, 0.90d, existingCenterCount: 4);
+
+        Assert.IsTrue(highPressure.Redevelop);
+        Assert.IsTrue(highPressure.FormNewCenter);
+        Assert.IsFalse(landOnly.FormNewCenter);
+        Assert.IsTrue(saturatedCenters.Redevelop);
+        Assert.IsFalse(saturatedCenters.FormNewCenter);
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => RegionalGrowthHistoryRule.Evaluate(1.1d, 0.5d, 0.5d, 1));
+    }
+
+    [TestMethod]
+    public void RockSlopeGetsDedicatedWarningSign()
+    {
+        var context = new RoadContextAnalysis(
+            new RegionalCorridorId(99),
+            MaximumGrade: 0.02d,
+            MaximumTurnAngleDegrees: 10d,
+            FloodRisk: 0.1d,
+            CrossesWater: false,
+            IsRockSlope: true,
+            IsMountainPass: false,
+            RequiresTunnel: false,
+            IsCoastalLowland: false,
+            FeatureId: null,
+            DestinationSettlementId: new SettlementId(2));
+
+        var signs = RegionalRoadSignRule.DetermineRequiredSigns(context);
+
+        Assert.IsTrue(signs.Contains(RoadSignKind.Direction));
+        Assert.IsTrue(signs.Contains(RoadSignKind.RockSlope));
+        Assert.IsFalse(signs.Contains(RoadSignKind.SteepGrade));
+    }
+
+    [TestMethod]
     public void RoadContextProducesDeterministicRequiredSignSet()
     {
         var environment = new WorldEnvironmentGenerator(CreateEnvironment(31001));
