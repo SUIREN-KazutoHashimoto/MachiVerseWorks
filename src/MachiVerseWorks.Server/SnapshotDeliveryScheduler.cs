@@ -45,7 +45,7 @@ internal sealed class SnapshotDeliveryScheduler
         }
     }
 
-    public bool TryReserve(Guid connectionId) => TryReserve(connectionId, ObservationDeliveryLane.Default);
+    public bool TryReserve(Guid connectionId) => TryReserve(connectionId, ObservationDeliveryLane.Snapshot);
 
     public bool TryReserve(Guid connectionId, ObservationDeliveryLane lane)
     {
@@ -125,7 +125,7 @@ internal sealed class SnapshotDeliveryScheduler
     }
 
     public bool TrySchedule(Guid connectionId, Func<Task> deliveryFactory)
-        => TrySchedule(connectionId, ObservationDeliveryLane.Default, deliveryFactory);
+        => TrySchedule(connectionId, ObservationDeliveryLane.Snapshot, deliveryFactory);
 
     public bool TrySchedule(Guid connectionId, ObservationDeliveryLane lane, Func<Task> deliveryFactory)
     {
