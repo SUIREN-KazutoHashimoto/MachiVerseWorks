@@ -30,8 +30,14 @@ public sealed partial class SimulationWorld
         }
 
         var freight = new Dictionary<(SettlementId From, SettlementId To, CommodityId Commodity), FreightAccumulator>();
+        var windowTicks = _persistentRegionalEvolutionOptions.TicksPerYear;
+        var windowStart = Time.TickCount > windowTicks ? Time.TickCount - windowTicks : 0UL;
         foreach (var shipment in CreateLogisticsSnapshot().Shipments.OrderBy(static item => item.Id.Value))
         {
+            var inCurrentWindow = shipment.State == ShipmentState.Delivered
+                ? shipment.DeliveredTick is { } deliveredTick && deliveredTick >= windowStart
+                : true;
+            if (!inCurrentWindow) continue;
             if (!TryGetEstablishmentSnapshot(shipment.SourceEstablishmentId, out var sourceEstablishment)
                 || !TryGetEstablishmentSnapshot(shipment.DestinationEstablishmentId, out var destinationEstablishment)
                 || !TryResolveRegionalEndpointPosition(sourceEstablishment.Location, out var sourcePoint)
