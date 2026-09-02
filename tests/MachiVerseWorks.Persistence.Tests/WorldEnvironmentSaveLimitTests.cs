@@ -41,7 +41,7 @@ public sealed class WorldEnvironmentSaveLimitTests
 
     private static void AssertPreScanLimit(string worldEnvironmentMembers, WorldSaveLimits limits, string path)
     {
-        var json = $"{{\"simulation\":{{\"economy\":{{\"worldEnvironment\":{{{worldEnvironmentMembers}}}}}}}}}}";
+        var json = string.Concat("{\"simulation\":{\"economy\":{\"worldEnvironment\":{", worldEnvironmentMembers, "}}}}");
         var exception = Assert.ThrowsExactly<InvalidDataException>(() =>
             WorldSaveSerializer.Deserialize(Encoding.UTF8.GetBytes(json), limits));
         StringAssert.Contains(exception.Message, path);
