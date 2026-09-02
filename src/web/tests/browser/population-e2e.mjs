@@ -1,5 +1,6 @@
 import { MachiVerseConnection } from '../../src/connection.ts';
 import { initializeLocalization } from '../../src/localization.ts';
+import { WEB_CURRENT_PROTOCOL_VERSION } from '../../src/person-inspection-protocol.ts';
 import {
   PopulationMessageType,
   decodePopulationFrame,
@@ -47,7 +48,10 @@ ui.onClearPersonInspection(() => connection.clearPersonInspection());
 try {
   connection.connect();
   await waitUntil(() => connectionState === 'connected', 'Protocol connection');
-  assert(protocolVersion?.major === 2 && protocolVersion?.minor === 17, 'current Browser connection negotiates Protocol 2.17');
+  assert(
+    protocolVersion?.major === WEB_CURRENT_PROTOCOL_VERSION.major && protocolVersion?.minor === WEB_CURRENT_PROTOCOL_VERSION.minor,
+    `current Browser connection negotiates Protocol ${String(WEB_CURRENT_PROTOCOL_VERSION.major)}.${String(WEB_CURRENT_PROTOCOL_VERSION.minor)}`,
+  );
   await waitUntil(() => populationStatistics !== null, 'PopulationStatistics');
   assert(populationStatistics.householdCount === 1, 'PopulationStatistics contains one Household');
   assert(populationStatistics.personCount === 1, 'PopulationStatistics contains one Person');
