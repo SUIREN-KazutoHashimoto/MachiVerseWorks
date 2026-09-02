@@ -317,6 +317,8 @@ Population publisherは専用serviceであり、別publish intervalのtickがtra
 
 Server / Webはcommon headerのmessage typeから対応decoderへdispatchする。Simulation内部classをwire object graphとして直接露出しない。
 
+Gateway Phase 1以降、Server側のcodec dispatchは`MachiVerseWorks.Server`の`ObservationProtocolAdapter`が所有する。adapterはnegotiated versionとmessage typeに応じて上記codecを選ぶだけで、domain semanticsや新しいfieldを生成しない。このdispatch整理ではmessage ID、payload layout、minimum versionを変更していないため、Protocol version `2.17`は据え置く。
+
 ## Error / decode failure
 
 unknown message、invalid payload、non-finite値、frame length不一致、unsupported minor message、negotiation後のversion変更を安全に拒否する。Error表示文はProtocolへ埋め込まず、stable error code / structured parameterをClient側でlocalizeする。
