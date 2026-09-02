@@ -110,9 +110,7 @@ internal sealed class ObservationCache
     public byte[] GetOrEncode(EncodedObservationCacheKey key, Func<byte[]> encoder)
     {
         ArgumentNullException.ThrowIfNull(encoder);
-        if (key.IsStatic) ObserveGeneration(key.Revision.Generation);
-        else ObserveRevision(key.Revision);
-        if (!_options.Enabled)
+        if (!_options.Enabled || !PrepareRevision(key.Revision, key.IsStatic))
         {
             Interlocked.Increment(ref _misses);
             Interlocked.Increment(ref _builds);
@@ -149,29 +147,8 @@ internal sealed class ObservationCache
         }
     }
 
-    public void ObserveRevision(ObservationRevision revision)
-    {
-        lock (_revisionGate)
-        {
-            if (EnsureGeneration(revision.Generation))
-            {
-                _dynamicRevision = revision.Revision;
-                return;
-            }
-
-            if (revision.Revision <= _dynamicRevision) return;
-            _dynamicRevision = revision.Revision;
-            var minimum = revision.Revision > _options.RetainedDynamicRevisions
-                ? revision.Revision - _options.RetainedDynamicRevisions
-                : 0UL;
-            EvictOlderDynamicEntries(revision.Generation, minimum);
-        }
-    }
-
-    public void ObserveGeneration(ulong generation)
-    {
-        lock (_revisionGate) _ = EnsureGeneration(generation);
-    }
+    public void ObserveRevision(ObservationRevision revision) => _ = PrepareRevision(revision, isStatic: false);
+    public void ObserveGeneration(ulong generation) => _ = PrepareRevision(new ObservationRevision(generation, 0), isStatic: true);
 
     public ObservationCacheMetrics CreateMetricsSnapshot() => new(
         Interlocked.Read(ref _hits),
@@ -196,9 +173,7 @@ internal sealed class ObservationCache
         where T : class
     {
         ArgumentNullException.ThrowIfNull(factory);
-        if (isStatic) ObserveGeneration(revision.Generation);
-        else ObserveRevision(revision);
-        if (!_options.Enabled)
+        if (!_options.Enabled || !PrepareRevision(revision, isStatic))
         {
             Interlocked.Increment(ref _misses);
             Interlocked.Increment(ref _builds);
@@ -227,13 +202,36 @@ internal sealed class ObservationCache
         }
     }
 
-    private bool EnsureGeneration(ulong generation)
+    private bool PrepareRevision(ObservationRevision revision, bool isStatic)
     {
-        if (_generation == generation) return false;
-        _generation = generation;
-        _dynamicRevision = 0;
-        ClearAll();
-        return true;
+        lock (_revisionGate)
+        {
+            if (_generation == 0 || revision.Generation > _generation)
+            {
+                _generation = revision.Generation;
+                _dynamicRevision = isStatic ? 0 : revision.Revision;
+                ClearAll();
+                return true;
+            }
+
+            if (revision.Generation < _generation) return false;
+            if (isStatic) return true;
+
+            if (revision.Revision > _dynamicRevision)
+            {
+                _dynamicRevision = revision.Revision;
+                var minimum = revision.Revision > _options.RetainedDynamicRevisions
+                    ? revision.Revision - _options.RetainedDynamicRevisions
+                    : 0UL;
+                EvictOlderDynamicEntries(revision.Generation, minimum);
+                return true;
+            }
+
+            var oldestRetained = _dynamicRevision > _options.RetainedDynamicRevisions
+                ? _dynamicRevision - _options.RetainedDynamicRevisions
+                : 0UL;
+            return revision.Revision >= oldestRetained;
+        }
     }
 
     private void EvictOlderDynamicEntries(ulong generation, ulong minimumRevision)
