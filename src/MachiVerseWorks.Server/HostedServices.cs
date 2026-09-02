@@ -23,9 +23,10 @@ internal static class SnapshotMessagePlanner
     public static SnapshotMessagePlan Create(AgentSnapshot[] snapshots, IReadOnlySet<ulong> knownAgentIds, ulong tickCount)
     {
         ArgumentNullException.ThrowIfNull(snapshots); ArgumentNullException.ThrowIfNull(knownAgentIds);
-        Array.Sort(snapshots, static (left, right) => left.Id.Value.CompareTo(right.Id.Value));
-        var current = new HashSet<ulong>(snapshots.Length); var messages = new List<IProtocolMessage>(snapshots.Length + knownAgentIds.Count);
-        foreach (var snapshot in snapshots)
+        var orderedSnapshots = snapshots.ToArray();
+        Array.Sort(orderedSnapshots, static (left, right) => left.Id.Value.CompareTo(right.Id.Value));
+        var current = new HashSet<ulong>(orderedSnapshots.Length); var messages = new List<IProtocolMessage>(orderedSnapshots.Length + knownAgentIds.Count);
+        foreach (var snapshot in orderedSnapshots)
         {
             var id = snapshot.Id.Value; current.Add(id);
             messages.Add(knownAgentIds.Contains(id) ? new AgentUpdateMessage(id, snapshot.Position.X, snapshot.Position.Y, snapshot.Position.Z, snapshot.Velocity.X, snapshot.Velocity.Y, snapshot.Velocity.Z, snapshot.TickCount) : new AgentSpawnMessage(id, snapshot.Position.X, snapshot.Position.Y, snapshot.Position.Z, snapshot.Velocity.X, snapshot.Velocity.Y, snapshot.Velocity.Z, snapshot.TickCount));
@@ -41,9 +42,10 @@ internal static class PedestrianSnapshotMessagePlanner
     public static PedestrianSnapshotMessagePlan Create(PedestrianSnapshot[] snapshots, IReadOnlySet<ulong> knownPedestrianIds, ulong tickCount)
     {
         ArgumentNullException.ThrowIfNull(snapshots); ArgumentNullException.ThrowIfNull(knownPedestrianIds);
-        Array.Sort(snapshots, static (left, right) => left.Id.Value.CompareTo(right.Id.Value));
-        var current = new HashSet<ulong>(snapshots.Length); var messages = new List<IProtocolMessage>(snapshots.Length + knownPedestrianIds.Count);
-        foreach (var snapshot in snapshots)
+        var orderedSnapshots = snapshots.ToArray();
+        Array.Sort(orderedSnapshots, static (left, right) => left.Id.Value.CompareTo(right.Id.Value));
+        var current = new HashSet<ulong>(orderedSnapshots.Length); var messages = new List<IProtocolMessage>(orderedSnapshots.Length + knownPedestrianIds.Count);
+        foreach (var snapshot in orderedSnapshots)
         {
             var id = snapshot.Id.Value; current.Add(id); var state = (ProtocolPedestrianMovementState)snapshot.State;
             messages.Add(knownPedestrianIds.Contains(id)
@@ -93,7 +95,7 @@ internal static class RailwayOperationsSnapshotMessagePlanner
 
 internal readonly record struct PendingSnapshotDelivery(ClientConnection Connection, ClientSubscriptionState Subscription);
 
-internal sealed class SnapshotPublishService(IObservationSource observationSource, ServerOptions options, ClientConnectionRegistry connections, E2eMetrics metrics, ILogger<SnapshotPublishService> logger) : BackgroundService
+internal sealed class SnapshotPublishService(IObservationSource observationSource, ServerOptions options, ClientConnectionRegistry connections, ObservationCache cache, E2eMetrics metrics, ILogger<SnapshotPublishService> logger) : BackgroundService
 {
     private static readonly TimeSpan ClientSendTimeout = TimeSpan.FromSeconds(5);
     private readonly SnapshotDeliveryScheduler _deliveryScheduler = new();
@@ -142,7 +144,11 @@ internal sealed class SnapshotPublishService(IObservationSource observationSourc
         try
         {
             await Task.Yield();
-            var snapshot = publishSnapshot.QueryEntities(subscription.Volume);
+            var revision = new ObservationRevision(publishSnapshot.ObservationGeneration, publishSnapshot.ObservationRevision);
+            var volumeIdentity = ObservationCacheIdentity.ForVolume(subscription.Volume);
+            var snapshot = cache.GetOrCreateSpatial(
+                new SpatialObservationCacheKey(SpatialObservationKind.Entities, subscription.Volume, revision),
+                () => publishSnapshot.QueryEntities(subscription.Volume));
             var agentPlan = SnapshotMessagePlanner.Create(snapshot.Agents, subscription.KnownAgentIds, snapshot.TickCount);
             var pedestrianPlan = connection.NegotiatedVersion.SupportsPedestrians ? PedestrianSnapshotMessagePlanner.Create(snapshot.Pedestrians, subscription.KnownPedestrianIds, snapshot.TickCount) : new PedestrianSnapshotMessagePlan([], []);
             var vehiclePlan = connection.NegotiatedVersion.SupportsVehicles ? VehicleSnapshotMessagePlanner.Create(snapshot.Vehicles, subscription.KnownVehicleIds, snapshot.TickCount) : new VehicleSnapshotMessagePlan([], []);
@@ -160,13 +166,21 @@ internal sealed class SnapshotPublishService(IObservationSource observationSourc
             IProtocolMessage? roadMessage = null; var roadStateHandled = false;
             if (connection.NegotiatedVersion.SupportsRoadNetwork && connection.NeedsRoadSnapshot(subscription.Revision, publishSnapshot.RoadNetwork.Revision))
             {
-                roadMessage = RoadSnapshotMessagePlanner.Create(publishSnapshot.RoadNetwork.Query(subscription.Volume), snapshot.TickCount); roadStateHandled = true;
+                var roadRevision = new ObservationRevision(publishSnapshot.ObservationGeneration, publishSnapshot.RoadNetwork.Revision);
+                var roadSnapshot = cache.GetOrCreateStatic(
+                    new StaticObservationCacheKey(StaticObservationKind.Road, subscription.Volume, roadRevision),
+                    () => publishSnapshot.RoadNetwork.Query(subscription.Volume));
+                roadMessage = RoadSnapshotMessagePlanner.Create(roadSnapshot, snapshot.TickCount); roadStateHandled = true;
             }
 
             IReadOnlyList<RailwayInfrastructureSnapshotMessage> railwayMessages = []; var railwayStateHandled = false;
             if (connection.NegotiatedVersion.SupportsRailwayInfrastructure && connection.NeedsRailwaySnapshot(subscription.Revision, publishSnapshot.RailwayInfrastructure.Revision))
             {
-                var railwayMessage = RailwayInfrastructureMessageMapper.Create(publishSnapshot.RailwayInfrastructure.Query(subscription.Volume), publishSnapshot.RailwayInfrastructure.Revision);
+                var railwayRevision = new ObservationRevision(publishSnapshot.ObservationGeneration, publishSnapshot.RailwayInfrastructure.Revision);
+                var railwaySnapshot = cache.GetOrCreateStatic(
+                    new StaticObservationCacheKey(StaticObservationKind.Railway, subscription.Volume, railwayRevision),
+                    () => publishSnapshot.RailwayInfrastructure.Query(subscription.Volume));
+                var railwayMessage = RailwayInfrastructureMessageMapper.Create(railwaySnapshot, publishSnapshot.RailwayInfrastructure.Revision);
                 railwayMessages = RailwayInfrastructureProtocolChunker.Split(railwayMessage); railwayStateHandled = true;
             }
 
@@ -176,11 +190,42 @@ internal sealed class SnapshotPublishService(IObservationSource observationSourc
             foreach (var message in agentPlan.Messages) { sendCancellation.CancelAfter(ClientSendTimeout); var sent = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation.Token); bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs; }
             foreach (var message in pedestrianPlan.Messages) { sendCancellation.CancelAfter(ClientSendTimeout); var sent = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation.Token); bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs; }
             foreach (var message in vehiclePlan.Messages) { sendCancellation.CancelAfter(ClientSendTimeout); var sent = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation.Token); bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs; }
-            foreach (var message in intersectionMessages) { sendCancellation.CancelAfter(ClientSendTimeout); var sent = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation.Token); bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs; }
-            if (roadMessage is not null) { sendCancellation.CancelAfter(ClientSendTimeout); var sent = await connection.SendAsync(roadMessage, connection.NegotiatedVersion, sendCancellation.Token); bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs; }
-            foreach (var railwayMessage in railwayMessages) { sendCancellation.CancelAfter(ClientSendTimeout); var sent = await connection.SendAsync(railwayMessage, connection.NegotiatedVersion, sendCancellation.Token); bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs; }
-            if (railwayOperationsMessage is not null) { sendCancellation.CancelAfter(ClientSendTimeout); var sent = await connection.SendAsync(railwayOperationsMessage, connection.NegotiatedVersion, sendCancellation.Token); bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs; }
-            if (multimodalTransitMessage is not null) { sendCancellation.CancelAfter(ClientSendTimeout); var sent = await connection.SendAsync(multimodalTransitMessage, connection.NegotiatedVersion, sendCancellation.Token); bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs; }
+            for (var index = 0; index < intersectionMessages.Length; index++)
+            {
+                sendCancellation.CancelAfter(ClientSendTimeout);
+                var key = new EncodedObservationCacheKey("intersection", connection.NegotiatedVersion, revision, ObservationCacheIdentity.ForChunk(volumeIdentity, index));
+                var sent = await connection.SendCachedAsync(intersectionMessages[index], connection.NegotiatedVersion, key, cache, sendCancellation.Token);
+                bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs;
+            }
+            if (roadMessage is not null)
+            {
+                sendCancellation.CancelAfter(ClientSendTimeout);
+                var key = new EncodedObservationCacheKey($"road:{publishSnapshot.RoadNetwork.Revision}", connection.NegotiatedVersion, revision, volumeIdentity);
+                var sent = await connection.SendCachedAsync(roadMessage, connection.NegotiatedVersion, key, cache, sendCancellation.Token);
+                bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs;
+            }
+            for (var index = 0; index < railwayMessages.Count; index++)
+            {
+                sendCancellation.CancelAfter(ClientSendTimeout);
+                var railwayRevision = new ObservationRevision(publishSnapshot.ObservationGeneration, publishSnapshot.RailwayInfrastructure.Revision);
+                var key = new EncodedObservationCacheKey("railway", connection.NegotiatedVersion, railwayRevision, ObservationCacheIdentity.ForChunk(volumeIdentity, index), IsStatic: true);
+                var sent = await connection.SendCachedAsync(railwayMessages[index], connection.NegotiatedVersion, key, cache, sendCancellation.Token);
+                bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs;
+            }
+            if (railwayOperationsMessage is not null)
+            {
+                sendCancellation.CancelAfter(ClientSendTimeout);
+                var key = new EncodedObservationCacheKey("railway-operations", connection.NegotiatedVersion, revision, volumeIdentity);
+                var sent = await connection.SendCachedAsync(railwayOperationsMessage, connection.NegotiatedVersion, key, cache, sendCancellation.Token);
+                bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs;
+            }
+            if (multimodalTransitMessage is not null)
+            {
+                sendCancellation.CancelAfter(ClientSendTimeout);
+                var key = new EncodedObservationCacheKey("multimodal-transit", connection.NegotiatedVersion, revision, "global");
+                var sent = await connection.SendCachedAsync(multimodalTransitMessage, connection.NegotiatedVersion, key, cache, sendCancellation.Token);
+                bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs;
+            }
 
             connection.TryReplaceKnownEntityIds(subscription.Revision, agentPlan.CurrentAgentIds, pedestrianPlan.CurrentPedestrianIds, vehiclePlan.CurrentVehicleIds);
             if (roadStateHandled) connection.TryMarkRoadSnapshotDelivered(subscription.Revision, publishSnapshot.RoadNetwork.Revision);

@@ -192,15 +192,26 @@ internal sealed class ClientConnection : IDisposable
             var encodeStarted = Stopwatch.GetTimestamp();
             var frame = ObservationProtocolAdapter.Serialize(message, version);
             var encodeTimeMs = Stopwatch.GetElapsedTime(encodeStarted).TotalMilliseconds;
-            await _sendGate.WaitAsync(cancellationToken);
-            try
-            {
-                if (Socket.State != WebSocketState.Open) throw new WebSocketException(WebSocketError.InvalidState);
-                var sendStarted = Stopwatch.GetTimestamp();
-                await Socket.SendAsync(new ArraySegment<byte>(frame), WebSocketMessageType.Binary, endOfMessage: true, cancellationToken);
-                return new ProtocolSendMetrics(frame.Length, encodeTimeMs, Stopwatch.GetElapsedTime(sendStarted).TotalMilliseconds);
-            }
-            finally { _sendGate.Release(); }
+            return await SendFrameAsync(frame, encodeTimeMs, cancellationToken);
+        }
+        finally { EndSend(); }
+    }
+
+    public async Task<ProtocolSendMetrics> SendCachedAsync(
+        IProtocolMessage message,
+        ProtocolVersion version,
+        EncodedObservationCacheKey cacheKey,
+        ObservationCache cache,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(cache);
+        BeginSend();
+        try
+        {
+            var encodeStarted = Stopwatch.GetTimestamp();
+            var frame = cache.GetOrEncode(cacheKey, () => ObservationProtocolAdapter.Serialize(message, version));
+            var encodeTimeMs = Stopwatch.GetElapsedTime(encodeStarted).TotalMilliseconds;
+            return await SendFrameAsync(frame, encodeTimeMs, cancellationToken);
         }
         finally { EndSend(); }
     }
@@ -218,6 +229,19 @@ internal sealed class ClientConnection : IDisposable
         }
         if (disposeSendGate) _sendGate.Dispose();
         GC.SuppressFinalize(this);
+    }
+
+    private async Task<ProtocolSendMetrics> SendFrameAsync(byte[] frame, double encodeTimeMs, CancellationToken cancellationToken)
+    {
+        await _sendGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (Socket.State != WebSocketState.Open) throw new WebSocketException(WebSocketError.InvalidState);
+            var sendStarted = Stopwatch.GetTimestamp();
+            await Socket.SendAsync(new ArraySegment<byte>(frame), WebSocketMessageType.Binary, endOfMessage: true, cancellationToken);
+            return new ProtocolSendMetrics(frame.Length, encodeTimeMs, Stopwatch.GetElapsedTime(sendStarted).TotalMilliseconds);
+        }
+        finally { _sendGate.Release(); }
     }
 
     private void BeginSend()

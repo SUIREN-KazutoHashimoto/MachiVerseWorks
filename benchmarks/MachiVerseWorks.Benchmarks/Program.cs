@@ -7,6 +7,14 @@ if (args.Contains("--read-model-latency", StringComparer.Ordinal))
     return;
 }
 
+if (args.Contains("--observation-cache", StringComparer.Ordinal))
+{
+    var results = ObservationCacheBenchmarkRunner.Run();
+    Console.WriteLine("viewers,spatial_uncached_ms,spatial_cached_ms,spatial_uncached_allocated_bytes,spatial_cached_allocated_bytes,spatial_hit_rate,spatial_build_count,encoding_uncached_ms,encoding_cached_ms,encoding_uncached_allocated_bytes,encoding_cached_allocated_bytes,encoding_hit_rate,encoding_count,encoded_bytes,encoded_memory_budget_bytes");
+    foreach (var result in results) Console.WriteLine(result.ToCsv());
+    return;
+}
+
 if (args.Contains("--road-traffic", StringComparer.Ordinal))
 {
     var benchmarkArgs = args.Where(static argument => argument != "--road-traffic").ToArray();

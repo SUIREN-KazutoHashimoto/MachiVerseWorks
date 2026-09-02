@@ -8,14 +8,15 @@ internal static class RailwayOperationsMessageMapper
     public static RailwayOperationsSnapshotMessage Create(RailwayOperationsSnapshot operations, TrainSnapshot[] visibleTrains, ulong tickCount)
     {
         ArgumentNullException.ThrowIfNull(operations); ArgumentNullException.ThrowIfNull(visibleTrains);
-        Array.Sort(visibleTrains, static (left, right) => left.Id.Value.CompareTo(right.Id.Value));
-        var serviceIds = visibleTrains.Select(static train => train.ServiceId).ToHashSet();
+        var orderedVisibleTrains = visibleTrains.ToArray();
+        Array.Sort(orderedVisibleTrains, static (left, right) => left.Id.Value.CompareTo(right.Id.Value));
+        var serviceIds = orderedVisibleTrains.Select(static train => train.ServiceId).ToHashSet();
         var services = operations.Services.Where(service => serviceIds.Contains(service.Id)).OrderBy(static service => service.Id.Value).ToArray();
         var timetableIds = services.Select(static service => service.TimetableId).ToHashSet();
         var timetables = operations.Timetables.Where(timetable => timetableIds.Contains(timetable.Id)).OrderBy(static timetable => timetable.Id.Value).ToArray();
         return new RailwayOperationsSnapshotMessage(
             tickCount,
-            visibleTrains.Select(static train => new ProtocolTrainState(
+            orderedVisibleTrains.Select(static train => new ProtocolTrainState(
                 train.Id.Value, train.FormationId.Value, train.ServiceId.Value, train.RouteId.Value,
                 train.Position.X, train.Position.Y, train.Position.Z, train.Forward.X, train.Forward.Y, train.Forward.Z,
                 train.SpeedMetersPerSecond, (byte)train.State,
