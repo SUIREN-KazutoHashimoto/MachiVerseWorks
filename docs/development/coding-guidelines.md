@@ -2,7 +2,7 @@
 
 MachiVerseWorks の実装で共通して守るコーディング方針を定めます。
 
-この文書は細かな好みを固定するためではなく、Simulation Core、Server、Protocol、Web Client の責務と、大規模リアルタイムシミュレーションに必要な性能特性を長期的に維持するための基準です。
+この文書は細かな好みを固定するためではなく、Simulation Core、Gateway、Server Host、Protocol、View、Management の責務と、大規模リアルタイムシミュレーションに必要な性能特性を長期的に維持するための基準です。
 
 ## 1. 基本原則
 
@@ -53,7 +53,8 @@ Agent、Vehicle、Building、Station などの ID は安定性を重視する。
 
 - Agent state は Agent/World store が正本を持つ。
 - Traffic state は交通系 store/system が正本を持つ。
-- Web Client や Server が Simulation state を推測して別の正本を作らない。
+- Activity、ETA、schedule、classification、semantic event等は対応するSimulation domainを意味的正本とする。
+- Gateway、View、Management、Server HostがSimulation semantic stateを推測して別の正本を作らない。
 
 ### 3.2 Tick
 
@@ -65,12 +66,13 @@ Simulation tick は再現性と観測可能性を重視する。
 commands
 → simulation update
 → state transition commit
-→ snapshot publish
+→ semantic observation source capture
 ```
 
 - I/O 待ちを Simulation tick に持ち込まない。
 - async network operation を tick 内部へ混ぜない。
 - tick 中に外部から mutable state を直接変更させない。
+- Gatewayのsubscription / cache / delivery状態をSimulation ruleやfidelityの判定条件に使用しない。
 
 ### 3.3 allocation
 
@@ -122,14 +124,23 @@ LINQ 自体は禁止しない。
 - `Channel<T>` は Server 内の producer/consumer 境界や command queue 等で有効な場合に検討する。
 - unbounded queue は backlog が無制限に増えないか確認する。
 
-## 6. 例外とエラー
+## 6. Gateway / Server Host
+
+- Gatewayはread-only Observation Request / subscription / filtering / cache / delivery / reconnectを担当し、semantic stateを生成しない。
+- Gatewayのcache hit / miss / rebuildで同一authoritative revisionのObservation semanticsを変えない。
+- Network処理からSimulation mutable Storeを長時間直接参照せず、detached source / snapshotを使う。
+- Observation routeからauthoritative mutation routeへ到達させない。
+- Server HostはGatewayとAdministration / Management command boundaryを別責務としてhostする。
+- slow client、timeout、cancellation、queue backlogはconnection / request単位で隔離し、Simulation tickへ無制限backpressureを波及させない。
+
+## 7. 例外とエラー
 
 - 例外は異常系に使用し、通常の高頻度 state transition を例外で表現しない。
 - public boundary では invalid input を検証する。
 - Protocol では user-facing message ではなく stable error/message code と structured parameter を返す。
 - catch して握りつぶさない。無視する場合は理由を明確にする。
 
-## 7. Logging
+## 8. Logging
 
 - structured logging を基本とする。
 - hot path で Agent ごとの常時ログを出さない。
@@ -137,23 +148,35 @@ LINQ 自体は禁止しない。
 - user-facing localization と運用ログを混同しない。
 - secret、token、個人情報をログへ出さない。
 
-## 8. Protocol / Save Data
+## 9. Protocol / Save Data
 
 - internal class layout をそのまま Protocol に公開しない。
 - binary layout は明示的な field order / width / endianness を持たせる。
 - Protocol version と application version を独立して扱える構造を維持する。
+- domain semantic payloadの意味・field / unitはSimulation、Observation control / delivery envelope / adaptationはGatewayというRoadmap ownershipを維持する。
+- read-only Observation Requestとauthoritative mutation commandを明示的に区別する。
 - Save Data は locale-independent な ID / enum / code / raw value を保存する。
 - 互換性を壊す変更では migration または versioning 方針を明示する。
 
-## 9. Web Client
+## 10. View / Management Client
+
+### View
 
 - Simulation state の正本を持たない。
-- Server snapshot を表示用 state へ変換し、render frame と Simulation tick を分離する。
+- Gatewayから受け取ったauthoritative observationを表示用 state へ変換し、render frame と Simulation tick を分離する。
+- semantic state、予定、ETA、分析結果等を推測・補完・再計算しない。
 - UI の固定表示文言は localization resource 経由を前提にする。
 - network decode と rendering object の lifecycle を明確にする。
 - 描画最適化は entity 数、draw call、frame time を計測して行う。
 
-## 10. コメントとドキュメント
+### Management
+
+- mutationはserver-authoritative command境界からだけ実行する。
+- command pending / resultとGatewayから再観測したauthoritative World stateを混同しない。
+- read-only View componentを再利用しても、command clientをView / Gateway moduleへ注入しない。
+- optimistic previewはauthoritative stateと型・state ownershipを分離する。
+
+## 11. コメントとドキュメント
 
 コメントは「何をしているか」より「なぜそうする必要があるか」を優先する。
 
@@ -168,7 +191,7 @@ LINQ 自体は禁止しない。
 
 重要な設計判断はコメントだけで終わらせず ADR を使用する。
 
-## 11. Analyzer / build
+## 12. Analyzer / build
 
 共通設定は `.editorconfig` と `Directory.Build.props` を正本とする。
 
@@ -179,12 +202,14 @@ LINQ 自体は禁止しない。
 
 警告を抑制する場合は、警告全体を無効化する前に局所修正または局所 suppression を優先する。
 
-## 12. Review checklist
+## 13. Review checklist
 
 実装レビューでは最低限次を確認する。
 
 - 状態 owner は明確か
-- Simulation / Server / Protocol / Web の境界を越えていないか
+- Simulation / Gateway / Server Host / Protocol / View / Managementの責務境界を越えていないか
+- Gateway / Viewがsemantic stateを推測・再計算していないか
+- Observation routeからmutation APIへ到達していないか
 - hot path に不要な allocation / full scan がないか
 - concurrent write の可能性はないか
 - Protocol / Save Data / localization の契約を壊していないか

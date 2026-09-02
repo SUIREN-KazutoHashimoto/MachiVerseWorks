@@ -8,9 +8,9 @@ SDK / runtime の version は個別に手入力して管理せず、Repository �
 - Node.js: [`src/web/.node-version`](../../src/web/.node-version)
 - npm dependency: [`src/web/package-lock.json`](../../src/web/package-lock.json)
 
-実装計画はSimulation側[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)、read-only View側[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)、Management側[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)を正本とします。
+実装計画はSimulation側[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)、Gateway側[`../../roadmap/GATEWAY_ROADMAP.md`](../../roadmap/GATEWAY_ROADMAP.md)、read-only View側[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)、Management側[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)を正本とします。4 Roadmapの責務・依存関係は[`../../roadmap/README.md`](../../roadmap/README.md)を参照してください。
 
-SimulationとViewのObservation Gateway / cache境界は[`../architecture/observation-gateway.md`](../architecture/observation-gateway.md)を参照してください。
+SimulationとGateway / ViewのObservation / cache境界は[`../architecture/observation-gateway.md`](../architecture/observation-gateway.md)を参照してください。
 
 ## Windows 実機での推奨セットアップ
 
@@ -154,7 +154,7 @@ Web View の既定 Server URL は `ws://127.0.0.1:5080/ws` なので、既定構
 
 別 Server へ接続する場合は Web View 起動時に `VITE_SERVER_URL` を指定します。
 
-現時点の`src/web`はread-only Viewです。将来Management Clientが同じWeb stackを利用する場合も、View moduleとは別のcommand client / shellとして実装します。
+現時点の`src/web`はread-only Viewです。将来Management Clientが同じWeb stackを利用する場合も、View moduleとは別のcommand client / shellとして実装します。Gatewayは現時点ではServer内でhostされるため、ローカル起動手順として別processを追加する必要はありません。
 
 ## End-to-End のローカル確認
 

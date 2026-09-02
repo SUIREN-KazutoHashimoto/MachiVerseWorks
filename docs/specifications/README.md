@@ -2,9 +2,11 @@
 
 都市シミュレーションとしての**現行仕様**を分野別に管理します。
 
-このディレクトリでは What / Why を中心に記述し、実装方法の詳細は `docs/architecture/` へ分離します。将来実装のTask状態は仕様書へ混ぜず、Simulation側は[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)、read-only View側は[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)、管理・編集UIは[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)を正本とします。
+このディレクトリでは What / Why を中心に記述し、実装方法の詳細は `docs/architecture/` へ分離します。将来実装のTask状態は仕様書へ混ぜず、Simulation側は[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)、Gateway側は[`../../roadmap/GATEWAY_ROADMAP.md`](../../roadmap/GATEWAY_ROADMAP.md)、read-only View側は[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)、管理・編集UIは[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)を正本とします。
 
-SimulationとViewのread-only境界、Observation Gateway、cache方針は[`../architecture/observation-gateway.md`](../architecture/observation-gateway.md)を参照してください。
+Simulationとread-only consumerのObservation Gateway、cache、delivery方針は[`../architecture/observation-gateway.md`](../architecture/observation-gateway.md)を参照してください。
+
+責務上、domainの意味・field / unit・authoritative observation sourceはSimulation側、Observation Request / subscription / cache / delivery / Protocol adaptationはGateway側で管理します。仕様書では意味と振る舞いを定義し、配送最適化そのものをdomain semanticsへ混在させません。
 
 ## Foundation / Client / Server
 

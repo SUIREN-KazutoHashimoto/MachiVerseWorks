@@ -2,7 +2,7 @@
 
 Headless ServerはASP.NET Core / Kestrel上で1つの`SimulationWorld`をserver-authoritativeに実行し、HTTP health endpointとProtocol 2.x binary WebSocketを提供します。現在のServer Protocol上限は[`ProtocolVersion.Current`](../MachiVerseWorks.Protocol/ProtocolVersion.cs)の **2.16** です。
 
-Serverはread-onlyな**Observation Gateway**と、authoritative mutationを扱う**Administration / Management command boundary**を分離する方向で整理します。現行publish / subscription / inspection処理がObservation Gatewayの既存基盤であり、generic cache / request deduplication等の追加基盤はSimulation Roadmapの`OBS-*`で段階実装します。
+Serverはread-onlyな**Observation Gateway**と、authoritative mutationを扱う**Administration / Management command boundary**を分離する方向で整理します。現行publish / subscription / inspection処理がObservation Gatewayの既存基盤であり、generic cache / request deduplication等の追加基盤は[`GATEWAY_ROADMAP.md`](../../roadmap/GATEWAY_ROADMAP.md)で段階実装します。
 
 ## Runtime boundary
 
@@ -37,7 +37,7 @@ Observation Gatewayは、現行のpublish / subscription / inspection処理をre
 - connection単位のsnapshot delivery scheduling / failure isolation
 - reconnect時のClient state再構築に必要な通常snapshot delivery
 
-### `OBS-*`で段階実装する拡張
+### Gateway Roadmapで段階実装する拡張
 
 - generic Entity inspectionのCurrent / Recent / Planned / Relations contract
 - Entity / Spatial / Static read-model cacheの共通化
@@ -46,7 +46,7 @@ Observation Gatewayは、現行のpublish / subscription / inspection処理をre
 - cache invalidation / eviction / World replacement / reconnect / resyncの統一契約
 - cache hit / miss / rebuild equivalenceと複数Viewer invariance test
 
-上記の未実装項目を、現在すでに存在する機能として扱いません。Task状態の正本は[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)のObservation Gateway Foundationです。
+上記の未実装項目を、現在すでに存在する機能として扱いません。Gateway側Task状態の正本は[`../../roadmap/GATEWAY_ROADMAP.md`](../../roadmap/GATEWAY_ROADMAP.md)です。domainの意味・authoritative observation sourceが必要な項目は[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)を依存先とします。
 
 Observation Gatewayが将来も行ってはいけない責務:
 
@@ -86,7 +86,7 @@ exit
 
 数値はInvariant Cultureで解釈し、IDは正の10進`ulong`です。引用符付きtokenを使うと空白を含むpathを渡せます。不正なcommandや参照整合性エラーはstructured resultとして処理し、Server processを停止させません。
 
-`world save`はSimulation lock中にcheckpointだけをcaptureし、serializationとfile I/Oはlock外で行います。`world load`はfile I/Oとdeserializeを先に終えてからworldをatomicに差し替えます。world差し替えやtopology mutationはread-model revisionを進め、Observation Gatewayの関連delivery stateを再同期可能な状態へ移します。将来の共通cache invalidationは`OBS-*`でこのrevision境界へ統合します。
+`world save`はSimulation lock中にcheckpointだけをcaptureし、serializationとfile I/Oはlock外で行います。`world load`はfile I/Oとdeserializeを先に終えてからworldをatomicに差し替えます。world差し替えやtopology mutationはread-model revisionを進め、Observation Gatewayの関連delivery stateを再同期可能な状態へ移します。将来の共通cache invalidation / resyncはGateway Phase 2 / 3でこのrevision境界へ統合します。
 
 詳細は[`../../docs/specifications/server-administration-console.md`](../../docs/specifications/server-administration-console.md)と[`../../docs/decisions/ADR-0005-server-administration-boundary.md`](../../docs/decisions/ADR-0005-server-administration-boundary.md)を参照してください。
 
@@ -149,12 +149,13 @@ Protocol 1.xの`SubscribeArea`や2D rectangle互換経路は提供しません�
 
 ## Roadmap boundary
 
-- authoritative state / rule / Observation contract / command / Protocol / Save / Administration境界: [`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)
+- authoritative state / rule / semantic observation source / command contract / Save Data: [`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)
+- Observation Request / subscription / cache / deduplication / delivery / Protocol adaptation / reconnect / resync: [`../../roadmap/GATEWAY_ROADMAP.md`](../../roadmap/GATEWAY_ROADMAP.md)
 - read-only Browser View / Camera / Selection / Inspector / Historical viewing / Rendering LOD: [`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)
 - editor / runtime control / configuration / Save / Addon管理UI: [`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)
 - Dashboard分析・trend・heatmap等: 将来Analytics Listener / analysis clientとして別設計
 
-3 Roadmapの責務と横断依存の索引は[`../../roadmap/README.md`](../../roadmap/README.md)を参照してください。
+4 Roadmapの責務と横断依存の索引は[`../../roadmap/README.md`](../../roadmap/README.md)を参照してください。
 
 ## ローカル起動
 

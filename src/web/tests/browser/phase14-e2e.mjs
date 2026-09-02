@@ -89,6 +89,7 @@ try {
   await waitUntil(() => vehicles.size === 4 && [...intersections.active()].length === 1, 'Vehicle and intersection snapshots');
   await waitUntil(() => sawVehicleUpdate && sawRed && sawGreen, 'Vehicle updates and mixed signal indications');
   await waitUntil(() => waitingVehicleIds.size > 0 && sawQueue, 'red-signal Vehicle queue');
+  await waitUntil(() => hasRenderableTrafficState(true), 'mixed signal snapshot with queue');
 
   const queuedRenderTime = performance.now();
   view.render(agents, queuedRenderTime, pedestrians, vehicles, intersections);
@@ -96,6 +97,7 @@ try {
 
   await waitUntil(() => restartedVehicleIds.size > 0, 'a queued Vehicle restarting on green', 45_000);
   await waitUntil(() => phaseIndexes.size > 1, 'fixed signal phase transition', 45_000);
+  await waitUntil(() => hasRenderableTrafficState(false), 'mixed signal snapshot after phase transition', 45_000);
 
   const finalRenderTime = performance.now();
   view.render(agents, finalRenderTime, pedestrians, vehicles, intersections);
@@ -129,6 +131,16 @@ function observeVehicle(message) {
     return;
   }
   if (waitingVehicleIds.has(message.vehicleId) && message.speedMetersPerSecond > 0) restartedVehicleIds.add(message.vehicleId);
+}
+
+function hasRenderableTrafficState(requireQueue) {
+  const active = [...intersections.active()];
+  if (active.length !== 1) return false;
+  const movements = active[0].movements;
+  const hasRed = movements.some((movement) => movement.indication === SignalIndication.Red);
+  const hasGreen = movements.some((movement) => movement.indication === SignalIndication.Green);
+  const hasQueue = movements.some((movement) => movement.queueLength > 0);
+  return hasRed && hasGreen && (!requireQueue || hasQueue);
 }
 
 function assertRenderedTraffic(requireQueue) {

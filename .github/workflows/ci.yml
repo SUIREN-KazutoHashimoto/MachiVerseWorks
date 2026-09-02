@@ -42,6 +42,7 @@ jobs:
           required_files=(
             README.md
             roadmap/SIMULATION_ROADMAP.md
+            roadmap/GATEWAY_ROADMAP.md
             roadmap/VIEW_ROADMAP.md
             roadmap/MANAGEMENT_ROADMAP.md
             AGENTS.md

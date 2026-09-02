@@ -19,7 +19,7 @@ body:
     id: proposal
     attributes:
       label: 提案内容
-      description: 期待する挙動、UI、Simulation / Server / Protocol への変更などを記載してください。
+      description: 期待する挙動と、Simulation / Gateway / View / Management / Server Host / Protocol等への影響が分かる場合は記載してください。
     validations:
       required: true
 
@@ -28,10 +28,13 @@ body:
     attributes:
       label: 関係しそうな領域
       options:
-        - label: Simulation Core
-        - label: Server / Networking
+        - label: Simulation Core / Semantics
+        - label: Observation Gateway / Delivery
+        - label: Server Host / Administration
         - label: Protocol
-        - label: Web Client / Rendering / UI
+        - label: Read-Only View / Rendering / Inspector
+        - label: Management Client / Editing / Operations
+        - label: Persistence / Save
         - label: 都市生成
         - label: Agent / 生活行動
         - label: 道路交通
@@ -51,7 +54,7 @@ body:
     id: performance
     attributes:
       label: 性能・規模への考慮
-      description: Agent 数、tick、network bandwidth、rendering 負荷などに影響しそうな点があれば記載してください。
+      description: Agent数、tick、Gateway delivery / cache、network bandwidth、rendering負荷などに影響しそうな点があれば記載してください。
 
   - type: textarea
     id: additional
