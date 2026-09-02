@@ -8,12 +8,12 @@
 
 SimulationがWorldの唯一の意味的正本です。Activity、Status、分類、予定、ETA、状態遷移、semantic event等の意味的処理はSimulation側で完結させ、Gateway / Viewへ推測・補完・再計算させません。
 
-> **現在:** Phase 30 — Regional & Urban Generation（実装完了・develop統合待ち）
-> **次の実装タスク:** Phase 31 `P31-001`
+> **現在:** Phase 31 — Persistent Regional & Settlement Evolution（実装完了・develop統合待ち）
+> **次の実装タスク:** Phase 32 `P32-001`
 
-> **Gateway:** Gateway Phase 1 `G1-002` から独立進行可能  
+> **Gateway:** Gateway Phase 3 `G3-001` から独立進行可能  
 > **Application version:** ルート [`VERSION`](../VERSION) を正本とする  
-> **Protocol:** `2.18`
+> **Protocol:** `2.19`
 > **Save format:** `11`
 
 ## 進行ルール
@@ -37,8 +37,8 @@ SimulationがWorldの唯一の意味的正本です。Activity、Status、分類
 | 27 | Remote MCP Administration | ✅ 完了 |
 | 28 | Radio & Spectrum Foundation | ✅ 完了 |
 | 29 | World & Physical Environment Generation | ✅ 完了・develop統合済み |
-| 30 | Regional & Urban Generation | ✅ 実装完了・develop統合待ち |
-| 31 | Persistent Regional & Settlement Evolution | ⬜ 未着手 |
+| 30 | Regional & Urban Generation | ✅ 完了・develop統合済み |
+| 31 | Persistent Regional & Settlement Evolution | ✅ 実装完了・develop統合待ち |
 | 32 | Simulation Scheduling & Workload Optimization | ⬜ 未着手 |
 | 33 | Deterministic Parallel Simulation | ⬜ 未着手 |
 | 35 | Historical World & Replay | ⬜ 未着手 |
@@ -198,7 +198,7 @@ Gatewayは[`GATEWAY_ROADMAP.md`](GATEWAY_ROADMAP.md)で独立してPhase 1から
 
 ## Phase 30 — Regional & Urban Generation
 
-> **状態: ⬜ 未着手**  
+> **状態: ✅ 完了 / develop統合済み**  
 > **依存:** Phase 10〜19 / 21〜29  
 > Phase 29の自然環境から複数Settlementの成立理由と歴史を生成し、道路・街区・Parcel・Land Use・Building・POI・人間由来の地名・道路標識を形成する。単一中心の完成都市を一度に生成せず、environment-driven / history-driven / iterative / polycentricな地域生成を正本方針とする。
 
@@ -267,43 +267,67 @@ Gatewayは[`GATEWAY_ROADMAP.md`](GATEWAY_ROADMAP.md)で独立してPhase 1から
 - 道路標識を地形・道路形状・destination・named Geographic Featureから導出する。
 - 生成品質を独立評価し、同じseed・quality presetから同じpolycentricな地域を再現できる。
 
+### Phase 30 Closeout evidence
+
+- Specification: `docs/specifications/regional-urban-generation.md`
+- Architecture: `docs/architecture/regional-urban-generation.md`
+- Protocol domain payload: 2.18 / `RegionalGenerationSnapshot`
+- Save: format 11 extension
+- Validation: Phase30 deterministic / materialization / Protocol / Persistence / Server regression
+- Benchmark: Regional Generation benchmark workflow
+- Integration: PR #225 で `develop` へ統合済み
+
 ---
 
 ## Phase 31 — Persistent Regional & Settlement Evolution
 
-> **状態: ⬜ 未着手**  
+> **状態: ✅ 実装完了 / develop統合待ち**  
 > **依存:** Phase 15 / 19 / 21 / 22 / 24〜30  
 > Phase 30が生成した初期Worldを固定された完成品として扱わず、Simulation時間の進行に応じて都市・町・村・集落・Parcel・Building・交通・地域間関係が継続的に変化するauthoritativeな地域Simulationを確立する。Settlementの規模分類は固定typeではなく実際の人口・機能・サービス・接続性から派生させ、一極集中を強制しない。
 
-- ⬜ **P31-001** — Persistent Regional Simulationの責務、時間粒度、Settlement / Parcel / Buildingのauthoritative境界を仕様化する
-- ⬜ **P31-002** — Settlement population・jobs・services・density・accessibility等からHamlet / Village / Town / City等を派生分類するstable ruleを実装する
-- ⬜ **P31-003** — Settlement center / territory / influenceを固定境界ではなく実World stateから再評価できる契約を実装する
-- ⬜ **P31-004** — 既存Population / Householdの転居・転入・転出を住宅・雇用・生活利便性・交通accessibilityへ接続する
-- ⬜ **P31-005** — 既存Industry / Jobs / EconomyとPopulationを接続し、Settlement内外の雇用・通勤需要を継続更新する
-- ⬜ **P31-006** — 商業・教育・医療等のserviceごとに到達可能性とservice catchment / influenceを計算する最小モデルを実装する
-- ⬜ **P31-007** — Settlement間の物流・商流を既存Logistics / Freightへ接続し、地域間依存をauthoritative stateとして観測できるようにする
-- ⬜ **P31-008** — Population / Economy / Accessibility / Land ValueからParcel単位の住宅・商業・工業等のdevelopment demandを計算する
-- ⬜ **P31-009** — development demandとParcel suitabilityから空地への新規Building / POI建設を時間経過イベントとして実装する
-- ⬜ **P31-010** — BuildingのbuiltAt / condition / use / capacity等を用いるaging・renovation・用途変更・redevelopment lifecycleを実装する
-- ⬜ **P31-011** — demand低下・事業停止・人口減少等からvacancy・closure・abandonment・demolition・空地化を実装する
-- ⬜ **P31-012** — 交通量・人口・産業・service需要からRoad / Transit / Utilityへの整備・増強需要signalを生成する共通境界を実装する
-- ⬜ **P31-013** — 既存Road / Transit networkの接続性変化がSettlement成長・土地利用・通勤・物流へフィードバックする最小ruleを実装する
-- ⬜ **P31-014** — 既存Settlement外で人口・雇用・交通nodeが集積した場合に新しいSettlementが成立できるemergence ruleを実装する
-- ⬜ **P31-015** — 人口・service・建物が減少したSettlementの縮小・分類降格・廃村化を履歴を失わず表現する
-- ⬜ **P31-016** — 通勤・物流・service依存・連続市街地等から複数SettlementのMetro / Urban Region関係を動的に派生する
-- ⬜ **P31-017** — 単一中心への固定吸収を避け、複数中心が競合・補完・専門化できるregional interaction ruleを実装する
-- ⬜ **P31-018** — Settlement growth / decline / Building lifecycle / regional relationの主要変化をstable historical eventとして記録する
-- ⬜ **P31-019** — Persistent Regional stateと必要な履歴をcheckpoint / Save Data / authoritative observation source / Protocol domain payloadへ統合し、Gatewayからread-only配信できるようにする
-- ⬜ **P31-020** — 複数都市・町・村・集落が100年以上成長・停滞・衰退・再成長するlong-run deterministic E2Eを追加する
-- ⬜ **P31-021** — 大都市・郊外・農村・遠隔集落を同一ruleで進めるWorld-scale Simulation benchmarkを記録する
-- ⬜ **P31-022** — Persistent Regional & Settlement Evolutionのspecification / architecture / ADR / ROADMAPを同期する
+- ✅ **P31-001** — Persistent Regional Simulationの責務、時間粒度、Settlement / Parcel / Buildingのauthoritative境界を仕様化する
+- ✅ **P31-002** — Settlement population・jobs・services・density・accessibility等からHamlet / Village / Town / City等を派生分類するstable ruleを実装する
+- ✅ **P31-003** — Settlement center / territory / influenceを固定境界ではなく実World stateから再評価できる契約を実装する
+- ✅ **P31-004** — 既存Population / Householdの転居・転入・転出を住宅・雇用・生活利便性・交通accessibilityへ接続する
+- ✅ **P31-005** — 既存Industry / Jobs / EconomyとPopulationを接続し、Settlement内外の雇用・通勤需要を継続更新する
+- ✅ **P31-006** — 商業・教育・医療等のserviceごとに到達可能性とservice catchment / influenceを計算する最小モデルを実装する
+- ✅ **P31-007** — Settlement間の物流・商流を既存Logistics / Freightへ接続し、地域間依存をauthoritative stateとして観測できるようにする
+- ✅ **P31-008** — Population / Economy / Accessibility / Land ValueからParcel単位の住宅・商業・工業等のdevelopment demandを計算する
+- ✅ **P31-009** — development demandとParcel suitabilityから空地への新規Building / POI建設を時間経過イベントとして実装する
+- ✅ **P31-010** — BuildingのbuiltAt / condition / use / capacity等を用いるaging・renovation・用途変更・redevelopment lifecycleを実装する
+- ✅ **P31-011** — demand低下・事業停止・人口減少等からvacancy・closure・abandonment・demolition・空地化を実装する
+- ✅ **P31-012** — 交通量・人口・産業・service需要からRoad / Transit / Utilityへの整備・増強需要signalを生成する共通境界を実装する
+- ✅ **P31-013** — 既存Road / Transit networkの接続性変化がSettlement成長・土地利用・通勤・物流へフィードバックする最小ruleを実装する
+- ✅ **P31-014** — 既存Settlement外で人口・雇用・交通nodeが集積した場合に新しいSettlementが成立できるemergence ruleを実装する
+- ✅ **P31-015** — 人口・service・建物が減少したSettlementの縮小・分類降格・廃村化を履歴を失わず表現する
+- ✅ **P31-016** — 通勤・物流・service依存・連続市街地等から複数SettlementのMetro / Urban Region関係を動的に派生する
+- ✅ **P31-017** — 単一中心への固定吸収を避け、複数中心が競合・補完・専門化できるregional interaction ruleを実装する
+- ✅ **P31-018** — Settlement growth / decline / Building lifecycle / regional relationの主要変化をstable historical eventとして記録する
+- ✅ **P31-019** — Persistent Regional stateと必要な履歴をcheckpoint / Save Data / authoritative observation source / Protocol domain payloadへ統合し、Gatewayからread-only配信できるようにする
+- ✅ **P31-020** — 複数都市・町・村・集落が100年以上成長・停滞・衰退・再成長するlong-run deterministic E2Eを追加する
+- ✅ **P31-021** — 大都市・郊外・農村・遠隔集落を同一ruleで進めるWorld-scale Simulation benchmarkを記録する
+- ✅ **P31-022** — Persistent Regional & Settlement Evolutionのspecification / architecture / ADR / ROADMAPを同期する
 
 ### Phase 31 完了条件
 
-- 初期生成後もSettlement / Parcel / Building / Population / Economy / Transportの状態が時間経過で継続的に変化する。
-- 都市・町・村・集落の分類と影響圏が実Simulation状態から派生し、固定テンプレートや単一中心への強制収束に依存しない。
-- 遠隔地・郊外・農村を集計値だけの別Simulationへ置換せず、都市部と同じauthoritative model・ruleで成長・衰退を再現できる。
-- 建設・老朽化・用途変更・再開発・閉鎖・解体・Settlement成立/消滅等が履歴として追跡できる。
+- ✅ 初期生成後もSettlement / Parcel / Building / Population / Economy / Transportの状態が時間経過で継続的に変化する。
+- ✅ 都市・町・村・集落の分類と影響圏が実Simulation状態から派生し、固定テンプレートや単一中心への強制収束に依存しない。
+- ✅ 遠隔地・郊外・農村を集計値だけの別Simulationへ置換せず、都市部と同じauthoritative model・ruleで成長・衰退を再現できる。
+- ✅ 建設・老朽化・用途変更・再開発・閉鎖・解体・Settlement成立/消滅等が履歴として追跡できる。
+
+### Phase 31 Closeout evidence
+
+- Specification: `docs/specifications/persistent-regional-evolution.md`
+- Architecture: `docs/architecture/persistent-regional-evolution.md`
+- ADR: `docs/decisions/ADR-0010-persistent-regional-evolution.md`
+- Protocol domain payload: 2.19 / `PersistentRegionalEvolutionSnapshot`
+- Save: format 11内へPersistent Regional state / event historyを統合し、既存Save format番号は変更しない
+- Determinism: 120年同一seed再現、60年衰退→60年再成長、materialized World 12年 + checkpoint round-trip
+- Regional interaction: actual Employment / Logistics / service catchment / continuous urban areaからCommuting / Trade / Service / Metroを年次再評価し、competition / complementarity / specialization profileを提供する
+- Territory: current center / influence / neighboring Settlement距離からderived territoryを再評価する
+- Benchmark: `PersistentRegionalEvolutionBenchmarks`を共通BenchmarkDotNet matrixへ登録
+- Gateway boundary: detached read-only source、Protocol capability gate、2.18以前への2.19 payload非配信
+- Integration: 最新`develop`を同期済み。Phase31本体は`develop`統合待ち
 
 ---
 

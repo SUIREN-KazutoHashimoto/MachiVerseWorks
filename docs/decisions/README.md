@@ -13,6 +13,7 @@
 - [`ADR-0007-read-only-view-observation-management-boundary.md`](ADR-0007-read-only-view-observation-management-boundary.md): Viewを完全read-onlyとし、Observation GatewayとManagement command境界を分離する
 - [`ADR-0008-authoritative-two-level-world-environment-terrain.md`](ADR-0008-authoritative-two-level-world-environment-terrain.md): Global EnvironmentとDetailed 3D Terrainを二層化し、両方をSimulation authoritative stateから決定する
 - [`ADR-0009-deterministic-regional-generation-authority.md`](ADR-0009-deterministic-regional-generation-authority.md): Regional GenerationをSimulation authoritative stateとして決定論的に生成し、generated planとlive-world materializationを分離する
+- [`ADR-0010-persistent-regional-evolution.md`](ADR-0010-persistent-regional-evolution.md): Phase 30の初期地域をSimulation-authoritativeに継続進化させ、遠隔地を含め同一ruleで扱う
 
 命名例:
 

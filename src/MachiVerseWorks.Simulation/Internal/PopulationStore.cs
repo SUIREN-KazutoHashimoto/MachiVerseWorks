@@ -50,6 +50,75 @@ internal sealed class PopulationStore
         return id;
     }
 
+    public bool RelocateHousehold(HouseholdId id, TripEndpoint residence)
+    {
+        if (!householdIndex.TryGetValue(id, out var householdPosition)) return false;
+        var household = households[householdPosition];
+        var previous = household.Residence;
+        if (previous == residence) return true;
+        household.Residence = residence;
+
+        for (var index = 0; index < persons.Count; index++)
+        {
+            var person = persons[index];
+            if (person.HouseholdId != id) continue;
+            person.Residence = residence;
+            if (person.TravelState == PersonTravelState.AtActivity
+                && person.CurrentActivity == ActivityKind.Home
+                && person.CurrentLocation == previous)
+            {
+                person.CurrentLocation = residence;
+            }
+        }
+        return true;
+    }
+
+    public void ReplaceBuildingReferences(BuildingId buildingId, TripEndpoint replacement)
+    {
+        for (var index = 0; index < households.Count; index++)
+        {
+            var household = households[index];
+            if (household.Residence.BuildingId == buildingId) household.Residence = replacement;
+        }
+
+        for (var index = 0; index < persons.Count; index++)
+        {
+            var person = persons[index];
+            if (person.Residence.BuildingId == buildingId) person.Residence = replacement;
+            if (person.CurrentLocation.BuildingId == buildingId) person.CurrentLocation = replacement;
+            if (person.Destination is { } destination && destination.BuildingId == buildingId) person.Destination = replacement;
+            for (var scheduleIndex = 0; scheduleIndex < person.Schedule.Length; scheduleIndex++)
+            {
+                var window = person.Schedule[scheduleIndex];
+                if (window.Destination is { } scheduled && scheduled.BuildingId == buildingId)
+                    person.Schedule[scheduleIndex] = window with { Destination = replacement };
+            }
+        }
+    }
+
+    public void ReplacePoiReferences(PoiId poiId, TripEndpoint replacement)
+    {
+        for (var index = 0; index < households.Count; index++)
+        {
+            var household = households[index];
+            if (household.Residence.PoiId == poiId) household.Residence = replacement;
+        }
+
+        for (var index = 0; index < persons.Count; index++)
+        {
+            var person = persons[index];
+            if (person.Residence.PoiId == poiId) person.Residence = replacement;
+            if (person.CurrentLocation.PoiId == poiId) person.CurrentLocation = replacement;
+            if (person.Destination is { } destination && destination.PoiId == poiId) person.Destination = replacement;
+            for (var scheduleIndex = 0; scheduleIndex < person.Schedule.Length; scheduleIndex++)
+            {
+                var window = person.Schedule[scheduleIndex];
+                if (window.Destination is { } scheduled && scheduled.PoiId == poiId)
+                    person.Schedule[scheduleIndex] = window with { Destination = replacement };
+            }
+        }
+    }
+
     public TripRequestId PeekTripRequestId()
     {
         EnsureCapacity(nextTripRequestId, "Trip request");
@@ -231,7 +300,7 @@ internal sealed class PopulationStore
 internal sealed class HouseholdState(HouseholdId id, TripEndpoint residence)
 {
     public HouseholdId Id { get; } = id;
-    public TripEndpoint Residence { get; } = residence;
+    public TripEndpoint Residence { get; set; } = residence;
     public int PersonCount { get; set; }
 }
 
@@ -248,7 +317,7 @@ internal sealed class PersonState(
     public PersonId Id { get; } = id;
     public HouseholdId HouseholdId { get; } = householdId;
     public PersonDemographics Demographics { get; } = demographics;
-    public TripEndpoint Residence { get; } = residence;
+    public TripEndpoint Residence { get; set; } = residence;
     public TripEndpoint CurrentLocation { get; set; } = currentLocation;
     public ActivityKind CurrentActivity { get; set; } = currentActivity;
     public PersonTravelState TravelState { get; set; } = PersonTravelState.AtActivity;

@@ -77,6 +77,7 @@ public sealed partial class SimulationWorld
         StepEconomy(nextTime);
         ApplyPowerOperationalConstraints();
         StepLogistics(nextTime);
+        StepPersistentRegionalEvolution(nextTime);
         PlanPopulationAndEconomyTrips(nextTime);
         StepVehicles(Config.TickDurationSeconds, nextTime.TickCount);
         StepRailwayOperations(Config.TickDurationSeconds, nextTime.TickCount);
@@ -97,6 +98,7 @@ public sealed partial class SimulationWorld
         {
             WorldEnvironment = CreateWorldEnvironmentCheckpoint(),
             RegionalGeneration = CreateRegionalGenerationCheckpoint(),
+            RegionalEvolution = CreatePersistentRegionalEvolutionCheckpoint(),
         };
         return new SimulationCheckpoint(
             Config.TickRate, Config.Seed, Config.SpatialCellSize, Time.TickCount, Time.Elapsed.Ticks, _random.State,
@@ -165,6 +167,7 @@ public sealed partial class SimulationWorld
         ValidateRadioCheckpoint(checkpoint);
         ValidateWorldEnvironmentCheckpoint(checkpoint);
         ValidateRegionalGenerationCheckpoint(checkpoint);
+        ValidatePersistentRegionalEvolutionCheckpoint(checkpoint);
         var expectedElapsedTicks = CalculateExpectedElapsedTicks(checkpoint.TickCount, config.TickRate);
         if (checkpoint.ElapsedTicks != expectedElapsedTicks
             && (!TryCalculateLegacyElapsedTicks(checkpoint.TickCount, config.TickRate, out var legacyElapsedTicks)
@@ -206,6 +209,7 @@ public sealed partial class SimulationWorld
         world.RestoreRadio(checkpoint.Economy?.Radio);
         world.RestoreWorldEnvironment(worldEnvironment);
         world.RestoreRegionalGeneration(checkpoint.Economy?.RegionalGeneration);
+        world.RestorePersistentRegionalEvolution(checkpoint.Economy?.RegionalEvolution);
         world._multimodalTransit.Restore(checkpoint.MultimodalTransit);
         ValidateMultimodalTransitCheckpointReferences(checkpoint);
         return world;
