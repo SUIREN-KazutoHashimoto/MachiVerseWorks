@@ -51,6 +51,9 @@ export interface ViewNavigationOptions {
 export class ViewNavigationController {
   private readonly sampledTargetPosition = new Float64Array(3);
   private readonly keys = new Set<string>();
+  private readonly movementForward = new THREE.Vector3();
+  private readonly movementRight = new THREE.Vector3();
+  private readonly movementDirection = new THREE.Vector3();
   private readonly minimumMoveSpeed: number;
   private readonly maximumMoveSpeed: number;
   private readonly sprintMultiplier: number;
@@ -193,8 +196,6 @@ export class ViewNavigationController {
   }
 
   private updateFreeMovement(deltaSeconds: number): void {
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
     let forwardAmount = 0;
     let rightAmount = 0;
     let verticalAmount = 0;
@@ -207,11 +208,19 @@ export class ViewNavigationController {
     if (this.keys.has('KeyQ') || this.keys.has('ControlLeft') || this.keys.has('ControlRight')) verticalAmount -= 1;
 
     if (forwardAmount === 0 && rightAmount === 0 && verticalAmount === 0) return;
+
+    this.movementForward.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    this.movementRight.set(1, 0, 0).applyQuaternion(this.camera.quaternion);
+    this.movementDirection
+      .copy(this.movementForward)
+      .multiplyScalar(forwardAmount)
+      .addScaledVector(this.movementRight, rightAmount);
+    this.movementDirection.y += verticalAmount;
+    this.movementDirection.normalize();
+
     const sprinting = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
     const distance = this.currentMoveSpeed * (sprinting ? this.sprintMultiplier : 1) * deltaSeconds;
-    this.camera.position.addScaledVector(forward, forwardAmount * distance);
-    this.camera.position.addScaledVector(right, rightAmount * distance);
-    this.camera.position.y += verticalAmount * distance;
+    this.camera.position.addScaledVector(this.movementDirection, distance);
     this.camera.position.y = Math.max(this.minimumHeight, this.camera.position.y);
     this.camera.updateMatrixWorld(true);
   }
@@ -307,6 +316,7 @@ export class ViewNavigationController {
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    if (isNavigationKeyboardInputTarget(event.target)) return;
     if (event.code === 'Space') event.preventDefault();
     this.setKeyState(event.code, true);
   };
@@ -379,6 +389,19 @@ function simulationPositionToThree(position: MutablePositionBuffer): THREE.Vecto
 function resolveFocusDistance(preferredZoom: number | undefined): number {
   if (preferredZoom === undefined) return DEFAULT_FOCUS_DISTANCE;
   return clamp(DEFAULT_FOCUS_DISTANCE / validatePositive(preferredZoom, 'preferred zoom'), 10, 10_000);
+}
+
+export function isNavigationKeyboardInputTarget(target: EventTarget | null): boolean {
+  let current: EventTarget | null = target;
+  while (current !== null && typeof current === 'object') {
+    const element = current as Partial<HTMLElement>;
+    const tagName = typeof element.tagName === 'string' ? element.tagName.toUpperCase() : '';
+    if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT' || tagName === 'BUTTON' || element.isContentEditable === true) {
+      return true;
+    }
+    current = element.parentElement ?? null;
+  }
+  return false;
 }
 
 function validateSampledWorldPosition(position: MutablePositionBuffer): void {
