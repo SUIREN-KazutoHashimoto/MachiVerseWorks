@@ -91,13 +91,15 @@ partition cacheはSaveしない。configから再構築できるderived dataで�
 
 この二重契約により、通常の道路・建物配置はsurface APIだけで高速に処理できる一方、地下・水中・cave・複数surfaceを必要とするdomainはvolume APIへ進める。
 
-`GetSurfaces(x, y, minZ, maxZ)`は同一XYに複数intersectionを返す。Phase29 baselineではprimary ground、sea water surface、deterministic cavity floor/ceilingを扱う。
+`GetSurfaces(x, y, minZ, maxZ)`は同一XYに複数intersectionを返す。Phase29 baselineではprimary ground、Ocean / Lake / River / Tributary / Floodplainのwater surface、deterministic cavity floor/ceilingを扱う。cavity radiusはdepthにより制限し、ceilingをprimary groundより下へ維持することでsurface queryとmatter queryを一致させる。
 
 ## Infrastructure constraint boundary
 
 Road / Railway / BuildingはTerrain実装詳細へ直接依存せず、`TerrainConstraintEvaluator`を利用する。
 
-返却値にはallow/denyだけでなくmaximum slope、elevation range、water/void intersection、reasonを含める。これにより後続Phaseでcut-and-fillやbridge/tunnel costを追加するときも、呼び出し側APIを壊さずconstraint resultを拡張できる。
+返却値にはallow/denyだけでなくmaximum slope、elevation range、water/void intersection、reasonを含める。Water / Voidはfootprintの`MinZ..MaxZ`内のsurface intersectionとmatter sampleを使って判定するため、上空のbridge相当volumeと地表水を混同せず、深いbasement / tunnel相当volume内のcavityも検出できる。
+
+これにより後続Phaseでcut-and-fillやbridge/tunnel costを追加するときも、呼び出し側APIを壊さずconstraint resultを拡張できる。
 
 ## GeographicFeature entity
 
@@ -111,34 +113,39 @@ Procedural fieldそのものと、人間が意味を付けて参照する自然�
 - transport route planning
 - Save / Protocol
 
-feature detectionは対象volumeをdeterministic gridで走査し、environment sampleからtypeを判定する。Phase29ではbaseline detectionであり、GIS級の境界抽出精度を目標にしない。
+feature detectionは対象volumeをdeterministic gridで走査し、environment sampleからtypeを判定する。Phase29ではbaseline detectionであり、GIS級の境界抽出精度を目標にしない。`Geometry`は構造比較し、別world / 別processで同一seed・config・volumeから再生成したfeatureを値として同一判定できる。
 
 ## Toponym provenance
 
 名前は`GeographicFeature`の表示propertyに埋め込まず、`NaturalToponym`として分離する。provenanceを持たせることで、将来のrename、言語別名称、親地名継承、addon generator差し替えで「どこから来た名前か」を追跡できる。
 
+checkpoint / Protocol validationはsource featureに加え、non-null / non-zeroのparent Toponym IDが同じcollection内に存在することも要求する。
+
 ## Save boundary
 
 World Environmentは既存Save format 11の`EconomyCheckpoint` optional extensionへ格納する。これは既存Power / Water / Gas / Optical / Radioと同じ後方互換拡張方式である。
 
-保存するのはconfig、materialize済みfeature、toponym。terrain cacheやregional query結果は保存しない。
+保存するのはconfigと、authoritative workflowで明示的にmaterializeされたfeature / toponymである。Terrain partition、regional query result、`SubscribeVolume`観測のために生成したfeature / toponym cacheは保存しない。read-only observationがcheckpoint stateを変更しないことをSave bytesのinvariance testで固定する。
 
-旧Saveでは`worldEnvironment`がnullになるため、Simulation seedからdefault configを作る。新Saveではcheckpoint configを`SimulationConfig`構築時に復元し、その後feature/toponymを戻す。
+旧Saveでは`worldEnvironment`がnullになるため、Simulation seedからdefault configを作る。新Saveではcheckpoint configを`SimulationConfig`構築時に復元し、保存済みfeature/toponymがあれば戻す。未materializeの自然feature/toponymは同じconfig/seed/volumeから再生成する。
+
+`WorldSaveLimits`はfeature数、toponym数、featureごとのgeometry点数を個別に制限し、`WorldSaveSerializer.NestedLimits`がDTO materialization前のJSON scanでも同じ上限を適用する。
 
 ## Observation boundary
 
-`CreateDetailedWorldEnvironmentSnapshot`は購読volume内を固定sample gridで観測し、global sampleと同じXYのdetailed terrain sampleを対応させる。
+`CreateDetailedWorldEnvironmentSnapshot`は購読volume内を固定sample gridで観測し、global sampleと同じXYのdetailed terrain sampleを対応させる。snapshot生成はderived observationであり、checkpoint対象dictionaryへfeature / toponymを追加しない。
 
-Serverはclientごとの`SubscribeVolume`を使ってsnapshotを作り、Protocol 2.17未満のclientへは送らない。
+Serverはclientごとの`SubscribeVolume`を使ってsnapshotを作り、Protocol 2.17未満のclientへは送らない。同一publish cycle内で同一`WorldVolume`を持つclientは1つのsnapshot/messageを共有し、procedural generationを接続数ぶん繰り返さない。
 
-Protocol payloadはcamelCase JSONを16-byte binary frame header内へ格納する。Phase29は可変geometry/textを多く含むため、binary固定長item化よりschema可読性を優先した。ただし1 MiB上限、sample/feature/geometry/text上限、finite/ID/reference validationはcodecで必須とする。
+Protocol payloadはcamelCase JSONを16-byte binary frame header内へ格納する。Phase29は可変geometry/textを多く含むため、binary固定長item化よりschema可読性を優先した。ただし1 MiB上限、sample/feature/geometry/text上限、finite/enum discriminant/ID/reference validationはcodecで必須とする。
 
 ## Failure / validation policy
 
 - configのNaN/Infinity、無効latitude、zero environment seedはconstructorで拒否
 - terrain queryのnon-finite coordinateは拒否
 - checkpointのduplicate/zero stable ID、missing parent/source参照は拒否
-- Protocolのoversized collection、invalid geometry/referenceはdeserialize前後で拒否
+- Protocolのoversized collection、未知discriminant、invalid geometry/referenceは拒否
+- Saveのworld environment可変collectionはmaterialization前後でbounded validationする
 - Server publish timeoutやWebSocket errorは既存connection policyに従う
 
 ## Performance policy
