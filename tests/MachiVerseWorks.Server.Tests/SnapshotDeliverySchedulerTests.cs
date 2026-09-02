@@ -40,6 +40,32 @@ public sealed class SnapshotDeliverySchedulerTests
     }
 
     [TestMethod]
+    public async Task CompetingDeliveryLaneGetsNextReservationBeforeActiveLaneCanRepeat()
+    {
+        var scheduler = new SnapshotDeliveryScheduler();
+        var connectionId = Guid.NewGuid();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Assert.IsTrue(scheduler.TryReserve(connectionId, ObservationDeliveryLane.Snapshot));
+        scheduler.StartReserved(connectionId, async () =>
+        {
+            started.SetResult();
+            await release.Task;
+        });
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+        Assert.IsFalse(scheduler.TryReserve(connectionId, ObservationDeliveryLane.Population));
+
+        release.SetResult();
+        await WaitUntilAsync(() => scheduler.InFlightCount == 0, TimeSpan.FromSeconds(1));
+
+        Assert.IsFalse(scheduler.TryReserve(connectionId, ObservationDeliveryLane.Snapshot));
+        Assert.IsTrue(scheduler.TryReserve(connectionId, ObservationDeliveryLane.Population));
+        scheduler.ReleaseReservation(connectionId);
+    }
+
+    [TestMethod]
     public async Task UnexpectedDeliveryFailureIsSurfacedToTheOwner()
     {
         var scheduler = new SnapshotDeliveryScheduler();

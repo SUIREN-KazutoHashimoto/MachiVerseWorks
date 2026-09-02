@@ -14,6 +14,18 @@ internal sealed class ConnectionLimitExceededException : InvalidOperationExcepti
         : base($"The WebSocket connection limit of {maximum} has been reached.") { }
 }
 
+internal readonly record struct CommittedDeliveryRevision(
+    long SubscriptionRevision,
+    ulong ObservationGeneration,
+    ulong ObservationRevision);
+
+internal readonly record struct StaticDeliveryRevision(
+    long SubscriptionRevision,
+    ulong ObservationGeneration,
+    ulong SourceRevision);
+
+internal readonly record struct ClientInspectionState(ulong? PersonId, long Revision);
+
 internal sealed class ClientConnection : IDisposable
 {
     private readonly object _stateGate = new();
@@ -27,10 +39,10 @@ internal sealed class ClientConnection : IDisposable
     private ulong? _inspectedPersonId;
     private ClientHandshakeState? _handshakeState;
     private long _subscriptionRevision;
-    private long _lastRoadSubscriptionRevision = long.MinValue;
-    private ulong _lastRoadRevision;
-    private long _lastRailwaySubscriptionRevision = long.MinValue;
-    private ulong _lastRailwayRevision;
+    private long _inspectionRevision;
+    private CommittedDeliveryRevision? _committedDelivery;
+    private StaticDeliveryRevision? _roadDelivery;
+    private StaticDeliveryRevision? _railwayDelivery;
     private int _activeSendCount;
     private bool _disposeRequested;
     private bool _sendGateDisposed;
@@ -103,12 +115,20 @@ internal sealed class ClientConnection : IDisposable
     public void SetInspectedPerson(ulong personId)
     {
         if (personId == 0) throw new ArgumentOutOfRangeException(nameof(personId));
-        lock (_stateGate) _inspectedPersonId = personId;
+        lock (_stateGate)
+        {
+            _inspectedPersonId = personId;
+            _inspectionRevision = checked(_inspectionRevision + 1);
+        }
     }
 
     public void ClearPersonInspection()
     {
-        lock (_stateGate) _inspectedPersonId = null;
+        lock (_stateGate)
+        {
+            _inspectedPersonId = null;
+            _inspectionRevision = checked(_inspectionRevision + 1);
+        }
     }
 
     public bool TryGetInspectedPersonId(out ulong personId)
@@ -125,6 +145,16 @@ internal sealed class ClientConnection : IDisposable
         }
     }
 
+    public ClientInspectionState CaptureInspectionState()
+    {
+        lock (_stateGate) return new ClientInspectionState(_inspectedPersonId, _inspectionRevision);
+    }
+
+    public bool IsInspectionCurrent(ClientInspectionState state)
+    {
+        lock (_stateGate) return _inspectionRevision == state.Revision && _inspectedPersonId == state.PersonId;
+    }
+
     public bool TryCaptureSubscription(out ClientSubscriptionState state)
     {
         lock (_stateGate)
@@ -134,53 +164,99 @@ internal sealed class ClientConnection : IDisposable
                 state = default;
                 return false;
             }
-            state = new ClientSubscriptionState(volume, _subscriptionRevision, new HashSet<ulong>(_knownAgentIds), new HashSet<ulong>(_knownPedestrianIds), new HashSet<ulong>(_knownVehicleIds));
+            state = new ClientSubscriptionState(
+                volume,
+                _subscriptionRevision,
+                _committedDelivery,
+                new HashSet<ulong>(_knownAgentIds),
+                new HashSet<ulong>(_knownPedestrianIds),
+                new HashSet<ulong>(_knownVehicleIds),
+                _roadDelivery,
+                _railwayDelivery);
             return true;
         }
     }
 
-    public bool NeedsRoadSnapshot(long subscriptionRevision, ulong roadRevision)
+    public bool NeedsRoadSnapshot(long subscriptionRevision, ulong roadRevision) => NeedsRoadSnapshot(subscriptionRevision, 0, roadRevision);
+
+    public bool NeedsRoadSnapshot(long subscriptionRevision, ulong observationGeneration, ulong roadRevision)
     {
-        lock (_stateGate) return _lastRoadSubscriptionRevision != subscriptionRevision || _lastRoadRevision != roadRevision;
+        lock (_stateGate)
+        {
+            return _roadDelivery is not { } delivered
+                || delivered.SubscriptionRevision != subscriptionRevision
+                || delivered.ObservationGeneration != observationGeneration
+                || delivered.SourceRevision != roadRevision;
+        }
     }
 
-    public bool TryMarkRoadSnapshotDelivered(long subscriptionRevision, ulong roadRevision)
+    public bool TryMarkRoadSnapshotDelivered(long subscriptionRevision, ulong roadRevision) => TryMarkRoadSnapshotDelivered(subscriptionRevision, 0, roadRevision);
+
+    public bool TryMarkRoadSnapshotDelivered(long subscriptionRevision, ulong observationGeneration, ulong roadRevision)
     {
         lock (_stateGate)
         {
             if (_subscriptionRevision != subscriptionRevision) return false;
-            _lastRoadSubscriptionRevision = subscriptionRevision;
-            _lastRoadRevision = roadRevision;
+            _roadDelivery = new StaticDeliveryRevision(subscriptionRevision, observationGeneration, roadRevision);
             return true;
         }
     }
 
-    public bool NeedsRailwaySnapshot(long subscriptionRevision, ulong railwayRevision)
+    public bool NeedsRailwaySnapshot(long subscriptionRevision, ulong railwayRevision) => NeedsRailwaySnapshot(subscriptionRevision, 0, railwayRevision);
+
+    public bool NeedsRailwaySnapshot(long subscriptionRevision, ulong observationGeneration, ulong railwayRevision)
     {
-        lock (_stateGate) return _lastRailwaySubscriptionRevision != subscriptionRevision || _lastRailwayRevision != railwayRevision;
+        lock (_stateGate)
+        {
+            return _railwayDelivery is not { } delivered
+                || delivered.SubscriptionRevision != subscriptionRevision
+                || delivered.ObservationGeneration != observationGeneration
+                || delivered.SourceRevision != railwayRevision;
+        }
     }
 
-    public bool TryMarkRailwaySnapshotDelivered(long subscriptionRevision, ulong railwayRevision)
+    public bool TryMarkRailwaySnapshotDelivered(long subscriptionRevision, ulong railwayRevision) => TryMarkRailwaySnapshotDelivered(subscriptionRevision, 0, railwayRevision);
+
+    public bool TryMarkRailwaySnapshotDelivered(long subscriptionRevision, ulong observationGeneration, ulong railwayRevision)
     {
         lock (_stateGate)
         {
             if (_subscriptionRevision != subscriptionRevision) return false;
-            _lastRailwaySubscriptionRevision = subscriptionRevision;
-            _lastRailwayRevision = railwayRevision;
+            _railwayDelivery = new StaticDeliveryRevision(subscriptionRevision, observationGeneration, railwayRevision);
             return true;
         }
     }
 
-    public bool TryReplaceKnownAgentIds(long revision, HashSet<ulong> agentIds) => TryReplaceKnownEntityIds(revision, agentIds, new HashSet<ulong>(_knownPedestrianIds), new HashSet<ulong>(_knownVehicleIds));
-    public bool TryReplaceKnownEntityIds(long revision, HashSet<ulong> agentIds, HashSet<ulong> pedestrianIds) => TryReplaceKnownEntityIds(revision, agentIds, pedestrianIds, new HashSet<ulong>(_knownVehicleIds));
+    public bool TryReplaceKnownAgentIds(long revision, HashSet<ulong> agentIds)
+        => TryReplaceKnownEntityIds(revision, 0, 0, agentIds, new HashSet<ulong>(_knownPedestrianIds), new HashSet<ulong>(_knownVehicleIds));
+
+    public bool TryReplaceKnownEntityIds(long revision, HashSet<ulong> agentIds, HashSet<ulong> pedestrianIds)
+        => TryReplaceKnownEntityIds(revision, 0, 0, agentIds, pedestrianIds, new HashSet<ulong>(_knownVehicleIds));
 
     public bool TryReplaceKnownEntityIds(long revision, HashSet<ulong> agentIds, HashSet<ulong> pedestrianIds, HashSet<ulong> vehicleIds)
+        => TryReplaceKnownEntityIds(revision, 0, 0, agentIds, pedestrianIds, vehicleIds);
+
+    public bool TryReplaceKnownEntityIds(
+        long subscriptionRevision,
+        ulong observationGeneration,
+        ulong observationRevision,
+        HashSet<ulong> agentIds,
+        HashSet<ulong> pedestrianIds,
+        HashSet<ulong> vehicleIds)
     {
-        ArgumentNullException.ThrowIfNull(agentIds); ArgumentNullException.ThrowIfNull(pedestrianIds); ArgumentNullException.ThrowIfNull(vehicleIds);
+        ArgumentNullException.ThrowIfNull(agentIds);
+        ArgumentNullException.ThrowIfNull(pedestrianIds);
+        ArgumentNullException.ThrowIfNull(vehicleIds);
         lock (_stateGate)
         {
-            _knownAgentIds = agentIds; _knownPedestrianIds = pedestrianIds; _knownVehicleIds = vehicleIds;
-            return _subscriptionRevision == revision;
+            if (_committedDelivery is { } committed && committed.SubscriptionRevision > subscriptionRevision)
+                return false;
+
+            _knownAgentIds = agentIds;
+            _knownPedestrianIds = pedestrianIds;
+            _knownVehicleIds = vehicleIds;
+            _committedDelivery = new CommittedDeliveryRevision(subscriptionRevision, observationGeneration, observationRevision);
+            return _subscriptionRevision == subscriptionRevision;
         }
     }
 
@@ -261,10 +337,24 @@ internal sealed class ClientConnection : IDisposable
     }
 }
 
-internal readonly record struct ClientSubscriptionState(WorldVolume Volume, long Revision, HashSet<ulong> KnownAgentIds, HashSet<ulong> KnownPedestrianIds, HashSet<ulong> KnownVehicleIds)
+internal readonly record struct ClientSubscriptionState(
+    WorldVolume Volume,
+    long Revision,
+    CommittedDeliveryRevision? CommittedDelivery,
+    HashSet<ulong> KnownAgentIds,
+    HashSet<ulong> KnownPedestrianIds,
+    HashSet<ulong> KnownVehicleIds,
+    StaticDeliveryRevision? RoadDelivery,
+    StaticDeliveryRevision? RailwayDelivery)
 {
-    public ClientSubscriptionState(WorldVolume volume, long revision, HashSet<ulong> knownAgentIds) : this(volume, revision, knownAgentIds, [], []) { }
-    public ClientSubscriptionState(WorldVolume volume, long revision, HashSet<ulong> knownAgentIds, HashSet<ulong> knownPedestrianIds) : this(volume, revision, knownAgentIds, knownPedestrianIds, []) { }
+    public ClientSubscriptionState(WorldVolume volume, long revision, HashSet<ulong> knownAgentIds)
+        : this(volume, revision, null, knownAgentIds, [], [], null, null) { }
+
+    public ClientSubscriptionState(WorldVolume volume, long revision, HashSet<ulong> knownAgentIds, HashSet<ulong> knownPedestrianIds)
+        : this(volume, revision, null, knownAgentIds, knownPedestrianIds, [], null, null) { }
+
+    public ClientSubscriptionState(WorldVolume volume, long revision, HashSet<ulong> knownAgentIds, HashSet<ulong> knownPedestrianIds, HashSet<ulong> knownVehicleIds)
+        : this(volume, revision, null, knownAgentIds, knownPedestrianIds, knownVehicleIds, null, null) { }
 }
 
 internal sealed class ClientConnectionRegistry

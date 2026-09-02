@@ -3,17 +3,15 @@ using MachiVerseWorks.Protocol;
 
 namespace MachiVerseWorks.Server;
 
-internal readonly record struct PendingPopulationDelivery(ClientConnection Connection, ulong? InspectedPersonId);
+internal readonly record struct PendingPopulationDelivery(ClientConnection Connection, ClientInspectionState Inspection);
 
 internal sealed class PopulationPublishService(
     IObservationSource observationSource,
     ServerOptions options,
     ClientConnectionRegistry connections,
-    ObservationCache cache) : BackgroundService
+    ObservationCache cache,
+    SnapshotDeliveryScheduler deliveryScheduler) : BackgroundService
 {
-    private static readonly TimeSpan ClientSendTimeout = TimeSpan.FromSeconds(5);
-    private readonly SnapshotDeliveryScheduler _deliveryScheduler = new();
-
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(options.SnapshotInterval);
@@ -21,22 +19,25 @@ internal sealed class PopulationPublishService(
         {
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
-                _deliveryScheduler.ThrowIfFaulted();
+                deliveryScheduler.ThrowIfFaulted();
                 var pending = CapturePendingDeliveries();
                 if (pending.Length == 0) continue;
                 try
                 {
-                    var inspectedIds = pending.Where(static item => item.InspectedPersonId.HasValue).Select(static item => item.InspectedPersonId!.Value).ToHashSet();
+                    var inspectedIds = pending
+                        .Where(static item => item.Inspection.PersonId.HasValue)
+                        .Select(static item => item.Inspection.PersonId!.Value)
+                        .ToHashSet();
                     var snapshot = observationSource.CapturePopulationPublishSnapshot(inspectedIds);
                     var statistics = PopulationMessageMapper.Create(snapshot.Statistics);
                     foreach (var delivery in pending)
                     {
-                        _deliveryScheduler.StartReserved(delivery.Connection.Id, () => PublishConnectionAsync(delivery, snapshot, statistics, stoppingToken));
+                        deliveryScheduler.StartReserved(delivery.Connection.Id, () => PublishConnectionAsync(delivery, snapshot, statistics, stoppingToken));
                     }
                 }
                 catch
                 {
-                    foreach (var delivery in pending) _deliveryScheduler.ReleaseReservation(delivery.Connection.Id);
+                    foreach (var delivery in pending) deliveryScheduler.ReleaseReservation(delivery.Connection.Id);
                     throw;
                 }
             }
@@ -45,10 +46,10 @@ internal sealed class PopulationPublishService(
         {
         }
 
-        _deliveryScheduler.ThrowIfFaulted();
-        var inFlight = _deliveryScheduler.CreateInFlightSnapshot();
+        deliveryScheduler.ThrowIfFaulted();
+        var inFlight = deliveryScheduler.CreateInFlightSnapshot();
         if (inFlight.Length > 0) await Task.WhenAll(inFlight);
-        _deliveryScheduler.ThrowIfFaulted();
+        deliveryScheduler.ThrowIfFaulted();
     }
 
     private PendingPopulationDelivery[] CapturePendingDeliveries()
@@ -60,11 +61,11 @@ internal sealed class PopulationPublishService(
             if (!connection.HandshakeCompleted
                 || !connection.NegotiatedVersion.SupportsPopulation
                 || connection.Socket.State != WebSocketState.Open
-                || !_deliveryScheduler.TryReserve(connection.Id))
+                || !deliveryScheduler.TryReserve(connection.Id, ObservationDeliveryLane.Population))
             {
                 continue;
             }
-            pending.Add(new PendingPopulationDelivery(connection, connection.TryGetInspectedPersonId(out var personId) ? personId : null));
+            pending.Add(new PendingPopulationDelivery(connection, connection.CaptureInspectionState()));
         }
         return pending.ToArray();
     }
@@ -81,16 +82,19 @@ internal sealed class PopulationPublishService(
             await Task.Yield();
             var revision = new ObservationRevision(snapshot.ObservationGeneration, snapshot.ObservationRevision);
             using var sendCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            sendCancellation.CancelAfter(ClientSendTimeout);
+            sendCancellation.CancelAfter(options.ObservationDeliveryTimeout);
             var statisticsKey = new EncodedObservationCacheKey("population-statistics", connection.NegotiatedVersion, revision, "global");
             _ = await connection.SendCachedAsync(statistics, connection.NegotiatedVersion, statisticsKey, cache, sendCancellation.Token);
-            if (delivery.InspectedPersonId is { } personId && snapshot.InspectedPersons.TryGetValue(personId, out var person))
+
+            var currentInspection = connection.CaptureInspectionState();
+            if (ObservationDeliveryPlanner.ShouldDeliverInspection(delivery.Inspection, currentInspection)
+                && delivery.Inspection.PersonId is { } personId
+                && snapshot.InspectedPersons.TryGetValue(personId, out var person))
             {
                 var personMessage = cache.GetOrCreateEntity(
                     new EntityObservationCacheKey(EntityObservationKind.Person, personId, revision),
                     () => PopulationMessageMapper.Create(person));
                 var personKey = new EncodedObservationCacheKey("person", connection.NegotiatedVersion, revision, ObservationCacheIdentity.ForEntity(personId));
-                sendCancellation.CancelAfter(ClientSendTimeout);
                 _ = await connection.SendCachedAsync(personMessage, connection.NegotiatedVersion, personKey, cache, sendCancellation.Token);
             }
         }
