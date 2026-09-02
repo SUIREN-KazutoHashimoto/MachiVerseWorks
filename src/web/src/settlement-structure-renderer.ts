@@ -26,6 +26,14 @@ export interface SettlementStructureRenderingMetrics {
   readonly roadSigns: number;
 }
 
+export interface SettlementStructureStableRelations {
+  readonly settlements: readonly Readonly<{ settlementId: bigint; nameId: bigint }>[];
+  readonly districts: readonly Readonly<{ districtId: bigint; settlementId: bigint; nameId: bigint }>[];
+  readonly parcels: readonly Readonly<{ parcelId: bigint; settlementId: bigint; districtId: bigint; buildingId: bigint }>[];
+  readonly buildings: readonly Readonly<{ buildingId: bigint; parcelId: bigint }>[];
+  readonly pois: readonly Readonly<{ poiId: bigint; settlementId: bigint; buildingId: bigint; nameId: bigint }>[];
+}
+
 /**
  * Maps the authoritative Regional Generation read model to presentation primitives.
  * It deliberately does not infer settlement class, zone, building use, or development state.
@@ -34,6 +42,7 @@ export class SettlementStructureRenderer {
   private readonly root = new THREE.Group();
   private renderedRevision = -1;
   private lastMetrics: SettlementStructureRenderingMetrics = emptyMetrics();
+  private lastRelations: SettlementStructureStableRelations = emptyRelations();
 
   public constructor(private readonly scene: THREE.Scene) {
     this.root.name = 'regional-generation';
@@ -41,6 +50,7 @@ export class SettlementStructureRenderer {
   }
 
   public get metrics(): SettlementStructureRenderingMetrics { return this.lastMetrics; }
+  public get relations(): SettlementStructureStableRelations { return this.lastRelations; }
 
   public update(store: ReadonlyRegionalGenerationStore): void {
     if (store.revision === this.renderedRevision) return;
@@ -49,6 +59,7 @@ export class SettlementStructureRenderer {
     const snapshot = store.snapshot;
     if (snapshot === null) {
       this.lastMetrics = emptyMetrics();
+      this.lastRelations = emptyRelations();
       return;
     }
     this.renderSnapshot(snapshot);
@@ -56,10 +67,12 @@ export class SettlementStructureRenderer {
 
   public dispose(): void {
     this.clearRoot();
+    this.lastRelations = emptyRelations();
     this.scene.remove(this.root);
   }
 
   private renderSnapshot(snapshot: RegionalGenerationSnapshotMessage): void {
+    this.lastRelations = createRelations(snapshot);
     this.addCorridors(snapshot);
     this.addDistricts(snapshot);
     this.addParcels(snapshot);
@@ -111,6 +124,7 @@ export class SettlementStructureRenderer {
     const lines = new THREE.LineSegments(geometry, material);
     lines.name = 'regional-districts';
     lines.frustumCulled = false;
+    lines.userData.relations = this.lastRelations.districts;
     this.root.add(lines);
   }
 
@@ -122,6 +136,7 @@ export class SettlementStructureRenderer {
     mesh.name = 'regional-parcels';
     mesh.count = snapshot.parcels.length;
     mesh.frustumCulled = false;
+    mesh.userData.relations = this.lastRelations.parcels;
     for (let index = 0; index < snapshot.parcels.length; index += 1) {
       const parcel = snapshot.parcels[index];
       boundsMatrix(parcel, Math.max(0.35, parcel.maxZ - parcel.minZ), matrix, PRESENTATION_OFFSET * 0.25);
@@ -141,6 +156,7 @@ export class SettlementStructureRenderer {
     mesh.name = 'regional-buildings';
     mesh.count = snapshot.buildings.length;
     mesh.frustumCulled = false;
+    mesh.userData.relations = this.lastRelations.buildings;
     for (let index = 0; index < snapshot.buildings.length; index += 1) {
       const building = snapshot.buildings[index];
       boundsMatrix(building, Math.max(1, building.maxZ - building.minZ), matrix, 0);
@@ -162,6 +178,7 @@ export class SettlementStructureRenderer {
     mesh.name = 'regional-settlements';
     mesh.count = snapshot.settlements.length;
     mesh.frustumCulled = false;
+    mesh.userData.relations = this.lastRelations.settlements;
     for (let index = 0; index < snapshot.settlements.length; index += 1) {
       const settlement = snapshot.settlements[index];
       // Scale is presentation-only and uses Simulation-provided influence radius; no City/Town/Village inference occurs here.
@@ -186,6 +203,7 @@ export class SettlementStructureRenderer {
     const points = new THREE.Points(geometry, material);
     points.name = 'regional-pois';
     points.frustumCulled = false;
+    points.userData.relations = this.lastRelations.pois;
     this.root.add(points);
   }
 
@@ -235,6 +253,16 @@ export class SettlementStructureRenderer {
 }
 
 const IDENTITY_QUATERNION = new THREE.Quaternion();
+
+function createRelations(snapshot: RegionalGenerationSnapshotMessage): SettlementStructureStableRelations {
+  return Object.freeze({
+    settlements: Object.freeze(snapshot.settlements.map((item) => Object.freeze({ settlementId: item.settlementId, nameId: item.nameId }))),
+    districts: Object.freeze(snapshot.districts.map((item) => Object.freeze({ districtId: item.districtId, settlementId: item.settlementId, nameId: item.nameId }))),
+    parcels: Object.freeze(snapshot.parcels.map((item) => Object.freeze({ parcelId: item.parcelId, settlementId: item.settlementId, districtId: item.districtId, buildingId: item.buildingId }))),
+    buildings: Object.freeze(snapshot.buildings.map((item) => Object.freeze({ buildingId: item.buildingId, parcelId: item.parcelId }))),
+    pois: Object.freeze(snapshot.pois.map((item) => Object.freeze({ poiId: item.poiId, settlementId: item.settlementId, buildingId: item.buildingId, nameId: item.nameId }))),
+  });
+}
 
 function boundsMatrix(bounds: { readonly minX: number; readonly minY: number; readonly minZ: number; readonly maxX: number; readonly maxY: number; readonly maxZ: number }, height: number, target: THREE.Matrix4, zOffset: number): void {
   const width = Math.max(0.1, bounds.maxX - bounds.minX);
@@ -350,4 +378,5 @@ function disposeObject(object: THREE.Object3D): void {
 }
 
 function emptyMetrics(): SettlementStructureRenderingMetrics { return Object.freeze({ settlements: 0, corridors: 0, districts: 0, parcels: 0, buildings: 0, pois: 0, labels: 0, roadSigns: 0 }); }
+function emptyRelations(): SettlementStructureStableRelations { return Object.freeze({ settlements: Object.freeze([]), districts: Object.freeze([]), parcels: Object.freeze([]), buildings: Object.freeze([]), pois: Object.freeze([]) }); }
 function clamp(value: number, minimum: number, maximum: number): number { return Math.max(minimum, Math.min(maximum, value)); }
