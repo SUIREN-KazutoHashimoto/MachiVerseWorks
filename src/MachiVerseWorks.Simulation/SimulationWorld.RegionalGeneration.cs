@@ -15,6 +15,7 @@ public sealed partial class SimulationWorld
             throw new InvalidOperationException("Regional generation has already been initialized for this world.");
 
         var generated = RegionalGenerator.Generate(volume, options, Time.TickCount);
+        generated = new RegionalGenerationEnricher(EnvironmentGenerator).Enrich(generated);
         _regionalGeneration = DetachRegionalSnapshot(generated);
         return DetachRegionalSnapshot(_regionalGeneration);
     }
