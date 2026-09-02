@@ -74,7 +74,9 @@ public sealed class RegionalGenerationLiveDeliveryTests
         _ = await ReceiveUntilAsync(socket, MessageType.HelloAck, TimeSpan.FromSeconds(3));
         _ = await ReceiveUntilAsync(socket, MessageType.RegionalGenerationSnapshot, TimeSpan.FromSeconds(5));
 
-        await AssertNoMessageTypeAsync(socket, MessageType.RegionalGenerationSnapshot, TimeSpan.FromMilliseconds(350));
+        // Leave several publish intervals unread. If the immutable baseline is retransmitted periodically,
+        // that stale non-empty frame will be queued ahead of the clear snapshot below and fail the assertions.
+        await Task.Delay(TimeSpan.FromMilliseconds(350));
 
         var config = runtime.Read(static world => world.Config);
         runtime.ReplaceWorld(new SimulationWorld(config));
@@ -91,22 +93,6 @@ public sealed class RegionalGenerationLiveDeliveryTests
         Assert.AreEqual(0, clear.Pois.Count);
         Assert.AreEqual(0, clear.Toponyms.Count);
         Assert.AreEqual(0, clear.RoadSigns.Count);
-    }
-
-    private static async Task AssertNoMessageTypeAsync(ClientWebSocket socket, MessageType target, TimeSpan duration)
-    {
-        using var cancellation = new CancellationTokenSource(duration);
-        try
-        {
-            while (true)
-            {
-                var received = await ReceiveFrameAsync(socket, duration, cancellation.Token);
-                Assert.AreNotEqual(target, received.Header.MessageType, $"Unexpected repeated {target} delivery.");
-            }
-        }
-        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
-        {
-        }
     }
 
     private static async Task<(ProtocolFrameHeader Header, byte[] Frame)> ReceiveUntilAsync(
