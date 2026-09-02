@@ -37,8 +37,13 @@ public sealed partial class SimulationWorld
     {
         ArgumentOutOfRangeException.ThrowIfNegative(years);
         EnsurePersistentRegionalEvolution();
-        _persistentRegionalEvolution = PersistentRegionalEvolutionEngine.AdvanceYears(
-            _persistentRegionalEvolution!, _regionalGeneration!, years, CreateRegionalEvolutionDrivers);
+        for (var year = 0; year < years; year++)
+        {
+            var previous = _persistentRegionalEvolution!;
+            var next = PersistentRegionalEvolutionEngine.AdvanceYears(
+                previous, _regionalGeneration!, 1, CreateRegionalEvolutionDrivers);
+            _persistentRegionalEvolution = ApplyPersistentRegionalWorldChanges(previous, next);
+        }
     }
 
     private void StepPersistentRegionalEvolution(SimulationTime nextTime)
@@ -47,9 +52,13 @@ public sealed partial class SimulationWorld
         EnsurePersistentRegionalEvolution();
         var targetYear = checked((int)Math.Min(int.MaxValue, nextTime.TickCount / _persistentRegionalEvolutionOptions.TicksPerYear));
         var years = targetYear - _persistentRegionalEvolution!.CurrentYear;
-        if (years > 0)
-            _persistentRegionalEvolution = PersistentRegionalEvolutionEngine.AdvanceYears(
-                _persistentRegionalEvolution, _regionalGeneration, years, CreateRegionalEvolutionDrivers);
+        for (var year = 0; year < years; year++)
+        {
+            var previous = _persistentRegionalEvolution;
+            var next = PersistentRegionalEvolutionEngine.AdvanceYears(
+                previous, _regionalGeneration, 1, CreateRegionalEvolutionDrivers);
+            _persistentRegionalEvolution = ApplyPersistentRegionalWorldChanges(previous, next);
+        }
         _persistentRegionalEvolution = _persistentRegionalEvolution with { TickCount = nextTime.TickCount };
     }
 
