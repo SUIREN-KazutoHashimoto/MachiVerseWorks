@@ -43,8 +43,10 @@ public sealed partial class SimulationWorld
             var next = PersistentRegionalEvolutionEngine.AdvanceYears(
                 previous, _regionalGeneration!, 1, CreateRegionalEvolutionDrivers);
             next = ApplyPersistentRegionalRedevelopment(next);
-            next = ApplyPersistentRegionalWorldChanges(previous, next);
-            _persistentRegionalEvolution = RecalculatePersistentRegionalSpatialState(next);
+            next = ApplyPersistentRegionalWorldChangesWithoutRelationRecording(next);
+            next = RecalculatePersistentRegionalSpatialState(next);
+            next = RecalculatePersistentRegionalRelations(previous, next);
+            _persistentRegionalEvolution = RecordRegionalRelationChanges(previous, next);
         }
     }
 
@@ -60,8 +62,10 @@ public sealed partial class SimulationWorld
             var next = PersistentRegionalEvolutionEngine.AdvanceYears(
                 previous, _regionalGeneration, 1, CreateRegionalEvolutionDrivers);
             next = ApplyPersistentRegionalRedevelopment(next);
-            next = ApplyPersistentRegionalWorldChanges(previous, next);
-            _persistentRegionalEvolution = RecalculatePersistentRegionalSpatialState(next);
+            next = ApplyPersistentRegionalWorldChangesWithoutRelationRecording(next);
+            next = RecalculatePersistentRegionalSpatialState(next);
+            next = RecalculatePersistentRegionalRelations(previous, next);
+            _persistentRegionalEvolution = RecordRegionalRelationChanges(previous, next);
         }
         _persistentRegionalEvolution = _persistentRegionalEvolution with { TickCount = nextTime.TickCount };
     }
@@ -97,7 +101,8 @@ public sealed partial class SimulationWorld
             throw new InvalidOperationException("Regional generation must be initialized before persistent regional evolution.");
         var currentYear = checked((int)Math.Min(int.MaxValue, Time.TickCount / _persistentRegionalEvolutionOptions.TicksPerYear));
         var initialized = PersistentRegionalEvolutionEngine.Initialize(_regionalGeneration, currentYear) with { TickCount = Time.TickCount };
-        _persistentRegionalEvolution = RecalculatePersistentRegionalSpatialState(initialized);
+        var spatial = RecalculatePersistentRegionalSpatialState(initialized);
+        _persistentRegionalEvolution = RecalculatePersistentRegionalRelations(initialized, spatial);
     }
 
     private PersistentRegionalEvolutionCheckpoint? CreatePersistentRegionalEvolutionCheckpoint() =>
