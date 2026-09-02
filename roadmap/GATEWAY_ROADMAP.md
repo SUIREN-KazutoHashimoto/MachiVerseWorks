@@ -12,7 +12,7 @@ GatewayはSimulationの意味的正本ではありません。Activity、Status�
 Gateway Roadmapの分離は責務と進捗管理の分離であり、直ちに別process / repository / deploy unitへ分離することを意味しません。現行では`MachiVerseWorks.Server`内のObservation側責務を明確化し、将来必要なら独立deploy可能な境界へ育てます。
 
 > **現在:** Gateway Phase 1 — Observation Boundary Foundation  
-> **次の実装タスク:** `G1-001` — Observation Requestとauthoritative mutation commandの境界をProtocol / Server責務として固定する  
+> **次の実装タスク:** `G1-002` — SimulationRuntimeからdetached observation sourceを取得する共通境界を定義し、Gatewayがmutable Storeへ直接依存しないようにする  
 > **並行可能:** Simulation Phase 29 / View Phase 1
 
 ## 最上位原則
@@ -30,7 +30,7 @@ Gateway Roadmapの分離は責務と進捗管理の分離であり、直ちに�
 
 | Gateway Phase | 内容 | 主な依存 | 状態 |
 | --- | --- | --- | --- |
-| 1 | Observation Boundary Foundation | 現行SimulationRuntime / Server publish / Protocol 2.x | ▶️ 次 |
+| 1 | Observation Boundary Foundation | 現行SimulationRuntime / Server publish / Protocol 2.x | ▶️ 進行中 |
 | 2 | Shared Observation Cache & Request Deduplication | Gateway Phase 1 | ⏳ 待機 |
 | 3 | Subscription, Delivery & Resynchronization | Gateway Phase 1 / 2 | ⏳ 待機 |
 | 4 | Generic Entity & Temporal Observation | Gateway Phase 1 / Simulation semantic observation | ⏳ Simulation依存待ち |
@@ -81,13 +81,13 @@ GatewayはSimulation Phase番号へ同期しない。現在のServer / Protocol�
 
 ## Gateway Phase 1 — Observation Boundary Foundation
 
-> **状態: ▶️ 次**  
+> **状態: ▶️ 進行中**  
 > **必須依存:** 現行SimulationRuntime / detached publish snapshot / Server WebSocket / Protocol 2.x  
 > **並行可能依存:** Simulation Phase 29、View Phase 1
 
 現行Serverに存在するpublish / subscription / inspection経路を、意味的処理を持たないread-only Observation Gatewayとして明示的に整理する。
 
-- ⬜ **G1-001** — Observation Requestとauthoritative mutation commandをProtocol / Server責務として明示的に分離する（旧`OBS-001`）
+- ✅ **G1-001** — Observation Requestとauthoritative mutation commandをProtocol / Server責務として明示的に分離する（旧`OBS-001`）
 - ⬜ **G1-002** — SimulationRuntimeからdetached observation sourceを取得する共通境界を定義し、Gatewayがmutable Storeへ直接依存しないようにする（旧`OBS-002`の基盤部分）
 - ⬜ **G1-003** — 現行publish / `SubscribeVolume` / Inspect処理をServer内のObservation Gateway責務としてmodule境界へ整理する（旧`OBS-003`）
 - ⬜ **G1-004** — Observation request / connection state / delivery stateとSimulation Entity stateのownershipを型・moduleで分離する
