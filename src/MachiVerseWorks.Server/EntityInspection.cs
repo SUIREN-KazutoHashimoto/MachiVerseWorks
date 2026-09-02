@@ -45,6 +45,25 @@ internal sealed class EntityInspectionRegistry
         lock (_gate) return CaptureUnsafe(connectionId) == selection;
     }
 
+    public bool TryStartCurrentSend(
+        Guid connectionId,
+        EntityInspectionSelection selection,
+        Func<Task> startSend,
+        out Task? sendTask)
+    {
+        ArgumentNullException.ThrowIfNull(startSend);
+        lock (_gate)
+        {
+            if (CaptureUnsafe(connectionId) != selection)
+            {
+                sendTask = null;
+                return false;
+            }
+            sendTask = startSend();
+            return true;
+        }
+    }
+
     public void Prune(IReadOnlySet<Guid> activeConnectionIds)
     {
         ArgumentNullException.ThrowIfNull(activeConnectionIds);
