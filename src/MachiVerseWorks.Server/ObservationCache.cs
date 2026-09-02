@@ -99,18 +99,19 @@ internal sealed class ObservationCache
     }
 
     public T GetOrCreateEntity<T>(EntityObservationCacheKey key, Func<T> factory) where T : class =>
-        GetOrCreate(_entities, key, _options.MaxEntityEntries, factory);
+        GetOrCreate(_entities, key, key.Revision, _options.MaxEntityEntries, isStatic: false, factory);
 
     public T GetOrCreateSpatial<T>(SpatialObservationCacheKey key, Func<T> factory) where T : class =>
-        GetOrCreate(_spatial, key, _options.MaxSpatialEntries, factory);
+        GetOrCreate(_spatial, key, key.Revision, _options.MaxSpatialEntries, isStatic: false, factory);
 
     public T GetOrCreateStatic<T>(StaticObservationCacheKey key, Func<T> factory) where T : class =>
-        GetOrCreate(_static, key, _options.MaxStaticEntries, factory);
+        GetOrCreate(_static, key, key.Revision, _options.MaxStaticEntries, isStatic: true, factory);
 
     public byte[] GetOrEncode(EncodedObservationCacheKey key, Func<byte[]> encoder)
     {
         ArgumentNullException.ThrowIfNull(encoder);
-        ObserveRevision(key.Revision);
+        if (key.IsStatic) ObserveGeneration(key.Revision.Generation);
+        else ObserveRevision(key.Revision);
         if (!_options.Enabled)
         {
             Interlocked.Increment(ref _misses);
@@ -143,7 +144,7 @@ internal sealed class ObservationCache
         }
         catch
         {
-            if (added) _encoded.TryRemove(new KeyValuePair<EncodedObservationCacheKey, Lazy<byte[]>>(key, actual));
+            if (added) RemoveExact(_encoded, key, actual);
             throw;
         }
     }
@@ -152,11 +153,9 @@ internal sealed class ObservationCache
     {
         lock (_revisionGate)
         {
-            if (_generation != revision.Generation)
+            if (EnsureGeneration(revision.Generation))
             {
-                _generation = revision.Generation;
                 _dynamicRevision = revision.Revision;
-                ClearAll();
                 return;
             }
 
@@ -167,6 +166,11 @@ internal sealed class ObservationCache
                 : 0UL;
             EvictOlderDynamicEntries(revision.Generation, minimum);
         }
+    }
+
+    public void ObserveGeneration(ulong generation)
+    {
+        lock (_revisionGate) _ = EnsureGeneration(generation);
     }
 
     public ObservationCacheMetrics CreateMetricsSnapshot() => new(
@@ -181,19 +185,19 @@ internal sealed class ObservationCache
         _static.Count,
         _encoded.Count);
 
-    private T GetOrCreate<TKey, T>(CacheStore<TKey> store, TKey key, int maximumEntries, Func<T> factory)
+    private T GetOrCreate<TKey, T>(
+        CacheStore<TKey> store,
+        TKey key,
+        ObservationRevision revision,
+        int maximumEntries,
+        bool isStatic,
+        Func<T> factory)
         where TKey : notnull
         where T : class
     {
         ArgumentNullException.ThrowIfNull(factory);
-        var revision = key switch
-        {
-            EntityObservationCacheKey entity => entity.Revision,
-            SpatialObservationCacheKey spatial => spatial.Revision,
-            StaticObservationCacheKey @static => @static.Revision,
-            _ => default,
-        };
-        ObserveRevision(revision);
+        if (isStatic) ObserveGeneration(revision.Generation);
+        else ObserveRevision(revision);
         if (!_options.Enabled)
         {
             Interlocked.Increment(ref _misses);
@@ -223,6 +227,15 @@ internal sealed class ObservationCache
         }
     }
 
+    private bool EnsureGeneration(ulong generation)
+    {
+        if (_generation == generation) return false;
+        _generation = generation;
+        _dynamicRevision = 0;
+        ClearAll();
+        return true;
+    }
+
     private void EvictOlderDynamicEntries(ulong generation, ulong minimumRevision)
     {
         AddEvictions(_entities.RemoveWhere(key => key.Revision.Generation != generation || key.Revision.Revision < minimumRevision));
@@ -231,11 +244,9 @@ internal sealed class ObservationCache
         {
             var key = entry.Key;
             if (key.IsStatic || (key.Revision.Generation == generation && key.Revision.Revision >= minimumRevision)) continue;
-            if (_encoded.TryRemove(entry))
-            {
-                Interlocked.Add(ref _encodedBytes, -entry.Value.Value.LongLength);
-                Interlocked.Increment(ref _evictions);
-            }
+            if (!RemoveExact(_encoded, key, entry.Value)) continue;
+            if (entry.Value.IsValueCreated) Interlocked.Add(ref _encodedBytes, -entry.Value.Value.LongLength);
+            Interlocked.Increment(ref _evictions);
         }
     }
 
@@ -246,7 +257,7 @@ internal sealed class ObservationCache
         AddEvictions(_static.Clear());
         foreach (var entry in _encoded)
         {
-            if (!_encoded.TryRemove(entry)) continue;
+            if (!RemoveExact(_encoded, entry.Key, entry.Value)) continue;
             if (entry.Value.IsValueCreated) Interlocked.Add(ref _encodedBytes, -entry.Value.Value.LongLength);
             Interlocked.Increment(ref _evictions);
         }
@@ -274,6 +285,11 @@ internal sealed class ObservationCache
         if (count > 0) Interlocked.Add(ref _evictions, count);
     }
 
+    private static bool RemoveExact<TKey, TValue>(ConcurrentDictionary<TKey, TValue> dictionary, TKey key, TValue value)
+        where TKey : notnull
+        where TValue : class =>
+        ((ICollection<KeyValuePair<TKey, TValue>>)dictionary).Remove(new KeyValuePair<TKey, TValue>(key, value));
+
     private sealed class CacheStore<TKey> where TKey : notnull
     {
         private readonly ConcurrentDictionary<TKey, Lazy<object>> _entries = new();
@@ -289,8 +305,7 @@ internal sealed class ObservationCache
             return actual;
         }
 
-        public bool TryRemove(TKey key, Lazy<object> expected) =>
-            _entries.TryRemove(new KeyValuePair<TKey, Lazy<object>>(key, expected));
+        public bool TryRemove(TKey key, Lazy<object> expected) => RemoveExact(_entries, key, expected);
 
         public bool TryRemoveOldest()
         {
@@ -304,7 +319,7 @@ internal sealed class ObservationCache
             ArgumentNullException.ThrowIfNull(predicate);
             var count = 0;
             foreach (var entry in _entries)
-                if (predicate(entry.Key) && _entries.TryRemove(entry)) count++;
+                if (predicate(entry.Key) && RemoveExact(_entries, entry.Key, entry.Value)) count++;
             return count;
         }
 
@@ -312,7 +327,7 @@ internal sealed class ObservationCache
         {
             var count = 0;
             foreach (var entry in _entries)
-                if (_entries.TryRemove(entry)) count++;
+                if (RemoveExact(_entries, entry.Key, entry.Value)) count++;
             while (_order.TryDequeue(out _)) { }
             return count;
         }
