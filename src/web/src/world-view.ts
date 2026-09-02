@@ -9,13 +9,15 @@ import type { ReadonlyIntersectionControlStore, ReadonlyVehicleStore } from './t
 import { SignalIndication } from './traffic-protocol.ts';
 import type { ReadonlyWorldEnvironmentStore } from './world-environment-store.ts';
 
+const CAMERA_FOV_DEGREES = 55;
+const CAMERA_NEAR = 0.1;
+const CAMERA_FAR = 50_000;
 const CAMERA_HEIGHT = 500;
 const CAMERA_TILT_DISTANCE = 250;
-const INITIAL_HALF_HEIGHT = 300;
 const SUBSCRIPTION_PADDING = 1.2;
-const MINIMUM_ZOOM = 0.25;
-const MAXIMUM_ZOOM = 8;
-const SUBSCRIPTION_RETRY_ZOOM_FACTOR = 1.25;
+const DEFAULT_OBSERVATION_DISTANCE = 3_000;
+const MINIMUM_OBSERVATION_DISTANCE = 250;
+const SUBSCRIPTION_RETRY_DISTANCE_FACTOR = 0.75;
 const AGENT_HALF_SIZE = 2.5;
 const PEDESTRIAN_HALF_HEIGHT = 1.5;
 
@@ -35,7 +37,7 @@ export interface WorldViewRenderingMetrics {
 
 export class WorldView {
   public readonly scene = new THREE.Scene();
-  public readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 2_000);
+  public readonly camera = new THREE.PerspectiveCamera(CAMERA_FOV_DEGREES, 1, CAMERA_NEAR, CAMERA_FAR);
   public readonly renderer = new THREE.WebGLRenderer({ antialias: true });
 
   private readonly physicalWorldRenderer: PhysicalWorldRenderer;
@@ -44,11 +46,8 @@ export class WorldView {
   private readonly vehicleRenderer: VehicleRenderer;
   private readonly intersectionRenderer: IntersectionControlRenderer;
   private readonly roadRenderer: RoadNetworkRenderer;
-  private aspect = 1;
-  private dragPointerId: number | null = null;
-  private lastPointerX = 0;
-  private lastPointerY = 0;
   private lastFrameTimeMs = 0;
+  private maximumObservationDistance = DEFAULT_OBSERVATION_DISTANCE;
 
   public constructor(private readonly host: HTMLElement) {
     this.scene.background = new THREE.Color(0x0b1020);
@@ -66,18 +65,13 @@ export class WorldView {
     this.pedestrianRenderer = new PedestrianRenderer(this.scene);
     this.vehicleRenderer = new VehicleRenderer(this.scene);
     this.intersectionRenderer = new IntersectionControlRenderer(this.scene);
-    this.installControls();
     this.resize();
   }
 
   public resize(): void {
     const width = Math.max(this.host.clientWidth, 1);
     const height = Math.max(this.host.clientHeight, 1);
-    this.aspect = width / height;
-    this.camera.left = -INITIAL_HALF_HEIGHT * this.aspect;
-    this.camera.right = INITIAL_HALF_HEIGHT * this.aspect;
-    this.camera.top = INITIAL_HALF_HEIGHT;
-    this.camera.bottom = -INITIAL_HALF_HEIGHT;
+    this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height, false);
   }
@@ -114,12 +108,20 @@ export class WorldView {
     });
   }
 
-  public getSubscriptionVolume(): WorldVolume { return computeOrthographicSubscriptionVolume(this.camera, SUBSCRIPTION_PADDING); }
+  public getSubscriptionVolume(): WorldVolume {
+    return computePerspectiveSubscriptionVolume(this.camera, this.maximumObservationDistance, SUBSCRIPTION_PADDING);
+  }
 
+  /**
+   * Keeps the existing retry call site but narrows observation depth instead of changing visual FOV.
+   * This preserves the user's camera pose while reducing the Gateway subscription cell count.
+   */
   public zoomInForSubscriptionRetry(): boolean {
-    if (this.camera.zoom >= MAXIMUM_ZOOM) return false;
-    this.camera.zoom = clamp(this.camera.zoom * SUBSCRIPTION_RETRY_ZOOM_FACTOR, MINIMUM_ZOOM, MAXIMUM_ZOOM);
-    this.camera.updateProjectionMatrix();
+    if (this.maximumObservationDistance <= MINIMUM_OBSERVATION_DISTANCE) return false;
+    this.maximumObservationDistance = Math.max(
+      MINIMUM_OBSERVATION_DISTANCE,
+      this.maximumObservationDistance * SUBSCRIPTION_RETRY_DISTANCE_FACTOR,
+    );
     return true;
   }
 
@@ -136,43 +138,62 @@ export class WorldView {
     this.intersectionRenderer.dispose();
     this.renderer.dispose();
   }
-
-  private installControls(): void {
-    const canvas = this.renderer.domElement;
-    canvas.addEventListener('pointerdown', (event) => {
-      if (event.button !== 0) return;
-      this.dragPointerId = event.pointerId;
-      this.lastPointerX = event.clientX;
-      this.lastPointerY = event.clientY;
-      canvas.setPointerCapture(event.pointerId);
-    });
-
-    canvas.addEventListener('pointermove', (event) => {
-      if (event.pointerId !== this.dragPointerId) return;
-      const width = Math.max(canvas.clientWidth, 1);
-      const height = Math.max(canvas.clientHeight, 1);
-      const worldWidth = (this.camera.right - this.camera.left) / this.camera.zoom;
-      const worldHeight = (this.camera.top - this.camera.bottom) / this.camera.zoom;
-      const deltaX = event.clientX - this.lastPointerX;
-      const deltaY = event.clientY - this.lastPointerY;
-      this.lastPointerX = event.clientX;
-      this.lastPointerY = event.clientY;
-      this.camera.position.x -= (deltaX / width) * worldWidth;
-      this.camera.position.z -= (deltaY / height) * worldHeight;
-    });
-
-    const releasePointer = (event: PointerEvent): void => { if (event.pointerId === this.dragPointerId) this.dragPointerId = null; };
-    canvas.addEventListener('pointerup', releasePointer);
-    canvas.addEventListener('pointercancel', releasePointer);
-    canvas.addEventListener('wheel', (event) => {
-      event.preventDefault();
-      const scale = Math.exp(-event.deltaY * 0.001);
-      this.camera.zoom = clamp(this.camera.zoom * scale, MINIMUM_ZOOM, MAXIMUM_ZOOM);
-      this.camera.updateProjectionMatrix();
-    }, { passive: false });
-  }
 }
 
+export function computePerspectiveSubscriptionVolume(
+  camera: THREE.PerspectiveCamera,
+  maximumDistance: number,
+  padding = 1,
+): WorldVolume {
+  if (!Number.isFinite(maximumDistance) || maximumDistance <= camera.near) {
+    throw new RangeError('Maximum observation distance must be finite and greater than the camera near plane.');
+  }
+  if (!Number.isFinite(padding) || padding < 1) throw new RangeError('Subscription padding must be finite and at least 1.');
+
+  camera.updateProjectionMatrix();
+  camera.updateMatrixWorld(true);
+  const farDistance = Math.min(maximumDistance, camera.far);
+  const rayPoint = new THREE.Vector3();
+  const rayDirection = new THREE.Vector3();
+
+  let minX = camera.position.x;
+  let minY = camera.position.z;
+  let minZ = camera.position.y;
+  let maxX = minX;
+  let maxY = minY;
+  let maxZ = minZ;
+
+  for (const normalizedY of [-1, 1]) for (const normalizedX of [-1, 1]) {
+    rayPoint.set(normalizedX, normalizedY, 1).unproject(camera);
+    rayDirection.copy(rayPoint).sub(camera.position).normalize();
+    for (const distance of [camera.near, farDistance]) {
+      const point = rayPoint.copy(camera.position).addScaledVector(rayDirection, distance);
+      const simulationX = point.x;
+      const simulationY = point.z;
+      const simulationZ = point.y;
+      minX = Math.min(minX, simulationX);
+      minY = Math.min(minY, simulationY);
+      minZ = Math.min(minZ, simulationZ);
+      maxX = Math.max(maxX, simulationX);
+      maxY = Math.max(maxY, simulationY);
+      maxZ = Math.max(maxZ, simulationZ);
+    }
+  }
+
+  const paddingX = (maxX - minX) * (padding - 1) * 0.5;
+  const paddingY = (maxY - minY) * (padding - 1) * 0.5;
+  const paddingZ = (maxZ - minZ) * (padding - 1) * 0.5;
+  return {
+    minX: minX - paddingX,
+    minY: minY - paddingY,
+    minZ: minZ - paddingZ,
+    maxX: maxX + paddingX,
+    maxY: maxY + paddingY,
+    maxZ: maxZ + paddingZ,
+  };
+}
+
+/** Retained for focused regression coverage of the old frustum math; WorldView no longer uses it. */
 export function computeOrthographicSubscriptionVolume(camera: THREE.OrthographicCamera, padding = 1): WorldVolume {
   if (!Number.isFinite(padding) || padding < 1) throw new RangeError('Subscription padding must be finite and at least 1.');
   camera.updateProjectionMatrix(); camera.updateMatrixWorld(true);
@@ -443,4 +464,3 @@ class IntersectionControlRenderer {
 function appendSimulationPosition(target: number[], x: number, y: number, z: number): void { target.push(x, z, y); }
 function replacePositions(geometry: THREE.BufferGeometry, values: readonly number[]): void { geometry.setAttribute('position', new THREE.Float32BufferAttribute(values, 3)); geometry.computeBoundingSphere(); }
 function compareBigInt(left: bigint, right: bigint): number { return left < right ? -1 : left > right ? 1 : 0; }
-function clamp(value: number, minimum: number, maximum: number): number { return Math.min(maximum, Math.max(minimum, value)); }

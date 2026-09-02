@@ -1,14 +1,21 @@
+import * as THREE from 'three';
+
 import type { ReadonlyEntityStore } from './entity-store.ts';
 import type { MutablePositionBuffer } from './visual-interpolation-state.ts';
 
-const DEFAULT_MINIMUM_ZOOM = 0.25;
-const DEFAULT_MAXIMUM_ZOOM = 8;
-const DEFAULT_ROTATION_RADIANS_PER_PIXEL = 0.004;
-const DEFAULT_ALTITUDE_METERS_PER_PIXEL = 2;
-const FOCUS_FALLBACK_DISTANCE = 250;
+const DEFAULT_MOVE_SPEED = 40;
+const DEFAULT_MINIMUM_MOVE_SPEED = 2;
+const DEFAULT_MAXIMUM_MOVE_SPEED = 800;
+const DEFAULT_SPRINT_MULTIPLIER = 4;
+const DEFAULT_LOOK_SENSITIVITY = 0.0035;
+const DEFAULT_MINIMUM_HEIGHT = 1.7;
+const DEFAULT_FOLLOW_DISTANCE = 12;
+const DEFAULT_MINIMUM_FOLLOW_DISTANCE = 3;
+const DEFAULT_MAXIMUM_FOLLOW_DISTANCE = 120;
+const DEFAULT_FOCUS_DISTANCE = 250;
+const MAXIMUM_FRAME_DELTA_SECONDS = 0.1;
+const PITCH_LIMIT = Math.PI / 2 - 0.01;
 const DIRECTION_EPSILON = 1e-9;
-const MINIMUM_FOCUS_DISTANCE = 1;
-const MAXIMUM_FOCUS_DISTANCE_RATIO = 0.9;
 
 export interface WorldPosition {
   readonly x: number;
@@ -21,69 +28,90 @@ export type ViewNavigationTargetKind = 'entity' | 'settlement' | 'geographic-fea
 export interface ViewNavigationTarget {
   readonly kind: ViewNavigationTargetKind;
   readonly id?: bigint | string;
+  /**
+   * Compatibility hint from the former orthographic navigation API.
+   * Perspective navigation maps larger values to a shorter focus/follow distance.
+   */
   readonly preferredZoom?: number;
   writePosition(now: number, target: MutablePositionBuffer): boolean;
 }
 
 export interface ViewNavigationOptions {
-  readonly minimumZoom?: number;
-  readonly maximumZoom?: number;
-  readonly rotationRadiansPerPixel?: number;
-  readonly altitudeMetersPerPixel?: number;
-}
-
-interface MutablePosition {
-  x: number;
-  y: number;
-  z: number;
-}
-
-export interface ViewNavigationCamera {
-  readonly position: MutablePosition;
-  readonly matrixWorld: { readonly elements: ArrayLike<number> };
-  readonly left: number;
-  readonly right: number;
-  readonly top: number;
-  readonly bottom: number;
-  readonly near: number;
-  readonly far: number;
-  zoom: number;
-  lookAt(x: number, y: number, z: number): void;
-  updateMatrixWorld(force?: boolean): void;
-  updateProjectionMatrix(): void;
+  readonly moveSpeed?: number;
+  readonly minimumMoveSpeed?: number;
+  readonly maximumMoveSpeed?: number;
+  readonly sprintMultiplier?: number;
+  readonly lookSensitivity?: number;
+  readonly minimumHeight?: number;
+  readonly followDistance?: number;
+  readonly minimumFollowDistance?: number;
+  readonly maximumFollowDistance?: number;
 }
 
 export class ViewNavigationController {
-  private readonly minimumZoom: number;
-  private readonly maximumZoom: number;
-  private readonly rotationRadiansPerPixel: number;
-  private readonly altitudeMetersPerPixel: number;
   private readonly sampledTargetPosition = new Float64Array(3);
-  private readonly sampledFocusPosition = new Float64Array(3);
-  private readonly sampledDirection = new Float64Array(3);
-  private readonly sampledRight = new Float64Array(2);
-  private readonly sampledUp = new Float64Array(2);
+  private readonly keys = new Set<string>();
+  private readonly minimumMoveSpeed: number;
+  private readonly maximumMoveSpeed: number;
+  private readonly sprintMultiplier: number;
+  private readonly lookSensitivity: number;
+  private readonly minimumHeight: number;
+  private readonly minimumFollowDistance: number;
+  private readonly maximumFollowDistance: number;
+  private readonly keyboardTarget: Window | null;
   private followTarget: ViewNavigationTarget | null = null;
-  private focusAltitude = 0;
-  private panPointerId: number | null = null;
-  private orbitPointerId: number | null = null;
+  private lookPointerId: number | null = null;
   private lastPointerX = 0;
   private lastPointerY = 0;
+  private lastUpdateAt: number | null = null;
+  private yaw = 0;
+  private pitch = 0;
+  private currentMoveSpeed: number;
+  private currentFollowDistance: number;
 
   public constructor(
-    private readonly camera: ViewNavigationCamera,
+    private readonly camera: THREE.PerspectiveCamera,
     private readonly surface: HTMLCanvasElement,
     options: ViewNavigationOptions = {},
   ) {
-    this.minimumZoom = validatePositive(options.minimumZoom ?? DEFAULT_MINIMUM_ZOOM, 'minimum zoom');
-    this.maximumZoom = validatePositive(options.maximumZoom ?? DEFAULT_MAXIMUM_ZOOM, 'maximum zoom');
-    if (this.maximumZoom < this.minimumZoom) throw new RangeError('Maximum zoom must be greater than or equal to minimum zoom.');
-    this.rotationRadiansPerPixel = validatePositive(options.rotationRadiansPerPixel ?? DEFAULT_ROTATION_RADIANS_PER_PIXEL, 'rotation sensitivity');
-    this.altitudeMetersPerPixel = validatePositive(options.altitudeMetersPerPixel ?? DEFAULT_ALTITUDE_METERS_PER_PIXEL, 'altitude sensitivity');
+    this.minimumMoveSpeed = validatePositive(options.minimumMoveSpeed ?? DEFAULT_MINIMUM_MOVE_SPEED, 'minimum move speed');
+    this.maximumMoveSpeed = validatePositive(options.maximumMoveSpeed ?? DEFAULT_MAXIMUM_MOVE_SPEED, 'maximum move speed');
+    if (this.maximumMoveSpeed < this.minimumMoveSpeed) throw new RangeError('Maximum move speed must be greater than or equal to minimum move speed.');
+    this.currentMoveSpeed = clamp(validatePositive(options.moveSpeed ?? DEFAULT_MOVE_SPEED, 'move speed'), this.minimumMoveSpeed, this.maximumMoveSpeed);
+    this.sprintMultiplier = validatePositive(options.sprintMultiplier ?? DEFAULT_SPRINT_MULTIPLIER, 'sprint multiplier');
+    this.lookSensitivity = validatePositive(options.lookSensitivity ?? DEFAULT_LOOK_SENSITIVITY, 'look sensitivity');
+    this.minimumHeight = validatePositive(options.minimumHeight ?? DEFAULT_MINIMUM_HEIGHT, 'minimum height');
+    this.minimumFollowDistance = validatePositive(options.minimumFollowDistance ?? DEFAULT_MINIMUM_FOLLOW_DISTANCE, 'minimum follow distance');
+    this.maximumFollowDistance = validatePositive(options.maximumFollowDistance ?? DEFAULT_MAXIMUM_FOLLOW_DISTANCE, 'maximum follow distance');
+    if (this.maximumFollowDistance < this.minimumFollowDistance) throw new RangeError('Maximum follow distance must be greater than or equal to minimum follow distance.');
+    this.currentFollowDistance = clamp(validatePositive(options.followDistance ?? DEFAULT_FOLLOW_DISTANCE, 'follow distance'), this.minimumFollowDistance, this.maximumFollowDistance);
     validatePositive(this.camera.near, 'camera near plane');
     validatePositive(this.camera.far, 'camera far plane');
     if (this.camera.far <= this.camera.near) throw new RangeError('Camera far plane must be greater than the near plane.');
+
+    this.keyboardTarget = typeof window === 'undefined' ? null : window;
+    this.syncAnglesFromCamera();
     this.installControls();
+  }
+
+  public get moveSpeed(): number { return this.currentMoveSpeed; }
+  public get followDistance(): number { return this.currentFollowDistance; }
+  public get isFollowing(): boolean { return this.followTarget !== null; }
+
+  /** View-local input seam used by keyboard handling and deterministic controller tests. */
+  public setKeyState(code: string, pressed: boolean): void {
+    if (pressed) this.keys.add(code);
+    else this.keys.delete(code);
+  }
+
+  /** Applies a mouse-look delta without coupling the camera state machine to DOM event construction. */
+  public lookBy(deltaX: number, deltaY: number): void {
+    validateFinite(deltaX, 'look delta X');
+    validateFinite(deltaY, 'look delta Y');
+    this.yaw -= deltaX * this.lookSensitivity;
+    this.pitch -= deltaY * this.lookSensitivity;
+    this.pitch = clamp(this.pitch, -PITCH_LIMIT, PITCH_LIMIT);
+    if (this.followTarget === null) this.applyRotation();
   }
 
   public dispose(): void {
@@ -93,98 +121,66 @@ export class ViewNavigationController {
     this.surface.removeEventListener('pointercancel', this.handlePointerRelease, true);
     this.surface.removeEventListener('wheel', this.handleWheel, true);
     this.surface.removeEventListener('contextmenu', this.handleContextMenu);
+    if (this.keyboardTarget !== null) {
+      this.keyboardTarget.removeEventListener('keydown', this.handleKeyDown);
+      this.keyboardTarget.removeEventListener('keyup', this.handleKeyUp);
+      this.keyboardTarget.removeEventListener('blur', this.handleBlur);
+    }
+    this.keys.clear();
     this.followTarget = null;
-    this.panPointerId = null;
-    this.orbitPointerId = null;
+    this.lookPointerId = null;
+    this.lastUpdateAt = null;
   }
 
   public update(now: number): void {
+    validateFinite(now, 'navigation timestamp');
+    const deltaSeconds = this.lastUpdateAt === null ? 0 : clamp((now - this.lastUpdateAt) / 1_000, 0, MAXIMUM_FRAME_DELTA_SECONDS);
+    this.lastUpdateAt = now;
+
     const target = this.followTarget;
-    if (target === null || !target.writePosition(now, this.sampledTargetPosition)) return;
-    this.centerOnSampledPosition(this.sampledTargetPosition);
-  }
+    if (target !== null) {
+      if (!target.writePosition(now, this.sampledTargetPosition)) {
+        this.clearFollow();
+        return;
+      }
+      this.orbitSampledPosition(this.sampledTargetPosition);
+      return;
+    }
 
-  /** Moves the camera along its current screen-right and screen-up axes projected onto the World X/Y plane. */
-  public pan(deltaRight: number, deltaUp: number): void {
-    validateFinite(deltaRight, 'pan right');
-    validateFinite(deltaUp, 'pan up');
-    this.followTarget = null;
-    this.camera.updateMatrixWorld(true);
-    const elements = this.camera.matrixWorld.elements;
-    writeHorizontalUnit(Number(elements[0]), Number(elements[2]), 1, 0, this.sampledRight);
-    writeHorizontalUnit(Number(elements[4]), Number(elements[6]), -this.sampledRight[1], this.sampledRight[0], this.sampledUp);
-    this.camera.position.x += this.sampledRight[0] * deltaRight + this.sampledUp[0] * deltaUp;
-    this.camera.position.z += this.sampledRight[1] * deltaRight + this.sampledUp[1] * deltaUp;
-    this.camera.updateMatrixWorld(true);
-  }
-
-  public zoomBy(factor: number): void {
-    validatePositive(factor, 'zoom factor');
-    this.setZoom(this.camera.zoom * factor);
-  }
-
-  public setZoom(zoom: number): void {
-    validatePositive(zoom, 'zoom');
-    this.camera.zoom = clamp(zoom, this.minimumZoom, this.maximumZoom);
-    this.camera.updateProjectionMatrix();
-  }
-
-  public rotateBy(radians: number): void {
-    validateFinite(radians, 'rotation');
-    if (radians === 0) return;
-    writeCameraWorldDirection(this.camera, this.sampledDirection);
-    const cosine = Math.cos(radians);
-    const sine = Math.sin(radians);
-    const rotatedX = this.sampledDirection[0] * cosine + this.sampledDirection[2] * sine;
-    const rotatedZ = -this.sampledDirection[0] * sine + this.sampledDirection[2] * cosine;
-    this.camera.lookAt(
-      this.camera.position.x + rotatedX,
-      this.camera.position.y + this.sampledDirection[1],
-      this.camera.position.z + rotatedZ,
-    );
-    this.camera.updateMatrixWorld(true);
-  }
-
-  public adjustAltitude(deltaMeters: number): void {
-    validateFinite(deltaMeters, 'altitude delta');
-    writeCameraWorldDirection(this.camera, this.sampledDirection);
-    const downwardComponent = -this.sampledDirection[1];
-    if (downwardComponent <= DIRECTION_EPSILON) throw new RangeError('Camera must face downward to adjust observation altitude.');
-
-    const minimumDistance = Math.max(MINIMUM_FOCUS_DISTANCE, this.camera.near * 2);
-    const maximumDistance = this.camera.far * MAXIMUM_FOCUS_DISTANCE_RATIO;
-    if (maximumDistance <= minimumDistance) throw new RangeError('Camera clipping range is too small for altitude navigation.');
-
-    const minimumAltitude = this.focusAltitude + downwardComponent * minimumDistance;
-    const maximumAltitude = this.focusAltitude + downwardComponent * maximumDistance;
-    const nextAltitude = this.camera.position.y + deltaMeters;
-    if (!Number.isFinite(nextAltitude)) throw new RangeError('Camera altitude must remain finite.');
-    this.camera.position.y = clamp(nextAltitude, minimumAltitude, maximumAltitude);
-    this.camera.updateMatrixWorld(true);
+    if (deltaSeconds > 0) this.updateFreeMovement(deltaSeconds);
   }
 
   public jump(target: ViewNavigationTarget, now = performance.now()): boolean {
     if (!target.writePosition(now, this.sampledTargetPosition)) return false;
     this.followTarget = null;
-    this.centerOnSampledPosition(this.sampledTargetPosition);
+    this.placeBehindSampledPosition(this.sampledTargetPosition, DEFAULT_FOCUS_DISTANCE);
     return true;
   }
 
   public focus(target: ViewNavigationTarget, now = performance.now()): boolean {
-    if (!this.jump(target, now)) return false;
-    if (target.preferredZoom !== undefined) this.setZoom(target.preferredZoom);
+    if (!target.writePosition(now, this.sampledTargetPosition)) return false;
+    this.followTarget = null;
+    const distance = resolveFocusDistance(target.preferredZoom);
+    this.placeBehindSampledPosition(this.sampledTargetPosition, distance);
     return true;
   }
 
   public follow(target: ViewNavigationTarget, now = performance.now()): boolean {
     if (!target.writePosition(now, this.sampledTargetPosition)) return false;
-    this.centerOnSampledPosition(this.sampledTargetPosition);
-    if (target.preferredZoom !== undefined) this.setZoom(target.preferredZoom);
+    if (target.preferredZoom !== undefined) {
+      this.currentFollowDistance = clamp(
+        DEFAULT_FOLLOW_DISTANCE * 4 / validatePositive(target.preferredZoom, 'preferred zoom'),
+        this.minimumFollowDistance,
+        this.maximumFollowDistance,
+      );
+    }
     this.followTarget = target;
+    this.orbitSampledPosition(this.sampledTargetPosition);
     return true;
   }
 
   public clearFollow(): void {
+    if (this.followTarget !== null) this.syncAnglesFromCamera();
     this.followTarget = null;
   }
 
@@ -196,38 +192,85 @@ export class ViewNavigationController {
     return this.follow(createEntityNavigationTarget(entityId, store, preferredZoom), now);
   }
 
-  private centerOnSampledPosition(position: MutablePositionBuffer): void {
-    validateSampledWorldPosition(position);
-    const simulationAltitude = position[2];
-    if (writeCameraFocusAtSimulationAltitude(this.camera, simulationAltitude, this.sampledFocusPosition)) {
-      this.camera.position.x += position[0] - this.sampledFocusPosition[0];
-      this.camera.position.z += position[1] - this.sampledFocusPosition[1];
-      this.camera.position.y += simulationAltitude - this.sampledFocusPosition[2];
-    } else {
-      writeCameraWorldDirection(this.camera, this.sampledDirection);
-      this.camera.position.x = position[0] - this.sampledDirection[0] * FOCUS_FALLBACK_DISTANCE;
-      this.camera.position.z = position[1] - this.sampledDirection[2] * FOCUS_FALLBACK_DISTANCE;
-      this.camera.position.y = simulationAltitude - this.sampledDirection[1] * FOCUS_FALLBACK_DISTANCE;
-    }
-    this.focusAltitude = simulationAltitude;
+  private updateFreeMovement(deltaSeconds: number): void {
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
+    let forwardAmount = 0;
+    let rightAmount = 0;
+    let verticalAmount = 0;
+
+    if (this.keys.has('KeyW')) forwardAmount += 1;
+    if (this.keys.has('KeyS')) forwardAmount -= 1;
+    if (this.keys.has('KeyD')) rightAmount += 1;
+    if (this.keys.has('KeyA')) rightAmount -= 1;
+    if (this.keys.has('KeyE') || this.keys.has('Space')) verticalAmount += 1;
+    if (this.keys.has('KeyQ') || this.keys.has('ControlLeft') || this.keys.has('ControlRight')) verticalAmount -= 1;
+
+    if (forwardAmount === 0 && rightAmount === 0 && verticalAmount === 0) return;
+    const sprinting = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
+    const distance = this.currentMoveSpeed * (sprinting ? this.sprintMultiplier : 1) * deltaSeconds;
+    this.camera.position.addScaledVector(forward, forwardAmount * distance);
+    this.camera.position.addScaledVector(right, rightAmount * distance);
+    this.camera.position.y += verticalAmount * distance;
+    this.camera.position.y = Math.max(this.minimumHeight, this.camera.position.y);
     this.camera.updateMatrixWorld(true);
   }
 
+  private placeBehindSampledPosition(position: MutablePositionBuffer, distance: number): void {
+    validateSampledWorldPosition(position);
+    const target = simulationPositionToThree(position);
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion).normalize();
+    this.camera.position.copy(target).addScaledVector(forward, -distance);
+    this.camera.position.y = Math.max(this.minimumHeight, this.camera.position.y);
+    this.camera.lookAt(target);
+    this.camera.updateMatrixWorld(true);
+    this.syncAnglesFromCamera();
+  }
+
+  private orbitSampledPosition(position: MutablePositionBuffer): void {
+    validateSampledWorldPosition(position);
+    const target = simulationPositionToThree(position);
+    const cp = Math.cos(this.pitch);
+    const forward = new THREE.Vector3(
+      -Math.sin(this.yaw) * cp,
+      Math.sin(this.pitch),
+      -Math.cos(this.yaw) * cp,
+    );
+    this.camera.position.copy(target).addScaledVector(forward, -this.currentFollowDistance);
+    this.camera.position.y = Math.max(this.minimumHeight, this.camera.position.y);
+    this.camera.lookAt(target);
+    this.camera.updateMatrixWorld(true);
+  }
+
+  private applyRotation(): void {
+    this.pitch = clamp(this.pitch, -PITCH_LIMIT, PITCH_LIMIT);
+    this.camera.quaternion.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
+    this.camera.updateMatrixWorld(true);
+  }
+
+  private syncAnglesFromCamera(): void {
+    const euler = new THREE.Euler().setFromQuaternion(this.camera.quaternion, 'YXZ');
+    this.pitch = clamp(euler.x, -PITCH_LIMIT, PITCH_LIMIT);
+    this.yaw = euler.y;
+  }
+
   private installControls(): void {
-    // Capture-phase handlers own Phase 2 camera input before WorldView's legacy target-phase handlers.
     this.surface.addEventListener('pointerdown', this.handlePointerDown, true);
     this.surface.addEventListener('pointermove', this.handlePointerMove, true);
     this.surface.addEventListener('pointerup', this.handlePointerRelease, true);
     this.surface.addEventListener('pointercancel', this.handlePointerRelease, true);
     this.surface.addEventListener('wheel', this.handleWheel, { capture: true, passive: false });
     this.surface.addEventListener('contextmenu', this.handleContextMenu);
+    if (this.keyboardTarget !== null) {
+      this.keyboardTarget.addEventListener('keydown', this.handleKeyDown);
+      this.keyboardTarget.addEventListener('keyup', this.handleKeyUp);
+      this.keyboardTarget.addEventListener('blur', this.handleBlur);
+    }
   }
 
   private readonly handlePointerDown = (event: PointerEvent): void => {
-    if (event.button !== 0 && event.button !== 2) return;
-    this.followTarget = null;
-    if (event.button === 0) this.panPointerId = event.pointerId;
-    else this.orbitPointerId = event.pointerId;
+    if (event.button !== 0) return;
+    this.lookPointerId = event.pointerId;
     this.lastPointerX = event.clientX;
     this.lastPointerY = event.clientY;
     this.surface.setPointerCapture(event.pointerId);
@@ -236,38 +279,45 @@ export class ViewNavigationController {
   };
 
   private readonly handlePointerMove = (event: PointerEvent): void => {
-    if (event.pointerId !== this.panPointerId && event.pointerId !== this.orbitPointerId) return;
+    if (event.pointerId !== this.lookPointerId) return;
     const deltaX = event.clientX - this.lastPointerX;
     const deltaY = event.clientY - this.lastPointerY;
     this.lastPointerX = event.clientX;
     this.lastPointerY = event.clientY;
-
-    if (event.pointerId === this.panPointerId) {
-      const width = Math.max(this.surface.clientWidth, 1);
-      const height = Math.max(this.surface.clientHeight, 1);
-      const worldWidth = (this.camera.right - this.camera.left) / this.camera.zoom;
-      const worldHeight = (this.camera.top - this.camera.bottom) / this.camera.zoom;
-      this.pan(-(deltaX / width) * worldWidth, (deltaY / height) * worldHeight);
-    } else {
-      if (deltaX !== 0) this.rotateBy(-deltaX * this.rotationRadiansPerPixel);
-      if (deltaY !== 0) this.adjustAltitude(-deltaY * this.altitudeMetersPerPixel);
-    }
-
+    this.lookBy(deltaX, deltaY);
     event.preventDefault();
     event.stopImmediatePropagation();
   };
 
   private readonly handlePointerRelease = (event: PointerEvent): void => {
-    const handled = event.pointerId === this.panPointerId || event.pointerId === this.orbitPointerId;
-    if (event.pointerId === this.panPointerId) this.panPointerId = null;
-    if (event.pointerId === this.orbitPointerId) this.orbitPointerId = null;
-    if (handled) event.stopImmediatePropagation();
+    if (event.pointerId !== this.lookPointerId) return;
+    this.lookPointerId = null;
+    event.stopImmediatePropagation();
   };
 
   private readonly handleWheel = (event: WheelEvent): void => {
-    this.zoomBy(Math.exp(-event.deltaY * 0.001));
+    const factor = Math.exp(-event.deltaY * 0.001);
+    if (this.followTarget === null) {
+      this.currentMoveSpeed = clamp(this.currentMoveSpeed * factor, this.minimumMoveSpeed, this.maximumMoveSpeed);
+    } else {
+      this.currentFollowDistance = clamp(this.currentFollowDistance * factor, this.minimumFollowDistance, this.maximumFollowDistance);
+    }
     event.preventDefault();
     event.stopImmediatePropagation();
+  };
+
+  private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    if (event.code === 'Space') event.preventDefault();
+    this.setKeyState(event.code, true);
+  };
+
+  private readonly handleKeyUp = (event: KeyboardEvent): void => {
+    this.setKeyState(event.code, false);
+  };
+
+  private readonly handleBlur = (): void => {
+    this.keys.clear();
+    this.lookPointerId = null;
   };
 
   private readonly handleContextMenu = (event: MouseEvent): void => {
@@ -310,57 +360,25 @@ export function createEntityNavigationTarget(
   };
 }
 
-export function getCameraFocusAtSimulationAltitude(camera: ViewNavigationCamera, simulationAltitude: number): WorldPosition | undefined {
-  const focus = new Float64Array(3);
-  if (!writeCameraFocusAtSimulationAltitude(camera, simulationAltitude, focus)) return undefined;
-  return { x: focus[0], y: focus[1], z: focus[2] };
-}
-
-function writeCameraFocusAtSimulationAltitude(camera: ViewNavigationCamera, simulationAltitude: number, target: MutablePositionBuffer): boolean {
+export function getCameraFocusAtSimulationAltitude(camera: THREE.PerspectiveCamera, simulationAltitude: number): WorldPosition | undefined {
   validateFinite(simulationAltitude, 'simulation altitude');
   camera.updateMatrixWorld(true);
-  const elements = camera.matrixWorld.elements;
-  const rawX = -Number(elements[8]);
-  const rawY = -Number(elements[9]);
-  const rawZ = -Number(elements[10]);
-  const directionLength = Math.hypot(rawX, rawY, rawZ);
-  if (!Number.isFinite(directionLength) || directionLength <= DIRECTION_EPSILON) throw new RangeError('Camera direction is invalid.');
-  const directionX = rawX / directionLength;
-  const directionY = rawY / directionLength;
-  const directionZ = rawZ / directionLength;
-  if (Math.abs(directionY) <= DIRECTION_EPSILON) return false;
-  const distance = (simulationAltitude - camera.position.y) / directionY;
-  if (!Number.isFinite(distance) || distance <= 0) return false;
-  target[0] = camera.position.x + directionX * distance;
-  target[1] = camera.position.z + directionZ * distance;
-  target[2] = simulationAltitude;
-  return true;
+  const direction = new THREE.Vector3();
+  camera.getWorldDirection(direction);
+  if (Math.abs(direction.y) <= DIRECTION_EPSILON) return undefined;
+  const distance = (simulationAltitude - camera.position.y) / direction.y;
+  if (!Number.isFinite(distance) || distance <= 0) return undefined;
+  const focus = camera.position.clone().addScaledVector(direction, distance);
+  return { x: focus.x, y: focus.z, z: simulationAltitude };
 }
 
-function writeCameraWorldDirection(camera: ViewNavigationCamera, target: MutablePositionBuffer): void {
-  camera.updateMatrixWorld(true);
-  const elements = camera.matrixWorld.elements;
-  const x = -Number(elements[8]);
-  const y = -Number(elements[9]);
-  const z = -Number(elements[10]);
-  const length = Math.hypot(x, y, z);
-  if (!Number.isFinite(length) || length <= DIRECTION_EPSILON) throw new RangeError('Camera direction is invalid.');
-  target[0] = x / length;
-  target[1] = y / length;
-  target[2] = z / length;
+function simulationPositionToThree(position: MutablePositionBuffer): THREE.Vector3 {
+  return new THREE.Vector3(position[0], position[2], position[1]);
 }
 
-function writeHorizontalUnit(x: number, z: number, fallbackX: number, fallbackZ: number, target: Float64Array): void {
-  let length = Math.hypot(x, z);
-  if (Number.isFinite(length) && length > DIRECTION_EPSILON) {
-    target[0] = x / length;
-    target[1] = z / length;
-    return;
-  }
-  length = Math.hypot(fallbackX, fallbackZ);
-  if (!Number.isFinite(length) || length <= DIRECTION_EPSILON) throw new RangeError('Camera horizontal basis is invalid.');
-  target[0] = fallbackX / length;
-  target[1] = fallbackZ / length;
+function resolveFocusDistance(preferredZoom: number | undefined): number {
+  if (preferredZoom === undefined) return DEFAULT_FOCUS_DISTANCE;
+  return clamp(DEFAULT_FOCUS_DISTANCE / validatePositive(preferredZoom, 'preferred zoom'), 10, 10_000);
 }
 
 function validateSampledWorldPosition(position: MutablePositionBuffer): void {
