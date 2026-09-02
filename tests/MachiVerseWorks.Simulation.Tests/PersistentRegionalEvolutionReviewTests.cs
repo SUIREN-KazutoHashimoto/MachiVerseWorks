@@ -143,6 +143,78 @@ public sealed class PersistentRegionalEvolutionReviewTests
         Assert.IsGreaterThanOrEqualTo(evolution.NextRelationId, after.NextRelationId);
     }
 
+    [TestMethod]
+    public void InitialRegionalBuildingDemolitionRemovesActualWorldObjectAndReferences()
+    {
+        var world = CreateWorld(31906);
+        world.ConfigurePersistentRegionalEvolution(new PersistentRegionalEvolutionOptions(ticksPerYear: 1));
+        world.InitializeRegionalWorld(
+            CreateVolume(),
+            new RegionalGenerationOptions(RegionalGenerationQualityPreset.Draft, settlementCount: 2, iterationBudget: 1),
+            out _);
+        _ = world.CreatePersistentRegionalEvolutionSnapshot();
+        var beforeBuildingCount = world.BuildingCount;
+        var checkpoint = world.CreateCheckpoint();
+        var evolution = checkpoint.Economy!.RegionalEvolution!;
+        var target = evolution.Snapshot.Buildings[0];
+        var buildings = evolution.Snapshot.Buildings.ToArray();
+        buildings[0] = target with
+        {
+            BuiltYear = -200,
+            LastChangedYear = 0,
+            Condition = 0.01d,
+            Occupancy = 0.01d,
+            Status = BuildingLifecycleStatus.Active,
+        };
+        var parcels = evolution.Snapshot.Parcels.ToArray();
+        var parcelIndex = Array.FindIndex(parcels, item => item.ParcelId == target.ParcelId);
+        Assert.IsGreaterThanOrEqualTo(0, parcelIndex);
+        var targetParcel = parcels[parcelIndex];
+        parcels[parcelIndex] = targetParcel with
+        {
+            DevelopmentDemand = 0d,
+            LandValue = 0d,
+            DevelopmentState = ParcelDevelopmentState.Occupied,
+        };
+        var settlements = evolution.Snapshot.Settlements
+            .Select(item => item.SettlementId == targetParcel.SettlementId
+                ? item with
+                {
+                    Population = 0,
+                    Jobs = 0,
+                    ServiceIndex = 0d,
+                    Density = 0d,
+                    Accessibility = 0d,
+                    Trend = SettlementTrend.Declining,
+                }
+                : item)
+            .ToArray();
+        var prepared = checkpoint with
+        {
+            Economy = checkpoint.Economy with
+            {
+                RegionalEvolution = evolution with
+                {
+                    Snapshot = evolution.Snapshot with
+                    {
+                        Settlements = settlements,
+                        Parcels = parcels,
+                        Buildings = buildings,
+                    },
+                },
+            },
+        };
+
+        var restored = SimulationWorld.RestoreCheckpoint(prepared);
+        restored.AdvancePersistentRegionalEvolutionYears(1);
+        var after = restored.CreatePersistentRegionalEvolutionSnapshot();
+        var afterParcel = after.Parcels.First(item => item.ParcelId == target.ParcelId);
+
+        Assert.AreEqual(beforeBuildingCount - 1, restored.BuildingCount);
+        Assert.IsNull(afterParcel.BuildingId);
+        Assert.AreEqual(ParcelDevelopmentState.Vacant, afterParcel.DevelopmentState);
+    }
+
     private static SimulationWorld CreateWorld(ulong seed) =>
         new(new SimulationConfig(tickRate: 2, seed: seed, worldEnvironment: CreateConfig(seed + 10_000)));
 
