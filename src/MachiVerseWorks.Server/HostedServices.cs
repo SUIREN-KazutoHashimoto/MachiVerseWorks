@@ -93,7 +93,7 @@ internal static class RailwayOperationsSnapshotMessagePlanner
 
 internal readonly record struct PendingSnapshotDelivery(ClientConnection Connection, ClientSubscriptionState Subscription);
 
-internal sealed class SnapshotPublishService(SimulationRuntime simulation, ServerOptions options, ClientConnectionRegistry connections, E2eMetrics metrics, ILogger<SnapshotPublishService> logger) : BackgroundService
+internal sealed class SnapshotPublishService(IObservationSource observationSource, ServerOptions options, ClientConnectionRegistry connections, E2eMetrics metrics, ILogger<SnapshotPublishService> logger) : BackgroundService
 {
     private static readonly TimeSpan ClientSendTimeout = TimeSpan.FromSeconds(5);
     private readonly SnapshotDeliveryScheduler _deliveryScheduler = new();
@@ -109,7 +109,7 @@ internal sealed class SnapshotPublishService(SimulationRuntime simulation, Serve
                 _deliveryScheduler.ThrowIfFaulted();
                 var pending = CapturePendingDeliveries();
                 if (pending.Length == 0) continue;
-                try { var publishSnapshot = simulation.CapturePublishSnapshot(); SchedulePublish(publishSnapshot, pending, stoppingToken); }
+                try { var publishSnapshot = observationSource.CapturePublishSnapshot(); SchedulePublish(publishSnapshot, pending, stoppingToken); }
                 catch { ReleaseReservations(pending); throw; }
             }
         }
