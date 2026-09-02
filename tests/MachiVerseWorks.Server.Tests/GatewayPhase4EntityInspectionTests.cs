@@ -1,3 +1,4 @@
+using System.Net.WebSockets;
 using MachiVerseWorks.Protocol;
 using MachiVerseWorks.Server;
 using MachiVerseWorks.Simulation;
@@ -100,6 +101,47 @@ public sealed class GatewayPhase4EntityInspectionTests
         Assert.IsTrue(cleared.Revision > second.Revision);
     }
 
+    [TestMethod]
+    public async Task EntityInspectionIsRevalidatedAfterWaitingForSendGate()
+    {
+        using var socket = new BlockingWebSocket();
+        using var connection = new ClientConnection(Guid.NewGuid(), socket);
+        var inspections = new EntityInspectionRegistry();
+        inspections.Set(connection.Id, new EntityInspectionTarget(ProtocolEntityType.Settlement, 1));
+        var selection = inspections.Capture(connection.Id);
+
+        var blockingSend = connection.SendAsync(
+            new ProtocolErrorMessage(ProtocolErrorCode.InvalidRequest, []),
+            new ProtocolVersion(2, 0),
+            CancellationToken.None);
+        await socket.FirstSendStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+        var guardedSend = connection.SendIfEntityInspectionCurrentAsync(
+            new EntityInspectionSnapshotMessage(
+                ProtocolEntityType.Settlement,
+                1,
+                900,
+                2040,
+                Found: true,
+                CurrentState: [new ProtocolInspectionField("population", "12000")],
+                Relations: [],
+                RecentPast: [],
+                PlannedFutureAvailable: false,
+                PlannedFuture: []),
+            ProtocolVersion.Current,
+            inspections,
+            selection,
+            CancellationToken.None);
+
+        inspections.Clear(connection.Id);
+        socket.ReleaseFirstSend.SetResult();
+
+        _ = await blockingSend;
+        var guardedResult = await guardedSend;
+        Assert.IsNull(guardedResult);
+        Assert.AreEqual(1, socket.SendCount);
+    }
+
     private static PopulationPublishSnapshot CreatePopulationSnapshot() => new(
         1,
         1,
@@ -134,5 +176,36 @@ public sealed class GatewayPhase4EntityInspectionTests
             events,
             [],
             []);
+    }
+
+    private sealed class BlockingWebSocket : WebSocket
+    {
+        private int _sendCount;
+
+        public TaskCompletionSource FirstSendStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ReleaseFirstSend { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int SendCount => Volatile.Read(ref _sendCount);
+        public override WebSocketCloseStatus? CloseStatus => null;
+        public override string? CloseStatusDescription => null;
+        public override WebSocketState State => WebSocketState.Open;
+        public override string? SubProtocol => null;
+        public override void Abort() { }
+        public override Task CloseAsync(WebSocketCloseStatus closeStatus, string? statusDescription, CancellationToken cancellationToken) => Task.CompletedTask;
+        public override Task CloseOutputAsync(WebSocketCloseStatus closeStatus, string? statusDescription, CancellationToken cancellationToken) => Task.CompletedTask;
+        public override void Dispose() { }
+        public override Task<WebSocketReceiveResult> ReceiveAsync(ArraySegment<byte> buffer, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public override async Task SendAsync(
+            ArraySegment<byte> buffer,
+            WebSocketMessageType messageType,
+            bool endOfMessage,
+            CancellationToken cancellationToken)
+        {
+            if (Interlocked.Increment(ref _sendCount) == 1)
+            {
+                FirstSendStarted.TrySetResult();
+                await ReleaseFirstSend.Task.WaitAsync(cancellationToken);
+            }
+        }
     }
 }
