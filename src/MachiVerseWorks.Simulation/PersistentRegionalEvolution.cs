@@ -169,7 +169,16 @@ public static class PersistentRegionalEvolutionEngine
                 DormantSinceYear = active ? null : old.DormantSinceYear ?? year };
             settlements[i] = next;
             if (scale != old.Scale) events.Add(new(new(nextEventId++), year, RegionalEvolutionEventKind.ClassificationChanged, old.SettlementId, null, $"{old.Scale}->{scale}"));
-            if (populationDelta != 0) events.Add(new(new(nextEventId++), year, populationDelta > 0 ? RegionalEvolutionEventKind.Growth : RegionalEvolutionEventKind.Decline, old.SettlementId, null, FormattableString.Invariant($"population {populationDelta:+#;-#;0}"))));
+            if (populationDelta != 0)
+            {
+                events.Add(new RegionalEvolutionEvent(
+                    new RegionalEvolutionEventId(nextEventId++),
+                    year,
+                    populationDelta > 0 ? RegionalEvolutionEventKind.Growth : RegionalEvolutionEventKind.Decline,
+                    old.SettlementId,
+                    null,
+                    FormattableString.Invariant($"population {populationDelta:+#;-#;0}")));
+            }
             if (!active && old.IsActive) events.Add(new(new(nextEventId++), year, RegionalEvolutionEventKind.SettlementDormancy, old.SettlementId, null, "population and jobs fell below persistence threshold"));
             if (active && !old.IsActive) events.Add(new(new(nextEventId++), year, RegionalEvolutionEventKind.SettlementRecovery, old.SettlementId, null, "activity recovered"));
         }
