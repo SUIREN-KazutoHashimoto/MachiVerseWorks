@@ -4,6 +4,8 @@ import { MessageType, type ProtocolMessage } from './protocol.ts';
 import { RoadNetworkStore, type ReadonlyRoadNetworkStore } from './road-network-store.ts';
 import { TrafficMessageType, type TrafficProtocolMessage } from './traffic-protocol.ts';
 import { IntersectionControlStore, type ReadonlyIntersectionControlStore, type ReadonlyVehicleStore, VehicleStore } from './traffic-store.ts';
+import { WorldEnvironmentStore, type ReadonlyWorldEnvironmentStore } from './world-environment-store.ts';
+import { WORLD_ENVIRONMENT_SNAPSHOT_MESSAGE_TYPE, type WorldEnvironmentSnapshotMessage } from './world-environment-protocol.ts';
 
 export interface ReadonlyViewObservationState {
   readonly entities: ReadonlyEntityStore;
@@ -11,6 +13,7 @@ export interface ReadonlyViewObservationState {
   readonly vehicles: ReadonlyVehicleStore;
   readonly intersections: ReadonlyIntersectionControlStore;
   readonly roadNetwork: ReadonlyRoadNetworkStore;
+  readonly worldEnvironment: ReadonlyWorldEnvironmentStore;
 }
 
 /** Single writable ingress for observation messages used by the View. */
@@ -20,14 +23,16 @@ export class ViewObservationState implements ReadonlyViewObservationState {
   private readonly vehicleStore = new VehicleStore();
   private readonly intersectionStore = new IntersectionControlStore();
   private readonly roadNetworkStore = new RoadNetworkStore();
+  private readonly worldEnvironmentStore = new WorldEnvironmentStore();
 
   public get entities(): ReadonlyEntityStore { return this.entityStore; }
   public get pedestrians(): ReadonlyPedestrianStore { return this.pedestrianStore; }
   public get vehicles(): ReadonlyVehicleStore { return this.vehicleStore; }
   public get intersections(): ReadonlyIntersectionControlStore { return this.intersectionStore; }
   public get roadNetwork(): ReadonlyRoadNetworkStore { return this.roadNetworkStore; }
+  public get worldEnvironment(): ReadonlyWorldEnvironmentStore { return this.worldEnvironmentStore; }
 
-  public apply(message: ProtocolMessage | TrafficProtocolMessage, receivedAt = performance.now()): boolean {
+  public apply(message: ProtocolMessage | TrafficProtocolMessage | WorldEnvironmentSnapshotMessage, receivedAt = performance.now()): boolean {
     switch (message.type) {
       case MessageType.AgentSpawn:
         this.entityStore.spawn(message, receivedAt);
@@ -62,6 +67,9 @@ export class ViewObservationState implements ReadonlyViewObservationState {
       case TrafficMessageType.IntersectionControlSnapshot:
         this.intersectionStore.apply(message, receivedAt);
         return true;
+      case WORLD_ENVIRONMENT_SNAPSHOT_MESSAGE_TYPE:
+        this.worldEnvironmentStore.replace(message);
+        return true;
       default:
         return false;
     }
@@ -74,5 +82,6 @@ export class ViewObservationState implements ReadonlyViewObservationState {
     this.vehicleStore.clear();
     this.intersectionStore.clear();
     this.roadNetworkStore.clear();
+    this.worldEnvironmentStore.clear();
   }
 }
