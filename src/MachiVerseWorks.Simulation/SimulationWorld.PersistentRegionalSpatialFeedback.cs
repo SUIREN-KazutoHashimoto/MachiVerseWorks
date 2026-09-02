@@ -83,7 +83,7 @@ public sealed partial class SimulationWorld
         var segmentNodes = roads.Segments
             .SelectMany(static segment => new[] { (segment.StartNodeId, segment.Id), (segment.EndNodeId, segment.Id) })
             .GroupBy(static item => item.Item1)
-            .ToDictionary(static group => group.Key, static group => group.Select(static item => item.Id).ToArray());
+            .ToDictionary(static group => group.Key, static group => group.Select(static item => item.Item2).ToArray());
         foreach (var node in roads.Nodes)
         {
             if (Distance2D(node.Position, center) > radius) continue;
