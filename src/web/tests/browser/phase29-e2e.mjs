@@ -8,7 +8,7 @@ if (!(result instanceof HTMLElement) || server === null) throw new Error('Phase 
 
 const socket = new WebSocket(server);
 socket.binaryType = 'arraybuffer';
-const timeout = window.setTimeout(() => fail(new Error('Timed out waiting for the Phase 29 WorldEnvironment snapshot.')), 60_000);
+const timeout = window.setTimeout(() => fail(new Error('Timed out waiting for the Phase 29 WorldEnvironment snapshot.')), 20_000);
 let handshaken = false;
 
 socket.addEventListener('open', () => socket.send(encodeHello({ major: 2, minor: 17 })));
@@ -24,7 +24,16 @@ socket.addEventListener('message', async (event) => {
     }
 
     const view = new DataView(frame);
-    if (frame.byteLength < PROTOCOL_HEADER_SIZE || view.getUint16(8, true) !== WORLD_ENVIRONMENT_SNAPSHOT_MESSAGE_TYPE) return;
+    if (frame.byteLength < PROTOCOL_HEADER_SIZE) throw new Error('Received a protocol frame shorter than the header.');
+    const messageType = view.getUint16(8, true);
+    if (messageType === MessageType.Error) {
+      const envelope = decodeFrame(frame);
+      const parameters = envelope.message.type === MessageType.Error
+        ? envelope.message.parameters.map((item) => `${item.key}=${item.value}`).join(', ')
+        : '';
+      throw new Error(`Server rejected the Phase 29 subscription: ${parameters}`);
+    }
+    if (messageType !== WORLD_ENVIRONMENT_SNAPSHOT_MESSAGE_TYPE) return;
     if (view.getUint16(4, true) !== 2 || view.getUint16(6, true) !== 17) throw new Error('WorldEnvironment snapshot protocol version mismatch.');
     const payloadLength = view.getUint32(12, true);
     if (payloadLength + PROTOCOL_HEADER_SIZE !== frame.byteLength) throw new Error('WorldEnvironment snapshot frame length mismatch.');
