@@ -166,7 +166,7 @@ Selection / Inspectorから共通利用できるEntity observationを、Gateway�
 
 - ⬜ **G4-001** — Entity ID / Entity Typeを共通targetとするgeneric inspection request / response contractを設計する（旧`OBS-008`）
 - ⬜ **G4-002** — Current state / RelationsをSimulation提供値のままgeneric inspectionへ載せる（旧`OBS-008`）
-- ⬜ **G4-003** — bounded Recent Past / semantic eventをSimulationのhistory projectionから配信する（旧`OBS-008`）
+- ⬜ **G4-003** — bounded Recent Past / semantic eventをSimulationのrecent-state / semantic-event sourceから配信する（旧`OBS-008`）
 - ⬜ **G4-004** — committed / scheduled Planned FutureをSimulation提供値のまま配信し、predictionと区別する（旧`OBS-008`）
 - ⬜ **G4-005** — selected Entityだけ高詳細Observationへ昇格できるconnection-local subscriptionを実装する
 - ⬜ **G4-006** — recent/planned payloadの件数・期間・payload size上限をProtocol互換で定義する
