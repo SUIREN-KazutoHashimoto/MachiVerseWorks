@@ -15,6 +15,7 @@ public sealed partial class SimulationWorld
         PersistentRegionalEvolutionSnapshot previous,
         PersistentRegionalEvolutionSnapshot current)
     {
+        EnsurePersistentRegionalRelationIdFloor(previous.Relations);
         if (current.Settlements.Count < 2)
             return current with { Relations = Array.Empty<RegionalRelation>() };
 
@@ -37,9 +38,6 @@ public sealed partial class SimulationWorld
             .ToDictionary(
                 static item => (CanonicalPair(item.FromSettlementId, item.ToSettlementId), item.Kind),
                 static item => item);
-        var nextRelationId = previous.Relations.Count == 0
-            ? 1UL
-            : checked(previous.Relations.Max(static item => item.Id.Value) + 1UL);
 
         var activeSettlements = current.Settlements
             .Where(static item => item.IsActive)
@@ -108,8 +106,10 @@ public sealed partial class SimulationWorld
                 }
                 else
                 {
+                    if (_nextPersistentRegionalRelationId == ulong.MaxValue)
+                        throw new OverflowException("Persistent regional Relation ID capacity has been exhausted.");
                     relations.Add(new RegionalRelation(
-                        new RegionalRelationId(nextRelationId++),
+                        new RegionalRelationId(_nextPersistentRegionalRelationId++),
                         pair.First,
                         pair.Second,
                         kind,
@@ -128,6 +128,15 @@ public sealed partial class SimulationWorld
                 .ThenBy(static item => item.Kind)
                 .ToArray(),
         };
+    }
+
+    private void EnsurePersistentRegionalRelationIdFloor(IReadOnlyList<RegionalRelation> relations)
+    {
+        if (relations.Count == 0) return;
+        var maximum = relations.Max(static item => item.Id.Value);
+        if (maximum == ulong.MaxValue)
+            throw new OverflowException("Persistent regional Relation ID capacity has been exhausted.");
+        _nextPersistentRegionalRelationId = Math.Max(_nextPersistentRegionalRelationId, maximum + 1UL);
     }
 
     private static (RegionalRelationKind Kind, double Strength)? SelectRegionalRelation(
