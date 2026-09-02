@@ -11,6 +11,7 @@
 - [`ADR-0005-server-administration-boundary.md`](ADR-0005-server-administration-boundary.md): Server Administrationを単一のauthoritative command境界へ集約する
 - [`ADR-0006-remote-mcp-through-administration-boundary.md`](ADR-0006-remote-mcp-through-administration-boundary.md): Remote MCPをPhase 20 Administration境界経由に限定する
 - [`ADR-0007-read-only-view-observation-management-boundary.md`](ADR-0007-read-only-view-observation-management-boundary.md): Viewを完全read-onlyとし、Observation GatewayとManagement command境界を分離する
+- [`ADR-0008-authoritative-two-level-world-environment-terrain.md`](ADR-0008-authoritative-two-level-world-environment-terrain.md): Global EnvironmentとDetailed 3D Terrainを二層化し、両方をSimulation authoritative stateから決定する
 
 命名例:
 

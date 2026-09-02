@@ -93,6 +93,7 @@ public sealed partial class SimulationWorld
     {
         EnsurePedestrianNetwork();
         var railwayOperations = _railwayOperations?.CreateSnapshot();
+        var economy = CreateEconomyCheckpointWithRadio() with { WorldEnvironment = CreateWorldEnvironmentCheckpoint() };
         return new SimulationCheckpoint(
             Config.TickRate, Config.Seed, Config.SpatialCellSize, Time.TickCount, Time.Elapsed.Ticks, _random.State,
             _agents.NextId, _agents.CreateCheckpoint(),
@@ -121,7 +122,7 @@ public sealed partial class SimulationWorld
             _railwayOperations?.NextServiceId ?? 1UL, railwayOperations?.Services ?? Array.Empty<RailwayServiceSnapshot>(),
             _railwayOperations?.NextTrainId ?? 1UL, railwayOperations?.Trains ?? Array.Empty<TrainSnapshot>(),
             _multimodalTransit.CreateCheckpoint(Time.TickCount),
-            CreateEconomyCheckpointWithRadio());
+            economy);
     }
 
     public static SimulationWorld RestoreCheckpoint(SimulationCheckpoint checkpoint)
@@ -141,7 +142,8 @@ public sealed partial class SimulationWorld
         }
         if (checkpoint.NextAgentId <= maximumAgentId) throw new ArgumentOutOfRangeException(nameof(checkpoint), checkpoint.NextAgentId, "Next Agent ID must be greater than every stored Agent ID.");
 
-        var config = new SimulationConfig(checkpoint.TickRate, checkpoint.Seed, checkpoint.SpatialCellSize);
+        var worldEnvironment = checkpoint.Economy?.WorldEnvironment;
+        var config = new SimulationConfig(checkpoint.TickRate, checkpoint.Seed, checkpoint.SpatialCellSize, worldEnvironment?.Config);
         ValidateUrbanObjectCheckpoint(checkpoint, config.SpatialCellSize);
         ValidateRoadNetworkCheckpoint(checkpoint, config.SpatialCellSize);
         ValidatePedestrianCheckpoint(checkpoint);
@@ -157,6 +159,7 @@ public sealed partial class SimulationWorld
         ValidateDeliveredGasCheckpointInvariants(checkpoint);
         ValidateOpticalCheckpoint(checkpoint);
         ValidateRadioCheckpoint(checkpoint);
+        ValidateWorldEnvironmentCheckpoint(checkpoint);
         var expectedElapsedTicks = CalculateExpectedElapsedTicks(checkpoint.TickCount, config.TickRate);
         if (checkpoint.ElapsedTicks != expectedElapsedTicks
             && (!TryCalculateLegacyElapsedTicks(checkpoint.TickCount, config.TickRate, out var legacyElapsedTicks)
@@ -196,6 +199,7 @@ public sealed partial class SimulationWorld
         world.RestoreGas(checkpoint.Economy?.Gas);
         world.RestoreOptical(checkpoint.Economy?.Optical);
         world.RestoreRadio(checkpoint.Economy?.Radio);
+        world.RestoreWorldEnvironment(worldEnvironment);
         world._multimodalTransit.Restore(checkpoint.MultimodalTransit);
         ValidateMultimodalTransitCheckpointReferences(checkpoint);
         return world;

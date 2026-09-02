@@ -47,6 +47,7 @@ public static class ServerApplication
         builder.Services.AddHostedService<GasPublishService>();
         builder.Services.AddHostedService<OpticalPublishService>();
         builder.Services.AddHostedService<RadioPublishService>();
+        builder.Services.AddHostedService<WorldEnvironmentPublishService>();
 
         if (mcpOptions.Enabled)
         {

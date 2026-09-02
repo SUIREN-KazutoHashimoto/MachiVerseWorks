@@ -9,7 +9,8 @@ public sealed class SimulationConfig
     public SimulationConfig(
         int tickRate = DefaultTickRate,
         ulong seed = 1,
-        double spatialCellSize = DefaultSpatialCellSize)
+        double spatialCellSize = DefaultSpatialCellSize,
+        WorldEnvironmentConfig? worldEnvironment = null)
     {
         if (tickRate is <= 0 or > MaximumTickRate)
         {
@@ -30,15 +31,13 @@ public sealed class SimulationConfig
         TickRate = tickRate;
         Seed = seed;
         SpatialCellSize = spatialCellSize;
+        WorldEnvironment = worldEnvironment ?? WorldEnvironmentConfig.CreateDefault(seed);
     }
 
     public int TickRate { get; }
-
     public ulong Seed { get; }
-
     public double SpatialCellSize { get; }
-
+    public WorldEnvironmentConfig WorldEnvironment { get; }
     public double TickDurationSeconds => 1d / TickRate;
-
     public TimeSpan TickDuration => TimeSpan.FromTicks(SimulationTime.CalculateElapsedTicks(1, TickRate));
 }
