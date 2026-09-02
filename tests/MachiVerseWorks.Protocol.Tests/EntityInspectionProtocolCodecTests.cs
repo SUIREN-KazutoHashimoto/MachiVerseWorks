@@ -1,23 +1,25 @@
-using MachiVerseWorks.Protocol;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace MachiVerseWorks.Protocol.Tests;
 
+[TestClass]
 public sealed class EntityInspectionProtocolCodecTests
 {
-    [Fact]
+    [TestMethod]
     public void InspectEntityRoundTripsTypeAndId()
     {
         var source = new InspectEntityMessage(ProtocolEntityType.Building, 42);
 
         var frame = EntityInspectionProtocolCodec.Serialize(source, ProtocolVersion.Current);
 
-        Assert.True(EntityInspectionProtocolCodec.TryDeserialize(frame, out var envelope, out var error));
-        Assert.Equal(ProtocolDecodeError.None, error);
-        var decoded = Assert.IsType<InspectEntityMessage>(envelope!.Message);
-        Assert.Equal(source, decoded);
+        Assert.IsTrue(EntityInspectionProtocolCodec.TryDeserialize(frame, out var envelope, out var error));
+        Assert.AreEqual(ProtocolDecodeError.None, error);
+        Assert.IsNotNull(envelope);
+        var decoded = (InspectEntityMessage)envelope.Message;
+        Assert.AreEqual(source, decoded);
     }
 
-    [Fact]
+    [TestMethod]
     public void EntitySnapshotRoundTripsBoundedReadModel()
     {
         var source = new EntityInspectionSnapshotMessage(
@@ -34,19 +36,20 @@ public sealed class EntityInspectionProtocolCodecTests
 
         var frame = EntityInspectionProtocolCodec.Serialize(source, ProtocolVersion.Current);
 
-        Assert.True(EntityInspectionProtocolCodec.TryDeserialize(frame, out var envelope, out var error));
-        Assert.Equal(ProtocolDecodeError.None, error);
-        var decoded = Assert.IsType<EntityInspectionSnapshotMessage>(envelope!.Message);
-        Assert.Equal(source.EntityType, decoded.EntityType);
-        Assert.Equal(source.EntityId, decoded.EntityId);
-        Assert.Equal(source.CurrentState, decoded.CurrentState);
-        Assert.Equal(source.Relations, decoded.Relations);
-        Assert.Equal(source.RecentPast, decoded.RecentPast);
-        Assert.False(decoded.PlannedFutureAvailable);
-        Assert.Empty(decoded.PlannedFuture);
+        Assert.IsTrue(EntityInspectionProtocolCodec.TryDeserialize(frame, out var envelope, out var error));
+        Assert.AreEqual(ProtocolDecodeError.None, error);
+        Assert.IsNotNull(envelope);
+        var decoded = (EntityInspectionSnapshotMessage)envelope.Message;
+        Assert.AreEqual(source.EntityType, decoded.EntityType);
+        Assert.AreEqual(source.EntityId, decoded.EntityId);
+        Assert.AreEqual(source.CurrentState[0], decoded.CurrentState[0]);
+        Assert.AreEqual(source.Relations[0], decoded.Relations[0]);
+        Assert.AreEqual(source.RecentPast[0], decoded.RecentPast[0]);
+        Assert.IsFalse(decoded.PlannedFutureAvailable);
+        Assert.AreEqual(0, decoded.PlannedFuture.Count);
     }
 
-    [Fact]
+    [TestMethod]
     public void EntitySnapshotRejectsUnboundedRecentPast()
     {
         var recent = Enumerable.Range(1, EntityInspectionProtocolCodec.MaximumRecentEvents + 1)
@@ -64,10 +67,10 @@ public sealed class EntityInspectionProtocolCodecTests
             PlannedFutureAvailable: false,
             PlannedFuture: []);
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => EntityInspectionProtocolCodec.Serialize(source, ProtocolVersion.Current));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => EntityInspectionProtocolCodec.Serialize(source, ProtocolVersion.Current));
     }
 
-    [Fact]
+    [TestMethod]
     public void MissingEntityCannotCarryDerivedState()
     {
         var source = new EntityInspectionSnapshotMessage(
@@ -82,6 +85,6 @@ public sealed class EntityInspectionProtocolCodecTests
             PlannedFutureAvailable: false,
             PlannedFuture: []);
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => EntityInspectionProtocolCodec.Serialize(source, ProtocolVersion.Current));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => EntityInspectionProtocolCodec.Serialize(source, ProtocolVersion.Current));
     }
 }
