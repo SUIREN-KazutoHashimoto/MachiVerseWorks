@@ -6,7 +6,7 @@ namespace MachiVerseWorks.Server;
 internal readonly record struct PendingPopulationDelivery(ClientConnection Connection, ulong? InspectedPersonId);
 
 internal sealed class PopulationPublishService(
-    SimulationRuntime simulation,
+    IObservationSource observationSource,
     ServerOptions options,
     ClientConnectionRegistry connections) : BackgroundService
 {
@@ -26,7 +26,7 @@ internal sealed class PopulationPublishService(
                 try
                 {
                     var inspectedIds = pending.Where(static item => item.InspectedPersonId.HasValue).Select(static item => item.InspectedPersonId!.Value).ToHashSet();
-                    var snapshot = simulation.CapturePopulationPublishSnapshot(inspectedIds);
+                    var snapshot = observationSource.CapturePopulationPublishSnapshot(inspectedIds);
                     var statistics = PopulationMessageMapper.Create(snapshot.Statistics);
                     foreach (var delivery in pending)
                     {

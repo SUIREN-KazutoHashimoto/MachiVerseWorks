@@ -4,7 +4,7 @@ using MachiVerseWorks.Protocol;
 namespace MachiVerseWorks.Server;
 
 internal sealed class LogisticsPublishService(
-    SimulationRuntime simulation,
+    IObservationSource observationSource,
     ServerOptions options,
     ClientConnectionRegistry connections) : BackgroundService
 {
@@ -23,7 +23,7 @@ internal sealed class LogisticsPublishService(
                     && connection.Socket.State == WebSocketState.Open).ToArray();
                 if (targets.Length == 0) continue;
 
-                var message = LogisticsMessageMapper.Create(simulation.Read(static world => world.CreateLogisticsSnapshot()));
+                var message = LogisticsMessageMapper.Create(observationSource.CaptureLogisticsSnapshot());
                 foreach (var connection in targets)
                 {
                     try

@@ -4,7 +4,7 @@ using MachiVerseWorks.Protocol;
 namespace MachiVerseWorks.Server;
 
 internal sealed class PowerPublishService(
-    SimulationRuntime simulation,
+    IObservationSource observationSource,
     ServerOptions options,
     ClientConnectionRegistry connections) : BackgroundService
 {
@@ -23,7 +23,7 @@ internal sealed class PowerPublishService(
                     && connection.Socket.State == WebSocketState.Open).ToArray();
                 if (targets.Length == 0) continue;
 
-                var snapshot = simulation.Read(static world => world.CreatePowerSnapshot());
+                var snapshot = observationSource.CapturePowerSnapshot();
                 if (snapshot.Nodes.Count == 0
                     && snapshot.Lines.Count == 0
                     && snapshot.Generators.Count == 0
