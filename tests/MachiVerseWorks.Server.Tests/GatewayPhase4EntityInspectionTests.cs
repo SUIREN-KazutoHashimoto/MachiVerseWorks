@@ -46,6 +46,42 @@ public sealed class GatewayPhase4EntityInspectionTests
     }
 
     [TestMethod]
+    public void TrainInspectionUsesAuthoritativeTransportSnapshot()
+    {
+        var train = new TrainSnapshot(
+            new TrainId(77),
+            new TrainFormationId(1),
+            new RailwayServiceId(2),
+            new RailwayRouteId(3),
+            1250,
+            new WorldPoint(10, 20, 0),
+            new WorldVector(1, 0, 0),
+            15,
+            TrainMovementState.Running,
+            null,
+            null,
+            null,
+            null,
+            0,
+            900);
+        var trains = new Dictionary<ulong, TrainSnapshot> { [77] = train };
+
+        var message = EntityInspectionMessageMapper.Create(
+            new EntityInspectionTarget(ProtocolEntityType.Train, 77),
+            CreatePopulationSnapshot(),
+            trains,
+            null);
+
+        Assert.IsTrue(message.Found);
+        Assert.AreEqual(ProtocolEntityType.Train, message.EntityType);
+        Assert.IsTrue(message.CurrentState.Any(field => field.Name == "state" && field.Value == "Running"));
+        Assert.IsTrue(message.CurrentState.Any(field => field.Name == "speedMetersPerSecond" && field.Value == "15"));
+        Assert.AreEqual(0, message.Relations.Count);
+        Assert.AreEqual(0, message.RecentPast.Count);
+        Assert.IsFalse(message.PlannedFutureAvailable);
+    }
+
+    [TestMethod]
     public void SelectionRevisionChangesAcrossRetargetAndClear()
     {
         var registry = new EntityInspectionRegistry();
