@@ -39,9 +39,9 @@ public sealed class RegionalGenerationLiveDeliveryTests
         Assert.AreEqual(authoritative.Parcels.Count, message.Parcels.Count);
         Assert.AreEqual(authoritative.Buildings.Count, message.Buildings.Count);
 
-        var settlementIds = message.Settlements.Select(static item => item.Id).ToHashSet();
-        var districtIds = message.Districts.Select(static item => item.Id).ToHashSet();
-        var parcelIds = message.Parcels.Select(static item => item.Id).ToHashSet();
+        var settlementIds = message.Settlements.Select(static item => item.SettlementId).ToHashSet();
+        var districtIds = message.Districts.Select(static item => item.DistrictId).ToHashSet();
+        var parcelIds = message.Parcels.Select(static item => item.ParcelId).ToHashSet();
         foreach (var corridor in message.Corridors)
         {
             CollectionAssert.Contains(settlementIds.ToList(), corridor.FromSettlementId);
