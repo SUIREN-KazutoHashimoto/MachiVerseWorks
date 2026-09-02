@@ -16,6 +16,9 @@ internal static class ObservationCacheIdentity
 
     public static string ForEntity(ulong entityId) => entityId.ToString(CultureInfo.InvariantCulture);
 
-    public static string ForChunk(WorldVolume volume, int chunkIndex) =>
-        string.Concat(ForVolume(volume), ":", chunkIndex.ToString(CultureInfo.InvariantCulture));
+    public static string ForChunk(string volumeIdentity, int chunkIndex)
+    {
+        ArgumentNullException.ThrowIfNull(volumeIdentity);
+        return string.Concat(volumeIdentity, ":", chunkIndex.ToString(CultureInfo.InvariantCulture));
+    }
 }
