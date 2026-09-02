@@ -114,6 +114,7 @@ internal static class ObservationGatewayServiceCollectionExtensions
         services.AddSingleton<ObservationCache>();
         services.AddSingleton<ClientConnectionRegistry>();
         services.AddSingleton<ObservationRequestQueue>();
+        services.AddSingleton<SnapshotDeliveryScheduler>();
         services.AddSingleton<WebSocketSessionHandler>();
         services.AddHostedService<ObservationRequestProcessor>();
         services.AddHostedService<SnapshotPublishService>();
