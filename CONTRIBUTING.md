@@ -12,7 +12,7 @@ MachiVerseWorks への貢献に関心を持っていただきありがとうご�
 - 仕様変更時は `docs/specifications/`、設計変更時は `docs/architecture/` を同期してください。
 - 長期間影響する重要な設計判断は `docs/decisions/` に ADR を残してください。
 
-共通ルールの正本は [`AGENTS.md`](AGENTS.md) です。
+共通ルールの正本は [`AGENTS.md`](AGENTS.md) です。実装計画の責務と依存関係は [`roadmap/README.md`](roadmap/README.md) を入口とします。
 
 ## ブランチ名
 
@@ -29,12 +29,21 @@ MachiVerseWorks への貢献に関心を持っていただきありがとうご�
 
 ## アーキテクチャ境界
 
-- `MachiVerseWorks.Simulation`: 都市シミュレーションの正本。通信・ブラウザへ依存させません。
-- `MachiVerseWorks.Server`: Simulation の実行、接続、command、snapshot 配信を担当します。
-- `MachiVerseWorks.Protocol`: Client / Server 間の契約を管理します。
-- `src/web`: 表示・入力・補間を担当し、Simulation の正本を持ちません。
+- **Simulation**: authoritative World、rule、意味的state、schedule / history、semantic observation source、authoritative command contractを所有します。
+- **Gateway**: read-only Observation Request、subscription、filtering、cache、deduplication、delivery、Protocol adaptation、reconnect / resyncを担当します。現在は主に`MachiVerseWorks.Server`内へ実装します。
+- **View**: Gatewayから受け取ったauthoritative observationの描画、Camera、Selection、Inspector、Rendering LOD等を担当する完全read-only clientです。
+- **Management**: World / City / Serverを明示的に変更するcommand client / UIです。mutationはSimulationのserver-authoritative command境界を必ず通します。
+- `MachiVerseWorks.Persistence`: Simulation checkpointとversioned Save Dataの変換・検証を担当します。
+- `MachiVerseWorks.Protocol`: 共有wire componentです。domain semantic payloadはSimulation、Observation control / deliveryはGateway、mutation command semanticsはSimulationという責務分離を維持します。
 
-責務を跨ぐ近道を作るより、必要な contract / command / snapshot を明示的に追加してください。
+責務を跨ぐ近道を作るより、必要なsemantic source、Observation contract、command、presentationを各Roadmapへ明示的に追加してください。
+
+Roadmapの正本:
+
+- [`roadmap/SIMULATION_ROADMAP.md`](roadmap/SIMULATION_ROADMAP.md)
+- [`roadmap/GATEWAY_ROADMAP.md`](roadmap/GATEWAY_ROADMAP.md)
+- [`roadmap/VIEW_ROADMAP.md`](roadmap/VIEW_ROADMAP.md)
+- [`roadmap/MANAGEMENT_ROADMAP.md`](roadmap/MANAGEMENT_ROADMAP.md)
 
 ## Pull Request
 
@@ -57,7 +66,7 @@ PR の標準マージ方式は **merge commit** です。version履歴と個々�
 不具合報告では、可能な範囲で次を記載してください。
 
 - バージョンまたはコミット
-- 発生箇所（Simulation / Server / Protocol / Web Client など）
+- 発生箇所（Simulation / Gateway / View / Management / Server host / Protocol など）
 - 再現条件
 - 期待する挙動
 - 実際の挙動

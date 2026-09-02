@@ -20,7 +20,7 @@
 - HTTP、WebSocket、ASP.NET Core、ブラウザ固有 API に依存しない。
 - World、Agent、Traffic、Transit、Logistics、Powerなどの状態とruleを保持する。
 - Activity、Status、分類、ETA、schedule、state transition、semantic event等の意味的処理はSimulation側で完結させる。
-- 外部からは明確な command / step / observation read model / checkpoint 境界を通して操作・観測する。
+- 外部からは明確な command / step / semantic observation source / checkpoint 境界を通して操作・観測する。
 
 ### MachiVerseWorks.Persistence
 
@@ -32,18 +32,27 @@ versioned Save Data と Simulation checkpoint の変換・検証を担当しま�
 - World のルールや tick を所有せず、Simulation の正本性を奪わない。
 - ファイル配置、ユーザー操作、HTTP 等の外部I/O方針は実行ホスト側の責務とする。
 
+### Gateway
+
+GatewayはSimulationとread-only consumerの間にある**完全read-onlyな観測境界**です。現時点では主に`MachiVerseWorks.Server`内へ実装しますが、責務・進捗は独立したGateway Roadmapで管理します。
+
+- Observation Request、subscription、spatial filtering、snapshot / delta / chunk deliveryを担当する。
+- Entity / Spatial / Static cache、request deduplication、encoded payload cache、reconnect / resyncを担当できる。
+- Simulation内部の可変データをネットワーク処理から直接参照し続けず、detached authoritative sourceを利用する。
+- Activity、ETA、分類、予定、semantic event等の意味的stateを生成・推測・補完・再計算しない。
+- GatewayからAdministration / Management mutation APIへ到達するrouteを持たせない。
+- Camera / Selection / View接続数 / Gateway cache状態をSimulation workload / fidelity / ruleの判定条件に使用しない。
+
+GatewayのTask状態は`roadmap/GATEWAY_ROADMAP.md`、architectureは`docs/architecture/observation-gateway.md`を正本とする。
+
 ### MachiVerseWorks.Server
 
 実行ホストと通信境界です。
 
 - Simulation Core のライフサイクルと tick を管理する。
-- **Observation Gateway** と **Administration / Management command boundary** を分離する。
-- Observation Gatewayはread-only observation request、subscription、snapshot / delta、cache / deduplication、reconnectを担当する。
-- Administration / Management commandはauthoritative mutationをSimulationへ渡す。
-- Simulation内部の可変データをネットワーク処理から直接参照し続けない。
-- Observation Gatewayは意味的stateを生成・推測・再計算しない。
-
-Observation Gatewayの正本は `docs/architecture/observation-gateway.md` とする。
+- **Gateway** と **Administration / Management command boundary** を分離してhostする。
+- Gateway側はread-only observation、Administration / Management側はauthoritative mutationを扱う。
+- transport / network処理がSimulationの意味的正本にならない。
 
 ### MachiVerseWorks.Protocol
 
@@ -51,6 +60,7 @@ Observation Gatewayの正本は `docs/architecture/observation-gateway.md` と�
 
 - message type、version、binary layout、control message を管理する。
 - read-only Observation Requestとauthoritative mutation commandを区別する。
+- domainの意味・field / unitはSimulation側authoritative contract、Observation control / delivery envelope / negotiationはGateway責務としてRoadmap ownershipを分ける。
 - Simulation の内部データ構造をそのまま公開 API にしない。
 - 後方互換性が必要になった場合に protocol version を独立して管理できる構成にする。
 
@@ -58,7 +68,7 @@ Observation Gatewayの正本は `docs/architecture/observation-gateway.md` と�
 
 Viewは**完全read-only**な観測・描画層です。
 
-- ServerのObservation Gatewayから受け取った状態を忠実に描画する。
+- Gatewayから受け取った状態を忠実に描画する。
 - Camera、Selection、Inspector、Historical viewing、Rendering LOD、interpolation等を担当する。
 - Simulationの正本にならない。
 - View側で意味的state、分類、予定、ETA、分析結果等を推測・補完・再計算しない。
@@ -77,7 +87,7 @@ ManagementはWorld / City / Serverを明示的に変更するUI / command client
 - Save / Load
 - destructive operation confirmation
 
-read-only View componentをManagement画面で再利用してよいが、mutation責務をView moduleへ持ち込まない。commandはServerのauthoritative command境界から実行する。
+read-only View componentをManagement画面で再利用してよいが、mutation責務をView / Gateway moduleへ持ち込まない。commandはServerのauthoritative command境界から実行し、結果のWorld表示はGatewayから再観測したauthoritative stateを正とする。
 
 ### Analytics
 
@@ -95,7 +105,7 @@ read-only View componentをManagement画面で再利用してよいが、mutatio
 - `docs/decisions/`: ADR
 - `docs/roadmap/`: Phaseを補足する詳細設計・検討資料。Task状態の正本にはしない
 - `docs/archive/`: 廃止済み資料・Legacy 資料・実験記録
-- `roadmap/`: 領域別の実装ロードマップ。Simulationは`roadmap/SIMULATION_ROADMAP.md`、Viewは`roadmap/VIEW_ROADMAP.md`、Managementは`roadmap/MANAGEMENT_ROADMAP.md`を正本とする
+- `roadmap/`: 領域別の実装ロードマップ。Simulationは`roadmap/SIMULATION_ROADMAP.md`、Gatewayは`roadmap/GATEWAY_ROADMAP.md`、Viewは`roadmap/VIEW_ROADMAP.md`、Managementは`roadmap/MANAGEMENT_ROADMAP.md`を正本とする
 - `scripts/`: 開発・CI 補助スクリプト
 - `tools/`: 独立した開発支援ツール
 
@@ -111,7 +121,7 @@ read-only View componentをManagement画面で再利用してよいが、mutatio
 - 廃止した資料は削除ではなく、参照価値がある場合のみ `docs/archive/` へ移す。
 - `archive` を未整理ファイルの一時置き場として使わない。
 - 将来の予定や作業状態は仕様書へ混ぜず、`roadmap/` 配下の領域別ロードマップで管理する。
-- Simulation / View / Managementの責務を変更した場合は3 Roadmapと主要READMEを同時に同期する。
+- Simulation / Gateway / View / Managementの責務を変更した場合は4 Roadmapと主要READMEを同時に同期する。
 - 文書を移動・改名した場合は、README・開発ルール・CI・他Markdownからの相対リンクを更新し、`python scripts/check-markdown-links.py` またはCIのMarkdown link validationでリンク切れがないことを確認する。
 
 ## 5. Git 運用
@@ -180,7 +190,7 @@ PR に伴う A / B の更新コミットは、PR 作成のためのバージョ�
 - 仕様を変更した場合は関連ドキュメントが更新されている。
 - 新しい設計判断が重要な場合は ADR が追加または更新されている。
 - 一時的なデバッグコード、不要なログ、実験用フラグが本流に残っていない。
-- 対応する`roadmap/SIMULATION_ROADMAP.md`、`roadmap/VIEW_ROADMAP.md`、`roadmap/MANAGEMENT_ROADMAP.md`の対象Taskがある場合は、実際の完了状態と状態記号が一致している。
+- 対応する`roadmap/SIMULATION_ROADMAP.md`、`roadmap/GATEWAY_ROADMAP.md`、`roadmap/VIEW_ROADMAP.md`、`roadmap/MANAGEMENT_ROADMAP.md`の対象Taskがある場合は、実際の完了状態と状態記号が一致している。
 - Markdownを追加・移動・改名した場合は、ローカルリンクとheading anchorの検証が成功している。
 
 ## 8. エージェント向け注意
@@ -197,7 +207,7 @@ PR に伴う A / B の更新コミットは、PR 作成のためのバージョ�
 
 - default locale は `ja-JP` とし、locale tag は BCP 47 形式で扱う。
 - Simulation Core の状態へ翻訳済み UI 文言を持ち込まない。
-- Protocol の正式契約へ日本語や英語などの翻訳済みエラーメッセージを埋め込まず、stable code と structured parameter を使用する。
+- Gateway / Protocol の正式契約へ日本語や英語などの翻訳済みエラーメッセージを埋め込まず、stable code と structured parameter を使用する。
 - Save Data には翻訳済みラベルではなく stable ID / enum / code / raw value を保存する。
 - ユーザー向け表示文言の localization と数値・日時・単位 formatting は Client presentation 層の責務とする。
 - locale resource は `src/web/locales/` を正規入口とする。
@@ -210,20 +220,22 @@ PR に伴う A / B の更新コミットは、PR 作成のためのバージョ�
 
 ## 10. Roadmap 運用
 
-`roadmap/SIMULATION_ROADMAP.md`、`roadmap/VIEW_ROADMAP.md`、`roadmap/MANAGEMENT_ROADMAP.md`を小さな完了可能Taskとして追跡する正本とする。
+`roadmap/SIMULATION_ROADMAP.md`、`roadmap/GATEWAY_ROADMAP.md`、`roadmap/VIEW_ROADMAP.md`、`roadmap/MANAGEMENT_ROADMAP.md`を小さな完了可能Taskとして追跡する正本とする。
 
 責務の基本分類:
 
-- **Simulation Roadmap** — authoritative state / rule / semantic processing / Observation read model / Protocol / Save Data / server-authoritative command contract
+- **Simulation Roadmap** — authoritative state / rule / semantic processing / schedule / history / semantic observation source / Save Data / server-authoritative command contract
+- **Gateway Roadmap** — Observation Request / subscription / filtering / cache / deduplication / Protocol adaptation / delivery / reconnect / resync
 - **View Roadmap** — read-only rendering / Camera / Selection / Inspector / Temporal & Historical viewing / Rendering LOD / View performance / localization
 - **Management Roadmap** — editor / build / edit / remove / runtime control / Server configuration / Save / Load / destructive operation UX
 - **Analytics** — 分析・統計・trend・heatmap等はView/Managementへ混在させず、必要になった時点で別Listener / clientとして設計する
 
-View RoadmapはSimulation RoadmapとPhase番号を一致させない。View固有基盤をPhase 1から進め、Simulationから移管されたView Taskは依存するSimulation Phase / observation contractが実装された時点で順次着手する。
+各RoadmapはPhase番号を一致させない。Simulation / Gateway / ViewはそれぞれPhase 1以降の独立順序または既存Simulation Phase順で進め、依存するauthoritative contract / delivery contractが実装された時点で利用側Taskを順次着手する。
 
 - 未完了Taskは `⬜`、必要な検証まで済んだ完了Taskは `✅` で表す。
-- 作業開始前に、依頼内容に対応する既存 Task ID があるか3 Roadmapで確認する。
+- 作業開始前に、依頼内容に対応する既存 Task ID があるか4 Roadmapで確認する。
 - 対応Taskが存在しない計画済み作業は、責務に応じたRoadmapへ小さなTaskとして追加する。
+- Simulationの意味・authoritative sourceが必要ならSimulation Roadmap、Observation delivery能力が必要ならGateway Roadmapへ切り出す。
 - `docs/roadmap/` の補足資料へTask案を書いた場合も、実際に着手対象とするTask ID・状態はルート `roadmap/` の正本へ同期する。
 - 1つのTaskへ複数の独立した成果を詰め込まない。
 - 「交通を完成」「UIを完成」など長期間閉じられない粒度のTaskを作らない。

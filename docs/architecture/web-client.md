@@ -4,9 +4,9 @@
 
 Browser ViewはHeadless ServerのObservation Gatewayから受け取るsnapshot / delta / inspection resultを描画stateへ変換する**完全read-onlyなpresentation層**である。
 
-Simulationの権威・意味的処理・予定・状態遷移はServer / Simulation側に残し、ViewはSimulation更新、運行判断、Activity判定、ETA再計算、分析集計等を行わない。
+Simulationの権威・意味的処理・予定・状態遷移はSimulation側に残し、Gatewayはそれらを意味を変えず配送する。ViewはSimulation更新、運行判断、Activity判定、ETA再計算、分析集計等を行わない。
 
-現行View実装の改善計画・Task状態は[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)を正本とする。World / City / Serverを変更するUIは[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)で管理する。Observation GatewayのServer側設計は[`observation-gateway.md`](observation-gateway.md)を参照する。
+現行View実装の改善計画・Task状態は[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)を正本とする。Observation Request / subscription / delivery / reconnect等のGateway側計画は[`../../roadmap/GATEWAY_ROADMAP.md`](../../roadmap/GATEWAY_ROADMAP.md)、World / City / Serverを変更するUIは[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)で管理する。Observation GatewayのServer側設計は[`observation-gateway.md`](observation-gateway.md)を参照する。
 
 ## Read-only invariant
 
@@ -48,13 +48,13 @@ C#側Protocolの正本は[`protocol.md`](protocol.md)と`MachiVerseWorks.Protoco
 
 ## Observation Request
 
-ViewからServerへ送る要求は、観測対象を指定するものに限定する。
+ViewからGatewayへ送る要求は、観測対象を指定するものに限定する。transportは現行ServerのWebSocketを使用する。
 
 現行例:
 
 - `SubscribeVolume`: Camera周辺の観測範囲を指定
 - `InspectPerson`: Person詳細の観測targetを指定
-- `ClearPersonInspection`: connection-local inspection targetを解除
+- `ClearPersonInspection`: connection-localなinspection targetを解除
 
 これらはSimulation mutationではない。将来generic Entity inspectionやHistorical observation requestを追加する場合も、authoritative commandとは別contractとして維持する。
 
@@ -72,7 +72,7 @@ Agent、Pedestrian、Vehicle、Train、Road / Rail geometry、listener / audio e
 
 pan / zoom中は設定周期で再評価し、ほぼ同じvolumeは再送しない。Serverが`subscriptionVolumeTooLarge`を返した場合はzoom-inして再送する。Reconnect後はHelloAck後に最新desired volumeだけを送る。
 
-将来のWorld scale Camera、floating origin、Rendering LOD、View data streamingはView Roadmapで管理し、Camera / LOD / View cacheをSimulation workloadやauthoritative stateへフィードバックしない。
+将来のWorld scale Camera、floating origin、Rendering LOD、Client-local rendering cacheはView Roadmapで管理する。Observation subscription / shared delivery cache / reconnect / resync等のServer側配送能力はGateway Roadmapで管理し、Camera / LOD / View cacheをSimulation workloadやauthoritative stateへフィードバックしない。
 
 ## View-local state
 
@@ -132,15 +132,15 @@ chunk index / final markerはないため、WebSocket orderingとServer側entity
 
 Protocol 2.7 `RailwayOperationsSnapshot`はTrain position / forwardを直接受信し、`RailwayOperationsLayer`がstable Train IDごとのmeshへ適用する。snapshotに存在しないTrain meshはそのapply時に除去する。
 
-現在のwire contractはFormation定義やFormation lengthを送らないため、Trainは固定BoxGeometryをdebug proxyとして描画する。これは列車長・編成形状の視覚的正本ではない。production Viewへ昇格する際はSimulation / Protocolから必要なauthoritative observationを追加し、View側で編成情報を推測しない。
+現在のwire contractはFormation定義やFormation lengthを送らないため、Trainは固定BoxGeometryをdebug proxyとして描画する。これは列車長・編成形状の視覚的正本ではない。production Viewへ昇格する際はSimulation側semantic observation sourceとGateway delivery contractへ必要なauthoritative情報を追加し、View側で編成情報を推測しない。
 
-Railway Debugの「次到着」はSimulation / Serverが提供するschedule semanticsだけを表示する。物理position / speed / block / platform待ちからView側で意味的ETAを再計算しない。
+Railway Debugの「次到着」はSimulationが提供しGatewayが配送するschedule semanticsだけを表示する。物理position / speed / block / platform待ちからView側で意味的ETAを再計算しない。
 
 ## Multimodal Transit
 
 Protocol 2.8はLine / Stop / Pattern、realtime Bus / Taxi position / state、arrival estimateを受ける。Viewはroute、stop / line、Bus / Taxi、`estimatedArrivalTick`等の提供値を表示する。
 
-arrival semanticsはSimulation / Protocol contractを正とし、mode間でViewが独自に意味を統一・再計算しない。
+arrival semanticsはSimulationのsemantic contractを正とし、Gatewayはそれを配送し、mode間でViewが独自に意味を統一・再計算しない。
 
 ## Economy / Logistics / Infrastructure / Communication
 
@@ -158,15 +158,15 @@ Protocol 2.10〜2.16で追加されたdomain snapshotは、それぞれのTypeSc
 
 現在のdebug表示はSimulation stateの観測手段である。将来production Viewへ昇格する場合も、View側の表示状態をSimulation正本へ戻さない。
 
-分析overlayやDashboardのための意味的集計はView Roadmapに含めない。Simulationが直接公開するstateを視覚化するだけのlayerはViewに置ける。
+分析overlayやDashboardのための意味的集計はView Roadmapに含めない。Simulationが直接持つsemantic stateをGateway経由で受けて視覚化するだけのlayerはViewに置ける。
 
 ## Historical View
 
-Simulation Phase 35がread-only Historical projectionを提供した後、Viewは同じrendering pipelineで過去Worldを表示する。
+Simulation Phase 35がread-only Historical projectionを提供し、Gateway Phase 5がhistorical observationとして配送できるようになった後、Viewは同じrendering pipelineで過去Worldを表示する。
 
 - timeline / time sliderはHistorical observation targetを変更するだけ
 - live Simulationを停止・巻き戻し・変更しない
-- 過去時点のSelection / InspectorもHistorical projectionから取得する
+- 過去時点のSelection / InspectorもGatewayのHistorical observationから取得する
 
 ## Reconnect / lifecycle
 
@@ -196,4 +196,4 @@ Management計画は[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEM
 - invariance: View接続・Camera・Selection・LOD・cache差でSimulation state digestが変わらないことを検証
 - performance: decode / frame / cache metricsとbenchmarkを必要なdomainごとに計測
 
-Protocol binary契約は[`protocol.md`](protocol.md)、Observation Gatewayは[`observation-gateway.md`](observation-gateway.md)を正本とする。
+Protocol binary契約は[`protocol.md`](protocol.md)、Observation Gateway architectureは[`observation-gateway.md`](observation-gateway.md)、Gateway実装計画は[`../../roadmap/GATEWAY_ROADMAP.md`](../../roadmap/GATEWAY_ROADMAP.md)を正本とする。

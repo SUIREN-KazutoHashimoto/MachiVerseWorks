@@ -57,7 +57,7 @@ GitHub Repository側で設定する値は[`repository-settings.md`](repository-s
 4. 関連する仕様 (`docs/specifications/`)
 5. 関連する設計 (`docs/architecture/`)
 6. 重要な採用理由がある場合はADR (`docs/decisions/`)
-7. 対応する`roadmap/SIMULATION_ROADMAP.md`、`roadmap/VIEW_ROADMAP.md`、`roadmap/MANAGEMENT_ROADMAP.md`のTask ID
+7. 対応する`roadmap/SIMULATION_ROADMAP.md`、`roadmap/GATEWAY_ROADMAP.md`、`roadmap/VIEW_ROADMAP.md`、`roadmap/MANAGEMENT_ROADMAP.md`のTask ID
 
 ファイル名や古い資料だけで現在の挙動を決めつけず、実効コードとtestを確認します。
 
@@ -66,7 +66,9 @@ GitHub Repository側で設定する値は[`repository-settings.md`](repository-s
 要求を次の観点に分解します。
 
 - authoritative state / semantic processing
-- Observation read model / Server delivery
+- semantic observation source
+- Observation Request / subscription / Gateway delivery
+- Gateway cache / deduplication / reconnect
 - Management command / validation
 - Protocol
 - View rendering / Camera / Selection / Inspector
@@ -78,29 +80,31 @@ GitHub Repository側で設定する値は[`repository-settings.md`](repository-s
 
 責務分類:
 
-- Simulationのstate / rule / meaning / schedule / Observation contract / authoritative command → Simulation Roadmap
+- Simulationのstate / rule / meaning / schedule / history / semantic observation source / authoritative command → Simulation Roadmap
+- Observation Request / subscription / filtering / cache / deduplication / Protocol adaptation / delivery / reconnect / resync → Gateway Roadmap
 - read-only描画 / Camera / Selection / Inspector / Historical viewing / Rendering LOD → View Roadmap
 - build / edit / runtime control / Server config / Save UI → Management Roadmap
 - 統計分析 / trend / heatmap等 → View / Managementへ入れず将来Analytics系として別設計
 
-Simulation / View / Managementにまたがる機能では、1 Taskへ混在させず責務ごとに分割します。
+Simulation / Gateway / View / Managementにまたがる機能では、1 Taskへ混在させず責務ごとに分割します。
 
-### ViewのSimulation追従
+### ViewのSimulation / Gateway追従
 
-View RoadmapはSimulation RoadmapとPhase番号を合わせません。View固有基盤をPhase 1から積み上げます。
+View RoadmapはSimulation / Gateway RoadmapとPhase番号を合わせません。View固有基盤をPhase 1から積み上げます。
 
-Simulationから移管されたView Taskは、次の両方を満たした時点で実装します。
+Simulationから移管されたView Taskは、原則として次を満たした時点で実装します。
 
 1. View側の前提Taskが完了している。
-2. 依存するSimulation Phase / Observation read modelが実装済みである。
+2. 依存するSimulation Phase / semantic observation sourceが実装済みである。
+3. 対象をViewへ届けるGateway contractが必要なら、そのbaseline delivery contractが実装済みである。
 
-依存Simulationが未完成の場合、Viewが仮のsemantic stateを生成して先行実装しません。
+依存Simulationが未完成の場合、Viewが仮のsemantic stateを生成して先行実装しません。Gatewayのcache等の最適化だけが未完成なら、正しいbaseline delivery contractがある範囲でViewを先行できます。
 
 ### 状態の所有者
 
 同じ情報を複数subsystemで推定し直さず、正規のstate ownerから取得します。
 
-特にSimulationの意味的stateをServer / View / Managementが独自に再構築して別の正本を作らないようにします。
+特にSimulationの意味的stateをGateway / View / Managementが独自に再構築して別の正本を作らないようにします。Gatewayは配送・cacheの正本であってWorld意味の正本ではありません。
 
 ## 4. 不具合修正
 
@@ -136,9 +140,9 @@ Timeout、強制リセット、fallbackは安全網として有効な場合が�
 View ───── Observation Request ────┐
 View ◄──── Observation Result ─────┤
                                    ▼
-                            Observation Gateway
+                                Gateway
                                    │
-                                   ▼ read model
+                                   ▼ detached semantic source
                               Simulation
                                    ▲
                                    │ authoritative command
@@ -149,11 +153,12 @@ View ◄──── Observation Result ─────┤
 ```
 
 - SimulationはHTTP / WebSocket / browser APIを知りません。
-- Observation GatewayはSimulation内部mutable stateをnetwork処理から直接共有し続けません。
+- GatewayはSimulation内部mutable stateをnetwork処理から直接共有し続けません。
+- Gatewayは意味的stateを生成せず、authoritative mutation routeを持ちません。
 - Viewは完全read-onlyで、意味的stateを推測・再計算しません。
 - Management mutationはserver-authoritative command境界を必ず通します。
 - Protocolは内部object graphのdumpではなく、Observation / Commandの外部契約として設計します。
-- View接続数、Camera、Selection、LOD、FPS、cacheがSimulation結果へ影響してはいけません。
+- Gateway / View接続数、Camera、Selection、LOD、FPS、cacheがSimulation結果へ影響してはいけません。
 
 詳細は[`../architecture/observation-gateway.md`](../architecture/observation-gateway.md)を参照してください。
 
@@ -164,7 +169,7 @@ View ◄──── Observation Result ─────┤
 - 変更前の基準値を残す
 - tick time、p50 / p95、allocation、snapshot size、network send time、render timeなど対象に合った指標を選ぶ
 - AgentごとのTask、hot pathのLINQ、不要なobject allocation、全件scanを安易に追加しない
-- Observation Gatewayはrevision cache / request deduplication等で同じread処理を無駄に繰り返さない
+- Gatewayはrevision cache / request deduplication等で同じread処理を無駄に繰り返さない
 - 最適化によって仕様やdeterminismが変わる場合は、単なる`perf`として扱わず明示する
 
 ## 7. 検証
@@ -176,13 +181,14 @@ View ◄──── Observation Result ─────┤
 - integration test
 - protocol compatibility test
 - observation invariance test
+- gateway cache / delivery equivalence test
 - management command validation test
 - benchmark
 - Server / Client結合確認
 - Browser実機確認
 - 複数seed / configの確認
 
-View / Observation変更では、View未接続 / 接続中、Camera / Selection / LOD / cache差でSimulation state digestが一致することを必要に応じて確認します。
+Gateway / View変更では、未接続 / 接続中、Camera / Selection / LOD / cache差でSimulation state digestが一致することを必要に応じて確認します。
 
 CIが成功していても、runtime behaviorを確認していない場合は「確認済み」と表現しません。
 
@@ -194,7 +200,7 @@ PR本文には最低限、可能な範囲で次を含めます。
 - 原因（bugfixの場合）
 - 実装内容
 - 重要なsemantic / protocol / performance変更
-- Simulation / View / Managementの責務変更
+- Simulation / Gateway / View / Managementの責務変更
 - 検証結果
 - 未確認事項
 - 既知制約
@@ -211,6 +217,7 @@ PR本文には最低限、可能な範囲で次を含めます。
 - Phase補足設計・検討 → `docs/roadmap/`（Task状態の正本にはしない）
 - 廃止済み・Legacy・実験履歴 → `docs/archive/`
 - Simulation側の実装計画 → `roadmap/SIMULATION_ROADMAP.md`
+- Gateway側の実装計画 → `roadmap/GATEWAY_ROADMAP.md`
 - read-only View側の実装計画 → `roadmap/VIEW_ROADMAP.md`
 - Management側の実装計画 → `roadmap/MANAGEMENT_ROADMAP.md`
 
@@ -224,6 +231,6 @@ PR本文には最低限、可能な範囲で次を含めます。
 - 必要なtest / build / benchmarkが成功している
 - runtime確認が必要な項目は確認済み、または未確認と明記している
 - 不要なdebug code / experiment flagが残っていない
-- 対応する3 RoadmapのTask状態が同期されている
+- 対応する4 RoadmapのTask状態が同期されている
 - Markdownを追加・移動・改名した場合はlocal link / heading anchor validationが成功している
 - 通常開発期間では`AGENTS.md`と`versioning.md`のversion規則へ従っている

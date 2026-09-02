@@ -2,6 +2,8 @@
 
 Vite + TypeScript + Three.jsで構成するMachiVerseWorksのread-onlyブラウザ3D Viewです。都市世界の正本と意味的処理はSimulationにあり、WebはObservation Gatewayから受信したsnapshot / inspection resultの表示・補間・Camera・Selection・Inspector・audioを担当します。
 
+- Simulation側のsemantic observation source: [`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)
+- Observation Request / subscription / delivery / reconnect等のGateway側計画: [`../../roadmap/GATEWAY_ROADMAP.md`](../../roadmap/GATEWAY_ROADMAP.md)
 - View側の将来実装・改善計画: [`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)
 - World / City / Server操作UI: [`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)
 - Observation Gateway設計: [`../../docs/architecture/observation-gateway.md`](../../docs/architecture/observation-gateway.md)
@@ -62,7 +64,7 @@ Cameraのnear / farを含む8つのfrustum cornerから3D AABBを計算し、pad
 
 Serverから`subscriptionVolumeTooLarge`を受けた場合はzoom-inして再購読します。Reconnect時はClient側のdynamic / static / observation stateを破棄し、HelloAck後の新しいsnapshotから再構築します。
 
-World scale Camera、Rendering LOD、View streaming / cache等の拡張はView Roadmapで管理し、CameraやLODをSimulation workload / fidelityの判定条件に使用しません。
+World scale Camera、Rendering LOD、Client-local rendering / asset cacheはView Roadmapで管理します。Observation subscription / shared Server cache / delivery / reconnect / resyncはGateway Roadmapで管理し、CameraやLODをSimulation workload / fidelityの判定条件に使用しません。
 
 ## Rendering / observation
 
@@ -70,12 +72,12 @@ Simulation `(X,Y,Z)`はThree.js / Web Audio境界で`(X,Z,Y)`へ明示変換し�
 
 - AgentはInstancedMesh、Pedestrian / Vehicleは専用storeから描画する
 - RoadとRailway Infrastructureはstatic / revision-aware geometryとして扱う
-- Railway OperationsのTrainはProtocol 2.7がFormation寸法を送らないため固定サイズのdebug proxy meshで描画する。production化時にView側で編成形状を推測しない
-- Railwayの次到着等はSimulation / Protocolが公開するschedule semanticsを表示し、View側で意味的ETAを再計算しない
+- Railway OperationsのTrainはProtocol 2.7がFormation寸法を送らないため固定サイズのdebug proxy meshで描画する。production化時にSimulation側semantic sourceとGateway delivery contractへ必要なauthoritative情報を追加し、View側で編成形状を推測しない
+- Railwayの次到着等はSimulationが公開しGatewayが配送するschedule semanticsを表示し、View側で意味的ETAを再計算しない
 - Multimodal TransitはLine / Stop / Pattern、Bus / Taxi位置、arrival estimate等の提供値を表示する
 - Economy / Logistics / Power / Water-Sewer / Gas / Optical / Radio-Spectrumは各Protocol decoderからread-only stateへ反映する
 
-現在のdebug表示はSimulation stateを観測するための表示であり、Web側状態はauthoritative stateではありません。production向け描画、Selection / Inspector、Current / Recent / Planned表示、Historical ViewはView Roadmapで計画します。
+現在のdebug表示はSimulation stateを観測するための表示であり、Web側状態はauthoritative stateではありません。production向け描画、Selection / Inspector、Current / Recent / Planned表示、Historical ViewはView Roadmapで計画します。それらを届けるgeneric inspection / temporal / historical deliveryはGateway Roadmapで管理します。
 
 Population / Economy / Traffic等の分析・trend・heatmapをWeb Viewで生成しません。必要な分析は将来Analytics Listener / analysis clientとして分離します。
 
@@ -98,6 +100,6 @@ npm run build
 
 実Server / WebSocket / headless browserを接続するE2Eは`.github/workflows/e2e.yml`へ集約されています。Protocol 2.16までの実装済み主要domainを対応するE2E / unit testで継続検証します。
 
-View基盤の拡張では、View未接続 / 接続中、Camera / Selection / LOD / cache差でSimulation state digestが一致するinvariance testを追加します。
+View / Gateway基盤の拡張では、View未接続 / 接続中、Camera / Selection / LOD / cache差でSimulation state digestが一致するinvariance testを追加します。
 
 詳細は[`../../docs/architecture/web-client.md`](../../docs/architecture/web-client.md)を参照してください。
