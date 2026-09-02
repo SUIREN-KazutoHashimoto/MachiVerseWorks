@@ -40,22 +40,28 @@ export interface TriangulatedTerrainSurface {
 }
 
 export function createPrimaryTerrainColumns(samples: readonly TerrainSurfaceSampleObservation[]): readonly TerrainColumnObservation[] {
-  return Object.freeze(samples.map((sample) => Object.freeze({
-    x: sample.x,
-    y: sample.y,
-    surfaces: Object.freeze([Object.freeze({
+  const columnsByCoordinate = new Map<string, TerrainColumnObservation>();
+  for (const sample of samples) {
+    const key = coordinateKey(sample.x, sample.y);
+    if (columnsByCoordinate.has(key)) continue;
+    columnsByCoordinate.set(key, Object.freeze({
       x: sample.x,
       y: sample.y,
-      z: sample.z,
-      normalX: sample.normalX,
-      normalY: sample.normalY,
-      normalZ: sample.normalZ,
-      material: sample.material,
-      surfaceWater: sample.surfaceWater,
-      role: 'primary-ground' as const,
-      layer: 0,
-    })]),
-  })));
+      surfaces: Object.freeze([Object.freeze({
+        x: sample.x,
+        y: sample.y,
+        z: sample.z,
+        normalX: sample.normalX,
+        normalY: sample.normalY,
+        normalZ: sample.normalZ,
+        material: sample.material,
+        surfaceWater: sample.surfaceWater,
+        role: 'primary-ground' as const,
+        layer: 0,
+      })]),
+    }));
+  }
+  return Object.freeze([...columnsByCoordinate.values()]);
 }
 
 export function triangulateTerrainSurface(
