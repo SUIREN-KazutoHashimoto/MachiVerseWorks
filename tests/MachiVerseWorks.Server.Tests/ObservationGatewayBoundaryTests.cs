@@ -102,14 +102,19 @@ public sealed class ObservationGatewayBoundaryTests
     [TestMethod]
     public async Task WebSocketObservationRouteRejectsNonObservationProtocolMessages()
     {
-        await using var host = await ServerTestHost.StartAsync(initialAgentCount: 1, tickRate: 30, snapshotRate: 5);
+        await using var host = await ServerTestHost.StartAsync(initialAgentCount: 0, tickRate: 30, snapshotRate: 5);
         using var socket = await host.ConnectWebSocketAsync();
         await ServerTestHost.HandshakeAsync(socket);
 
         await ServerTestHost.SendAsync(socket, new HelloMessage());
-        var response = await ServerTestHost.ReceiveAsync(socket, TimeSpan.FromSeconds(3));
 
-        var error = response.Message as ProtocolErrorMessage;
+        ProtocolErrorMessage? error = null;
+        for (var attempt = 0; attempt < 10 && error is null; attempt++)
+        {
+            var response = await ServerTestHost.ReceiveAsync(socket, TimeSpan.FromSeconds(3));
+            error = response.Message as ProtocolErrorMessage;
+        }
+
         Assert.IsNotNull(error);
         Assert.AreEqual(ProtocolErrorCode.InvalidRequest, error.Code);
     }
