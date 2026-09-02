@@ -3,7 +3,7 @@ using System.Net.WebSockets;
 namespace MachiVerseWorks.Server;
 
 internal sealed class RadioPublishService(
-    SimulationRuntime simulation,
+    IObservationSource observationSource,
     ServerOptions options,
     ClientConnectionRegistry connections) : BackgroundService
 {
@@ -18,7 +18,7 @@ internal sealed class RadioPublishService(
             {
                 var targets = connections.CreateSnapshot().Where(static connection => connection.HandshakeCompleted && connection.NegotiatedVersion.SupportsRadio && connection.Socket.State == WebSocketState.Open).ToArray();
                 if (targets.Length == 0) continue;
-                var snapshot = simulation.Read(static world => world.CreateRadioSnapshot());
+                var snapshot = observationSource.CaptureRadioSnapshot();
                 if (snapshot.Sites.Count == 0 && snapshot.Links.Count == 0 && snapshot.Bands.Count == 0 && snapshot.FrequencyBlocks.Count == 0) continue;
                 var messages = RadioMessageMapper.Create(snapshot);
                 foreach (var connection in targets)
