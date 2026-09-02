@@ -51,8 +51,12 @@ jobs:
         run: dotnet build MachiVerseWorks.slnx --configuration Release --no-restore
       - name: Simulation Phase30 tests
         run: dotnet test tests/MachiVerseWorks.Simulation.Tests/MachiVerseWorks.Simulation.Tests.csproj --configuration Release --no-build --filter 'FullyQualifiedName~RegionalGeneration|FullyQualifiedName~RegionalMaterialization|FullyQualifiedName~RegionalUrbanRule'
+      - name: Simulation Phase31 tests
+        run: dotnet test tests/MachiVerseWorks.Simulation.Tests/MachiVerseWorks.Simulation.Tests.csproj --configuration Release --no-build --filter 'FullyQualifiedName~PersistentRegionalEvolution|FullyQualifiedName~RegionalPolycentricInteraction|FullyQualifiedName~SettlementTerritory'
       - name: Protocol Phase30 tests
         run: dotnet test tests/MachiVerseWorks.Protocol.Tests/MachiVerseWorks.Protocol.Tests.csproj --configuration Release --no-build --filter 'FullyQualifiedName~RegionalGeneration'
+      - name: Protocol Phase31 tests
+        run: dotnet test tests/MachiVerseWorks.Protocol.Tests/MachiVerseWorks.Protocol.Tests.csproj --configuration Release --no-build --filter 'FullyQualifiedName~PersistentRegionalEvolution'
       - name: Persistence regression
         run: dotnet test tests/MachiVerseWorks.Persistence.Tests/MachiVerseWorks.Persistence.Tests.csproj --configuration Release --no-build
       - name: Server regression
