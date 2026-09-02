@@ -146,7 +146,8 @@ public sealed partial class SimulationWorld
         var moved = 0;
         foreach (var household in households)
         {
-            if (moved >= 4 || !TryResolveRegionalEndpointPosition(household.Residence, out var position)) break;
+            if (moved >= 4) break;
+            if (!TryResolveRegionalEndpointPosition(household.Residence, out var position)) continue;
             var origin = FindNearestSettlement(source.Settlements, position);
             if (origin is null || origin.Trend is not (SettlementTrend.Declining or SettlementTrend.Dormant)) continue;
 
