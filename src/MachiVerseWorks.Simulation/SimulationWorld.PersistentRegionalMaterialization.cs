@@ -39,19 +39,31 @@ public sealed partial class SimulationWorld
             if (poiKind is { } kind)
                 actualPoi = CreatePoi(Center(bounds), kind, actualBuilding);
 
+            RoadAccessPointId? roadAccessPointId = null;
             var road = CreateRoadNetworkSnapshot();
             if (road.Segments.Count > 0)
             {
                 var segmentIds = road.Segments.Select(static item => item.Id).ToArray();
                 var segment = SelectNearestRoadSegment(segmentIds, bounds);
-                CreateRoadAccessPoint(segment, 0.5d, actualBuilding, actualPoi, RoadAccessMode.Motor | RoadAccessMode.Foot);
+                roadAccessPointId = CreateRoadAccessPoint(segment, 0.5d, actualBuilding, actualPoi, RoadAccessMode.Motor | RoadAccessMode.Foot);
             }
 
             var capacity = CalculateDevelopmentCapacity(generatedParcel.Zone, bounds);
+            (CompanyId CompanyId, EstablishmentId EstablishmentId, JobId JobId)? economy = null;
             if (use != GeneratedBuildingUse.Residential)
-                MaterializeRegionalEconomicCapacity(actualBuilding, actualPoi, use, capacity);
+                economy = MaterializeRegionalEconomicCapacity(actualBuilding, actualPoi, use, capacity);
 
             var generatedBuildingId = new GeneratedBuildingId(nextBuildingId++);
+            _persistentRegionalMaterializations.Add(
+                generatedBuildingId,
+                new PersistentRegionalMaterializationBinding(
+                    generatedBuildingId,
+                    actualBuilding,
+                    actualPoi,
+                    roadAccessPointId,
+                    economy?.CompanyId,
+                    economy?.EstablishmentId,
+                    economy?.JobId));
             parcels[index] = parcel with
             {
                 BuildingId = generatedBuildingId,
@@ -73,7 +85,7 @@ public sealed partial class SimulationWorld
                 RegionalEvolutionEventKind.BuildingConstructed,
                 parcel.SettlementId,
                 generatedBuildingId,
-                $"parcel {parcel.ParcelId.Value} demand {parcel.DevelopmentDemand:F3}"));
+                FormattableString.Invariant($"parcel {parcel.ParcelId.Value} demand {parcel.DevelopmentDemand:F3}")));
 
             if (use is GeneratedBuildingUse.Residential or GeneratedBuildingUse.MixedUse)
                 MaterializeRegionalPopulationGrowth(parcel.SettlementId, actualBuilding, source);
@@ -88,7 +100,7 @@ public sealed partial class SimulationWorld
         };
     }
 
-    private void MaterializeRegionalEconomicCapacity(
+    private (CompanyId CompanyId, EstablishmentId EstablishmentId, JobId JobId) MaterializeRegionalEconomicCapacity(
         BuildingId buildingId,
         PoiId? poiId,
         GeneratedBuildingUse use,
@@ -107,7 +119,8 @@ public sealed partial class SimulationWorld
             initialCashBalance: checked((long)Math.Max(10_000, capacity * 1_000)),
             dailyProductionCapacity: Math.Max(1d, capacity * 0.5d));
         var establishment = CreateEstablishment(company, buildingId, poiId);
-        CreateJob(establishment, Math.Max(1, capacity / 4), dailyWage: 120);
+        var job = CreateJob(establishment, Math.Max(1, capacity / 4), dailyWage: 120);
+        return (company, establishment, job);
     }
 
     private void MaterializeRegionalPopulationGrowth(
@@ -232,7 +245,7 @@ public sealed partial class SimulationWorld
                 RegionalEvolutionEventKind.SettlementEmergence,
                 id,
                 null,
-                $"population {population}, jobs {jobs}, connectivity {connectivity:F2}"));
+                FormattableString.Invariant($"population {population}, jobs {jobs}, connectivity {connectivity:F2}")));
         }
 
         return source with
