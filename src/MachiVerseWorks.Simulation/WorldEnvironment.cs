@@ -57,7 +57,9 @@ public sealed record WorldEnvironmentConfig
             throw new ArgumentOutOfRangeException(nameof(geographicNorth), "Geographic north must be a finite non-zero horizontal vector.");
 
         WorldSeed = worldSeed;
-        GeographicNorth = new WorldVector(geographicNorth.X / northLength, geographicNorth.Y / northLength, 0d);
+        GeographicNorth = Math.Abs(northLength - 1d) <= 1e-12
+            ? new WorldVector(geographicNorth.X, geographicNorth.Y, 0d)
+            : new WorldVector(geographicNorth.X / northLength, geographicNorth.Y / northLength, 0d);
         LatitudeDegrees = latitudeDegrees;
         Continentality = continentality;
         MaritimeInfluence = maritimeInfluence;
