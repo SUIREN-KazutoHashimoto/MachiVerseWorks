@@ -15,6 +15,7 @@ public sealed class ServerOptionsTests
             ["Server:Port"] = "9000",
             ["Server:SnapshotRate"] = "20",
             ["Server:MaximumSubscriptionCellCount"] = "2048",
+            ["Server:ObservationDeliveryTimeoutMilliseconds"] = "2500",
             ["Simulation:TickRate"] = "60",
             ["Simulation:Seed"] = "42",
             ["Simulation:SpatialCellSize"] = "32",
@@ -33,6 +34,7 @@ public sealed class ServerOptionsTests
         Assert.AreEqual(9000, options.Port);
         Assert.AreEqual(20, options.SnapshotRate);
         Assert.AreEqual(2048, options.MaximumSubscriptionCellCount);
+        Assert.AreEqual(TimeSpan.FromMilliseconds(2500), options.ObservationDeliveryTimeout);
         Assert.AreEqual(60, options.TickRate);
         Assert.AreEqual(42UL, options.Seed);
         Assert.AreEqual(32d, options.SpatialCellSize);
@@ -49,6 +51,7 @@ public sealed class ServerOptionsTests
         var options = ServerOptions.Load(configuration);
 
         Assert.AreEqual(1_048_576, options.MaximumSubscriptionCellCount);
+        Assert.AreEqual(TimeSpan.FromSeconds(5), options.ObservationDeliveryTimeout);
     }
 
     [TestMethod]
@@ -62,6 +65,17 @@ public sealed class ServerOptionsTests
     public void InvalidMaximumSubscriptionCellCountIsRejected()
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Server:MaximumSubscriptionCellCount"] = "0" }).Build();
+        Assert.ThrowsExactly<InvalidOperationException>(() => ServerOptions.Load(configuration));
+    }
+
+    [TestMethod]
+    public void InvalidObservationDeliveryTimeoutIsRejected()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Server:ObservationDeliveryTimeoutMilliseconds"] = "99",
+        }).Build();
+
         Assert.ThrowsExactly<InvalidOperationException>(() => ServerOptions.Load(configuration));
     }
 }
