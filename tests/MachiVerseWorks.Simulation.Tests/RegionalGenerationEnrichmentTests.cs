@@ -81,7 +81,7 @@ public sealed class RegionalGenerationEnrichmentTests
         var settlement = new Settlement(
             new SettlementId(1),
             environment.Sample(new WorldPoint(0d, 0d, 0d)).Position,
-            SettlementEnvironmentKind.Inland,
+            SettlementEnvironmentKind.InlandPlain,
             SettlementOriginKind.InlandPlain,
             RegionalRole.Market,
             InitialEconomyKind.Trade,
