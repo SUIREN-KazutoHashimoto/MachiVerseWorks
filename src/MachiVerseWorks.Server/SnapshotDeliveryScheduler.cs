@@ -185,14 +185,12 @@ internal sealed class SnapshotDeliveryScheduler
         {
             lock (_gate)
             {
-                if (!_slots.TryGetValue(connectionId, out var slot)
-                    || !ReferenceEquals(slot.Delivery, delivery))
+                if (_slots.TryGetValue(connectionId, out var slot)
+                    && ReferenceEquals(slot.Delivery, delivery))
                 {
-                    return;
+                    slot.Delivery = null;
+                    if (slot.WaitingLanes.Count == 0) _slots.Remove(connectionId);
                 }
-
-                slot.Delivery = null;
-                if (slot.WaitingLanes.Count == 0) _slots.Remove(connectionId);
             }
         }
     }
