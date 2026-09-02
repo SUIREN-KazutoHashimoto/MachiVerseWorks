@@ -12,6 +12,20 @@ namespace MachiVerseWorks.Benchmarks;
 [Config(typeof(GatewayDeliveryBenchmarkConfig))]
 public class GatewayDeliveryBenchmarks
 {
+    private static readonly ObservationDeliveryLane[] ContendedLanes =
+    [
+        ObservationDeliveryLane.Snapshot,
+        ObservationDeliveryLane.Population,
+        ObservationDeliveryLane.Economy,
+        ObservationDeliveryLane.Logistics,
+        ObservationDeliveryLane.Power,
+        ObservationDeliveryLane.WaterSewer,
+        ObservationDeliveryLane.Gas,
+        ObservationDeliveryLane.Optical,
+        ObservationDeliveryLane.Radio,
+        ObservationDeliveryLane.WorldEnvironment,
+    ];
+
     private EntityPublishSnapshot _snapshot = null!;
     private ClientSubscriptionState[] _subscriptions = null!;
     private Guid[] _connectionIds = null!;
@@ -95,17 +109,43 @@ public class GatewayDeliveryBenchmarks
 
     [Benchmark]
     [BenchmarkCategory("FairnessBudget")]
-    public int IndependentConnectionReservations()
+    public async Task<int> ContendedLaneHandoffs()
     {
         var scheduler = new SnapshotDeliveryScheduler();
-        var reserved = 0;
-        for (var viewer = 0; viewer < _connectionIds.Length; viewer++)
+        var handoffs = 0;
+        foreach (var connectionId in _connectionIds)
         {
-            if (scheduler.TryReserve(_connectionIds[viewer])) reserved++;
+            var releaseFirst = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (!scheduler.TryReserve(connectionId, ContendedLanes[0])) continue;
+            scheduler.StartReserved(connectionId, async () =>
+            {
+                await Task.Yield();
+                await releaseFirst.Task;
+            });
+
+            for (var laneIndex = 1; laneIndex < ContendedLanes.Length; laneIndex++)
+            {
+                if (!scheduler.TryReserve(connectionId, ContendedLanes[laneIndex])) handoffs++;
+            }
+
+            releaseFirst.SetResult();
+            while (scheduler.InFlightCount != 0) await Task.Yield();
+
+            for (var laneIndex = 1; laneIndex < ContendedLanes.Length; laneIndex++)
+            {
+                while (!scheduler.TryReserve(connectionId, ContendedLanes[laneIndex])) await Task.Yield();
+                handoffs++;
+                scheduler.ReleaseReservation(connectionId);
+            }
+
+            if (scheduler.TryReserve(connectionId, ContendedLanes[0]))
+            {
+                handoffs++;
+                scheduler.ReleaseReservation(connectionId);
+            }
         }
-        for (var viewer = 0; viewer < _connectionIds.Length; viewer++)
-            scheduler.ReleaseReservation(_connectionIds[viewer]);
-        return reserved;
+
+        return handoffs;
     }
 
     private sealed class GatewayDeliveryBenchmarkConfig : ManualConfig

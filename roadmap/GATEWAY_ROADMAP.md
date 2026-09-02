@@ -11,8 +11,8 @@ GatewayはSimulationの意味的正本ではありません。Activity、Status�
 
 Gateway Roadmapの分離は責務と進捗管理の分離であり、直ちに別process / repository / deploy unitへ分離することを意味しません。現行では`MachiVerseWorks.Server`内のObservation側責務を明確化し、将来必要なら独立deploy可能な境界へ育てます。
 
-> **現在:** Gateway Phase 2 — Shared Observation Cache & Request Deduplication 完了  
-> **次の実装タスク:** Gateway Phase 3 `G3-001` — desired subscription / committed delivery revisionを分離する  
+> **現在:** Gateway Phase 3 — Subscription, Delivery & Resynchronization 完了  
+> **次の実装タスク:** Gateway Phase 4 `G4-001` — Entity ID / Entity Typeを共通targetとするgeneric inspection request / response contractを設計する  
 > **並行可能:** Simulation Phase 30 / View Phase 2
 
 ## 最上位原則
@@ -32,7 +32,7 @@ Gateway Roadmapの分離は責務と進捗管理の分離であり、直ちに�
 | --- | --- | --- | --- |
 | 1 | Observation Boundary Foundation | 現行SimulationRuntime / Server publish / Protocol 2.x | ✅ 完了 |
 | 2 | Shared Observation Cache & Request Deduplication | Gateway Phase 1 | ✅ 完了 |
-| 3 | Subscription, Delivery & Resynchronization | Gateway Phase 1 / 2 | ⬜ 未着手 |
+| 3 | Subscription, Delivery & Resynchronization | Gateway Phase 1 / 2 | ✅ 完了 |
 | 4 | Generic Entity & Temporal Observation | Gateway Phase 1 / Simulation semantic observation | ⏳ Simulation依存待ち |
 | 5 | Historical Observation & Replay Delivery | Gateway Phase 3 / Simulation Phase 35 | ⏳ Simulation依存待ち |
 | 6 | Gateway Fidelity, Scalability & Closeout | Gateway Phase 1〜5 | ⏳ 待機 |
@@ -140,20 +140,22 @@ Phase 2ではGateway-owned singleton `ObservationCache`を追加し、Entity / S
 
 ## Gateway Phase 3 — Subscription, Delivery & Resynchronization
 
-> **状態: ⬜ 未着手**  
+> **状態: ✅ 完了**  
 > **必須依存:** Gateway Phase 1  
 > **並行可能依存:** Gateway Phase 2
 
 Camera移動、slow client、reconnect、World replacementを含む長時間接続でもauthoritative observationへ収束する配送境界を完成させる。
 
-- ⬜ **G3-001** — connectionごとのdesired subscription / committed delivery revisionを分離し、古いdelivery完了で新subscriptionを汚染しないstate modelを整理する
-- ⬜ **G3-002** — static / dynamic / explicit inspectionごとのsnapshot / delta / chunk planning境界を共通化する
-- ⬜ **G3-003** — slow clientをconnection単位のin-flight budget / timeout / cancellationで隔離する
-- ⬜ **G3-004** — reconnect時にconnection-local delivery/cache stateを破棄し最新authoritative observationへresyncする（旧`OBS-007`）
-- ⬜ **G3-005** — World load / replacement / topology revision変更時のcache / known-ID / delivery marker invalidationを統一する（旧`OBS-007`）
-- ⬜ **G3-006** — negotiated minor version変更・旧Client接続で未対応messageを送らないcompatibility testを追加する
-- ⬜ **G3-007** — subscriptionを高速に切り替えてもremove / static revision / inspect stateがeventually consistentになるE2Eを追加する
-- ⬜ **G3-008** — 多数Viewer / 広範囲subscription / reconnect stormのServer負荷とfairnessを計測する
+- ✅ **G3-001** — connectionごとのdesired subscription / committed delivery revisionを分離し、古いdelivery完了で新subscriptionを汚染しないstate modelを整理する
+- ✅ **G3-002** — static / dynamic / explicit inspectionごとのsnapshot / delta / chunk planning境界を共通化する
+- ✅ **G3-003** — slow clientをconnection単位のin-flight budget / timeout / cancellationで隔離する
+- ✅ **G3-004** — reconnect時にconnection-local delivery/cache stateを破棄し最新authoritative observationへresyncする（旧`OBS-007`）
+- ✅ **G3-005** — World load / replacement / topology revision変更時のcache / known-ID / delivery marker invalidationを統一する（旧`OBS-007`）
+- ✅ **G3-006** — negotiated minor version変更・旧Client接続で未対応messageを送らないcompatibility testを追加する
+- ✅ **G3-007** — subscriptionを高速に切り替えてもremove / static revision / inspect stateがeventually consistentになるE2Eを追加する
+- ✅ **G3-008** — 多数Viewer / 広範囲subscription / reconnect stormのServer負荷とfairnessを計測する
+
+Phase 3ではdesired subscriptionとcommitted delivery markerを分離し、static / dynamic / inspectionのdelivery planningをGateway-owned stateとして整理した。`SnapshotDeliveryScheduler`でconnection単位のin-flight budgetとSnapshot / Population fairnessを管理し、全Observation publisherを同じbudgetと`ObservationDeliveryTimeout`へ統合する。disconnect時はscheduler stateを破棄し、inspection payloadはsend gate取得後にrevisionを再検証して古いselectionのdebug payloadを送らない。reconnect / generation変更 / Protocol compatibility / subscription churnのregression testと、広範囲subscription・reconnect・lane contentionのbenchmarkを追加した。
 
 ### Gateway Phase 3 完了条件
 
