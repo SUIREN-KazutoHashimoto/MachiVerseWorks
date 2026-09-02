@@ -73,7 +73,9 @@ internal sealed class ObservationCache
     private readonly CacheStore<StaticObservationCacheKey> _static = new();
     private readonly ConcurrentDictionary<EncodedObservationCacheKey, Lazy<byte[]>> _encoded = new();
     private readonly ConcurrentQueue<EncodedObservationCacheKey> _encodedOrder = new();
+    private readonly HashSet<Lazy<byte[]>> _accountedEncodedEntries = [];
     private readonly object _revisionGate = new();
+    private readonly object _encodedAccountingGate = new();
     private ulong _generation;
     private ulong _dynamicRevision;
     private long _hits;
@@ -132,9 +134,8 @@ internal sealed class ObservationCache
         try
         {
             var frame = actual.Value;
-            if (added)
+            if (added && TryAccountEncodedEntry(key, actual, frame.LongLength))
             {
-                Interlocked.Add(ref _encodedBytes, frame.LongLength);
                 _encodedOrder.Enqueue(key);
                 TrimEncoded();
             }
@@ -142,7 +143,7 @@ internal sealed class ObservationCache
         }
         catch
         {
-            if (added) RemoveExact(_encoded, key, actual);
+            if (added) RemoveEncodedExact(key, actual);
             throw;
         }
     }
@@ -242,8 +243,7 @@ internal sealed class ObservationCache
         {
             var key = entry.Key;
             if (key.IsStatic || (key.Revision.Generation == generation && key.Revision.Revision >= minimumRevision)) continue;
-            if (!RemoveExact(_encoded, key, entry.Value)) continue;
-            if (entry.Value.IsValueCreated) Interlocked.Add(ref _encodedBytes, -entry.Value.Value.LongLength);
+            if (!RemoveEncodedExact(key, entry.Value)) continue;
             Interlocked.Increment(ref _evictions);
         }
     }
@@ -255,8 +255,7 @@ internal sealed class ObservationCache
         AddEvictions(_static.Clear());
         foreach (var entry in _encoded)
         {
-            if (!RemoveExact(_encoded, entry.Key, entry.Value)) continue;
-            if (entry.Value.IsValueCreated) Interlocked.Add(ref _encodedBytes, -entry.Value.Value.LongLength);
+            if (!RemoveEncodedExact(entry.Key, entry.Value)) continue;
             Interlocked.Increment(ref _evictions);
         }
         while (_encodedOrder.TryDequeue(out _)) { }
@@ -272,10 +271,44 @@ internal sealed class ObservationCache
         while ((_encoded.Count > _options.MaxEncodedEntries || Interlocked.Read(ref _encodedBytes) > _options.MaxEncodedBytes)
             && _encodedOrder.TryDequeue(out var oldest))
         {
-            if (!_encoded.TryRemove(oldest, out var removed)) continue;
-            if (removed.IsValueCreated) Interlocked.Add(ref _encodedBytes, -removed.Value.LongLength);
+            if (!TryRemoveEncoded(oldest, out _)) continue;
             Interlocked.Increment(ref _evictions);
         }
+    }
+
+    private bool TryAccountEncodedEntry(EncodedObservationCacheKey key, Lazy<byte[]> entry, long frameBytes)
+    {
+        lock (_encodedAccountingGate)
+        {
+            if (!_encoded.TryGetValue(key, out var current) || !ReferenceEquals(current, entry)) return false;
+            if (_accountedEncodedEntries.Add(entry)) Interlocked.Add(ref _encodedBytes, frameBytes);
+            return true;
+        }
+    }
+
+    private bool RemoveEncodedExact(EncodedObservationCacheKey key, Lazy<byte[]> expected)
+    {
+        lock (_encodedAccountingGate)
+        {
+            if (!RemoveExact(_encoded, key, expected)) return false;
+            ReleaseEncodedAccounting(expected);
+            return true;
+        }
+    }
+
+    private bool TryRemoveEncoded(EncodedObservationCacheKey key, out Lazy<byte[]>? removed)
+    {
+        lock (_encodedAccountingGate)
+        {
+            if (!_encoded.TryRemove(key, out removed)) return false;
+            ReleaseEncodedAccounting(removed);
+            return true;
+        }
+    }
+
+    private void ReleaseEncodedAccounting(Lazy<byte[]> entry)
+    {
+        if (_accountedEncodedEntries.Remove(entry)) Interlocked.Add(ref _encodedBytes, -entry.Value.LongLength);
     }
 
     private void AddEvictions(int count)
