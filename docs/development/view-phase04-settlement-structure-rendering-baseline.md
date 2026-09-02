@@ -39,23 +39,30 @@ View は人口、jobs、位置、密度、影響半径等から City / Town / Vi
 
 現行 Protocol 2.18 `ProtocolSettlement` には Settlement environment / origin / role / economy は存在するが、City / Town / Village / Hamlet に相当する明示的 semantic classification は存在しない。その値が Simulation observation として追加されるまでは View 側へ代替 rule を実装しない。
 
-このため `V4-002` は upstream semantic classification待ちであり、`V4-005` の「同じread modelから異なる地域表現を成立させる」部分とは分離する。`V4-005` は提供済みrole / zone / building bounds等だけで複数Settlementを同時表示できることを対象とし、City / Town / Village / Hamletという意味ラベル自体は `V4-002` で扱う。
+このため `V4-002` は upstream semantic classification待ちである。また `V4-005` に含まれる Village / Hamlet を意味的に区別した最終visual representationも同じauthoritative classification待ちとする。提供済みrole / zone / building bounds等だけで、性質の異なる複数Settlementを単一read modelから同時表示するView-local baselineまでは先行実装する。
 
 ## Current integration dependency
 
-Phase 30 baseline には `RegionalGenerationMessageMapper` と Protocol 2.18 codec が存在する。一方、Phase 4 closeoutには Gateway の live `RegionalGenerationSnapshot` capture / delivery が必要であり、Browser E2Eはその配送契約を正本として検証する。
+Phase 30 baseline には `RegionalGenerationMessageMapper` と Protocol 2.18 codec が存在する。しかし現行 Gateway の `IObservationSource` には Regional Generation snapshot のcapture契約がなく、`AddObservationGateway` にも Regional Generation publish service が登録されていない。`ObservationProtocolAdapter` のserialize対応だけではWeb Clientまでsnapshotは到達しない。
+
+したがって次を明確に分離する。
+
+- View-local Browser baseline: authoritative Protocol 2.18 と同じread model shapeを入力し、実ブラウザ/Three.js上でrenderer contractを検証する。
+- live Gateway integration: Simulationからcaptureした実snapshotをGateway経由でWeb Clientへ配送し、同じrendererへ適用する。Gateway delivery contract実装後に追加する。
+
+前者のfixtureを後者の代替やPhase完了証跡として扱わない。
 
 Simulation Phase 31 の建設、用途変更、vacancy、demolition、Settlement の成長・停滞・衰退も同様に、authoritative observation が公開されるまで View 側で推測しない。Store は snapshot replacement ごとに同じ renderer contract を更新できるため、Phase 31 source は別の都市 model を作らずこの境界へ統合する。
 
 ## Current Phase 4 task status
 
-- `V4-001`: client-side 3D rendering baseline 実装済み。live Gateway E2Eはdelivery contract待ち。
+- `V4-001`: client-side 3D rendering baselineとBrowser-level rendering確認を実装。live Gateway integrationはdelivery contract待ち。
 - `V4-002`: City / Town / Village / Hamlet authoritative classification待ち。
-- `V4-003`: stable ID relation indexとrenderer relation metadataを実装・unit test済み。
+- `V4-003`: stable ID relation index、renderer relation metadata、unit / Browser-level検証を実装。live delivery経由の最終確認待ち。
 - `V4-004`: Simulation Phase 31 state transition observation待ち。
-- `V4-005`: heterogeneous multi-Settlement representationを同一read modelで実装・unit test済み。
-- `V4-006`: Simulation Phase 31 persistent regional observationを使うE2E待ち。
-- `V4-007`: 本文書と回帰testをbaseline記録とする。Phase全体の最終closeoutは上流依存解消後に行う。
+- `V4-005`: heterogeneous multi-Settlementの同一read model baselineとBrowser-level検証を実装。Village / Hamlet等の意味分類を使う最終表現は`V4-002`依存。
+- `V4-006`: Simulation Phase 31 persistent regional observationを使うlive E2E待ち。
+- `V4-007`: 本文書と回帰testでclient baselineを記録。Phase全体の最終closeoutは上流依存解消後に行う。
 
 ## Regression coverage
 
@@ -65,7 +72,7 @@ Simulation Phase 31 の建設、用途変更、vacancy、demolition、Settlement
 - 64-bit stable ID の exact decode
 - broken stable-ID relation の拒否
 
-`src/web/tests/regional-generation-store.test.mjs` は Settlement / District / Parcel / Building / POI relation を stable ID で双方向に必要な範囲まで辿れること、および connection reset 相当の clear で state が破棄されることを固定する。
+`src/web/tests/regional-generation-store.test.mjs` は Settlement / District / Parcel / Building / POI relation を stable ID で必要な範囲まで辿れること、および connection reset 相当の clear で state が破棄されることを固定する。
 
 `src/web/tests/settlement-structure-renderer.test.mjs` は次を固定する。
 
@@ -73,7 +80,14 @@ Simulation Phase 31 の建設、用途変更、vacancy、demolition、Settlement
 - Settlement / District / Parcel / Building / POI のstable ID relationをrenderer revisionと同時に保持する
 - clear後にrelation metadataを破棄する
 
-Browser / live Gateway E2E は Regional Generation delivery が利用可能になった時点で追加し、Simulation state を捏造したfixtureをPhase完了証跡として扱わない。
+`src/web/tests/browser/view-phase04-e2e.mjs` と `scripts/run-view-phase04-e2e.sh` は実Chrome / Chromium上で次を確認する。
+
+- Settlement / Corridor / District / Parcel / Building / POI / Toponym / Road SignがThree.js sceneへ生成され、実draw callが発生する
+- 離れた複数Settlementが1つへ集約されず、Simulation提供role等の差をpresentationへ反映する
+- Parcel→District / Settlement、Building→Parcel / District / Settlement、POI→Building等のstable ID relationを`bigint`のまま保持する
+- browser canvas上でhuman Toponym spriteを生成できる
+
+このBrowser E2EはView-local rendering boundaryの証跡であり、Simulation→Gateway→Webのlive Regional Generation deliveryを証明するものではない。
 
 ## Known upstream contract issue
 
