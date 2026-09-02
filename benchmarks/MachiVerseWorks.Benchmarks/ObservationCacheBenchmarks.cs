@@ -110,8 +110,6 @@ public class ObservationCacheBenchmarks
         return bytes;
     }
 
-    public ObservationCacheMetrics CreateCacheMetrics() => _cached.CreateMetricsSnapshot();
-
     private sealed class ObservationCacheBenchmarkConfig : ManualConfig
     {
         public ObservationCacheBenchmarkConfig()
