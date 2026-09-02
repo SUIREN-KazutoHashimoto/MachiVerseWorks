@@ -1,4 +1,5 @@
 import { MachiVerseConnection } from '../../src/connection.ts';
+import { WEB_CURRENT_PROTOCOL_VERSION } from '../../src/person-inspection-protocol.ts';
 import { RailwayInfrastructureLayer, RailwayMessageType } from '../../src/railway-infrastructure.ts';
 import { RailwayOperationsLayer, RailwayOperationsMessageType, RailwayServiceState, TrainMovementState } from '../../src/railway-operations.ts';
 import { WorldView } from '../../src/world-view.ts';
@@ -52,14 +53,17 @@ const connection = new MachiVerseConnection(serverUrl, { minimumDelayMs: 100, ma
 
 try {
   connection.connect();
-  await waitUntil(() => state === 'connected', 'Protocol 2.17 connection');
+  await waitUntil(() => state === 'connected', 'current Protocol connection');
   connection.setSubscription({ minX: -120, minY: 0, minZ: -10, maxX: 120, maxY: 50, maxZ: 15 });
   await waitUntil(() => infrastructure !== null && infrastructure.stations.length === 2 && infrastructure.platforms.length === 2, 'Phase 18 railway infrastructure');
   await waitUntil(() => operations !== null && operations.trains.length === 2 && operations.services.length === 2 && operations.timetables.length === 2, 'two trains and services');
   await waitUntil(() => observedMovement && observedPlatform && observedDelay, 'movement, platform assignment, and delay');
   await waitUntil(() => operations !== null && operations.services.every((service) => service.state === RailwayServiceState.Completed), 'both services completing', 70_000);
 
-  assert(negotiatedVersion?.major === 2 && negotiatedVersion?.minor === 17, 'Protocol 2.17 was negotiated');
+  assert(
+    negotiatedVersion?.major === WEB_CURRENT_PROTOCOL_VERSION.major && negotiatedVersion?.minor === WEB_CURRENT_PROTOCOL_VERSION.minor,
+    `Protocol ${String(WEB_CURRENT_PROTOCOL_VERSION.major)}.${String(WEB_CURRENT_PROTOCOL_VERSION.minor)} was negotiated`,
+  );
   assert(infrastructure.stations.length === 2, 'two Stations were published');
   assert(infrastructure.platforms.length === 2, 'two Platforms were published');
   assert(operations.trains.length === 2, 'two Trains were published');
