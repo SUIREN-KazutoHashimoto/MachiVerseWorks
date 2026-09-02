@@ -11,9 +11,9 @@ GatewayはSimulationの意味的正本ではありません。Activity、Status�
 
 Gateway Roadmapの分離は責務と進捗管理の分離であり、直ちに別process / repository / deploy unitへ分離することを意味しません。現行では`MachiVerseWorks.Server`内のObservation側責務を明確化し、将来必要なら独立deploy可能な境界へ育てます。
 
-> **現在:** Gateway Phase 1 — Observation Boundary Foundation  
-> **次の実装タスク:** `G1-002` — SimulationRuntimeからdetached observation sourceを取得する共通境界を定義し、Gatewayがmutable Storeへ直接依存しないようにする  
-> **並行可能:** Simulation Phase 29 / View Phase 1
+> **現在:** Gateway Phase 1 — Observation Boundary Foundation 完了  
+> **次の実装タスク:** Gateway Phase 2 `G2-001` — Entity Observation CacheをEntity ID + authoritative observation revisionで共有する  
+> **並行可能:** Simulation Phase 30 / View Phase 2
 
 ## 最上位原則
 
@@ -30,8 +30,8 @@ Gateway Roadmapの分離は責務と進捗管理の分離であり、直ちに�
 
 | Gateway Phase | 内容 | 主な依存 | 状態 |
 | --- | --- | --- | --- |
-| 1 | Observation Boundary Foundation | 現行SimulationRuntime / Server publish / Protocol 2.x | ▶️ 進行中 |
-| 2 | Shared Observation Cache & Request Deduplication | Gateway Phase 1 | ⏳ 待機 |
+| 1 | Observation Boundary Foundation | 現行SimulationRuntime / Server publish / Protocol 2.x | ✅ 完了 |
+| 2 | Shared Observation Cache & Request Deduplication | Gateway Phase 1 | ⬜ 未着手 |
 | 3 | Subscription, Delivery & Resynchronization | Gateway Phase 1 / 2 | ⏳ 待機 |
 | 4 | Generic Entity & Temporal Observation | Gateway Phase 1 / Simulation semantic observation | ⏳ Simulation依存待ち |
 | 5 | Historical Observation & Replay Delivery | Gateway Phase 3 / Simulation Phase 35 | ⏳ Simulation依存待ち |
@@ -81,20 +81,22 @@ GatewayはSimulation Phase番号へ同期しない。現在のServer / Protocol�
 
 ## Gateway Phase 1 — Observation Boundary Foundation
 
-> **状態: ▶️ 進行中**  
+> **状態: ✅ 完了**  
 > **必須依存:** 現行SimulationRuntime / detached publish snapshot / Server WebSocket / Protocol 2.x  
-> **並行可能依存:** Simulation Phase 29、View Phase 1
+> **並行可能依存:** Simulation Phase 30、View Phase 2
 
 現行Serverに存在するpublish / subscription / inspection経路を、意味的処理を持たないread-only Observation Gatewayとして明示的に整理する。
 
 - ✅ **G1-001** — Observation Requestとauthoritative mutation commandをProtocol / Server責務として明示的に分離する（旧`OBS-001`）
-- ⬜ **G1-002** — SimulationRuntimeからdetached observation sourceを取得する共通境界を定義し、Gatewayがmutable Storeへ直接依存しないようにする（旧`OBS-002`の基盤部分）
-- ⬜ **G1-003** — 現行publish / `SubscribeVolume` / Inspect処理をServer内のObservation Gateway責務としてmodule境界へ整理する（旧`OBS-003`）
-- ⬜ **G1-004** — Observation request / connection state / delivery stateとSimulation Entity stateのownershipを型・moduleで分離する
-- ⬜ **G1-005** — negotiated Protocol versionごとのObservation message adaptationをGateway境界へ整理し、domain semanticsをcodec側で生成しない
-- ⬜ **G1-006** — Gateway routeからAdmin / Management mutation APIへ到達できないdependency test / negative E2Eを追加する
-- ⬜ **G1-007** — 現行Protocol互換のViewがGateway境界整理前後で同一Observationを受け取るregression testを追加する
-- ⬜ **G1-008** — Gateway Phase 1のarchitecture / Protocol / Server README / Roadmapを同期する
+- ✅ **G1-002** — SimulationRuntimeからdetached observation sourceを取得する共通境界を定義し、Gatewayがmutable Storeへ直接依存しないようにする（旧`OBS-002`の基盤部分）
+- ✅ **G1-003** — 現行publish / `SubscribeVolume` / Inspect処理をServer内のObservation Gateway責務としてmodule境界へ整理する（旧`OBS-003`）
+- ✅ **G1-004** — Observation request / connection state / delivery stateとSimulation Entity stateのownershipを型・moduleで分離する
+- ✅ **G1-005** — negotiated Protocol versionごとのObservation message adaptationをGateway境界へ整理し、domain semanticsをcodec側で生成しない
+- ✅ **G1-006** — Gateway routeからAdmin / Management mutation APIへ到達できないdependency test / negative E2Eを追加する
+- ✅ **G1-007** — 現行Protocol互換のViewがGateway境界整理前後で同一Observationを受け取るregression testを追加する
+- ✅ **G1-008** — Gateway Phase 1のarchitecture / Protocol / Server README / Roadmapを同期する
+
+Phase 1では`IObservationSource` / `SimulationObservationSource`をSimulationRuntimeとの唯一のObservation bridgeとして導入し、Gateway publisher / WebSocket sessionはdetached snapshotとread-only metadataだけを参照する。Gateway登録は`AddObservationGateway()`へ集約し、codec選択は`ObservationProtocolAdapter`へ移した。dependency test、non-observation requestのnegative WebSocket test、wire encoding equivalence testで境界と互換性を固定する。
 
 ### Gateway Phase 1 完了条件
 
@@ -107,7 +109,7 @@ GatewayはSimulation Phase番号へ同期しない。現在のServer / Protocol�
 
 ## Gateway Phase 2 — Shared Observation Cache & Request Deduplication
 
-> **状態: ⏳ 待機**  
+> **状態: ⬜ 未着手**  
 > **必須依存:** Gateway Phase 1
 
 同じauthoritative observationを複数Client / requestで再生成・再encodeし続けない共有cache基盤を作る。
@@ -201,7 +203,7 @@ Simulationが所有するhistorical projection / replayをread-only consumerへ�
 ### Gateway Phase 5 完了条件
 
 - ViewがSimulation内部history storeへ直接依存せず過去Worldを観測できる。
-- Gatewayで歴史を再構成・推測せずSimulation historical projectionを配送する。
+- Gatewayで歴史を再構築・推測せずSimulation historical projectionを配送する。
 - live / historical requestが互いのcache / revision stateを汚染しない。
 
 ---
