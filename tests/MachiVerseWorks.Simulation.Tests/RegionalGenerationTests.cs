@@ -119,7 +119,26 @@ public sealed class RegionalGenerationTests
         var world = new SimulationWorld(new SimulationConfig(worldEnvironment: CreateConfig(30006)));
         world.GenerateRegionalGeneration(CreateVolume());
 
-        Assert.ThrowsException<InvalidOperationException>(() => world.GenerateRegionalGeneration(CreateVolume()));
+        AssertThrows<InvalidOperationException>(() => world.GenerateRegionalGeneration(CreateVolume()));
+    }
+
+    private static void AssertThrows<TException>(Action action)
+        where TException : Exception
+    {
+        try
+        {
+            action();
+        }
+        catch (TException)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            Assert.Fail($"Expected {typeof(TException).Name}, but got {exception.GetType().Name}: {exception.Message}");
+        }
+
+        Assert.Fail($"Expected {typeof(TException).Name}, but no exception was thrown.");
     }
 
     private static WorldEnvironmentConfig CreateConfig(ulong worldSeed) => new(
