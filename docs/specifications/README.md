@@ -21,6 +21,7 @@ Simulationとread-only consumerのObservation Gateway、cache、delivery方針�
 ## World / City Foundation
 
 - [`world-environment-terrain.md`](world-environment-terrain.md): deterministic Global Environment、Detailed 3D Terrain、GeographicFeature、自然地名、Save / authoritative observation source / Protocol domain payload境界
+- [`regional-urban-generation.md`](regional-urban-generation.md): deterministic複数Settlement、歴史的成長、regional corridor、District / Parcel / Building、Human Toponym、Road Context / sign、Save / observation境界
 
 ## City / Mobility / Population
 

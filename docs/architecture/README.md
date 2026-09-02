@@ -21,6 +21,7 @@ MachiVerseWorks の現行技術アーキテクチャを管理します。
 ## World / Physical Environment
 
 - [`world-environment-terrain.md`](world-environment-terrain.md): authoritative Global Environment、Detailed 3D Terrain、GeographicFeature、Toponym、semantic observation source / Save境界
+- [`regional-urban-generation.md`](regional-urban-generation.md): deterministic Settlement / historical growth / regional corridor / District / Parcel / Human Toponym生成、materialization、Save / Protocol境界
 
 ## Mobility / Population / Economy
 

@@ -18,6 +18,7 @@ public static partial class WorldSaveSerializer
         ValidateGasCheckpointWithinLimits(economy.Gas, limits);
         ValidateOpticalCheckpointWithinLimits(economy.Optical, limits);
         ValidateWorldEnvironmentCheckpointWithinLimits(economy.WorldEnvironment, limits);
+        ValidateRegionalGenerationCheckpointWithinLimits(economy.RegionalGeneration, limits);
     }
 
     private static void ValidateLogisticsCheckpointWithinLimits(LogisticsCheckpoint? logistics, WorldSaveLimits limits)
@@ -80,5 +81,22 @@ public static partial class WorldSaveSerializer
         ValidateCount(worldEnvironment.Toponyms.Count, limits.MaximumNaturalToponymCount, "NaturalToponyms");
         foreach (var feature in worldEnvironment.Features)
             ValidateCount(feature.Geometry.Count, limits.MaximumGeographicFeatureGeometryPointCount, "GeographicFeatureGeometryPoints");
+    }
+
+    private static void ValidateRegionalGenerationCheckpointWithinLimits(RegionalGenerationCheckpoint? regionalGeneration, WorldSaveLimits limits)
+    {
+        if (regionalGeneration is null) return;
+        var snapshot = regionalGeneration.Snapshot;
+        ValidateCount(snapshot.Settlements.Count, limits.MaximumBuildingCount, "RegionalSettlements");
+        ValidateCount(snapshot.GrowthEvents.Count, limits.MaximumPersonCount, "RegionalGrowthEvents");
+        ValidateCount(snapshot.Corridors.Count, limits.MaximumRoadSegmentCount, "RegionalCorridors");
+        ValidateCount(snapshot.Districts.Count, limits.MaximumBuildingCount, "RegionalDistricts");
+        ValidateCount(snapshot.Parcels.Count, limits.MaximumBuildingCount, "RegionalParcels");
+        ValidateCount(snapshot.Buildings.Count, limits.MaximumBuildingCount, "RegionalGeneratedBuildings");
+        ValidateCount(snapshot.Pois.Count, limits.MaximumPoiCount, "RegionalGeneratedPois");
+        ValidateCount(snapshot.Toponyms.Count, limits.MaximumNaturalToponymCount, "RegionalHumanToponyms");
+        ValidateCount(snapshot.RoadSigns.Count, limits.MaximumRoadAccessPointCount, "RegionalRoadSigns");
+        foreach (var corridor in snapshot.Corridors)
+            ValidateCount(corridor.Geometry.Count, limits.MaximumGeographicFeatureGeometryPointCount, "RegionalCorridorGeometryPoints");
     }
 }

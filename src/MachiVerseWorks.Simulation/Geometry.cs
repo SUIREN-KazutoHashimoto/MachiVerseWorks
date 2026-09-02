@@ -60,6 +60,7 @@ public readonly record struct SpatialCell(int X, int Y, int Z);
 
 public readonly record struct WorldVolume
 {
+    [System.Text.Json.Serialization.JsonConstructor]
     public WorldVolume(
         double minX,
         double minY,
