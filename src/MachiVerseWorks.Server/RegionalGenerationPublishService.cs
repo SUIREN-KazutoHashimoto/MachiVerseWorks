@@ -20,9 +20,9 @@ internal sealed class RegionalGenerationPublishService(
         LoggerMessage.Define<ulong, ulong>(
             LogLevel.Error,
             new EventId(1, nameof(LogOversizedSnapshot)),
-            "Regional Generation observation generation {Generation} revision {Revision} cannot fit the Protocol 2.18 single-frame contract; delivery was skipped without disconnecting Clients.");
+            "Regional Generation observation generation {Generation} source tick {SourceTick} cannot fit the Protocol 2.18 single-frame contract; delivery was skipped without disconnecting Clients.");
 
-    private readonly Dictionary<Guid, (ulong Generation, ulong Revision)> _delivered = [];
+    private readonly Dictionary<Guid, (ulong Generation, bool HasSnapshot, ulong SourceTick)> _delivered = [];
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -40,8 +40,8 @@ internal sealed class RegionalGenerationPublishService(
                 if (targets.Length == 0) continue;
 
                 var observation = observationSource.CaptureRegionalGenerationObservation();
-                var revision = (observation.Generation, observation.Revision);
-                if (targets.All(connection => _delivered.TryGetValue(connection.Id, out var delivered) && delivered == revision))
+                var sourceIdentity = (observation.Generation, observation.HasSnapshot, observation.SourceTick);
+                if (targets.All(connection => _delivered.TryGetValue(connection.Id, out var delivered) && delivered == sourceIdentity))
                     continue;
 
                 var message = RegionalGenerationMessageMapper.ToProtocol(
@@ -54,20 +54,20 @@ internal sealed class RegionalGenerationPublishService(
                 }
                 catch (ArgumentOutOfRangeException exception)
                 {
-                    LogOversizedSnapshot(logger, observation.Generation, observation.Revision, exception);
+                    LogOversizedSnapshot(logger, observation.Generation, observation.SourceTick, exception);
                     continue;
                 }
 
                 foreach (var connection in targets)
                 {
-                    if (_delivered.TryGetValue(connection.Id, out var delivered) && delivered == revision) continue;
+                    if (_delivered.TryGetValue(connection.Id, out var delivered) && delivered == sourceIdentity) continue;
                     if (deliveryCoordinator.TrySchedule(
                         connection,
                         ObservationDeliveryLane.Snapshot,
                         message,
                         stoppingToken))
                     {
-                        _delivered[connection.Id] = revision;
+                        _delivered[connection.Id] = sourceIdentity;
                     }
                 }
             }
