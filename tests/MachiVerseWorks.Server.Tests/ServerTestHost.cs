@@ -126,6 +126,10 @@ internal sealed class ServerTestHost : IAsyncDisposable
         {
             decoded = LogisticsProtocolCodec.TryDeserialize(frame, out envelope, out error);
         }
+        else if (header.MessageType == MessageType.WorldEnvironmentSnapshot)
+        {
+            decoded = WorldEnvironmentProtocolCodec.TryDeserialize(frame, out envelope, out error);
+        }
         else
         {
             decoded = ProtocolCodec.TryDeserialize(frame, out envelope, out error);
