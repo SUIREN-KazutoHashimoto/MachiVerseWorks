@@ -7,8 +7,10 @@ import { initializeLocalization, type LocaleParameters } from './localization.ts
 import { MultimodalTransitMessageType, type MultimodalTransitProtocolMessage, type MultimodalTransitSnapshotMessage } from './multimodal-transit.ts';
 import { PopulationMessageType, type PopulationProtocolMessage, type PopulationStatisticsMessage, type PersonDebugMessage } from './population-protocol.ts';
 import { MessageType, ProtocolErrorCode, type AgentStateMessage, type ProtocolErrorMessage, type ProtocolMessage, type WorldVolume } from './protocol.ts';
+import { REGIONAL_GENERATION_SNAPSHOT_MESSAGE_TYPE, type RegionalGenerationSnapshotMessage } from './regional-generation-protocol.ts';
 import { RailwayInfrastructureLayer, RailwayMessageType, type RailwayProtocolMessage } from './railway-infrastructure.ts';
 import { RailwayOperationsLayer, RailwayOperationsMessageType, type RailwayOperationsProtocolMessage, type RailwayOperationsSnapshotMessage } from './railway-operations.ts';
+import { SettlementStructureRenderer } from './settlement-structure-renderer.ts';
 import { isRetryableSubscriptionDetailCode } from './subscription-error-policy.ts';
 import { ClientUi } from './ui.ts';
 import { TrafficMessageType, type TrafficProtocolMessage } from './traffic-protocol.ts';
@@ -39,6 +41,7 @@ export class Application {
   private readonly performanceMetrics = import.meta.env.DEV ? new ClientPerformanceMetrics() : null;
   private readonly view: WorldView;
   private readonly navigation: ViewNavigationController;
+  private readonly regionalGeneration: SettlementStructureRenderer;
   private readonly railway: RailwayInfrastructureLayer;
   private readonly railwayOperations: RailwayOperationsLayer;
   private readonly ui: ClientUi;
@@ -61,6 +64,7 @@ export class Application {
     const performanceMetrics = this.performanceMetrics;
     this.view = new WorldView(host);
     this.navigation = new ViewNavigationController(this.view.camera, this.view.renderer.domElement);
+    this.regionalGeneration = new SettlementStructureRenderer(this.view.scene);
     this.railway = new RailwayInfrastructureLayer(this.view.scene);
     this.railwayOperations = new RailwayOperationsLayer(this.view.scene);
     this.ui = new ClientUi(host, this.localizer, performanceMetrics !== null);
@@ -106,14 +110,14 @@ export class Application {
   public start(): void { if (this.disposed) throw new Error('Application is disposed.'); this.connection.connect(); this.animationFrame = window.requestAnimationFrame(this.animate); }
   public dispose(): void {
     if (this.disposed) return;
-    this.disposed = true; window.cancelAnimationFrame(this.animationFrame); window.removeEventListener('resize', this.handleResize); this.connection.disconnect(); this.navigation.dispose(); this.audio.dispose(); this.railway.dispose(); this.railwayOperations.dispose(); this.logisticsDebug.dispose(); this.powerDebug.dispose(); this.waterSewerDebug.dispose(); this.gasDebug.dispose(); this.opticalDebug.dispose(); this.radioDebug.dispose(); this.view.dispose(); this.ui.dispose();
+    this.disposed = true; window.cancelAnimationFrame(this.animationFrame); window.removeEventListener('resize', this.handleResize); this.connection.disconnect(); this.navigation.dispose(); this.audio.dispose(); this.regionalGeneration.dispose(); this.railway.dispose(); this.railwayOperations.dispose(); this.logisticsDebug.dispose(); this.powerDebug.dispose(); this.waterSewerDebug.dispose(); this.gasDebug.dispose(); this.opticalDebug.dispose(); this.radioDebug.dispose(); this.view.dispose(); this.ui.dispose();
   }
   private readonly handleResize = (): void => { this.view.resize(); };
 
   private readonly animate = (now: number): void => {
     if (this.disposed) return;
     const performanceMetrics = this.performanceMetrics; if (performanceMetrics !== null) performanceMetrics.recordAnimationFrame(now);
-    this.navigation.update(now); this.updateSubscription(now); this.view.render(this.observation.entities, now, this.observation.pedestrians, this.observation.vehicles, this.observation.intersections, this.observation.roadNetwork, this.observation.worldEnvironment); this.audio.syncListenerFromCamera(this.view.camera); this.updateAudio(now); if (performanceMetrics !== null) this.updatePerformanceUi(now, performanceMetrics); this.animationFrame = window.requestAnimationFrame(this.animate);
+    this.navigation.update(now); this.updateSubscription(now); this.regionalGeneration.update(this.observation.regionalGeneration); this.view.render(this.observation.entities, now, this.observation.pedestrians, this.observation.vehicles, this.observation.intersections, this.observation.roadNetwork, this.observation.worldEnvironment); this.audio.syncListenerFromCamera(this.view.camera); this.updateAudio(now); if (performanceMetrics !== null) this.updatePerformanceUi(now, performanceMetrics); this.animationFrame = window.requestAnimationFrame(this.animate);
   };
 
   private updateSubscription(now: number): void {
@@ -127,7 +131,7 @@ export class Application {
 
   private updatePerformanceUi(now: number, metrics: ClientPerformanceMetrics): void { if (now - this.lastPerformanceUiAt < 500) return; this.lastPerformanceUiAt = now; this.ui.setPerformanceMetrics(metrics.snapshot()); }
 
-  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage | MultimodalTransitProtocolMessage | EconomyProtocolMessage | LogisticsProtocolMessage | PowerProtocolMessage | WaterSewerProtocolMessage | GasProtocolMessage | OpticalProtocolMessage | RadioProtocolMessage | WorldEnvironmentSnapshotMessage): void {
+  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage | MultimodalTransitProtocolMessage | EconomyProtocolMessage | LogisticsProtocolMessage | PowerProtocolMessage | WaterSewerProtocolMessage | GasProtocolMessage | OpticalProtocolMessage | RadioProtocolMessage | WorldEnvironmentSnapshotMessage | RegionalGenerationSnapshotMessage): void {
     switch (message.type) {
       case MessageType.AgentSpawn:
       case MessageType.AgentUpdate:
@@ -146,6 +150,7 @@ export class Application {
       case TrafficMessageType.IntersectionControlSnapshot:
         this.observation.apply(message); return;
       case WORLD_ENVIRONMENT_SNAPSHOT_MESSAGE_TYPE:
+      case REGIONAL_GENERATION_SNAPSHOT_MESSAGE_TYPE:
         this.observation.apply(message); return;
       case PopulationMessageType.PopulationStatistics: this.applyPopulationStatistics(message); return;
       case PopulationMessageType.PersonDebug: this.applyPersonDebug(message); return;
