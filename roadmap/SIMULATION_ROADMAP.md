@@ -8,7 +8,7 @@
 
 SimulationがWorldの唯一の意味的正本です。Activity、Status、分類、予定、ETA、状態遷移、semantic event等の意味的処理はSimulation側で完結させ、Gateway / Viewへ推測・補完・再計算させません。
 
-> **現在:** Phase 31 — Persistent Regional & Settlement Evolution（実装完了・develop統合待ち）
+> **現在:** Phase 32 — Simulation Scheduling & Workload Optimization（未着手）
 > **次の実装タスク:** Phase 32 `P32-001`
 
 > **Gateway:** Gateway Phase 3 `G3-001` から独立進行可能  
@@ -38,7 +38,7 @@ SimulationがWorldの唯一の意味的正本です。Activity、Status、分類
 | 28 | Radio & Spectrum Foundation | ✅ 完了 |
 | 29 | World & Physical Environment Generation | ✅ 完了・develop統合済み |
 | 30 | Regional & Urban Generation | ✅ 完了・develop統合済み |
-| 31 | Persistent Regional & Settlement Evolution | ✅ 実装完了・develop統合待ち |
+| 31 | Persistent Regional & Settlement Evolution | ✅ 完了・develop統合済み |
 | 32 | Simulation Scheduling & Workload Optimization | ⬜ 未着手 |
 | 33 | Deterministic Parallel Simulation | ⬜ 未着手 |
 | 35 | Historical World & Replay | ⬜ 未着手 |
@@ -281,7 +281,7 @@ Gatewayは[`GATEWAY_ROADMAP.md`](GATEWAY_ROADMAP.md)で独立してPhase 1から
 
 ## Phase 31 — Persistent Regional & Settlement Evolution
 
-> **状態: ✅ 実装完了 / develop統合待ち**  
+> **状態: ✅ 完了 / develop統合済み**  
 > **依存:** Phase 15 / 19 / 21 / 22 / 24〜30  
 > Phase 30が生成した初期Worldを固定された完成品として扱わず、Simulation時間の進行に応じて都市・町・村・集落・Parcel・Building・交通・地域間関係が継続的に変化するauthoritativeな地域Simulationを確立する。Settlementの規模分類は固定typeではなく実際の人口・機能・サービス・接続性から派生させ、一極集中を強制しない。
 
@@ -327,7 +327,7 @@ Gatewayは[`GATEWAY_ROADMAP.md`](GATEWAY_ROADMAP.md)で独立してPhase 1から
 - Territory: current center / influence / neighboring Settlement距離からderived territoryを再評価する
 - Benchmark: `PersistentRegionalEvolutionBenchmarks`を共通BenchmarkDotNet matrixへ登録
 - Gateway boundary: detached read-only source、Protocol capability gate、2.18以前への2.19 payload非配信
-- Integration: 最新`develop`を同期済み。Phase31本体は`develop`統合待ち
+- Integration: `develop`上に`PersistentRegionalEvolution`、`SimulationWorld.PersistentRegional*`、Settlement territory / relation / redevelopment / materialization実装と対応Simulation testsが存在することをコードベースで再確認済み
 
 ---
 
