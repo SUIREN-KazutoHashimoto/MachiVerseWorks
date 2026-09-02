@@ -1,4 +1,5 @@
 import { PedestrianMovementState, type PedestrianStateMessage } from './protocol.ts';
+import { VisualInterpolationState } from './visual-interpolation-state.ts';
 
 export interface SampledPedestrian {
   readonly pedestrianId: bigint;
@@ -14,101 +15,64 @@ export interface SampledPedestrian {
   readonly tickCount: bigint;
 }
 
-interface ClientPedestrian {
-  readonly pedestrianId: bigint;
-  tripRequestId: bigint;
-  previousX: number;
-  previousY: number;
-  previousZ: number;
-  currentX: number;
-  currentY: number;
-  currentZ: number;
-  velocityX: number;
-  velocityY: number;
-  velocityZ: number;
-  walkingSpeedMetersPerSecond: number;
-  state: PedestrianMovementState;
-  tickCount: bigint;
-  receivedAt: number;
-  interpolationDurationMs: number;
+export interface ReadonlyPedestrianStore {
+  readonly size: number;
+  writeSampledPositions(now: number, target: Float32Array): number;
+  sample(now?: number): IterableIterator<SampledPedestrian>;
 }
 
-export class PedestrianStore {
-  private readonly pedestrians = new Map<bigint, ClientPedestrian>();
+/** Authoritative pedestrian observations. Visual history is kept separately. */
+export class PedestrianStore implements ReadonlyPedestrianStore {
+  private readonly pedestrians = new Map<bigint, PedestrianStateMessage>();
+  private readonly interpolation = new VisualInterpolationState<bigint>();
 
   public get size(): number { return this.pedestrians.size; }
 
   public spawn(snapshot: PedestrianStateMessage, receivedAt = performance.now()): void {
     validateSnapshot(snapshot);
-    this.pedestrians.set(snapshot.pedestrianId, {
-      pedestrianId: snapshot.pedestrianId,
-      tripRequestId: snapshot.tripRequestId,
-      previousX: snapshot.x,
-      previousY: snapshot.y,
-      previousZ: snapshot.z,
-      currentX: snapshot.x,
-      currentY: snapshot.y,
-      currentZ: snapshot.z,
-      velocityX: snapshot.velocityX,
-      velocityY: snapshot.velocityY,
-      velocityZ: snapshot.velocityZ,
-      walkingSpeedMetersPerSecond: snapshot.walkingSpeedMetersPerSecond,
-      state: snapshot.state,
-      tickCount: snapshot.tickCount,
-      receivedAt,
-      interpolationDurationMs: 100,
-    });
+    this.pedestrians.set(snapshot.pedestrianId, snapshot);
+    this.interpolation.upsert(snapshot.pedestrianId, snapshot, receivedAt);
   }
 
   public update(snapshot: PedestrianStateMessage, receivedAt = performance.now()): boolean {
     validateSnapshot(snapshot);
-    const pedestrian = this.pedestrians.get(snapshot.pedestrianId);
-    if (pedestrian === undefined) return false;
-    const observedInterval = receivedAt - pedestrian.receivedAt;
-    pedestrian.previousX = pedestrian.currentX;
-    pedestrian.previousY = pedestrian.currentY;
-    pedestrian.previousZ = pedestrian.currentZ;
-    pedestrian.currentX = snapshot.x;
-    pedestrian.currentY = snapshot.y;
-    pedestrian.currentZ = snapshot.z;
-    pedestrian.tripRequestId = snapshot.tripRequestId;
-    pedestrian.velocityX = snapshot.velocityX;
-    pedestrian.velocityY = snapshot.velocityY;
-    pedestrian.velocityZ = snapshot.velocityZ;
-    pedestrian.walkingSpeedMetersPerSecond = snapshot.walkingSpeedMetersPerSecond;
-    pedestrian.state = snapshot.state;
-    pedestrian.tickCount = snapshot.tickCount;
-    pedestrian.receivedAt = receivedAt;
-    if (Number.isFinite(observedInterval) && observedInterval > 0) pedestrian.interpolationDurationMs = clamp(observedInterval, 33, 500);
+    if (!this.pedestrians.has(snapshot.pedestrianId)) return false;
+    this.pedestrians.set(snapshot.pedestrianId, snapshot);
+    this.interpolation.upsert(snapshot.pedestrianId, snapshot, receivedAt);
     return true;
   }
 
-  public remove(pedestrianId: bigint): boolean { return this.pedestrians.delete(pedestrianId); }
-  public clear(): void { this.pedestrians.clear(); }
+  public remove(pedestrianId: bigint): boolean {
+    this.interpolation.remove(pedestrianId);
+    return this.pedestrians.delete(pedestrianId);
+  }
+
+  public clear(): void {
+    this.pedestrians.clear();
+    this.interpolation.clear();
+  }
 
   public writeSampledPositions(now: number, target: Float32Array): number {
     const requiredValues = this.pedestrians.size * 3;
     if (target.length < requiredValues) throw new RangeError(`Target pedestrian position buffer requires at least ${String(requiredValues)} values.`);
     let offset = 0;
-    for (const pedestrian of this.pedestrians.values()) {
-      const alpha = clamp((now - pedestrian.receivedAt) / pedestrian.interpolationDurationMs, 0, 1);
-      target[offset] = lerp(pedestrian.previousX, pedestrian.currentX, alpha);
-      target[offset + 1] = lerp(pedestrian.previousY, pedestrian.currentY, alpha);
-      target[offset + 2] = lerp(pedestrian.previousZ, pedestrian.currentZ, alpha);
+    for (const pedestrianId of this.pedestrians.keys()) {
+      if (!this.interpolation.writeSampledPosition(pedestrianId, now, target, offset)) continue;
       offset += 3;
     }
     return offset / 3;
   }
 
   public *sample(now = performance.now()): IterableIterator<SampledPedestrian> {
-    for (const pedestrian of this.pedestrians.values()) {
-      const alpha = clamp((now - pedestrian.receivedAt) / pedestrian.interpolationDurationMs, 0, 1);
+    for (const [pedestrianId, pedestrian] of this.pedestrians) {
+      const position = this.interpolation.sample(pedestrianId, now);
+      if (position === undefined) continue;
       yield {
-        pedestrianId: pedestrian.pedestrianId,
+        pedestrianId,
         tripRequestId: pedestrian.tripRequestId,
-        x: lerp(pedestrian.previousX, pedestrian.currentX, alpha),
-        y: lerp(pedestrian.previousY, pedestrian.currentY, alpha),
-        z: lerp(pedestrian.previousZ, pedestrian.currentZ, alpha),
+        x: position.x,
+        y: position.y,
+        z: position.z,
         velocityX: pedestrian.velocityX,
         velocityY: pedestrian.velocityY,
         velocityZ: pedestrian.velocityZ,
@@ -124,6 +88,3 @@ function validateSnapshot(snapshot: PedestrianStateMessage): void {
   if (snapshot.pedestrianId === 0n || snapshot.tripRequestId === 0n) throw new RangeError('Pedestrian IDs must be greater than zero.');
   if (!Number.isFinite(snapshot.x) || !Number.isFinite(snapshot.y) || !Number.isFinite(snapshot.z) || !Number.isFinite(snapshot.velocityX) || !Number.isFinite(snapshot.velocityY) || !Number.isFinite(snapshot.velocityZ) || !Number.isFinite(snapshot.walkingSpeedMetersPerSecond) || snapshot.walkingSpeedMetersPerSecond <= 0) throw new RangeError('Pedestrian snapshot contains an invalid numeric value.');
 }
-
-function lerp(from: number, to: number, alpha: number): number { return from + (to - from) * alpha; }
-function clamp(value: number, minimum: number, maximum: number): number { return Math.min(maximum, Math.max(minimum, value)); }

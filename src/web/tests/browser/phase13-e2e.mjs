@@ -1,11 +1,9 @@
 import * as THREE from 'three';
 
 import { MachiVerseConnection } from '../../src/connection.ts';
-import { EntityStore } from '../../src/entity-store.ts';
-import { PedestrianStore } from '../../src/pedestrian-store.ts';
 import { MessageType } from '../../src/protocol.ts';
 import { TrafficMessageType, VehicleMovementState } from '../../src/traffic-protocol.ts';
-import { IntersectionControlStore, VehicleStore } from '../../src/traffic-store.ts';
+import { ViewObservationState } from '../../src/view-observation-state.ts';
 import { WorldView } from '../../src/world-view.ts';
 
 const parameters = new URLSearchParams(window.location.search);
@@ -14,10 +12,11 @@ const host = document.querySelector('#host');
 const result = document.querySelector('#result');
 if (!(host instanceof HTMLElement) || !(result instanceof HTMLElement)) throw new Error('Phase 13 E2E host elements are missing.');
 
-const agents = new EntityStore();
-const pedestrians = new PedestrianStore();
-const vehicles = new VehicleStore();
-const intersections = new IntersectionControlStore();
+const observation = new ViewObservationState();
+const agents = observation.entities;
+const pedestrians = observation.pedestrians;
+const vehicles = observation.vehicles;
+const intersections = observation.intersections;
 const view = new WorldView(host);
 const spawnedVehicleIds = new Set();
 const updatedVehicleIds = new Set();
@@ -35,22 +34,22 @@ const connection = new MachiVerseConnection(serverUrl, { minimumDelayMs: 100, ma
     switch (message.type) {
       case MessageType.RoadNetworkSnapshot:
         roadSnapshot = message;
-        view.applyRoadNetwork(message);
+        observation.apply(message);
         break;
       case TrafficMessageType.VehicleSpawn:
-        vehicles.spawn(message);
+        observation.apply(message);
         spawnedVehicleIds.add(message.vehicleId);
         spawnPositions.set(message.vehicleId, [message.x, message.y, message.z]);
         observeVehicle(message);
         break;
       case TrafficMessageType.VehicleUpdate:
         updatedVehicleIds.add(message.vehicleId);
-        if (!vehicles.update(message)) vehicles.spawn(message);
+        observation.apply(message);
         observeMovement(message);
         observeVehicle(message);
         break;
       case TrafficMessageType.VehicleRemove:
-        vehicles.remove(message.vehicleId);
+        observation.apply(message);
         break;
       default:
         break;
@@ -58,13 +57,7 @@ const connection = new MachiVerseConnection(serverUrl, { minimumDelayMs: 100, ma
   },
   onProtocolError: (message) => { protocolError = new Error(`Protocol error ${String(message.code)}.`); },
   onClientError: (error) => { clientError = error; },
-  onDisconnected: () => {
-    agents.clear();
-    pedestrians.clear();
-    vehicles.clear();
-    intersections.clear();
-    view.clearRoadNetwork();
-  },
+  onDisconnected: () => { observation.resetConnectionState(); },
   onHelloAck: () => {},
 });
 
@@ -79,11 +72,11 @@ try {
     () => movedVehicleIds.size === 3 || arrivedVehicleIds.size === 3,
     'Vehicle movement updates or an authoritative already-arrived snapshot');
 
-  view.render(agents, performance.now(), pedestrians, vehicles, intersections);
+  renderView(performance.now());
   assertRenderedVehicles();
 
   await waitUntil(() => arrivedVehicleIds.size === 3, 'all fixture Vehicles reaching Arrived', 20_000);
-  view.render(agents, performance.now(), pedestrians, vehicles, intersections);
+  renderView(performance.now());
   assertRenderedVehicles();
 
   assert(
@@ -108,6 +101,10 @@ try {
 } finally {
   connection.disconnect();
   view.dispose();
+}
+
+function renderView(now) {
+  view.render(agents, now, pedestrians, vehicles, intersections, observation.roadNetwork);
 }
 
 function observeMovement(message) {

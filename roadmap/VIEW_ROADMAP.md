@@ -8,7 +8,7 @@
 - 人口統計、経済分析、交通分析、heatmap、trend等の分析処理はViewへ含めず、将来のAnalytics Listener / analysis clientとして別途設計します。
 - Observation Gatewayのarchitectureは[`../docs/architecture/observation-gateway.md`](../docs/architecture/observation-gateway.md)を正本とします。
 
-> **現在:** View Phase 1 — Read-Only View Foundation  
+> **現在:** View Phase 2 — Camera & Observation Navigation  
 > **進め方:** View固有の基盤はPhase 1から進め、Simulationから移管された描画Taskは依存するSimulation semantic sourceとGateway delivery contractが実装できた時点で順次着手する
 
 ## 最上位原則
@@ -28,7 +28,7 @@
 
 | View Phase | 内容 | 主な必須依存 | 状態 |
 | --- | --- | --- | --- |
-| 1 | Read-Only View Foundation | 現行read-only Protocol / Gateway Phase 1境界 | ▶️ 基盤着手可能 |
+| 1 | Read-Only View Foundation | 現行read-only Protocol / Gateway Phase 1境界 | ✅ 完了 |
 | 2 | Camera & Observation Navigation | Gateway subscription contract | ⏳ Gateway統合待ち |
 | 3 | Physical World Rendering | Simulation Phase 29 source + Gateway delivery | ⏳ Simulation / Gateway依存待ち |
 | 4 | Settlement & Structure Rendering | Simulation Phase 30 baseline / Phase 31 evolution + Gateway delivery | ⏳ Simulation / Gateway依存待ち |
@@ -103,20 +103,20 @@ Simulation / Gateway Phaseがcloseoutした際は、対応する未着手View Ta
 
 ## View Phase 1 — Read-Only View Foundation
 
-> **状態: ▶️ 基盤着手可能**  
+> **状態: ✅ 完了**  
 > **必須依存:** 現行Server / read-only Protocol message flow  
 > **並行可能依存:** Gateway Phase 1 `G1-001` / `G1-003` のObservation / mutation境界整理
 
 Viewを完全read-onlyなPresentation clientとして固定し、Gatewayから受け取ったread modelだけで描画できる基盤を作る。
 
-- ⬜ **V1-001** — View / Gateway / Managementの責務境界と禁止事項をWeb Client architecture / module dependencyへ反映する
-- ⬜ **V1-002** — Protocol messageをView-local rendering stateへ一方向適用する共通state boundaryを整理する
-- ⬜ **V1-003** — View-local stateをCamera / Selection / rendering resource / audio resource / cache / interpolationへ限定する契約を実装・testする
-- ⬜ **V1-004** — authoritative observationとprevious/current visual interpolation stateを型・module境界で分離する
-- ⬜ **V1-005** — reconnect / resync時にconnection-local View stateを安全に破棄し、新authoritative observationから再構築する
-- ⬜ **V1-006** — Viewからmutation Protocol / Administration APIへ到達しないことをdependency / E2Eで検証する
-- ⬜ **V1-007** — View未接続 / 単一View / 複数View接続でSimulation state digestが一致する基礎E2Eを整備する
-- ⬜ **V1-008** — Read-Only View Foundationのarchitecture / test / Roadmapを同期する
+- ✅ **V1-001** — View / Gateway / Managementの責務境界と禁止事項をWeb Client architecture / module dependencyへ反映する
+- ✅ **V1-002** — Protocol messageをView-local rendering stateへ一方向適用する共通state boundaryを整理する
+- ✅ **V1-003** — View-local stateをCamera / Selection / rendering resource / audio resource / cache / interpolationへ限定する契約を実装・testする
+- ✅ **V1-004** — authoritative observationとprevious/current visual interpolation stateを型・module境界で分離する
+- ✅ **V1-005** — reconnect / resync時にconnection-local View stateを安全に破棄し、新authoritative observationから再構築する
+- ✅ **V1-006** — Viewからmutation Protocol / Administration APIへ到達しないことをdependency / E2Eで検証する
+- ✅ **V1-007** — View未接続 / 単一View / 複数View接続でSimulation state digestが一致する基礎E2Eを整備する
+- ✅ **V1-008** — Read-Only View Foundationのarchitecture / test / Roadmapを同期する
 
 ### View Phase 1 完了条件
 

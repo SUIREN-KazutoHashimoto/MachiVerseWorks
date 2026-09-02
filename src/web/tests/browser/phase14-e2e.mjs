@@ -1,15 +1,13 @@
 import * as THREE from 'three';
 
 import { MachiVerseConnection } from '../../src/connection.ts';
-import { EntityStore } from '../../src/entity-store.ts';
-import { PedestrianStore } from '../../src/pedestrian-store.ts';
 import { MessageType } from '../../src/protocol.ts';
 import {
   SignalIndication,
   TrafficMessageType,
   VehicleMovementState,
 } from '../../src/traffic-protocol.ts';
-import { IntersectionControlStore, VehicleStore } from '../../src/traffic-store.ts';
+import { ViewObservationState } from '../../src/view-observation-state.ts';
 import { WorldView } from '../../src/world-view.ts';
 
 const parameters = new URLSearchParams(window.location.search);
@@ -18,10 +16,11 @@ const host = document.querySelector('#host');
 const result = document.querySelector('#result');
 if (!(host instanceof HTMLElement) || !(result instanceof HTMLElement)) throw new Error('Phase 14 E2E host elements are missing.');
 
-const agents = new EntityStore();
-const pedestrians = new PedestrianStore();
-const vehicles = new VehicleStore();
-const intersections = new IntersectionControlStore();
+const observation = new ViewObservationState();
+const agents = observation.entities;
+const pedestrians = observation.pedestrians;
+const vehicles = observation.vehicles;
+const intersections = observation.intersections;
 const view = new WorldView(host);
 const waitingVehicleIds = new Set();
 const restartedVehicleIds = new Set();
@@ -41,22 +40,22 @@ const connection = new MachiVerseConnection(serverUrl, { minimumDelayMs: 100, ma
     switch (message.type) {
       case MessageType.RoadNetworkSnapshot:
         roadSnapshot = message;
-        view.applyRoadNetwork(message);
+        observation.apply(message);
         break;
       case TrafficMessageType.VehicleSpawn:
-        vehicles.spawn(message);
+        observation.apply(message);
         observeVehicle(message);
         break;
       case TrafficMessageType.VehicleUpdate:
         sawVehicleUpdate = true;
-        if (!vehicles.update(message)) vehicles.spawn(message);
+        observation.apply(message);
         observeVehicle(message);
         break;
       case TrafficMessageType.VehicleRemove:
-        vehicles.remove(message.vehicleId);
+        observation.apply(message);
         break;
       case TrafficMessageType.IntersectionControlSnapshot:
-        intersections.apply(message);
+        observation.apply(message);
         phaseIndexes.add(message.phaseIndex);
         for (const movement of message.movements) {
           if (movement.indication === SignalIndication.Red) sawRed = true;
@@ -70,13 +69,7 @@ const connection = new MachiVerseConnection(serverUrl, { minimumDelayMs: 100, ma
   },
   onProtocolError: (message) => { protocolError = new Error(`Protocol error ${String(message.code)}.`); },
   onClientError: (error) => { clientError = error; },
-  onDisconnected: () => {
-    agents.clear();
-    pedestrians.clear();
-    vehicles.clear();
-    intersections.clear();
-    view.clearRoadNetwork();
-  },
+  onDisconnected: () => { observation.resetConnectionState(); },
   onHelloAck: () => {},
 });
 
@@ -92,7 +85,7 @@ try {
   await waitUntil(() => hasRenderableTrafficState(true), 'mixed signal snapshot with queue');
 
   const queuedRenderTime = performance.now();
-  view.render(agents, queuedRenderTime, pedestrians, vehicles, intersections);
+  renderView(queuedRenderTime);
   assertRenderedTraffic(true);
 
   await waitUntil(() => restartedVehicleIds.size > 0, 'a queued Vehicle restarting on green', 45_000);
@@ -100,7 +93,7 @@ try {
   await waitUntil(() => hasRenderableTrafficState(false), 'mixed signal snapshot after phase transition', 45_000);
 
   const finalRenderTime = performance.now();
-  view.render(agents, finalRenderTime, pedestrians, vehicles, intersections);
+  renderView(finalRenderTime);
   assertRenderedTraffic(false);
 
   result.dataset.status = 'passed';
@@ -123,6 +116,10 @@ try {
 } finally {
   connection.disconnect();
   view.dispose();
+}
+
+function renderView(now) {
+  view.render(agents, now, pedestrians, vehicles, intersections, observation.roadNetwork);
 }
 
 function observeVehicle(message) {
