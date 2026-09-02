@@ -67,11 +67,18 @@ public sealed class ViewObservationIsolationTests
 
     private static async Task<ulong> ReceiveUntilVisibleAgentAsync(ClientWebSocket socket)
     {
-        for (var index = 0; index < 64; index++)
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+        try
         {
-            var message = (await ServerTestHost.ReceiveAsync(socket, TimeSpan.FromSeconds(3))).Message;
-            if (message is AgentSpawnMessage spawn) return spawn.AgentId;
-            if (message is AgentUpdateMessage update) return update.AgentId;
+            while (!cancellation.IsCancellationRequested)
+            {
+                var message = (await ServerTestHost.ReceiveAsync(socket, TimeSpan.FromSeconds(3))).Message;
+                if (message is AgentSpawnMessage spawn) return spawn.AgentId;
+                if (message is AgentUpdateMessage update) return update.AgentId;
+            }
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
         }
 
         Assert.Fail("Expected an initial visible agent observation was not received.");
@@ -80,7 +87,8 @@ public sealed class ViewObservationIsolationTests
 
     private static async Task ReceiveUntilAgentRemoveAsync(ClientWebSocket socket, ulong agentId)
     {
-        for (var index = 0; index < 64; index++)
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(8);
+        while (DateTime.UtcNow < deadline)
         {
             var message = (await ServerTestHost.ReceiveAsync(socket, TimeSpan.FromSeconds(3))).Message;
             if (message is AgentRemoveMessage remove && remove.AgentId == agentId) return;
@@ -91,7 +99,8 @@ public sealed class ViewObservationIsolationTests
 
     private static async Task ReceiveUntilAgentSpawnAsync(ClientWebSocket socket, ulong agentId)
     {
-        for (var index = 0; index < 64; index++)
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(8);
+        while (DateTime.UtcNow < deadline)
         {
             var message = (await ServerTestHost.ReceiveAsync(socket, TimeSpan.FromSeconds(3))).Message;
             if (message is AgentSpawnMessage spawn && spawn.AgentId == agentId) return;
