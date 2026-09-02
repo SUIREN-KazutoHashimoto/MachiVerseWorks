@@ -6,7 +6,8 @@ namespace MachiVerseWorks.Server;
 
 internal readonly record struct RegionalGenerationObservation(
     ulong Generation,
-    ulong Revision,
+    bool HasSnapshot,
+    ulong SourceTick,
     RegionalGenerationSnapshot? Snapshot,
     ulong TickCount);
 
@@ -33,7 +34,7 @@ internal interface IObservationSource
     OpticalSnapshot CaptureOpticalSnapshot();
     RadioSnapshot CaptureRadioSnapshot();
     VersionedObservation<WorldEnvironmentSnapshot> CaptureWorldEnvironmentSnapshot(WorldVolume volume);
-    RegionalGenerationObservation CaptureRegionalGenerationObservation() => new(0, 0, null, 0);
+    RegionalGenerationObservation CaptureRegionalGenerationObservation() => new(0, false, 0, null, 0);
     (PersistentRegionalEvolutionSnapshot Evolution, RegionalInteractionSnapshot Interactions)? CapturePersistentRegionalEvolutionSnapshot();
     bool PersonExists(ulong personId);
 }
@@ -117,12 +118,16 @@ internal sealed class SimulationObservationSource(SimulationRuntime simulation) 
         while (true)
         {
             var generation = simulation.ObservationGeneration;
-            var revision = simulation.ObservationRevision;
-            var tickCount = simulation.TickCount;
             var snapshot = simulation.Read<RegionalGenerationSnapshot?>(static world =>
                 world.TryCreateRegionalGenerationSnapshot(out var captured) ? captured : null);
-            if (generation == simulation.ObservationGeneration && revision == simulation.ObservationRevision)
-                return new RegionalGenerationObservation(generation, revision, snapshot, tickCount);
+            var tickCount = simulation.TickCount;
+            if (generation != simulation.ObservationGeneration) continue;
+            return new RegionalGenerationObservation(
+                generation,
+                snapshot is not null,
+                snapshot?.TickCount ?? 0UL,
+                snapshot,
+                tickCount);
         }
     }
 
