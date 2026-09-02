@@ -25,6 +25,9 @@ public sealed class WorldSaveLimits
     public const int DefaultMaximumRailwayRouteSegmentCount = 100_000;
     public const int DefaultMaximumTimetableStopCount = 100_000;
     public const int DefaultMaximumTimetableStopTotalCount = 1_000_000;
+    public const int DefaultMaximumGeographicFeatureCount = 100_000;
+    public const int DefaultMaximumGeographicFeatureGeometryPointCount = 4_096;
+    public const int DefaultMaximumNaturalToponymCount = 100_000;
 
     private static readonly int PersonNeedKindCount = Enum.GetValues<NeedKind>().Length;
 
@@ -49,7 +52,10 @@ public sealed class WorldSaveLimits
         int maximumDepotTrackSegmentCount = DefaultMaximumDepotTrackSegmentCount,
         int maximumRailwayRouteSegmentCount = DefaultMaximumRailwayRouteSegmentCount,
         int maximumTimetableStopCount = DefaultMaximumTimetableStopCount,
-        int maximumTimetableStopTotalCount = DefaultMaximumTimetableStopTotalCount)
+        int maximumTimetableStopTotalCount = DefaultMaximumTimetableStopTotalCount,
+        int maximumGeographicFeatureCount = DefaultMaximumGeographicFeatureCount,
+        int maximumGeographicFeatureGeometryPointCount = DefaultMaximumGeographicFeatureGeometryPointCount,
+        int maximumNaturalToponymCount = DefaultMaximumNaturalToponymCount)
     {
         MaximumBytes = RequirePositive(maximumBytes, nameof(maximumBytes), "Maximum Save Data bytes");
         MaximumAgentCount = RequirePositive(maximumAgentCount, nameof(maximumAgentCount), "Maximum Agent count");
@@ -86,6 +92,9 @@ public sealed class WorldSaveLimits
         MaximumRailwayRouteSegmentCount = RequirePositive(maximumRailwayRouteSegmentCount, nameof(maximumRailwayRouteSegmentCount), "Maximum RailwayRoute segment count");
         MaximumTimetableStopCount = RequirePositive(maximumTimetableStopCount, nameof(maximumTimetableStopCount), "Maximum Timetable stop count");
         MaximumTimetableStopTotalCount = RequirePositive(maximumTimetableStopTotalCount, nameof(maximumTimetableStopTotalCount), "Maximum total Timetable stop count");
+        MaximumGeographicFeatureCount = RequirePositive(maximumGeographicFeatureCount, nameof(maximumGeographicFeatureCount), "Maximum GeographicFeature count");
+        MaximumGeographicFeatureGeometryPointCount = RequirePositive(maximumGeographicFeatureGeometryPointCount, nameof(maximumGeographicFeatureGeometryPointCount), "Maximum GeographicFeature geometry point count");
+        MaximumNaturalToponymCount = RequirePositive(maximumNaturalToponymCount, nameof(maximumNaturalToponymCount), "Maximum NaturalToponym count");
     }
 
     public static WorldSaveLimits Default { get; } = new();
@@ -116,6 +125,9 @@ public sealed class WorldSaveLimits
     public int MaximumRailwayRouteSegmentCount { get; }
     public int MaximumTimetableStopCount { get; }
     public int MaximumTimetableStopTotalCount { get; }
+    public int MaximumGeographicFeatureCount { get; }
+    public int MaximumGeographicFeatureGeometryPointCount { get; }
+    public int MaximumNaturalToponymCount { get; }
 
     private static int RequirePositive(int value, string parameterName, string label)
     {
