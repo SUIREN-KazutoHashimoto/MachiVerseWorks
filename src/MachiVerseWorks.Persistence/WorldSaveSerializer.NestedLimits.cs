@@ -141,6 +141,7 @@ public static partial class WorldSaveSerializer
             if (reader.ValueTextEquals("waterSewer")) return NestedSaveProperty.WaterSewer;
             if (reader.ValueTextEquals("gas")) return NestedSaveProperty.Gas;
             if (reader.ValueTextEquals("worldEnvironment")) return NestedSaveProperty.WorldEnvironment;
+            if (reader.ValueTextEquals("regionalGeneration")) return NestedSaveProperty.RegionalGeneration;
         }
         else if (context == NestedSaveContext.Logistics)
         {
@@ -183,6 +184,20 @@ public static partial class WorldSaveSerializer
             if (reader.ValueTextEquals("toponyms")) return NestedSaveProperty.Toponyms;
         }
         else if (context == NestedSaveContext.GeographicFeature && reader.ValueTextEquals("geometry")) return NestedSaveProperty.Geometry;
+        else if (context == NestedSaveContext.RegionalGeneration && reader.ValueTextEquals("snapshot")) return NestedSaveProperty.Snapshot;
+        else if (context == NestedSaveContext.RegionalGenerationSnapshot)
+        {
+            if (reader.ValueTextEquals("settlements")) return NestedSaveProperty.RegionalSettlements;
+            if (reader.ValueTextEquals("growthEvents")) return NestedSaveProperty.RegionalGrowthEvents;
+            if (reader.ValueTextEquals("corridors")) return NestedSaveProperty.RegionalCorridors;
+            if (reader.ValueTextEquals("districts")) return NestedSaveProperty.RegionalDistricts;
+            if (reader.ValueTextEquals("parcels")) return NestedSaveProperty.RegionalParcels;
+            if (reader.ValueTextEquals("buildings")) return NestedSaveProperty.RegionalBuildings;
+            if (reader.ValueTextEquals("pois")) return NestedSaveProperty.RegionalPois;
+            if (reader.ValueTextEquals("toponyms")) return NestedSaveProperty.RegionalToponyms;
+            if (reader.ValueTextEquals("roadSigns")) return NestedSaveProperty.RegionalRoadSigns;
+        }
+        else if (context == NestedSaveContext.RegionalCorridor && reader.ValueTextEquals("geometry")) return NestedSaveProperty.RegionalCorridorGeometry;
         return NestedSaveProperty.Other;
     }
 
@@ -197,6 +212,8 @@ public static partial class WorldSaveSerializer
             (NestedSaveContext.Economy, NestedSaveProperty.WaterSewer) => NestedSaveContext.WaterSewer,
             (NestedSaveContext.Economy, NestedSaveProperty.Gas) => NestedSaveContext.Gas,
             (NestedSaveContext.Economy, NestedSaveProperty.WorldEnvironment) => NestedSaveContext.WorldEnvironment,
+            (NestedSaveContext.Economy, NestedSaveProperty.RegionalGeneration) => NestedSaveContext.RegionalGeneration,
+            (NestedSaveContext.RegionalGeneration, NestedSaveProperty.Snapshot) => NestedSaveContext.RegionalGenerationSnapshot,
             _ => NestedSaveContext.Other,
         };
 
@@ -210,6 +227,7 @@ public static partial class WorldSaveSerializer
             (NestedSaveContext.RailwayOperations, NestedSaveProperty.Routes) => NestedSaveContext.RailwayRoute,
             (NestedSaveContext.RailwayOperations, NestedSaveProperty.Timetables) => NestedSaveContext.Timetable,
             (NestedSaveContext.WorldEnvironment, NestedSaveProperty.Features) => NestedSaveContext.GeographicFeature,
+            (NestedSaveContext.RegionalGenerationSnapshot, NestedSaveProperty.RegionalCorridors) => NestedSaveContext.RegionalCorridor,
             _ => NestedSaveContext.Other,
         };
 
@@ -249,6 +267,16 @@ public static partial class WorldSaveSerializer
             (NestedSaveContext.WorldEnvironment, NestedSaveProperty.Features) => new(limits.MaximumGeographicFeatureCount, "simulation.economy.worldEnvironment.features", NestedArrayKind.None),
             (NestedSaveContext.WorldEnvironment, NestedSaveProperty.Toponyms) => new(limits.MaximumNaturalToponymCount, "simulation.economy.worldEnvironment.toponyms", NestedArrayKind.None),
             (NestedSaveContext.GeographicFeature, NestedSaveProperty.Geometry) => new(limits.MaximumGeographicFeatureGeometryPointCount, "simulation.economy.worldEnvironment.features[].geometry", NestedArrayKind.None),
+            (NestedSaveContext.RegionalGenerationSnapshot, NestedSaveProperty.RegionalSettlements) => new(limits.MaximumBuildingCount, "simulation.economy.regionalGeneration.snapshot.settlements", NestedArrayKind.None),
+            (NestedSaveContext.RegionalGenerationSnapshot, NestedSaveProperty.RegionalGrowthEvents) => new(limits.MaximumPersonCount, "simulation.economy.regionalGeneration.snapshot.growthEvents", NestedArrayKind.None),
+            (NestedSaveContext.RegionalGenerationSnapshot, NestedSaveProperty.RegionalCorridors) => new(limits.MaximumRoadSegmentCount, "simulation.economy.regionalGeneration.snapshot.corridors", NestedArrayKind.None),
+            (NestedSaveContext.RegionalGenerationSnapshot, NestedSaveProperty.RegionalDistricts) => new(limits.MaximumBuildingCount, "simulation.economy.regionalGeneration.snapshot.districts", NestedArrayKind.None),
+            (NestedSaveContext.RegionalGenerationSnapshot, NestedSaveProperty.RegionalParcels) => new(limits.MaximumBuildingCount, "simulation.economy.regionalGeneration.snapshot.parcels", NestedArrayKind.None),
+            (NestedSaveContext.RegionalGenerationSnapshot, NestedSaveProperty.RegionalBuildings) => new(limits.MaximumBuildingCount, "simulation.economy.regionalGeneration.snapshot.buildings", NestedArrayKind.None),
+            (NestedSaveContext.RegionalGenerationSnapshot, NestedSaveProperty.RegionalPois) => new(limits.MaximumPoiCount, "simulation.economy.regionalGeneration.snapshot.pois", NestedArrayKind.None),
+            (NestedSaveContext.RegionalGenerationSnapshot, NestedSaveProperty.RegionalToponyms) => new(limits.MaximumNaturalToponymCount, "simulation.economy.regionalGeneration.snapshot.toponyms", NestedArrayKind.None),
+            (NestedSaveContext.RegionalGenerationSnapshot, NestedSaveProperty.RegionalRoadSigns) => new(limits.MaximumRoadAccessPointCount, "simulation.economy.regionalGeneration.snapshot.roadSigns", NestedArrayKind.None),
+            (NestedSaveContext.RegionalCorridor, NestedSaveProperty.RegionalCorridorGeometry) => new(limits.MaximumGeographicFeatureGeometryPointCount, "simulation.economy.regionalGeneration.snapshot.corridors[].geometry", NestedArrayKind.None),
             _ => new(int.MaxValue, null, NestedArrayKind.None),
         };
 
@@ -258,6 +286,7 @@ public static partial class WorldSaveSerializer
     private enum NestedSaveContext : byte
     {
         Other, Root, Simulation, Vehicle, Person, BlockSection, Depot, RailwayOperations, RailwayRoute, Timetable, Economy, Logistics, Power, WaterSewer, Gas, WorldEnvironment, GeographicFeature,
+        RegionalGeneration, RegionalGenerationSnapshot, RegionalCorridor,
     }
 
     private enum NestedSaveProperty : byte
@@ -267,6 +296,7 @@ public static partial class WorldSaveSerializer
         WaterSewer, WaterNodes, WaterPipes, SewerNodes, SewerPipes, WaterSources, Reservoirs, Pumps, TreatmentPlants, ServicePoints,
         Gas, GasNodes, GasPipelines, GasSources, GasImportTerminals, GasStorages, GasServicePoints,
         WorldEnvironment, Features, Toponyms, Geometry,
+        RegionalGeneration, Snapshot, RegionalSettlements, RegionalGrowthEvents, RegionalCorridors, RegionalDistricts, RegionalParcels, RegionalBuildings, RegionalPois, RegionalToponyms, RegionalRoadSigns, RegionalCorridorGeometry,
     }
 
     private enum NestedArrayKind : byte { None, TimetableStops }

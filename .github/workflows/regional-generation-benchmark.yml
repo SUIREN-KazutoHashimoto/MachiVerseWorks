@@ -1,0 +1,44 @@
+name: Regional Generation Benchmark
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/MachiVerseWorks.Simulation/**'
+      - 'benchmarks/MachiVerseWorks.Benchmarks/RegionalGenerationBenchmarks.cs'
+      - '.github/workflows/regional-generation-benchmark.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  regional-generation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore MachiVerseWorks.slnx
+
+      - name: Run Regional Generation benchmark
+        env:
+          MACHIVERSE_BENCHMARK_ARTIFACTS: ${{ github.workspace }}/.artifacts/benchmarks/regional-generation
+        run: >-
+          dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj
+          --configuration Release --no-restore --
+          --filter '*RegionalGenerationBenchmarks*' --job short
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: benchmark-regional-generation
+          path: .artifacts/benchmarks/regional-generation
+          if-no-files-found: warn
+          retention-days: 14

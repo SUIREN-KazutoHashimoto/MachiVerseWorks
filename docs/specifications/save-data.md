@@ -26,7 +26,7 @@ migration対象:
 - Format 10: Format 9 + Multimodal Transit / Journey / Passenger / Taxi
 - Format 11: Format 10 + Economy checkpoint
 
-Phase 22以降のLogistics / Power / Water・Sewer / Gas / Optical / Radio等は、既存Format 11へ**additive optional sub-state**として追加する。各fieldが存在しない既存Format 11 Saveは、そのdomainを空またはdefault stateとして復元できるため、これらの追加だけではformat versionを上げない。
+Phase 22以降のLogistics / Power / Water・Sewer / Gas / Optical / Radio / World Environment / Regional Generation等は、既存Format 11へ**additive optional sub-state**として追加する。各fieldが存在しない既存Format 11 Saveは、そのdomainを空またはdefault stateとして復元できるため、これらの追加だけではformat versionを上げない。
 
 Format 2以前、および11より新しい未知versionは拒否する。
 
@@ -43,9 +43,9 @@ Format 2以前、および11より新しい未知versionは拒否する。
 - Railway Operations
 - Multimodal Transit
 - Economy
-- Economy checkpoint配下のoptional sub-stateとしてLogistics / Power / Water・Sewer / Gas / Optical / Radio等
+- Economy checkpoint配下のoptional sub-stateとしてLogistics / Power / Water・Sewer / Gas / Optical / Radio / World Environment / Regional Generation等
 
-表示文字列ではなくraw numeric value、enum code、stable IDを保存する。
+表示文字列ではなくraw numeric value、enum code、stable IDを保存する。Human Toponymは表示済み翻訳文字列ではなくdomain nameとprovenanceを保存する。
 
 ## Pedestrian state — Format 5+
 
@@ -105,8 +105,12 @@ Format 11導入後のdomainは互換なoptional sub-stateとして追加され�
 - Gas: pipeline / delivered gas / inventory / service state
 - Optical: topology / capacity / congestion / outage state
 - Radio / Spectrum: site / antenna / emission / link / spectrum state
+- World Environment: environment config / GeographicFeature / Natural Toponym
+- Regional Generation: Settlement / historical growth / corridor / District / Parcel / generated Building・POI / Human Toponym / Road Sign / quality report
 
 各domain固有の保存項目・参照整合性は対応する`docs/specifications/`のdomain仕様を正本とする。optional field欠落を理由にFormat 11全体を拒否せず、そのdomainの定義済みempty/default migrationを適用する。
+
+Regional Generationはgenerated planそのものを保存し、materialize済みのRoad / Building / Population / Economy runtime stateとは別のstable generation IDを保持する。load後も生成履歴・人間由来地名provenance・RegionalQualityReportを失わない。
 
 ## Signal controller state
 
@@ -132,7 +136,7 @@ Format 11は大きく次の順で復元する。
 8. Railway Infrastructure
 9. Railway Operations
 10. Multimodal TransitとRoad / Railway / Population cross-domain reference
-11. Economyおよび存在するFormat 11 optional domain sub-stateを依存順に復元・検証
+11. Economyおよび存在するFormat 11 optional domain sub-stateを依存順に復元・検証。World EnvironmentをRegional Generationより先に検証し、Regional seed / provenanceの前提を確定する
 12. routing / walking / traffic / signal / railway ownership等のderived stateを再構築
 
 いずれかが不正なら部分Worldを返さない。
@@ -142,6 +146,8 @@ Format 11は大きく次の順で復元する。
 `elapsedTicks`は`tickCount`とSimulation TickRateから得られるdeterministic elapsed timeと一致しなければならない。`randomState`はseedだけでなく保存時点のdeterministic generator状態を保持する。
 
 Vehicle / Pedestrian / Population / Railway / Multimodal Transit / Economy / Logistics / Infrastructureは、同じauthoritative inputと後続tickのもとでsave/load後もdeterministic continuationを得る。
+
+Regional Generationは同一seed / generation inputで再現可能であることに加え、保存済みsnapshotをload時に再生成へ置換せず、その時点のauthoritative generated stateを復元する。
 
 ## Resource limits
 
@@ -162,7 +168,7 @@ Vehicle / Pedestrian / Population / Railway / Multimodal Transit / Economy / Log
 - Household: 1,000,000
 - Person: 1,000,000
 
-既存constructor parameterとのsource compatibilityを維持するため、shared infrastructure limitの入力名は当面`maximumBuildingCount` / `maximumRoadNodeCount` / `maximumRoadSegmentCount` / `maximumLaneConnectionCount` / `maximumRoadAccessPointCount`を維持する。public propertyでは同じ値を`MaximumInfrastructureSiteCount` / `MaximumInfrastructureNodeCount` / `MaximumInfrastructureSegmentCount` / `MaximumInfrastructureConnectionCount` / `MaximumInfrastructureAccessPointCount`として明示し、Road名propertyは互換aliasとして同値を返す。したがってこれらのcustom limit変更は対応するRoad / Railway collectionの双方へ意図的に適用される。
+既存constructor parameterとのsource compatibilityを維持するため、shared infrastructure limitの入力名は当面`maximumBuildingCount` / `maximumRoadNodeCount` / `maximumRoadSegmentCount` / `maximumLaneConnectionCount` / `maximumRoadAccessPointCount`を維持する。public propertyでは同じ値を`MaximumInfrastructureSiteCount` / `MaximumInfrastructureNodeCount` / `MaximumInfrastructureSegmentCount` / `MaximumInfrastructureConnectionCount` / `MaximumInfrastructureAccessPointCount`として明示し、Road名propertyは互換aliasとして同値を返す。したがってこれらのcustom limit変更は対応するRoad / Railway / Regional generation collectionの上限へ意図的に再利用される。
 
 単一entity内のnested collectionにも独立した上限を適用する。
 
@@ -174,8 +180,11 @@ Vehicle / Pedestrian / Population / Railway / Multimodal Transit / Economy / Log
 - `railwayOperations.routes[].trackSegmentIds`: 100,000 / RailwayRoute
 - `railwayOperations.timetables[].stops`: 100,000 / Timetable
 - Railway Operations Timetable stop総数: 1,000,000 / World
+- `economy.regionalGeneration.snapshot.corridors[].geometry`: GeographicFeature geometryと同じbounded point limit
 
-同じlimit contractをserialize / deserializeへ適用する。deserializeでは`Utf8JsonReader`がJSON path / parent contextを追跡し、DTO materialization前にnested件数を拒否する。同名`trackSegmentIds`でもDepotとRailwayRouteを混同しない。
+Regional generation snapshotではSettlement / GrowthEvent / Corridor / District / Parcel / GeneratedBuilding / GeneratedPoi / HumanToponym / RoadSignの各collectionもDTO materialization前に上限検証する。
+
+同じlimit contractをserialize / deserializeへ適用する。deserializeでは`Utf8JsonReader`がJSON path / parent contextを追跡し、DTO materialization前にnested件数を拒否する。同名`trackSegmentIds`や`geometry`でもdomain contextを区別する。
 
 serializeでも`SimulationCheckpoint`からSave DTO配列へ投影する前に同じnested上限を検証する。BlockSection / DepotのSave上限はSimulation正本の100,000件membership上限を超えて設定できない。
 
@@ -192,6 +201,7 @@ serializeでも`SimulationCheckpoint`からSave DTO配列へ投影する前に�
 - Intersection movement / conflict / fixed-cycle phase
 - Railway runtime owner index
 - Population statistics / Person debug view
+- materialized RoadSignのnearest RoadSegment / Lane bindingなど、authoritative generated stateから再導出できるprojection
 - benchmark / diagnostics
 
 ## 拒否条件
@@ -211,5 +221,6 @@ serializeでも`SimulationCheckpoint`からSave DTO配列へ投影する前に�
 - Multimodal Stop / Pattern / Trip / Vehicle / Taxi / Journey / Passenger reference不整合
 - active Transit stateとRoad Vehicle / Railway Service / Population Tripのcross-domain不整合
 - Economy / Logistics / Utility / Communication / Radioのstable ID、cross-domain reference、capacity / inventory / service-state invariant不整合
+- Regional Generationのduplicate / zero stable ID、missing Settlement / District / Parcel / Building / HumanToponym / Corridor reference、seed mismatch、invalid geometry / quality range
 
 実装境界は[`../architecture/persistence.md`](../architecture/persistence.md)を参照する。

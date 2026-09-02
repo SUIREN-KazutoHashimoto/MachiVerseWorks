@@ -8,11 +8,12 @@
 
 SimulationがWorldの唯一の意味的正本です。Activity、Status、分類、予定、ETA、状態遷移、semantic event等の意味的処理はSimulation側で完結させ、Gateway / Viewへ推測・補完・再計算させません。
 
-> **現在:** Phase 30 — Regional & Urban Generation  
-> **次の実装タスク:** Phase 30 `P30-001` — Settlement / SettlementOrigin / RegionalRole / historical growth eventの正本契約  
+> **現在:** Phase 30 — Regional & Urban Generation（実装完了・develop統合待ち）
+> **次の実装タスク:** Phase 31 `P31-001`
+
 > **Gateway:** Gateway Phase 1 `G1-002` から独立進行可能  
 > **Application version:** ルート [`VERSION`](../VERSION) を正本とする  
-> **Protocol:** `2.17`  
+> **Protocol:** `2.18`
 > **Save format:** `11`
 
 ## 進行ルール
@@ -36,7 +37,7 @@ SimulationがWorldの唯一の意味的正本です。Activity、Status、分類
 | 27 | Remote MCP Administration | ✅ 完了 |
 | 28 | Radio & Spectrum Foundation | ✅ 完了 |
 | 29 | World & Physical Environment Generation | ✅ 完了・develop統合済み |
-| 30 | Regional & Urban Generation | ⬜ 次 |
+| 30 | Regional & Urban Generation | ✅ 実装完了・develop統合待ち |
 | 31 | Persistent Regional & Settlement Evolution | ⬜ 未着手 |
 | 32 | Simulation Scheduling & Workload Optimization | ⬜ 未着手 |
 | 33 | Deterministic Parallel Simulation | ⬜ 未着手 |
@@ -213,49 +214,49 @@ Gatewayは[`GATEWAY_ROADMAP.md`](GATEWAY_ROADMAP.md)で独立してPhase 1から
 
 ### 30.1 Settlement Network & Historical Urban Growth
 
-- ⬜ **P30-001** — Settlement / SettlementOrigin / RegionalRole / historical growth eventの正本契約を仕様化する
-- ⬜ **P30-002** — flatness・water access・transport potential・buildability・resource access・flood risk・steep slope・isolation・construction cost等からSettlement Suitabilityを評価する
-- ⬜ **P30-003** — Phase 29のcandidate regionからweighted deterministic selectionで複数のSettlement originを決定する
-- ⬜ **P30-004** — river plain / estuary / bay / basin / valley / mountain pass / resource access等からSettlementOrigin / RegionalRole / InitialEconomyの基礎傾向を派生する
-- ⬜ **P30-005** — City / Town / Village / Hamletを固定テンプレートとして直接配置せず、複数の初期Settlementと人口・機能・周辺関係を生成する
-- ⬜ **P30-006** — 地形・河川・峠・海岸・Settlement間需要を考慮してprimary road / regional / intercity corridorを生成する
-- ⬜ **P30-007** — Railway等の大規模transport corridorを需要・地形・Settlement成長履歴から形成できるgeneration境界を実装する
-- ⬜ **P30-008** — 各Settlementについてpopulation / economy growthに応じたcenter formation・urban expansion・suburbanizationを段階生成する
-- ⬜ **P30-009** — congestion / accessibility / land pressure等に応じたredevelopment・new center formation・複数中心化の履歴ruleを実装する
-- ⬜ **P30-010** — 自然地名をSettlement / City / District等の人間側名称へ継承・変形するNaming provenance ruleを実装する
-- ⬜ **P30-011** — Settlementごとの生成履歴とSettlement間関係をevent / generation stageとして保存する
+- ✅ **P30-001** — Settlement / SettlementOrigin / RegionalRole / historical growth eventの正本契約を仕様化する
+- ✅ **P30-002** — flatness・water access・transport potential・buildability・resource access・flood risk・steep slope・isolation・construction cost等からSettlement Suitabilityを評価する
+- ✅ **P30-003** — Phase 29のcandidate regionからweighted deterministic selectionで複数のSettlement originを決定する
+- ✅ **P30-004** — river plain / estuary / bay / basin / valley / mountain pass / resource access等からSettlementOrigin / RegionalRole / InitialEconomyの基礎傾向を派生する
+- ✅ **P30-005** — City / Town / Village / Hamletを固定テンプレートとして直接配置せず、複数の初期Settlementと人口・機能・周辺関係を生成する
+- ✅ **P30-006** — 地形・河川・峠・海岸・Settlement間需要を考慮してprimary road / regional / intercity corridorを生成する
+- ✅ **P30-007** — Railway等の大規模transport corridorを需要・地形・Settlement成長履歴から形成できるgeneration境界を実装する
+- ✅ **P30-008** — 各Settlementについてpopulation / economy growthに応じたcenter formation・urban expansion・suburbanizationを段階生成する
+- ✅ **P30-009** — congestion / accessibility / land pressure等に応じたredevelopment・new center formation・複数中心化の履歴ruleを実装する
+- ✅ **P30-010** — 自然地名をSettlement / City / District等の人間側名称へ継承・変形するNaming provenance ruleを実装する
+- ✅ **P30-011** — Settlementごとの生成履歴とSettlement間関係をevent / generation stageとして保存する
 
 ### 30.2 Detailed Urban Fabric & Signage
 
-- ⬜ **P30-012** — Parcel境界・Zone種別・土地利用・占有/development stateの正本契約を仕様化する
-- ⬜ **P30-013** — Historical Road Networkからterrain-awareな詳細Road / Lane networkを生成する
-- ⬜ **P30-014** — Road NetworkからBlock / Parcelをdeterministicに生成するsubdivisionを実装する
-- ⬜ **P30-015** — Road access・parcel size・slope・flood risk・land value・land use等からdevelopment suitabilityを評価する
-- ⬜ **P30-016** — Zone / Land Useに応じたBuilding用途・規模・density・height候補を生成する
-- ⬜ **P30-017** — 初期生成履歴として空ParcelへのBuilding / POI developmentを段階生成する
-- ⬜ **P30-018** — demand変化に応じたredevelopment / vacancyの最小ruleを実装する
-- ⬜ **P30-019** — station district / CBD / industrial area / suburb / old town等を都市履歴とaccessibilityから形成する
-- ⬜ **P30-020** — 初期Population / Household / Jobを複数Settlementへ配置するseeding処理を実装する
-- ⬜ **P30-021** — Railway / Power / Water / Sewer / Gas / Optical / Radio等を壊さず地形とSettlement networkへ適応するgeneration constraintを定義する
-- ⬜ **P30-022** — 自然地名・Settlement履歴・District hierarchyからRoad / Bridge / Tunnel / Station / District等の名称をdeterministicに生成する
-- ⬜ **P30-023** — Road geometry・hierarchy・destination・Geographic Featureを解析するRoad Context Analysisを実装する
-- ⬜ **P30-024** — steep grade / sharp curve / rock slope / floodplain / river crossing / mountain pass / tunnel / coastal lowland等から必要な標識を決定する
-- ⬜ **P30-025** — destination name・distance・direction・route contextを使う案内標識と地名標識をdeterministicに生成する
-- ⬜ **P30-026** — Road Signをstable ID付き都市Entityとして配置し、Road Segment / Lane / GeographicFeature / named destinationへの参照を保持する
-- ⬜ **P30-027** — Parcel / Zone / generation history / human toponym / Road Signをcheckpoint / Save Dataへ統合する
-- ⬜ **P30-028** — Settlement network / Parcel / Zone / development / urban naming / Road Signのauthoritative observation source / domain payload contractを実装する。subscription / cache / deliveryはGateway Roadmapへ切り分ける
+- ✅ **P30-012** — Parcel境界・Zone種別・土地利用・占有/development stateの正本契約を仕様化する
+- ✅ **P30-013** — Historical Road Networkからterrain-awareな詳細Road / Lane networkを生成する
+- ✅ **P30-014** — Road NetworkからBlock / Parcelをdeterministicに生成するsubdivisionを実装する
+- ✅ **P30-015** — Road access・parcel size・slope・flood risk・land value・land use等からdevelopment suitabilityを評価する
+- ✅ **P30-016** — Zone / Land Useに応じたBuilding用途・規模・density・height候補を生成する
+- ✅ **P30-017** — 初期生成履歴として空ParcelへのBuilding / POI developmentを段階生成する
+- ✅ **P30-018** — demand変化に応じたredevelopment / vacancyの最小ruleを実装する
+- ✅ **P30-019** — station district / CBD / industrial area / suburb / old town等を都市履歴とaccessibilityから形成する
+- ✅ **P30-020** — 初期Population / Household / Jobを複数Settlementへ配置するseeding処理を実装する
+- ✅ **P30-021** — Railway / Power / Water / Sewer / Gas / Optical / Radio等を壊さず地形とSettlement networkへ適応するgeneration constraintを定義する
+- ✅ **P30-022** — 自然地名・Settlement履歴・District hierarchyからRoad / Bridge / Tunnel / Station / District等の名称をdeterministicに生成する
+- ✅ **P30-023** — Road geometry・hierarchy・destination・Geographic Featureを解析するRoad Context Analysisを実装する
+- ✅ **P30-024** — steep grade / sharp curve / rock slope / floodplain / river crossing / mountain pass / tunnel / coastal lowland等から必要な標識を決定する
+- ✅ **P30-025** — destination name・distance・direction・route contextを使う案内標識と地名標識をdeterministicに生成する
+- ✅ **P30-026** — Road Signをstable ID付き都市Entityとして配置し、Road Segment / Lane / GeographicFeature / named destinationへの参照を保持する
+- ✅ **P30-027** — Parcel / Zone / generation history / human toponym / Road Signをcheckpoint / Save Dataへ統合する
+- ✅ **P30-028** — Settlement network / Parcel / Zone / development / urban naming / Road Signのauthoritative observation source / domain payload contractを実装する。subscription / cache / deliveryはGateway Roadmapへ切り分ける
 
 > Web Client 3D可視化はView Roadmap Phase 4 `V4-001`へ分離する。
 
 ### Generation Quality / Validation
 
-- ⬜ **P30-029** — `RegionalQualityReport`を実装し、TerrainAdaptation / RoadConnectivity / AverageSlopeCost / Accessibility / CongestionRisk / LandUseConsistency / FloodExposure / UrbanCompactness / PolycentricBalance等を独立評価する
-- ⬜ **P30-030** — 弱いquality dimensionに応じて道路・土地利用・Settlement中心配置等を改善するGenerate → Evaluate → Improve loopを実装する
-- ⬜ **P30-031** — 同一seed・設定で同一Settlement network・都市形状・名称・標識・quality reportを生成するreproducibility E2Eを追加する
-- ⬜ **P30-032** — river / port / basin / valley / mountain / cold / dry inland / island region等のdeterministic fixtureを追加する
-- ⬜ **P30-033** — Draft / Standard / High Quality等のgeneration quality presetとiteration budgetを定義する
-- ⬜ **P30-034** — 小/中/大規模Settlement networkのgeneration時間・memory・quality metrics・初期Simulation負荷benchmarkを記録する
-- ⬜ **P30-035** — World→Terrain→Settlement Network→Historical Growth→Urban Fabric→Validationのspecification / architecture / ADR / ROADMAPを同期する
+- ✅ **P30-029** — `RegionalQualityReport`を実装し、TerrainAdaptation / RoadConnectivity / AverageSlopeCost / Accessibility / CongestionRisk / LandUseConsistency / FloodExposure / UrbanCompactness / PolycentricBalance等を独立評価する
+- ✅ **P30-030** — 弱いquality dimensionに応じて道路・土地利用・Settlement中心配置等を改善するGenerate → Evaluate → Improve loopを実装する
+- ✅ **P30-031** — 同一seed・設定で同一Settlement network・都市形状・名称・標識・quality reportを生成するreproducibility E2Eを追加する
+- ✅ **P30-032** — river / port / basin / valley / mountain / cold / dry inland / island region等のdeterministic fixtureを追加する
+- ✅ **P30-033** — Draft / Standard / High Quality等のgeneration quality presetとiteration budgetを定義する
+- ✅ **P30-034** — 小/中/大規模Settlement networkのgeneration時間・memory・quality metrics・初期Simulation負荷benchmarkを記録する
+- ✅ **P30-035** — World→Terrain→Settlement Network→Historical Growth→Urban Fabric→Validationのspecification / architecture / ADR / ROADMAPを同期する
 
 ### Phase 30 完了条件
 

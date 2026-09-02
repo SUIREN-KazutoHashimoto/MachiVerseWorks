@@ -93,7 +93,11 @@ public sealed partial class SimulationWorld
     {
         EnsurePedestrianNetwork();
         var railwayOperations = _railwayOperations?.CreateSnapshot();
-        var economy = CreateEconomyCheckpointWithRadio() with { WorldEnvironment = CreateWorldEnvironmentCheckpoint() };
+        var economy = CreateEconomyCheckpointWithRadio() with
+        {
+            WorldEnvironment = CreateWorldEnvironmentCheckpoint(),
+            RegionalGeneration = CreateRegionalGenerationCheckpoint(),
+        };
         return new SimulationCheckpoint(
             Config.TickRate, Config.Seed, Config.SpatialCellSize, Time.TickCount, Time.Elapsed.Ticks, _random.State,
             _agents.NextId, _agents.CreateCheckpoint(),
@@ -160,6 +164,7 @@ public sealed partial class SimulationWorld
         ValidateOpticalCheckpoint(checkpoint);
         ValidateRadioCheckpoint(checkpoint);
         ValidateWorldEnvironmentCheckpoint(checkpoint);
+        ValidateRegionalGenerationCheckpoint(checkpoint);
         var expectedElapsedTicks = CalculateExpectedElapsedTicks(checkpoint.TickCount, config.TickRate);
         if (checkpoint.ElapsedTicks != expectedElapsedTicks
             && (!TryCalculateLegacyElapsedTicks(checkpoint.TickCount, config.TickRate, out var legacyElapsedTicks)
@@ -200,6 +205,7 @@ public sealed partial class SimulationWorld
         world.RestoreOptical(checkpoint.Economy?.Optical);
         world.RestoreRadio(checkpoint.Economy?.Radio);
         world.RestoreWorldEnvironment(worldEnvironment);
+        world.RestoreRegionalGeneration(checkpoint.Economy?.RegionalGeneration);
         world._multimodalTransit.Restore(checkpoint.MultimodalTransit);
         ValidateMultimodalTransitCheckpointReferences(checkpoint);
         return world;
