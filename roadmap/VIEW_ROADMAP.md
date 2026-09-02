@@ -8,7 +8,7 @@
 - 人口統計、経済分析、交通分析、heatmap、trend等の分析処理はViewへ含めず、将来のAnalytics Listener / analysis clientとして別途設計します。
 - Observation Gatewayのarchitectureは[`../docs/architecture/observation-gateway.md`](../docs/architecture/observation-gateway.md)を正本とします。
 
-> **現在:** View Phase 3 — Physical World Rendering（Simulation / Gateway依存待ち）  
+> **現在:** View Phase 4 — Settlement & Structure Rendering（Simulation / Gateway依存待ち）  
 > **進め方:** View固有の基盤はPhase 1から進め、Simulationから移管された描画Taskは依存するSimulation semantic sourceとGateway delivery contractが実装できた時点で順次着手する
 
 ## 最上位原則
@@ -30,7 +30,7 @@
 | --- | --- | --- | --- |
 | 1 | Read-Only View Foundation | 現行read-only Protocol / Gateway Phase 1境界 | ✅ 完了 |
 | 2 | Camera & Observation Navigation | Gateway subscription contract | ✅ 完了 |
-| 3 | Physical World Rendering | Simulation Phase 29 source + Gateway delivery | ⏳ Simulation / Gateway依存待ち |
+| 3 | Physical World Rendering | Simulation Phase 29 source + Gateway delivery | ✅ 完了 |
 | 4 | Settlement & Structure Rendering | Simulation Phase 30 baseline / Phase 31 evolution + Gateway delivery | ⏳ Simulation / Gateway依存待ち |
 | 5 | Infrastructure & Dynamic Entity Fidelity | 各Simulation domain source / Gateway delivery contract | ⏳ View基盤待ち |
 | 6 | Large World Rendering & Rendering LOD | Simulation Phase 29〜31 source / Gateway Phase 2〜3 | ⏳ Simulation / Gateway依存待ち |
@@ -151,15 +151,15 @@ Viewを完全read-onlyなPresentation clientとして固定し、Gatewayから�
 
 ## View Phase 3 — Physical World Rendering
 
-> **状態: ⏳ Simulation / Gateway依存待ち**  
+> **状態: ✅ 完了**  
 > **必須依存:** View Phase 1 / 2、Simulation Phase 29 `P29-025`のWorld / Terrain / GeographicFeature / Toponym semantic source、対応Gateway delivery contract
 
-- ⬜ **V3-001** — flat `GridHelper`依存を置換し、Terrain / Water / GeographicFeature / 自然地名を3D描画する（旧`P29-026`）
-- ⬜ **V3-002** — Simulationから提供されたsurface / material / feature typeをView側で意味付けし直さずvisual resolverへmappingする
-- ⬜ **V3-003** — Cave / overhang / multi-surface等の3D terrain observationを表現できるgeometry境界を整える
-- ⬜ **V3-004** — coastline / river / lake / mountain / valley等をstable GeographicFeature observationから識別可能な表現へmappingする
-- ⬜ **V3-005** — Physical World RenderingのBrowser E2Eを追加する
-- ⬜ **V3-006** — Terrain renderingのframe time / draw call / memory baselineを記録する
+- ✅ **V3-001** — flat `GridHelper`依存を置換し、Terrain / Water / GeographicFeature / 自然地名を3D描画する（旧`P29-026`）
+- ✅ **V3-002** — Simulationから提供されたsurface / material / feature typeをView側で意味付けし直さずvisual resolverへmappingする
+- ✅ **V3-003** — Cave / overhang / multi-surface等の3D terrain observationを表現できるgeometry境界を整える
+- ✅ **V3-004** — coastline / river / lake / mountain / valley等をstable GeographicFeature observationから識別可能な表現へmappingする
+- ✅ **V3-005** — Physical World RenderingのBrowser E2Eを追加する
+- ✅ **V3-006** — Terrain renderingのframe time / draw call / memory baselineを記録する
 
 ### View Phase 3 完了条件
 
