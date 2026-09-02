@@ -71,8 +71,8 @@ public static class EntityInspectionProtocolCodec
     public static byte[] Serialize(IProtocolMessage message, ProtocolVersion version)
     {
         ArgumentNullException.ThrowIfNull(message);
-        if (!version.SupportsPersistentRegionalEvolution)
-            throw new ArgumentOutOfRangeException(nameof(version), version, "Entity inspection requires Protocol 2.19 or newer.");
+        if (!version.SupportsEntityInspection)
+            throw new ArgumentOutOfRangeException(nameof(version), version, "Entity inspection requires Protocol 2.20 or newer.");
 
         return message switch
         {
@@ -87,7 +87,7 @@ public static class EntityInspectionProtocolCodec
     {
         envelope = null;
         if (!ProtocolFrameHeader.TryRead(frame, out var header, out error)) return false;
-        if (!header.Version.SupportsPersistentRegionalEvolution)
+        if (!header.Version.SupportsEntityInspection)
         {
             error = ProtocolDecodeError.InvalidPayload;
             return false;
