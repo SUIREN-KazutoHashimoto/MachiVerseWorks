@@ -355,7 +355,7 @@ function normalizeCorridor(raw: WireCorridor): RegionalCorridorObservation {
   if (!isRecord(raw) || !Array.isArray(raw.geometry) || raw.geometry.length < 2 || raw.geometry.length > MAXIMUM_CORRIDOR_GEOMETRY_POINTS
     || !enumRange(raw.kind, RegionalCorridorKind.PrimaryRoad, RegionalCorridorKind.Railway) || !unit(raw.terrainAdaptation) || !nonNegative(raw.constructionCost)) throw new ProtocolDecodeFailure('RegionalGeneration Corridor values are invalid.');
   const geometry = Object.freeze(raw.geometry.map((point) => {
-    if (!isRecord(point) || !validPoint(point)) throw new ProtocolDecodeFailure('RegionalGeneration Corridor geometry is invalid.');
+    if (!validPoint(point)) throw new ProtocolDecodeFailure('RegionalGeneration Corridor geometry is invalid.');
     return Object.freeze({ x: point.x, y: point.y, z: point.z });
   }));
   return Object.freeze({ ...raw, corridorId: parsePositiveUInt64(raw.corridorId, 'Corridor ID'), fromSettlementId: parsePositiveUInt64(raw.fromSettlementId, 'Corridor from settlement ID'), toSettlementId: parsePositiveUInt64(raw.toSettlementId, 'Corridor to settlement ID'), nameId: parseUInt64(raw.nameId, 'Corridor name ID'), geometry });
@@ -442,7 +442,9 @@ function parseUInt64(value: WireUInt64, label: string): bigint {
   }
 }
 
-function validPoint(value: { readonly x: unknown; readonly y: unknown; readonly z: unknown }): value is { readonly x: number; readonly y: number; readonly z: number } { return finite(value.x) && finite(value.y) && finite(value.z); }
+function validPoint(value: unknown): value is { readonly x: number; readonly y: number; readonly z: number } {
+  return isRecord(value) && finite(value.x) && finite(value.y) && finite(value.z);
+}
 function validVolume(value: { readonly minX: unknown; readonly minY: unknown; readonly minZ: unknown; readonly maxX: unknown; readonly maxY: unknown; readonly maxZ: unknown }, requireHorizontalArea: boolean): boolean {
   if (![value.minX, value.minY, value.minZ, value.maxX, value.maxY, value.maxZ].every(finite)) return false;
   const minX = value.minX as number, minY = value.minY as number, minZ = value.minZ as number, maxX = value.maxX as number, maxY = value.maxY as number, maxZ = value.maxZ as number;
