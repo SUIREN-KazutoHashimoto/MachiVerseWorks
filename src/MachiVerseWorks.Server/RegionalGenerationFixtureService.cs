@@ -17,7 +17,7 @@ internal sealed class RegionalGenerationFixtureService(
 
         simulation.Mutate(static world =>
         {
-            if (!world.HasRegionalGeneration)
+            if (!world.TryCreateRegionalGenerationSnapshot(out _))
             {
                 _ = world.GenerateRegionalGeneration(
                     new WorldVolume(-2_000d, -2_000d, 0d, 2_000d, 2_000d, 200d),
