@@ -103,6 +103,8 @@ Gateway側Taskは[`../../roadmap/GATEWAY_ROADMAP.md`](../../roadmap/GATEWAY_ROAD
 
 同じProtocol projectに実装されることを理由に責務を1 Roadmapへ統合しない。
 
+Gateway Phase 1では、negotiated Protocol versionに応じたcodec選択を`ObservationProtocolAdapter`へ集約した。adapterはmessageの意味やfieldを生成せず、Simulation / mapperが作成済みのauthoritative payloadを該当codecへ渡すだけとする。wire layout自体は変更していないため、この境界整理だけを理由にProtocol versionは更新しない。
+
 ## Observation Request
 
 ViewからGatewayへ送信する通信が存在しても、それがSimulation mutationでなければread-only境界を壊さない。
@@ -242,6 +244,16 @@ Analyticsが同じSimulationを観測する場合でも、Camera中心のView su
 
 初期実装では新しい独立processを必須としない。既存`MachiVerseWorks.Server`内で、現在のpublish / subscription / inspection処理をGateway責務として明確化する。
 
+Gateway Phase 1完了時点の実装境界は次の通り。
+
+- `IObservationSource`: Gatewayから見えるread-only source contract。`SimulationWorld`やmutation callbackを公開しない。
+- `SimulationObservationSource`: `SimulationRuntime`へ直接依存できる唯一のObservation adapter。Simulation lock内で取得したdetached snapshot / read modelだけを返す。
+- `AddObservationGateway()`: Observation Request queue / WebSocket session / publisher群をGateway moduleとして一括登録するDI境界。
+- `ClientConnection` / `ClientSubscriptionState` / `SnapshotDeliveryScheduler`: connection-local request / subscription / delivery stateを所有し、Simulation Entity stateを所有しない。
+- `ObservationProtocolAdapter`: negotiated Protocol versionに応じたserialize / deserialize codec選択だけを担当する。
+
+`WebSocketSessionHandler`および各Observation publisherは`SimulationRuntime`へ直接依存せず、`IObservationSource`からtick rate / spatial metadata / detached snapshotsを取得する。Administration / Managementの`AdminCommandQueue` / executorは`AddObservationGateway()`へ登録せず、Server host側で別moduleとして登録する。
+
 将来、負荷・deployment・security上の必要性が生じた場合に別processへ分離できるよう、Simulationとの境界はdetached semantic source / stable contractに保つ。
 
 ## 検証原則
@@ -253,6 +265,7 @@ Analyticsが同じSimulationを観測する場合でも、Camera中心のView su
 - cache eviction後に再構築しても同一revisionの内容が一致する。
 - Gateway経由からauthoritative mutation APIへ到達できないことをtestする。
 - Gateway内部実装を変更しても公開Observation contractが同じならViewを分岐させない。
+- Phase 1境界はdependency test、non-observation WebSocket requestのnegative test、旧codecとのwire byte equivalence testで回帰監視する。
 
 ## 関連文書
 

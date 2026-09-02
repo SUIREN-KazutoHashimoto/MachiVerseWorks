@@ -190,25 +190,7 @@ internal sealed class ClientConnection : IDisposable
         try
         {
             var encodeStarted = Stopwatch.GetTimestamp();
-            var frame = message switch
-            {
-                IntersectionControlSnapshotMessage intersection => IntersectionControlProtocolCodec.Serialize(intersection, version),
-                RailwayInfrastructureSnapshotMessage railway => RailwayInfrastructureProtocolCodec.Serialize(railway, version),
-                RailwayOperationsSnapshotMessage railwayOperations => RailwayOperationsProtocolCodec.Serialize(railwayOperations, version),
-                MultimodalTransitSnapshotMessage multimodalTransit => MultimodalTransitProtocolCodec.Serialize(multimodalTransit, version),
-                EconomySnapshotMessage economy => EconomyProtocolCodec.Serialize(economy, version),
-                LogisticsSnapshotMessage logistics => LogisticsProtocolCodec.Serialize(logistics, version),
-                PowerSnapshotMessage power => PowerProtocolCodec.Serialize(power, version),
-                WaterSewerSnapshotMessage waterSewer => WaterSewerProtocolCodec.Serialize(waterSewer, version),
-                GasSnapshotMessage gas => GasProtocolCodec.Serialize(gas, version),
-                OpticalSnapshotMessage optical => OpticalProtocolCodec.Serialize(optical, version),
-                RadioSnapshotMessage radio => RadioProtocolCodec.Serialize(radio, version),
-                SpectrumSnapshotMessage spectrum => RadioProtocolCodec.Serialize(spectrum, version),
-                WorldEnvironmentSnapshotMessage worldEnvironment => WorldEnvironmentProtocolCodec.Serialize(worldEnvironment, version),
-                RegionalGenerationSnapshotMessage regionalGeneration => RegionalGenerationProtocolCodec.Serialize(regionalGeneration, version),
-                InspectPersonMessage or PopulationStatisticsMessage or PersonDebugMessage => PopulationProtocolCodec.Serialize(message, version),
-                _ => ProtocolCodec.Serialize(message, version),
-            };
+            var frame = ObservationProtocolAdapter.Serialize(message, version);
             var encodeTimeMs = Stopwatch.GetElapsedTime(encodeStarted).TotalMilliseconds;
             await _sendGate.WaitAsync(cancellationToken);
             try
