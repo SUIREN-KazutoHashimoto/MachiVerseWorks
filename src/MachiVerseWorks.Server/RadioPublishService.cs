@@ -24,12 +24,12 @@ internal sealed class RadioPublishService(
                 {
                     _ = deliveryCoordinator.TrySchedule(
                         connection,
-                        stoppingToken,
                         async sendCancellation =>
                         {
                             _ = await connection.SendAsync(messages.Radio, connection.NegotiatedVersion, sendCancellation);
                             _ = await connection.SendAsync(messages.Spectrum, connection.NegotiatedVersion, sendCancellation);
-                        });
+                        },
+                        stoppingToken);
                 }
             }
         }
