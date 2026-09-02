@@ -1,0 +1,59 @@
+name: Regional Generation Validation
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'src/MachiVerseWorks.Simulation/**'
+      - 'src/MachiVerseWorks.Protocol/**'
+      - 'src/MachiVerseWorks.Persistence/**'
+      - 'src/MachiVerseWorks.Server/**'
+      - 'tests/MachiVerseWorks.Simulation.Tests/**'
+      - 'tests/MachiVerseWorks.Protocol.Tests/**'
+      - 'tests/MachiVerseWorks.Persistence.Tests/**'
+      - 'tests/MachiVerseWorks.Server.Tests/**'
+      - '.github/workflows/regional-generation-validation.yml'
+  pull_request:
+    branches: [develop]
+    paths:
+      - 'src/MachiVerseWorks.Simulation/**'
+      - 'src/MachiVerseWorks.Protocol/**'
+      - 'src/MachiVerseWorks.Persistence/**'
+      - 'src/MachiVerseWorks.Server/**'
+      - 'tests/MachiVerseWorks.Simulation.Tests/**'
+      - 'tests/MachiVerseWorks.Protocol.Tests/**'
+      - 'tests/MachiVerseWorks.Persistence.Tests/**'
+      - 'tests/MachiVerseWorks.Server.Tests/**'
+      - '.github/workflows/regional-generation-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: regional-generation-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore MachiVerseWorks.slnx
+      - name: Build
+        run: dotnet build MachiVerseWorks.slnx --configuration Release --no-restore
+      - name: Simulation Phase30 tests
+        run: dotnet test tests/MachiVerseWorks.Simulation.Tests/MachiVerseWorks.Simulation.Tests.csproj --configuration Release --no-build --filter 'FullyQualifiedName~RegionalGeneration|FullyQualifiedName~RegionalMaterialization|FullyQualifiedName~RegionalUrbanRule'
+      - name: Protocol Phase30 tests
+        run: dotnet test tests/MachiVerseWorks.Protocol.Tests/MachiVerseWorks.Protocol.Tests.csproj --configuration Release --no-build --filter 'FullyQualifiedName~RegionalGeneration'
+      - name: Persistence regression
+        run: dotnet test tests/MachiVerseWorks.Persistence.Tests/MachiVerseWorks.Persistence.Tests.csproj --configuration Release --no-build
+      - name: Server regression
+        run: dotnet test tests/MachiVerseWorks.Server.Tests/MachiVerseWorks.Server.Tests.csproj --configuration Release --no-build
