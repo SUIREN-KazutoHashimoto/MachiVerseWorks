@@ -95,17 +95,40 @@ public class GatewayDeliveryBenchmarks
 
     [Benchmark]
     [BenchmarkCategory("FairnessBudget")]
-    public int IndependentConnectionReservations()
+    public async Task<int> ContendedLaneHandoffs()
     {
         var scheduler = new SnapshotDeliveryScheduler();
-        var reserved = 0;
-        for (var viewer = 0; viewer < _connectionIds.Length; viewer++)
+        var handoffs = 0;
+        foreach (var connectionId in _connectionIds)
         {
-            if (scheduler.TryReserve(_connectionIds[viewer])) reserved++;
+            var releaseSnapshot = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (!scheduler.TryReserve(connectionId, ObservationDeliveryLane.Snapshot)) continue;
+            scheduler.StartReserved(connectionId, async () =>
+            {
+                await Task.Yield();
+                await releaseSnapshot.Task;
+            });
+
+            if (!scheduler.TryReserve(connectionId, ObservationDeliveryLane.Population)) handoffs++;
+            releaseSnapshot.SetResult();
+            while (!scheduler.TryReserve(connectionId, ObservationDeliveryLane.Population)) await Task.Yield();
+            handoffs++;
+
+            var releasePopulation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            scheduler.StartReserved(connectionId, async () =>
+            {
+                await Task.Yield();
+                await releasePopulation.Task;
+            });
+
+            if (!scheduler.TryReserve(connectionId, ObservationDeliveryLane.Snapshot)) handoffs++;
+            releasePopulation.SetResult();
+            while (!scheduler.TryReserve(connectionId, ObservationDeliveryLane.Snapshot)) await Task.Yield();
+            handoffs++;
+            scheduler.ReleaseReservation(connectionId);
         }
-        for (var viewer = 0; viewer < _connectionIds.Length; viewer++)
-            scheduler.ReleaseReservation(_connectionIds[viewer]);
-        return reserved;
+
+        return handoffs;
     }
 
     private sealed class GatewayDeliveryBenchmarkConfig : ManualConfig
