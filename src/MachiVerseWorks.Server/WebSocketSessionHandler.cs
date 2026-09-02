@@ -5,7 +5,7 @@ using MachiVerseWorks.Simulation;
 
 namespace MachiVerseWorks.Server;
 
-internal sealed class WebSocketSessionHandler(ClientConnectionRegistry connections, ObservationRequestQueue observationRequests, SimulationRuntime simulation, ServerOptions options, ILogger<WebSocketSessionHandler> logger)
+internal sealed class WebSocketSessionHandler(ClientConnectionRegistry connections, ObservationRequestQueue observationRequests, IObservationSource observationSource, ServerOptions options, ILogger<WebSocketSessionHandler> logger)
 {
     private const int ReceiveBufferSize = 8192;
     private const int MaximumFrameLength = ProtocolFrameHeader.Size + (int)ProtocolFrameHeader.MaxPayloadLength;
@@ -35,7 +35,7 @@ internal sealed class WebSocketSessionHandler(ClientConnectionRegistry connectio
                     break;
                 }
                 if (frame is null) break;
-                if (!TryDeserializeFrame(frame, out var envelope, out var decodeError) || envelope is null)
+                if (!ObservationProtocolAdapter.TryDeserialize(frame, out var envelope, out var decodeError) || envelope is null)
                 {
                     await SendDecodeErrorAsync(connection, decodeError, cancellationToken);
                     await CloseWithTimeoutAsync(socket, WebSocketCloseStatus.InvalidPayloadData, "Invalid protocol frame.", options.CloseTimeout, cancellationToken);
@@ -87,7 +87,7 @@ internal sealed class WebSocketSessionHandler(ClientConnectionRegistry connectio
                 await CloseWithTimeoutAsync(connection.Socket, WebSocketCloseStatus.PolicyViolation, "Unsupported protocol version.", options.CloseTimeout, cancellationToken);
                 return false;
             }
-            await connection.SendAsync(new HelloAckMessage(negotiatedVersion, checked((ushort)simulation.TickRate)), negotiatedVersion, cancellationToken);
+            await connection.SendAsync(new HelloAckMessage(negotiatedVersion, checked((ushort)observationSource.TickRate)), negotiatedVersion, cancellationToken);
             connection.CompleteHandshake(negotiatedVersion);
             return true;
         }
@@ -115,7 +115,7 @@ internal sealed class WebSocketSessionHandler(ClientConnectionRegistry connectio
                 try
                 {
                     var volume = new WorldVolume(subscribeVolume.MinX, subscribeVolume.MinY, subscribeVolume.MinZ, subscribeVolume.MaxX, subscribeVolume.MaxY, subscribeVolume.MaxZ);
-                    if (!SubscriptionVolumePolicy.TryValidate(volume, simulation.SpatialCellSize, options.MaximumSubscriptionCellCount, out var detailCode))
+                    if (!SubscriptionVolumePolicy.TryValidate(volume, observationSource.SpatialCellSize, options.MaximumSubscriptionCellCount, out var detailCode))
                     {
                         return await RejectRecoverableAsync(connection,
                             [new ProtocolErrorParameter(ProtocolErrorParameterKeys.Field, "volume"), new ProtocolErrorParameter(ProtocolErrorParameterKeys.DetailCode, detailCode ?? SubscriptionVolumePolicy.OutsideSpatialGridDetailCode)], cancellationToken);
@@ -136,7 +136,7 @@ internal sealed class WebSocketSessionHandler(ClientConnectionRegistry connectio
                 {
                     return await RejectRecoverableAsync(connection, [new ProtocolErrorParameter(ProtocolErrorParameterKeys.Field, "personId"), new ProtocolErrorParameter(ProtocolErrorParameterKeys.DetailCode, "inspectionDisabled")], cancellationToken);
                 }
-                if (!simulation.TryGetPersonSnapshot(new PersonId(inspectPerson.PersonId), out _))
+                if (!observationSource.PersonExists(inspectPerson.PersonId))
                 {
                     return await RejectRecoverableAsync(connection, [new ProtocolErrorParameter(ProtocolErrorParameterKeys.Field, "personId"), new ProtocolErrorParameter(ProtocolErrorParameterKeys.DetailCode, "personNotFound")], cancellationToken);
                 }
@@ -160,20 +160,6 @@ internal sealed class WebSocketSessionHandler(ClientConnectionRegistry connectio
         if (connection.RegisterInvalidRequest(options.InvalidRequestStrikeLimit, options.InvalidRequestStrikeWindow)) return true;
         await CloseWithTimeoutAsync(connection.Socket, WebSocketCloseStatus.PolicyViolation, "Too many invalid requests.", options.CloseTimeout, cancellationToken);
         return false;
-    }
-
-    private static bool TryDeserializeFrame(ReadOnlySpan<byte> frame, out ProtocolEnvelope? envelope, out ProtocolDecodeError error)
-    {
-        if (!ProtocolFrameHeader.TryRead(frame, out var header, out error))
-        {
-            envelope = null;
-            return false;
-        }
-        if (header.MessageType == MessageType.ClearPersonInspection)
-            return PersonInspectionProtocolCodec.TryDeserialize(frame, out envelope, out error);
-        return header.MessageType is MessageType.InspectPerson or MessageType.PopulationStatistics or MessageType.PersonDebug
-            ? PopulationProtocolCodec.TryDeserialize(frame, out envelope, out error)
-            : ProtocolCodec.TryDeserialize(frame, out envelope, out error);
     }
 
     private async Task<byte[]?> ReceiveFrameAsync(WebSocket socket, TimeSpan frameReceiveTimeout, CancellationToken cancellationToken)
