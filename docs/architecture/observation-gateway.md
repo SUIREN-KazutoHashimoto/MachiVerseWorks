@@ -2,24 +2,23 @@
 
 ## 目的
 
-MachiVerseWorksでは、SimulationがWorldの唯一の意味的正本を所有し、Viewはその結果を読み取って忠実に表示するだけの完全read-only clientとする。
+MachiVerseWorksでは、SimulationがWorldの唯一の意味的正本を所有し、Gatewayがread-only observationの配送境界を担当し、Viewはその結果を読み取って忠実に表示する完全read-only clientとする。
 
-ViewがSimulation内部Storeやcommand境界へ直接依存しないよう、Server側に **Observation Gateway** という明示的なread-only観測境界を置く。
+GatewayがSimulation内部Storeやcommand境界へ直接依存しないよう、Server側に **Observation Gateway** という明示的なread-only観測境界を置く。GatewayのTask状態・実装順は[`../../roadmap/GATEWAY_ROADMAP.md`](../../roadmap/GATEWAY_ROADMAP.md)を正本とし、Simulation Roadmapのcross-cutting Taskとしては管理しない。
 
 ```text
 MachiVerseWorks.Simulation
   authoritative state / rules / meaning / plans / history
               │
-              │ detached observation read model
+              │ detached semantic observation source
               ▼
-MachiVerseWorks.Server
-  Observation Gateway
+Gateway (initially hosted in MachiVerseWorks.Server)
   ├─ observation request
   ├─ subscription / spatial filtering
   ├─ shared read-model cache
   ├─ request deduplication
   ├─ snapshot / delta planning
-  ├─ protocol encoding cache
+  ├─ protocol adaptation / encoding cache
   └─ connection / resync
               │
               │ read-only Protocol
@@ -28,17 +27,19 @@ View
   render / camera / selection / inspector
 ```
 
-Simulationを変更する操作はObservation Gatewayを通さない。管理操作は別のAdministration / Management command境界を使用する。
+Simulationを変更する操作はGatewayを通さない。管理操作は別のAdministration / Management command境界を使用する。
+
+Gateway Roadmapの分離は責務・進捗管理の分離であり、現時点で別process / repository / deploy unitへ分離することを必須としない。まず`MachiVerseWorks.Server`内でmodule boundaryを確立し、必要になれば独立deploy可能な境界へ育てる。
 
 ## 最上位の不変条件
 
 - SimulationがWorld state・rule・意味・状態遷移・予定・意味的eventの唯一の正本である。
-- ViewはSimulation stateを変更できない。
-- Viewは意味的stateを推測、補完、再計算、予測しない。
-- Viewの存在・非存在、接続数、Camera位置、Selection、描画FPS、Rendering LOD、View cache状態によってSimulation結果が変化してはならない。
-- Observation GatewayはSimulationが公開した意味を配送・再利用するだけで、新しい意味を生成しない。
-- ViewはObservation APIだけから表示に必要なSimulation情報を取得できなければならず、Simulation内部Storeへ直接アクセスしない。
-- Observation系Protocolにはauthoritative mutation commandを定義しない。
+- Gatewayは完全read-onlyであり、Simulation stateを変更できない。
+- Gateway / Viewは意味的stateを推測、補完、再計算、予測しない。
+- Viewの存在・非存在、接続数、Camera位置、Selection、描画FPS、Rendering LOD、View cache、Gateway cache状態によってSimulation結果が変化してはならない。
+- GatewayはSimulationが公開した意味を配送・再利用するだけで、新しい意味を生成しない。
+- ViewはGateway Observation APIだけから表示に必要なSimulation情報を取得できなければならず、Simulation内部Storeへ直接アクセスしない。
+- Observation routeからauthoritative mutation APIへ到達できない。
 
 ## Simulation側の責務
 
@@ -54,15 +55,18 @@ Simulation側で完結させるもの:
 - Historical projection
 - stable IDとEntity relation
 - deterministic ruleとvalidation
+- Gatewayへ渡すdetached semantic observation source / domain payload
 
-例えばPersonが通勤中かどうかをView側で位置・時刻・destinationから推測してはならない。Simulationが`Activity = Commuting`相当の観測値を公開し、Viewはそれを表示する。
+例えばPersonが通勤中かどうかをGateway / View側で位置・時刻・destinationから推測してはならない。Simulationが`Activity = Commuting`相当の観測値を公開し、Gatewayはそれを配送し、Viewは表示する。
 
-## Observation Gatewayの責務
+Simulation側Taskは[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)を正本とする。
 
-Observation GatewayはServer内のread-only delivery boundaryとして、次を担当できる。
+## Gatewayの責務
 
-- Simulationのdetached read model / snapshotの取得
-- Cameraや明示targetに基づくsubscription管理
+GatewayはServer内のread-only delivery boundaryとして、次を担当できる。
+
+- Simulationのdetached observation source / snapshotの取得
+- Cameraや明示targetに基づくObservation Request / subscription管理
 - spatial filtering
 - explicit inspect request
 - snapshot / delta planning
@@ -76,7 +80,7 @@ Observation GatewayはServer内のread-only delivery boundaryとして、次を�
 - encoded payload cache
 - cache eviction
 
-Observation Gatewayが行ってはいけないもの:
+Gatewayが行ってはいけないもの:
 
 - Activity等の意味的判定
 - World ruleの実行
@@ -86,9 +90,22 @@ Observation Gatewayが行ってはいけないもの:
 - Simulation stateのmutation
 - View都合によるSimulation workload / fidelity変更
 
+Gateway側Taskは[`../../roadmap/GATEWAY_ROADMAP.md`](../../roadmap/GATEWAY_ROADMAP.md)を正本とする。
+
+## Protocol ownership
+
+`MachiVerseWorks.Protocol`は共有wire componentだが、Roadmap上の責務は次のように分ける。
+
+- domainの意味、field / unit、authoritative semantic payload: Simulation
+- Observation Request、subscription control、delivery envelope、serialization / negotiation / resync: Gateway
+- authoritative mutation commandの意味・validation: Simulation
+- mutation commandを発行するUI / Client state: Management
+
+同じProtocol projectに実装されることを理由に責務を1 Roadmapへ統合しない。
+
 ## Observation Request
 
-ViewからServerへ送信する通信が存在しても、それがSimulation mutationでなければread-only境界を壊さない。
+ViewからGatewayへ送信する通信が存在しても、それがSimulation mutationでなければread-only境界を壊さない。
 
 代表例:
 
@@ -101,7 +118,7 @@ ViewからServerへ送信する通信が存在しても、それがSimulation mu
 
 ## Cache設計
 
-Observation Gatewayは、同じauthoritative observationを複数Clientや複数requestで再利用するためcacheを持てる。
+Gatewayは、同じauthoritative observationを複数Clientや複数requestで再利用するためcacheを持てる。
 
 ### Revision基準
 
@@ -144,6 +161,8 @@ Road、Railway、Building geometry、Terrain等、revisionが変わるまで再�
 
 同一Protocol version / same observation revision / same payloadを多数Clientへ配信する場合は、encode済みpayloadを再利用できる。ただしconnection固有metadataを含むframeは安全に分離する。
 
+これらの最適化TaskはGateway Roadmap Phase 2を正本とする。cacheを無効化しても正しいObservationへfallbackできなければならない。
+
 ## 短期履歴とCacheの境界
 
 Gatewayが受信済みObservation Snapshotを短時間保持することは許容する。ただし、その差分を解釈してsemantic eventを新規生成してはならない。
@@ -161,7 +180,7 @@ position@tick102
 というsemantic eventをGatewayが生成する
 ```
 
-意味的なrecent eventが必要な場合はSimulationが`RecentEvent`等のread modelとして公開する。
+意味的なrecent eventが必要な場合はSimulationが`RecentEvent`等のsemantic sourceとして公開する。
 
 ## View側で許可するローカルstate
 
@@ -173,9 +192,11 @@ ViewはPresentationに必要なローカルstateのみ所有する。
 - mesh / material / asset cache
 - client-side visibility / culling / LOD state
 - snapshot間interpolation用previous/current visual state
-- connection-local observation state
+- connection-local desired observation state
 
 これらはauthoritative World stateではなく、Simulationへフィードバックしない。
+
+Viewの実装計画は[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)を正本とする。
 
 ## View Inspector契約
 
@@ -186,44 +207,52 @@ Object Inspectorは少なくとも次の観測軸を表示できる構造を目�
 - Planned Future: Simulationが公開したschedule / planned state
 - Relations: 所属、destination、参照Entity等
 
-ViewはCurrentからRecent PastやPlanned Futureを推測しない。
+Simulationが意味を生成し、Gateway Phase 4が意味を変えず配送し、View Phase 7 / 8が表示する。Gateway / ViewはCurrentからRecent PastやPlanned Futureを推測しない。
+
+## Historical Observation
+
+Historical projectionの意味と再構築はSimulation Phase 35が所有する。Gateway Phase 5はhistorical tick / range / selected Entityのread-only request、filtering、delivery、cache namespace、cancellationを担当し、View Phase 9がtimeline / historical renderingを担当する。
+
+Gatewayがhistoryを再構築したりlive Simulationを巻き戻したりしない。
 
 ## Managementとの分離
 
 Management ClientはViewと同じ画面技術やread-only View componentを再利用してよいが、責務は別とする。
 
 ```text
-                    ┌─ Observation Gateway ──> View
-Simulation Runtime ─┤
-                    └─ Command Boundary <──── Management
+                    ┌─ Gateway ─────────────> View
+Simulation Runtime ─┤      └───────────────> Management read side
+                    └─ Command Boundary <─── Management write side
 ```
 
-- View module自体はmutation APIを参照しない。
+- Gateway / View module自体はmutation APIを参照しない。
 - Management shellがread-only Viewを埋め込む場合も、mutationは別のManagement command clientから送信する。
-- Editor、pause / resume、Save / Load、configuration変更、destructive operationはView責務に含めない。
+- command成功後はGatewayからauthoritative resultを再観測する。
+- Editor、pause / resume、Save / Load、configuration変更、destructive operationはGateway / View責務に含めない。
 
 Managementの実装計画は[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)を正本とする。
 
 ## Analyticsとの分離
 
-人口統計、経済分析、交通分析、heatmap、trend、長期集計等はViewで計算しない。必要になった場合は専用Analytics Listener / data pipelineを設ける。
+人口統計、経済分析、交通分析、heatmap、trend、長期集計等はGateway / Viewで意味的に計算しない。必要になった場合は専用Analytics Listener / data pipelineを設ける。
 
 Analyticsが同じSimulationを観測する場合でも、Camera中心のView subscriptionと全World分析用feedは要求特性が異なるため、同一delivery contractへ無理に統合しない。
 
 ## 実装配置
 
-初期実装では新しい独立processを必須としない。既存`MachiVerseWorks.Server`内で、現在のpublish / subscription / inspection処理をObservation Gateway責務として明確化する。
+初期実装では新しい独立processを必須としない。既存`MachiVerseWorks.Server`内で、現在のpublish / subscription / inspection処理をGateway責務として明確化する。
 
-将来、負荷・deployment・security上の必要性が生じた場合に別processへ分離できるよう、Simulationとの境界はdetached read model / stable contractに保つ。
+将来、負荷・deployment・security上の必要性が生じた場合に別processへ分離できるよう、Simulationとの境界はdetached semantic source / stable contractに保つ。
 
 ## 検証原則
 
-- View未接続とView接続中で同一Simulation inputから同一authoritative state digestを得る。
+- Gateway / View未接続と接続中で同一Simulation inputから同一authoritative state digestを得る。
 - Camera位置、subscription、selection、LODを変更してもSimulation state digestが変わらない。
 - 複数View接続でSimulation結果が変わらない。
 - cache hit / missで返却するobservation内容が同一revisionなら一致する。
 - cache eviction後に再構築しても同一revisionの内容が一致する。
-- Observation Gateway経由からauthoritative mutation APIへ到達できないことをtestする。
+- Gateway経由からauthoritative mutation APIへ到達できないことをtestする。
+- Gateway内部実装を変更しても公開Observation contractが同じならViewを分岐させない。
 
 ## 関連文書
 
@@ -232,6 +261,8 @@ Analyticsが同じSimulationを観測する場合でも、Camera中心のView su
 - [`headless-server.md`](headless-server.md)
 - [`web-client.md`](web-client.md)
 - [`protocol.md`](protocol.md)
+- [`../../roadmap/README.md`](../../roadmap/README.md)
 - [`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)
+- [`../../roadmap/GATEWAY_ROADMAP.md`](../../roadmap/GATEWAY_ROADMAP.md)
 - [`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)
 - [`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)

@@ -1,14 +1,15 @@
 # View Roadmap
 
-このファイルは、MachiVerseWorks の **View側の実装ロードマップ**です。ViewはSimulationが生成したWorldを忠実に観測・描画するための完全read-only clientとし、Simulation stateを変更する責務を持ちません。
+このファイルは、MachiVerseWorks の **View側の実装ロードマップ**です。ViewはSimulationが生成したWorldをGateway経由で忠実に観測・描画するための完全read-only clientとし、Simulation stateを変更する責務を持ちません。
 
-- Simulation Core、authoritative World、Simulation rule、意味的state、予定、履歴、Observation read model / Protocol / Server境界は[`SIMULATION_ROADMAP.md`](SIMULATION_ROADMAP.md)で管理します。
+- Simulation Core、authoritative World、Simulation rule、意味的state、予定、履歴、authoritative observation sourceは[`SIMULATION_ROADMAP.md`](SIMULATION_ROADMAP.md)で管理します。
+- Observation Request、subscription、cache、deduplication、delivery、Protocol adaptation、reconnect / resyncは[`GATEWAY_ROADMAP.md`](GATEWAY_ROADMAP.md)で管理します。
 - World / City / Serverを変更するeditor・運転control・Save / Load・configuration等は[`MANAGEMENT_ROADMAP.md`](MANAGEMENT_ROADMAP.md)で管理します。
 - 人口統計、経済分析、交通分析、heatmap、trend等の分析処理はViewへ含めず、将来のAnalytics Listener / analysis clientとして別途設計します。
 - Observation Gatewayのarchitectureは[`../docs/architecture/observation-gateway.md`](../docs/architecture/observation-gateway.md)を正本とします。
 
 > **現在:** View Phase 2 — Camera & Observation Navigation  
-> **進め方:** View固有の基盤はPhase 1から進め、Simulationから移管された描画Taskは依存するSimulation Phase / read modelが実装できた時点で順次着手する
+> **進め方:** View固有の基盤はPhase 1から進め、Simulationから移管された描画Taskは依存するSimulation semantic sourceとGateway delivery contractが実装できた時点で順次着手する
 
 ## 最上位原則
 
@@ -17,7 +18,7 @@
 - **Viewは受け取った意味を視覚・聴覚表現へ変換するだけである。**
 - Viewが所有してよいのはCamera、Selection、renderer / audio resource、描画cache、LOD、interpolation、presentation設定等のClient-local stateだけとする。
 - Viewの存在・非存在、接続数、Camera位置、Selection、描画FPS、Rendering LOD、View cache、quality profileによってSimulation結果が変化してはならない。
-- ViewはSimulation内部Storeへ直接アクセスせず、Observation Gateway / Protocolから提供されるread-only contractだけを使用する。
+- ViewはSimulation内部Storeへ直接アクセスせず、Gateway / Protocolから提供されるread-only contractだけを使用する。
 - `SubscribeVolume`、Inspect系request等は「何を見るか」を指定するObservation Requestであり、World mutation commandとは分離する。
 - View moduleにManagement command clientを注入してmutation可能にしない。Management ClientがView componentを再利用する場合もcommand責務はManagement shell側に置く。
 - **Simulation FidelityとRendering Fidelityを分離する。** 遠距離・非表示・低品質設定で描画を大胆に簡略化してよいが、背後のSimulation stateやruleを簡略化する理由にしない。
@@ -25,48 +26,49 @@
 
 ## 全体の現在地
 
-| View Phase | 内容 | 主な必須Simulation依存 | 状態 |
+| View Phase | 内容 | 主な必須依存 | 状態 |
 | --- | --- | --- | --- |
-| 1 | Read-Only View Foundation | 現行read-only Protocol / Observation boundary | ✅ 完了 |
-| 2 | Camera & Observation Navigation | Observation subscription contract | ▶️ 着手可能 |
-| 3 | Physical World Rendering | Simulation Phase 29 observation contract | ⏳ Simulation依存待ち |
-| 4 | Settlement & Structure Rendering | Simulation Phase 30 baseline / Phase 31 evolution | ⏳ Simulation依存待ち |
-| 5 | Infrastructure & Dynamic Entity Fidelity | 各Simulation domain observation contract | ⏳ View基盤待ち |
-| 6 | Large World Rendering & Rendering LOD | Simulation Phase 29〜31 world / settlement observation | ⏳ Simulation依存待ち |
-| 7 | Object Selection & Inspector | generic Entity inspection Current / Relations | ⏳ Observation依存待ち |
-| 8 | Temporal Observation | recent / planned semantic observation | ⏳ Simulation依存待ち |
-| 9 | Historical World View | Simulation Phase 35 historical projection | ⏳ Simulation依存待ち |
+| 1 | Read-Only View Foundation | 現行read-only Protocol / Gateway Phase 1境界 | ✅ 完了 |
+| 2 | Camera & Observation Navigation | Gateway subscription contract | ⏳ Gateway統合待ち |
+| 3 | Physical World Rendering | Simulation Phase 29 source + Gateway delivery | ⏳ Simulation / Gateway依存待ち |
+| 4 | Settlement & Structure Rendering | Simulation Phase 30 baseline / Phase 31 evolution + Gateway delivery | ⏳ Simulation / Gateway依存待ち |
+| 5 | Infrastructure & Dynamic Entity Fidelity | 各Simulation domain source / Gateway delivery contract | ⏳ View基盤待ち |
+| 6 | Large World Rendering & Rendering LOD | Simulation Phase 29〜31 source / Gateway Phase 2〜3 | ⏳ Simulation / Gateway依存待ち |
+| 7 | Object Selection & Inspector | Gateway Phase 4 Current / Relations | ⏳ Gateway依存待ち |
+| 8 | Temporal Observation | Simulation semantic history / schedule + Gateway Phase 4 | ⏳ Simulation / Gateway依存待ち |
+| 9 | Historical World View | Simulation Phase 35 + Gateway Phase 5 | ⏳ Simulation / Gateway依存待ち |
 | 10 | Localization | stable observation / error contract | ⏳ 待機 |
 | 11 | Production Visual & Audio Presentation | available authoritative presentation source | ⏳ View基盤待ち |
 | 12 | View Addon & Customization | Simulation Phase 38 Extension Platform | ⏳ Simulation依存待ち |
-| 13 | Fidelity, Accessibility & Performance Closeout | View Phase 1〜12 | ⏳ 待機 |
+| 13 | Fidelity, Accessibility & Performance Closeout | View Phase 1〜12 / Gateway Phase 6 integration | ⏳ 待機 |
 
 ## 依存関係の読み方
 
 View Roadmapでは、依存を次の3種類に分ける。
 
-- **必須依存** — 対象を正しく観測するauthoritative state / Observation contract、またはView内の前提Task。満たさない限りそのTaskを完了できない。
-- **並行可能依存** — renderer / state boundary / Server境界等を並行実装できるが、integration / closeoutまでに合流が必要な依存。
+- **必須依存** — 対象を正しく観測するauthoritative state / Gateway Observation contract、またはView内の前提Task。満たさない限りそのTaskを完了できない。
+- **並行可能依存** — renderer / state boundary / Gateway境界等を並行実装できるが、integration / closeoutまでに合流が必要な依存。
 - **統合依存** — 後から同じcomponentを組み合わせるための依存。対象Phaseの基礎実装開始を止めない。
 
-Observation Gateway Foundation全体をView Phase 1の一括hard gateにはしない。現行read-only Protocolで成立するView-local基盤は先行でき、`OBS-001` / `OBS-003`の境界整理と並行して進める。generic Inspectorは`OBS-008`のCurrent / Relations契約、Temporal Observationは同TaskのRecent / Planned契約と各Simulation domainのsemantic observationが揃った時点でcloseoutできる。
+Gateway Phase 1全体をView Phase 1の一括hard gateにはしない。現行read-only Protocolで成立するView-local基盤は先行でき、Gateway `G1-001` / `G1-003`の境界整理と並行して進める。generic InspectorはGateway Phase 4 `G4-001` / `G4-002`のCurrent / Relations契約、Temporal Observationは`G4-003` / `G4-004`のRecent / Planned契約と各Simulation domainのsemantic observation sourceが揃った時点でcloseoutできる。
 
-Simulation Phase 32のSchedulerやPhase 33のparallelismはSimulation内部のworkload / execution戦略であり、Observation contractが変わらない限りView Renderingの必須依存にしない。ViewはSimulation内部の計算方式ではなく、公開されたauthoritative observationだけへ依存する。
+Simulation Phase 32のSchedulerやPhase 33のparallelismはSimulation内部のworkload / execution戦略であり、authoritative sourceとGateway Observation contractが変わらない限りView Renderingの必須依存にしない。ViewはSimulation内部の計算方式やGateway内部のcache実装ではなく、公開されたread-only observationだけへ依存する。
 
-## Simulation Roadmap追従ルール
+## Simulation / Gateway Roadmap追従ルール
 
-View RoadmapはSimulation RoadmapとPhase番号を一致させない。View自身の技術的依存順でPhase 1から積み上げる。
+View RoadmapはSimulation / Gateway RoadmapとPhase番号を一致させない。View自身の技術的依存順でPhase 1から積み上げる。
 
-一方、Simulationから移管されたTaskや特定domainの描画Taskには**必須となるSimulation Phase / read model**を明示する。
+一方、Simulationから移管されたTaskや特定domainの描画Taskには**必須となるSimulation Phase / semantic source**と、必要な場合は**Gateway Phase / delivery contract**を明示する。
 
-実装可能条件は原則として次の両方を満たすこととする。
+実装可能条件は原則として次を満たすこととする。
 
 1. 対象TaskのView側必須依存が完了している。
-2. 対象を意味的に表現するSimulation側のauthoritative state / observation contractが実装済みである。
+2. 対象を意味的に表現するSimulation側authoritative state / semantic observation sourceが実装済みである。
+3. 対象をViewへ届けるGateway contractが必要な場合、そのdelivery contractが利用可能である。
 
-Simulation側の依存が未完成ならViewが仮の意味を生成して先行実装しない。必要ならgeometry / renderer / asset pipeline等の意味を持たないView基盤だけを先行する。
+Simulation側の依存が未完成ならViewが仮の意味を生成して先行実装しない。Gateway側の最適化が未完成でも正しいbaseline Observation contractがあるなら、geometry / renderer / View state等は先行してよい。
 
-Simulation Phaseがcloseoutした際は、対応する未着手View Taskが実装可能になったかを確認し、View Roadmapの状態を更新する。
+Simulation / Gateway Phaseがcloseoutした際は、対応する未着手View Taskが実装可能になったかを確認し、View Roadmapの状態を更新する。
 
 ## View Roadmap 運用ルール
 
@@ -74,7 +76,8 @@ Simulation Phaseがcloseoutした際は、対応する未着手View Taskが実�
 - 未完了Taskは`⬜`、必要な検証まで済んだ完了Taskは`✅`で表す。
 - 1 Taskは原則として1つの観測可能な成果を持つ。
 - Rendering / Camera / Selection / Inspector / asset / audio / performance / accessibility / localization等を必要に応じて分割する。
-- Simulation側の仕様変更が必要なら[`SIMULATION_ROADMAP.md`](SIMULATION_ROADMAP.md)へ切り分ける。
+- Simulation側の意味・source contract変更が必要なら[`SIMULATION_ROADMAP.md`](SIMULATION_ROADMAP.md)へ切り分ける。
+- Observation Request / subscription / cache / delivery / reconnect等の変更が必要なら[`GATEWAY_ROADMAP.md`](GATEWAY_ROADMAP.md)へ切り分ける。
 - mutation UIが必要なら[`MANAGEMENT_ROADMAP.md`](MANAGEMENT_ROADMAP.md)へ切り分ける。
 - 分析・集計が必要ならView内へ実装せず、Analytics系の別境界として設計する。
 - Browser確認、test、performance計測、docs同期まで含めて完了判定する。
@@ -102,11 +105,11 @@ Simulation Phaseがcloseoutした際は、対応する未着手View Taskが実�
 
 > **状態: ✅ 完了**  
 > **必須依存:** 現行Server / read-only Protocol message flow  
-> **並行可能依存:** Simulation Roadmap `OBS-001` / `OBS-003` のObservation / mutation境界整理
+> **並行可能依存:** Gateway Phase 1 `G1-001` / `G1-003` のObservation / mutation境界整理
 
-Viewを完全read-onlyなPresentation clientとして固定し、Observation Gatewayから受け取ったread modelだけで描画できる基盤を作る。
+Viewを完全read-onlyなPresentation clientとして固定し、Gatewayから受け取ったread modelだけで描画できる基盤を作る。
 
-- ✅ **V1-001** — View / Observation Gateway / Managementの責務境界と禁止事項をWeb Client architecture / module dependencyへ反映する
+- ✅ **V1-001** — View / Gateway / Managementの責務境界と禁止事項をWeb Client architecture / module dependencyへ反映する
 - ✅ **V1-002** — Protocol messageをView-local rendering stateへ一方向適用する共通state boundaryを整理する
 - ✅ **V1-003** — View-local stateをCamera / Selection / rendering resource / audio resource / cache / interpolationへ限定する契約を実装・testする
 - ✅ **V1-004** — authoritative observationとprevious/current visual interpolation stateを型・module境界で分離する
@@ -117,18 +120,18 @@ Viewを完全read-onlyなPresentation clientとして固定し、Observation Gat
 
 ### View Phase 1 完了条件
 
-- ViewがObservation contractだけから成立する。
+- ViewがGateway Observation contractだけから成立する。
 - View codeからauthoritative mutation APIへ到達する経路がない。
 - View接続数や描画状態がSimulation結果へ影響しない。
-- Observation Gatewayのcache最適化が未実装でも、正しいread-only observationからViewを構築できる。
+- Gatewayのcache最適化が未実装でも、正しいread-only observationからViewを構築できる。
 
 ---
 
 ## View Phase 2 — Camera & Observation Navigation
 
-> **状態: ▶️ 着手可能**  
-> **必須依存:** View Phase 1 / Observation Gateway subscription contract  
-> **並行可能依存:** `OBS-004`〜`OBS-007`のcache / dedup / resync最適化
+> **状態: ⏳ Gateway統合待ち**  
+> **必須依存:** View Phase 1 / Gateway Phase 1のObservation Request / subscription boundary  
+> **並行可能依存:** Gateway Phase 2 / 3のcache / dedup / delivery / resync最適化
 
 - ⬜ **V2-001** — pan / zoom / rotate / altitudeを含むWorld navigationを整理する
 - ⬜ **V2-002** — View frustum / focus targetからread-only `SubscribeVolume`等のObservation Requestを生成する
@@ -142,14 +145,14 @@ Viewを完全read-onlyなPresentation clientとして固定し、Observation Gat
 
 - 大規模WorldをCameraで自由に観測できる。
 - 都市中心・郊外・農村・遠隔集落のどこへでも同じnavigation契約で移動できる。
-- Observation Requestは配送対象だけを変え、Simulation workload / fidelity / resultを変えない。
+- Observation RequestはGatewayの配送対象だけを変え、Simulation workload / fidelity / resultを変えない。
 
 ---
 
 ## View Phase 3 — Physical World Rendering
 
-> **状態: ⏳ Simulation依存待ち**  
-> **必須依存:** View Phase 1 / 2、Simulation Phase 29 `P29-025`相当のWorld / Terrain / GeographicFeature / Toponym observation contract
+> **状態: ⏳ Simulation / Gateway依存待ち**  
+> **必須依存:** View Phase 1 / 2、Simulation Phase 29 `P29-025`のWorld / Terrain / GeographicFeature / Toponym semantic source、対応Gateway delivery contract
 
 - ⬜ **V3-001** — flat `GridHelper`依存を置換し、Terrain / Water / GeographicFeature / 自然地名を3D描画する（旧`P29-026`）
 - ⬜ **V3-002** — Simulationから提供されたsurface / material / feature typeをView側で意味付けし直さずvisual resolverへmappingする
@@ -160,7 +163,7 @@ Viewを完全read-onlyなPresentation clientとして固定し、Observation Gat
 
 ### View Phase 3 完了条件
 
-- Simulation Phase 29が公開した物理Worldをflat gridへ簡略化せず観測できる。
+- Simulation Phase 29が公開しGatewayが配送した物理Worldをflat gridへ簡略化せず観測できる。
 - GeographicFeatureや地名の意味をView独自ruleで生成しない。
 - 都市外・未開発地域もWorldの一部として地形・水系・地理Featureを観測できる。
 
@@ -168,9 +171,9 @@ Viewを完全read-onlyなPresentation clientとして固定し、Observation Gat
 
 ## View Phase 4 — Settlement & Structure Rendering
 
-> **状態: ⏳ Simulation依存待ち**  
-> **必須依存:** View Phase 3、Simulation Phase 30 `P30-028`相当のSettlement / Parcel / Zone / naming baseline observation  
-> **統合依存:** Simulation Phase 31 Persistent Regional observation（`V4-004` / `V4-006`の動的変化表示）
+> **状態: ⏳ Simulation / Gateway依存待ち**  
+> **必須依存:** View Phase 3、Simulation Phase 30 `P30-028`のSettlement / Parcel / Zone / naming baseline source、対応Gateway delivery contract  
+> **統合依存:** Simulation Phase 31 Persistent Regional source（`V4-004` / `V4-006`の動的変化表示）
 
 - ⬜ **V4-001** — Settlement network / Parcel / Zone / development / urban naming / Road Signを3D可視化する（旧`P30-028`のView部分）
 - ⬜ **V4-002** — City / Town / Village / Hamlet等の分類はSimulation提供値だけを使用して表示する
@@ -182,7 +185,7 @@ Viewを完全read-onlyなPresentation clientとして固定し、Observation Gat
 
 ### View Phase 4 完了条件
 
-- Simulation Phase 30のbaseline Settlement / Structureを忠実に観測できる。
+- Simulation Phase 30のbaseline Settlement / StructureをGateway経由で忠実に観測できる。
 - Phase 31のPersistent Regional observationが利用可能な場合は、複数Settlementの成長・停滞・衰退・再成長を同じ表示契約へ反映できる。
 - 人口や位置からViewが都市分類・土地利用・成長状態を推測しない。
 - 一極集中を前提にせず、複数都市・町・村・集落が同じWorld内に並存する状態を視覚的に確認できる。
@@ -192,7 +195,7 @@ Viewを完全read-onlyなPresentation clientとして固定し、Observation Gat
 ## View Phase 5 — Infrastructure & Dynamic Entity Fidelity
 
 > **状態: ⏳ View基盤待ち**  
-> **必須依存:** View Phase 1、対象domainの既存 / 将来observation contract  
+> **必須依存:** View Phase 1、対象domainのSimulation semantic source / Gateway delivery contract  
 > **統合依存:** View Phase 3 / 4（Terrain / Settlement上へ統合表示する場合）
 
 - ⬜ **V5-001** — Road / Lane / Intersectionをproduction View representationへ整理する
@@ -206,16 +209,16 @@ Viewを完全read-onlyなPresentation clientとして固定し、Observation Gat
 
 ### View Phase 5 完了条件
 
-- 主要Simulation Entityを一貫したstable ID / observation contractから表示できる。
-- debug proxyがproduction Viewで誤った意味を表す場合は、Simulation observation contractまたはvisual resolverを明示して解消する。
+- 主要Simulation Entityを一貫したstable ID / Gateway observation contractから表示できる。
+- debug proxyがproduction Viewで誤った意味を表す場合は、Simulation semantic sourceまたはvisual resolverを明示して解消する。
 - asset不足がEntity消失やSimulation意味の捏造につながらない。
 
 ---
 
 ## View Phase 6 — Large World Rendering & Rendering LOD
 
-> **状態: ⏳ Simulation依存待ち**  
-> **必須依存:** View Phase 3〜5、Simulation Phase 29〜31のWorld / Settlement observationとstable coordinate contract  
+> **状態: ⏳ Simulation / Gateway依存待ち**  
+> **必須依存:** View Phase 3〜5、Simulation Phase 29〜31のWorld / Settlement sourceとstable coordinate contract、Gateway Phase 2〜3の共有delivery / resync基盤  
 > **統合依存:** Simulation Phase 32 / 33とのinvariance / performance回帰確認。Scheduler / worker / partition実装そのものには依存しない
 
 旧Phase 34のWorld Rendering / Rendering LOD計画を、read-only原則と複数Settlementを持つ巨大World前提に合わせて再構成する。
@@ -243,7 +246,7 @@ Viewを完全read-onlyなPresentation clientとして固定し、Observation Gat
 
 - 巨大Worldを広域から個別Entityまで連続して観測できる。
 - 複数都市、郊外、農村、Village / Hamlet、遠隔集落を同じWorld View上で移動・比較できる。
-- LOD / culling / cache / streamingがSimulation結果やEntity lifecycleへ影響しない。
+- View側LOD / culling / cacheとGateway側delivery / cacheがSimulation結果やEntity lifecycleへ影響しない。
 - 遠距離地域の描画負荷を下げても、その地域のSimulation精度が下がったことを意味しない。
 - Simulation Scheduler / parallel worker / partition構成が変化しても、公開Observation contractが同じならView実装を分岐させない。
 
@@ -251,8 +254,8 @@ Viewを完全read-onlyなPresentation clientとして固定し、Observation Gat
 
 ## View Phase 7 — Object Selection & Inspector
 
-> **状態: ⏳ Observation依存待ち**  
-> **必須依存:** View Phase 1 / 2、Simulation Roadmap `OBS-008` のgeneric inspection Current / Relations契約  
+> **状態: ⏳ Gateway依存待ち**  
+> **必須依存:** View Phase 1 / 2、Gateway Phase 4 `G4-001` / `G4-002` のgeneric inspection Current / Relations契約  
 > **統合依存:** View Phase 3〜6の対象renderer（3D pickingへ利用）
 
 - ⬜ **V7-001** — Map / 3D Entityを選択するpicking / selection基盤を実装する（旧`P36-003`）
@@ -273,12 +276,12 @@ Viewを完全read-onlyなPresentation clientとして固定し、Observation Gat
 
 ## View Phase 8 — Temporal Observation
 
-> **状態: ⏳ Simulation依存待ち**  
-> **必須依存:** View Phase 7、`OBS-008`のRecent Past / Planned Future / Relations契約、対象Simulation domainが公開するsemantic event / schedule / planned state
+> **状態: ⏳ Simulation / Gateway依存待ち**  
+> **必須依存:** View Phase 7、Gateway Phase 4 `G4-003` / `G4-004`のRecent Past / Planned Future契約、対象Simulation domainが公開するsemantic event / schedule / planned state
 
 - ⬜ **V8-001** — InspectorにCurrent / Recent Past / Planned Futureの3軸を持つ共通表示contractを実装する
-- ⬜ **V8-002** — Recent PastはSimulationが公開したstate / eventだけを表示する
-- ⬜ **V8-003** — Planned FutureはSimulationが公開したschedule / planned action / estimated valueだけを表示する
+- ⬜ **V8-002** — Recent PastはSimulationが公開しGatewayが配送したstate / eventだけを表示する
+- ⬜ **V8-003** — Planned FutureはSimulationが公開しGatewayが配送したschedule / planned action / estimated valueだけを表示する
 - ⬜ **V8-004** — View側でposition差分等からsemantic eventを生成しないことをtestする
 - ⬜ **V8-005** — trajectory等の純粋なvisual historyをsemantic historyと区別して表示する
 - ⬜ **V8-006** — Person / Vehicle / Train / Building / Settlement等の代表Entityでtemporal Inspector E2Eを追加する
@@ -286,14 +289,14 @@ Viewを完全read-onlyなPresentation clientとして固定し、Observation Gat
 ### View Phase 8 完了条件
 
 - 選択Objectについて現在、少し過去、予定を観測できる。
-- 過去・予定の意味をViewが生成しない。
+- 過去・予定の意味をView / Gatewayが生成しない。
 
 ---
 
 ## View Phase 9 — Historical World View
 
-> **状態: ⏳ Simulation依存待ち**  
-> **必須依存:** View Phase 6〜8、Simulation Phase 35のHistorical read-only projection / timeline contract
+> **状態: ⏳ Simulation / Gateway依存待ち**  
+> **必須依存:** View Phase 6〜8、Simulation Phase 35のHistorical read-only projection、Gateway Phase 5 Historical delivery
 
 - ⬜ **V9-001** — World timeline / time sliderからHistorical read-only projectionを選択できるようにする（旧`P35-010`）
 - ⬜ **V9-002** — Historical projectionをlive Viewと同じrendering pipelineへ適用する
@@ -304,7 +307,7 @@ Viewを完全read-onlyなPresentation clientとして固定し、Observation Gat
 
 ### View Phase 9 完了条件
 
-- 指定時点のWorldを観測し、その時点のObjectを選択・詳細表示できる。
+- Gatewayを通じて指定時点のWorldを観測し、その時点のObjectを選択・詳細表示できる。
 - 複数SettlementやInfrastructureの長期変化をWorld全体と局所の両scaleで追跡できる。
 - Historical viewingがlive Simulationへ一切干渉しない。
 
@@ -313,7 +316,7 @@ Viewを完全read-onlyなPresentation clientとして固定し、Observation Gat
 ## View Phase 10 — Localization
 
 > **状態: ⏳ 待機**  
-> **必須依存:** stable observation / error code / structured parameter contract、主要Inspector UI
+> **必須依存:** stable Gateway observation / error code / structured parameter contract、主要Inspector UI
 
 - ⬜ **V10-001** — `ja-JP` defaultのlocale discovery / fallback policyを固定する（旧`P38-010`）
 - ⬜ **V10-002** — 追加locale resource pack loading境界を実装する（旧`P38-011`）
@@ -334,7 +337,7 @@ Viewを完全read-onlyなPresentation clientとして固定し、Observation Gat
 
 > **状態: ⏳ View基盤待ち**  
 > **必須依存:** View Phase 5のvisual resolver / dynamic rendering基盤  
-> **統合依存:** View Phase 3 / 4 / 6〜10、Simulationが公開するWorld time / environment / semantic event等のavailable presentation source
+> **統合依存:** View Phase 3 / 4 / 6〜10、Simulationが公開しGatewayが配送するWorld time / environment / semantic event等のavailable presentation source
 
 Debug proxy中心の表示から、街・地域・Infrastructure・移動Entityを長時間観測できるproduction presentationへ仕上げる。ここでも見た目のためにSimulation semanticsをView側で作らない。
 
@@ -371,7 +374,7 @@ model差し替え、material変更、描画layer追加等をCore Viewの改造�
 - ⬜ **V12-003** — read-only rendering layer / map layer / label layerを追加できるextension pointを実装する
 - ⬜ **V12-004** — Inspector section / read-only panelを追加できるextension pointを実装する
 - ⬜ **V12-005** — theme / presentation resource / locale resource contributionをCore resource namespaceと衝突しない形で追加できるようにする
-- ⬜ **V12-006** — View AddonへObservation contractだけを公開し、Simulation mutation API / Management command client / mutable internal storeへ到達させない
+- ⬜ **V12-006** — View AddonへGateway Observation contractだけを公開し、Simulation mutation API / Management command client / mutable internal storeへ到達させない
 - ⬜ **V12-007** — Extension Platformが解決したload order / provider selection / conflict resultをViewが受け取り、View側で独自の競合ruleを再実装しない
 - ⬜ **V12-008** — Addon disable / update / reload時にaddon-owned renderer / audio / cache resourceを安全に破棄・再構築する
 - ⬜ **V12-009** — model差し替えとread-only layer追加を行う公式sample View Addonを追加する
@@ -390,7 +393,8 @@ model差し替え、material変更、描画layer追加等をCore Viewの改造�
 ## View Phase 13 — Fidelity, Accessibility & Performance Closeout
 
 > **状態: ⏳ 待機**  
-> **必須依存:** View Phase 1〜12
+> **必須依存:** View Phase 1〜12  
+> **統合依存:** Gateway Phase 6のinvariance / scalability closeout
 
 - ⬜ **V13-001** — Simulation observationとView表示のmissing / stale / wrong-revision検出testを整備する
 - ⬜ **V13-002** — long-running Viewでspawn / remove / reconnect / cache eviction / historical switching / addon reload後の整合性を検証する
@@ -407,7 +411,7 @@ model差し替え、material変更、描画layer追加等をCore Viewの改造�
 ### View Phase 13 完了条件
 
 - 表示品質・端末性能・アクセシビリティ設定を変えても同じauthoritative Worldを意味的に同一として観測できる。
-- 長時間・大規模WorldでもView cacheやdelivery stateがSimulationと混同されない。
+- 長時間・大規模WorldでもView cacheやGateway delivery stateがSimulationと混同されない。
 - World overviewから遠隔集落、個別Buildingまで一貫して観測・選択・詳細確認できる。
 - Core ViewとView Addonの双方がread-only境界を維持する。
 
@@ -419,4 +423,4 @@ model差し替え、material変更、描画layer追加等をCore Viewの改造�
 - cinematic camera / screenshot / video capture等の観測専用tool
 - 高度なrenderer backend差し替えや将来WebGPU移行
 
-Management操作やAnalytics処理はこのBacklogへ入れない。Simulation semanticsを必要とする新しい表示案が生じた場合は、まずSimulation / Observation contract側へ必要な意味を定義し、View側だけで推測実装しない。
+Management操作やAnalytics処理はこのBacklogへ入れない。Simulation semanticsを必要とする新しい表示案が生じた場合はSimulation Roadmapへ、Observation Request / subscription / delivery変更が必要ならGateway Roadmapへ切り分け、View側だけで推測実装しない。

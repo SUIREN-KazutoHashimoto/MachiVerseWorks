@@ -24,7 +24,7 @@
 
 MachiVerseWorks は、市民・道路交通・公共交通・物流・産業・電力などの都市活動を、サーバー側で継続的にシミュレーションする都市シミュレーションプロジェクトです。
 
-旧 Machi-Sim で得られたドメイン・設計・性能面の知見を引き継ぎつつ、ブラウザ単体実装からシミュレーション本体を分離しています。Simulationがauthoritative worldと意味的処理を所有し、ViewはObservation Gateway経由で必要な3D空間・Entity情報を読み取って忠実に表示します。World / City / Serverを変更する操作はViewから分離し、Management Clientからserver-authoritative command境界を利用する構成です。
+旧 Machi-Sim で得られたドメイン・設計・性能面の知見を引き継ぎつつ、ブラウザ単体実装からシミュレーション本体を分離しています。Simulationがauthoritative worldと意味的処理を所有し、Gatewayがread-only observationのsubscription / cache / deliveryを担当し、ViewはGateway経由で必要な3D空間・Entity情報を読み取って忠実に表示します。World / City / Serverを変更する操作はView / Gatewayから分離し、Management Clientからserver-authoritative command境界を利用する構成です。
 
 > [!NOTE]
 > 現在は **pre-alpha** 段階です。実装・API・Protocol・Save format・仕様は開発の進行に伴って変更される可能性があります。
@@ -36,10 +36,11 @@ MachiVerseWorks は、市民・道路交通・公共交通・物流・産業・�
 - Save format: **11**（正本: [`SaveFormatVersion.Current`](src/MachiVerseWorks.Persistence/SaveFormatVersion.cs)）
 - Simulation Phase 28 Radio & Spectrum Foundation: ✅ 完了
 - Simulation Phase 29 World & Physical Environment Generation: ▶️ 次
-- View Roadmap: Phase 1 Read-Only View Foundationから開始し、各描画Taskは依存するSimulation read modelの完成に追従
+- Gateway Roadmap: Phase 1 Observation Boundary Foundationから開始し、Simulation Phase 29 / View Phase 1と並行可能
+- View Roadmap: Phase 1 Read-Only View Foundationから開始し、各描画Taskは依存するSimulation semantic source / Gateway delivery contractの完成に追従
 - Management Roadmap: Simulation Phase 36のcommand境界に合わせてManagement Clientを実装予定
 
-詳細なPhase / Task状態は、Simulation側を[`roadmap/SIMULATION_ROADMAP.md`](roadmap/SIMULATION_ROADMAP.md)、read-only View側を[`roadmap/VIEW_ROADMAP.md`](roadmap/VIEW_ROADMAP.md)、管理・編集UIを[`roadmap/MANAGEMENT_ROADMAP.md`](roadmap/MANAGEMENT_ROADMAP.md)で管理し、READMEへ全Task一覧は複製しません。
+詳細なPhase / Task状態は、Simulation側を[`roadmap/SIMULATION_ROADMAP.md`](roadmap/SIMULATION_ROADMAP.md)、Gateway側を[`roadmap/GATEWAY_ROADMAP.md`](roadmap/GATEWAY_ROADMAP.md)、read-only View側を[`roadmap/VIEW_ROADMAP.md`](roadmap/VIEW_ROADMAP.md)、管理・編集UIを[`roadmap/MANAGEMENT_ROADMAP.md`](roadmap/MANAGEMENT_ROADMAP.md)で管理し、READMEへ全Task一覧は複製しません。
 
 ## Architecture
 
@@ -50,6 +51,12 @@ MachiVerseWorks は、市民・道路交通・公共交通・物流・産業・�
                          └──────────────▲───────────────┘
                                         │ Observation
                                         │ Protocol 2.16 / WebSocket
+                               ┌────────┴────────┐
+                               │     Gateway      │
+                               │ subscribe/cache  │
+                               │ delivery/resync  │
+                               └────────▲─────────┘
+                                        │ detached semantic source
 ┌──────────────────────────────┐        │
 │      Management Client       │        │
 │ edit / operation / admin UI  │        │
@@ -58,8 +65,7 @@ MachiVerseWorks は、市民・道路交通・公共交通・物流・産業・�
                ▼                        │
         ┌───────────────────────────────┴─┐
         │      MachiVerseWorks.Server     │
-        │ Observation Gateway             │
-        │ Administration / Command        │
+        │ Gateway / Command adapters      │
         └────────────────┬────────────────┘
                          │
         ┌────────────────▼────────────────┐
@@ -77,23 +83,26 @@ MachiVerseWorks.Protocol = Observation / Command wire contract
 
 | Component | Responsibility |
 | --- | --- |
-| **Simulation** | authoritative world、rule、意味的state、schedule、Agent / Road / Traffic / Population / Transit / Economy / Infrastructure / Communication |
+| **Simulation** | authoritative world、rule、意味的state、schedule、semantic observation source、Agent / Road / Traffic / Population / Transit / Economy / Infrastructure / Communication |
 | **Persistence** | Simulation checkpointとversioned Save Dataのmapping、外部Save validation |
-| **Server / Observation Gateway** | read-only observation request、subscription、snapshot / delta、cache / deduplication、connection管理 |
+| **Gateway** | read-only Observation Request、subscription、snapshot / delta delivery、cache / deduplication、Protocol adaptation、reconnect / resync |
 | **Server / Command Boundary** | Administration / Management commandのvalidation・dispatch・authoritative mutation |
 | **Protocol** | Client / Server間のstable ID・version negotiation・Observation / Command binary layout |
 | **View** | read-only 3D描画、Camera、Selection、Inspector、補間、Historical viewing、localization |
 | **Management** | build / edit / remove、運転control、Server設定、Save / Load等の明示的な管理UI |
 
-設計の詳細は[`docs/architecture/overview.md`](docs/architecture/overview.md)、SimulationとViewの境界・cache設計は[`docs/architecture/observation-gateway.md`](docs/architecture/observation-gateway.md)、Protocolのbinary正本は[`docs/architecture/protocol.md`](docs/architecture/protocol.md)、Save仕様は[`docs/specifications/save-data.md`](docs/specifications/save-data.md)を参照してください。採用理由は[`ADR-0001`](docs/decisions/ADR-0001-csharp-headless-simulation-server.md)に記録しています。
+Gatewayは現時点では`MachiVerseWorks.Server`内の責務として実装し、Roadmap上の分離は独立した責務・進捗管理を意味します。将来必要になればprocess / deploy unitを分離できる境界へ育てます。
+
+設計の詳細は[`docs/architecture/overview.md`](docs/architecture/overview.md)、SimulationとGateway / Viewの境界・cache設計は[`docs/architecture/observation-gateway.md`](docs/architecture/observation-gateway.md)、Protocolのbinary正本は[`docs/architecture/protocol.md`](docs/architecture/protocol.md)、Save仕様は[`docs/specifications/save-data.md`](docs/specifications/save-data.md)を参照してください。採用理由は[`ADR-0001`](docs/decisions/ADR-0001-csharp-headless-simulation-server.md)と[`ADR-0007`](docs/decisions/ADR-0007-read-only-view-observation-management-boundary.md)に記録しています。
 
 ## Design Principles
 
 - **Simulation authoritative** — Worldの状態・rule・意味・予定・状態遷移はSimulationで完結する
+- **Read-only Gateway** — Gatewayは意味を生成せず、Observation Request / cache / delivery / resyncだけを担当する
 - **Read-only View** — ViewはSimulationを変更せず、意味を推測・補完・再計算しない
 - **Observation / Command separation** — 観測要求とauthoritative mutation commandを別境界にする
-- **Spatial observation** — Viewには必要な3D範囲・明示targetだけを配信する
-- **View-independent simulation** — Viewの有無、接続数、Camera、LOD、FPSでSimulation結果を変えない
+- **Spatial observation** — Viewには必要な3D範囲・明示targetだけをGatewayから配信する
+- **View-independent simulation** — View / Gatewayの観測状態、接続数、Camera、LOD、FPSでSimulation結果を変えない
 - **Separated clocks** — Simulation tick / observation publish / render frameを分離する
 - **Measure first** — 最適化はprofiler・benchmark・実測値に基づく
 - **Stable data contracts** — Protocol / Save Dataへ表示言語やUI文字列を混ぜない
@@ -129,6 +138,7 @@ MachiVerseWorks/
 │  └─ archive/
 ├─ roadmap/
 │  ├─ SIMULATION_ROADMAP.md
+│  ├─ GATEWAY_ROADMAP.md
 │  ├─ VIEW_ROADMAP.md
 │  └─ MANAGEMENT_ROADMAP.md
 ├─ scripts/
@@ -165,7 +175,7 @@ MachiVerseWorks/
 | [`docs/roadmap/`](docs/roadmap/) | Roadmapを補足するPhase設計・検討資料。進捗の正本ではない |
 | [`docs/archive/`](docs/archive/) | Legacy資料・廃止済み設計・実験記録 |
 
-進捗の正本は[`roadmap/SIMULATION_ROADMAP.md`](roadmap/SIMULATION_ROADMAP.md)、[`roadmap/VIEW_ROADMAP.md`](roadmap/VIEW_ROADMAP.md)、[`roadmap/MANAGEMENT_ROADMAP.md`](roadmap/MANAGEMENT_ROADMAP.md)、ドキュメント全体の索引は[`docs/README.md`](docs/README.md)を参照してください。
+進捗の正本は[`roadmap/SIMULATION_ROADMAP.md`](roadmap/SIMULATION_ROADMAP.md)、[`roadmap/GATEWAY_ROADMAP.md`](roadmap/GATEWAY_ROADMAP.md)、[`roadmap/VIEW_ROADMAP.md`](roadmap/VIEW_ROADMAP.md)、[`roadmap/MANAGEMENT_ROADMAP.md`](roadmap/MANAGEMENT_ROADMAP.md)、ドキュメント全体の索引は[`docs/README.md`](docs/README.md)を参照してください。
 
 ## Legacy
 
