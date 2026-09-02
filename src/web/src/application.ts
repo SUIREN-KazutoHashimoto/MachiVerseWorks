@@ -28,6 +28,7 @@ import { OPTICAL_SNAPSHOT_MESSAGE_TYPE, type OpticalProtocolMessage, type Optica
 import { RadioDebugOverlay } from './radio-debug.ts';
 import { RADIO_SNAPSHOT_MESSAGE_TYPE, SPECTRUM_SNAPSHOT_MESSAGE_TYPE, type RadioProtocolMessage, type RadioSnapshotMessage, type SpectrumSnapshotMessage } from './radio-protocol.ts';
 import { ViewObservationState, type ReadonlyViewObservationState } from './view-observation-state.ts';
+import { WORLD_ENVIRONMENT_SNAPSHOT_MESSAGE_TYPE, type WorldEnvironmentSnapshotMessage } from './world-environment-protocol.ts';
 
 export class Application {
   private readonly localizer = initializeLocalization();
@@ -112,7 +113,7 @@ export class Application {
   private readonly animate = (now: number): void => {
     if (this.disposed) return;
     const performanceMetrics = this.performanceMetrics; if (performanceMetrics !== null) performanceMetrics.recordAnimationFrame(now);
-    this.navigation.update(now); this.updateSubscription(now); this.view.render(this.observation.entities, now, this.observation.pedestrians, this.observation.vehicles, this.observation.intersections, this.observation.roadNetwork); this.audio.syncListenerFromCamera(this.view.camera); this.updateAudio(now); if (performanceMetrics !== null) this.updatePerformanceUi(now, performanceMetrics); this.animationFrame = window.requestAnimationFrame(this.animate);
+    this.navigation.update(now); this.updateSubscription(now); this.view.render(this.observation.entities, now, this.observation.pedestrians, this.observation.vehicles, this.observation.intersections, this.observation.roadNetwork, this.observation.worldEnvironment); this.audio.syncListenerFromCamera(this.view.camera); this.updateAudio(now); if (performanceMetrics !== null) this.updatePerformanceUi(now, performanceMetrics); this.animationFrame = window.requestAnimationFrame(this.animate);
   };
 
   private updateSubscription(now: number): void {
@@ -126,7 +127,7 @@ export class Application {
 
   private updatePerformanceUi(now: number, metrics: ClientPerformanceMetrics): void { if (now - this.lastPerformanceUiAt < 500) return; this.lastPerformanceUiAt = now; this.ui.setPerformanceMetrics(metrics.snapshot()); }
 
-  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage | MultimodalTransitProtocolMessage | EconomyProtocolMessage | LogisticsProtocolMessage | PowerProtocolMessage | WaterSewerProtocolMessage | GasProtocolMessage | OpticalProtocolMessage | RadioProtocolMessage): void {
+  private handleProtocolMessage(message: ProtocolMessage | TrafficProtocolMessage | PopulationProtocolMessage | RailwayProtocolMessage | RailwayOperationsProtocolMessage | MultimodalTransitProtocolMessage | EconomyProtocolMessage | LogisticsProtocolMessage | PowerProtocolMessage | WaterSewerProtocolMessage | GasProtocolMessage | OpticalProtocolMessage | RadioProtocolMessage | WorldEnvironmentSnapshotMessage): void {
     switch (message.type) {
       case MessageType.AgentSpawn:
       case MessageType.AgentUpdate:
@@ -143,6 +144,8 @@ export class Application {
       case TrafficMessageType.VehicleUpdate:
       case TrafficMessageType.VehicleRemove:
       case TrafficMessageType.IntersectionControlSnapshot:
+        this.observation.apply(message); return;
+      case WORLD_ENVIRONMENT_SNAPSHOT_MESSAGE_TYPE:
         this.observation.apply(message); return;
       case PopulationMessageType.PopulationStatistics: this.applyPopulationStatistics(message); return;
       case PopulationMessageType.PersonDebug: this.applyPersonDebug(message); return;
