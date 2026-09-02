@@ -2,7 +2,7 @@ namespace MachiVerseWorks.Simulation;
 
 public sealed partial class SimulationWorld
 {
-    private static PersistentRegionalEvolutionSnapshot ApplyPersistentRegionalRedevelopment(
+    private PersistentRegionalEvolutionSnapshot ApplyPersistentRegionalRedevelopment(
         PersistentRegionalEvolutionSnapshot source)
     {
         if (source.Buildings.Count == 0) return source;
@@ -23,6 +23,7 @@ public sealed partial class SimulationWorld
 
             if (building.Status == BuildingLifecycleStatus.Demolished)
             {
+                RemovePersistentRegionalMaterialization(building.BuildingId);
                 if (parcel.BuildingId == building.BuildingId)
                 {
                     parcels[index] = parcel with
@@ -57,7 +58,7 @@ public sealed partial class SimulationWorld
                 RegionalEvolutionEventKind.BuildingUseChanged,
                 parcel.SettlementId,
                 building.BuildingId,
-                $"{building.Use}->{nextUse}; demand {parcel.DevelopmentDemand:F3}"));
+                FormattableString.Invariant($"{building.Use}->{nextUse}; demand {parcel.DevelopmentDemand:F3}")));
         }
 
         return source with
