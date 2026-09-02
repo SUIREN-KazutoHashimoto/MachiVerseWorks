@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACT_DIR="$ROOT_DIR/.artifacts/view-phase04-e2e"
+BASELINE_FILE="$ROOT_DIR/docs/development/baselines/view-phase04-rendering-baseline.json"
 WEB_PORT=5188
 WEB_PID=""
 mkdir -p "$ARTIFACT_DIR"; rm -f "$ARTIFACT_DIR"/*
@@ -73,6 +74,8 @@ extract_evolution_metric() {
   echo "evolution_draw_calls=$(extract_evolution_metric draw-calls)"
 } | tee "$ARTIFACT_DIR/rendering-baseline.txt"
 
+node "$ROOT_DIR/scripts/check-view-phase04-rendering-baseline.mjs" "$BASELINE_FILE" "$ARTIFACT_DIR/rendering-baseline.txt"
+
 cat "$ARTIFACT_DIR/browser.html"
 cat "$ARTIFACT_DIR/evolution-browser.html"
-echo "View Phase 4 Settlement & Structure Rendering browser E2E passed (static + Phase31 evolution)."
+echo "View Phase 4 Settlement & Structure Rendering browser E2E passed (static + Phase31 evolution + checked-in baseline)."
