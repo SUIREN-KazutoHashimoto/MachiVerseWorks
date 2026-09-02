@@ -18,7 +18,7 @@ Branch protection / Rulesetのrequired checkは **`CI / ci-gate`** を正本と�
 
 ### Repository validation
 
-- 必須Repository fileが存在し空でないこと。Roadmapは`roadmap/SIMULATION_ROADMAP.md`、`roadmap/VIEW_ROADMAP.md`、`roadmap/MANAGEMENT_ROADMAP.md`の3ファイルを必須とする
+- 必須Repository fileが存在し空でないこと。Roadmapは`roadmap/SIMULATION_ROADMAP.md`、`roadmap/GATEWAY_ROADMAP.md`、`roadmap/VIEW_ROADMAP.md`、`roadmap/MANAGEMENT_ROADMAP.md`の4ファイルを必須とする
 - `scripts/check-markdown-links.py`でMarkdown local file linkとheading anchorを検証
 - `global.json` SDK policy
 - `VERSION`の`A.B.C`形式
@@ -27,7 +27,7 @@ Branch protection / Rulesetのrequired checkは **`CI / ci-gate`** を正本と�
 - その他のPR targetはbaseより大きい`VERSION`を要求
 - `src/web/locales/manifest.json`のlocale/default整合
 
-MarkdownやRoadmapを移動・改名した場合は、CIのMarkdown link validationを必ず通し、旧相対リンクを残さない。
+MarkdownやRoadmapを移動・改名した場合は、CIのMarkdown link validationを必ず通し、旧相対リンクを残さない。Roadmap責務を変更した場合は4 Roadmapと`roadmap/README.md`の依存索引も同期する。
 
 ### .NET
 

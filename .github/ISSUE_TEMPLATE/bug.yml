@@ -23,9 +23,12 @@ body:
       label: 発生箇所
       options:
         - Simulation Core
-        - Server
+        - Observation Gateway
+        - Server Host / Administration
         - Protocol
-        - Web Client
+        - Read-Only View
+        - Management Client
+        - Persistence / Save
         - Build / CI / Tooling
         - Documentation
         - 不明 / 複数
