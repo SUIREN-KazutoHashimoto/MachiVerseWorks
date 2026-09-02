@@ -57,6 +57,7 @@ extract_metric() {
   echo "buildings=$(extract_metric buildings)"
   echo "labels=$(extract_metric labels)"
   echo "road_signs=$(extract_metric road-signs)"
+  echo "current_year=$(extract_metric current-year)"
 } | tee "$ARTIFACT_DIR/rendering-baseline.txt"
 
 cat "$ARTIFACT_DIR/browser.html"
