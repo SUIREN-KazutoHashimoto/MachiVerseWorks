@@ -22,10 +22,10 @@ public static class PersistentRegionalEvolutionProtocolCodec
         if (!version.SupportsPersistentRegionalEvolution)
             throw new ArgumentOutOfRangeException(nameof(version), version, "Persistent regional evolution messages require Protocol 2.19 or newer.");
         if (!IsValid(message))
-            throw new ArgumentOutOfRangeException(nameof(message), "Persistent regional evolution snapshot contains invalid values or references.");
+            throw new ArgumentOutOfRangeException(nameof(message), "Persistent regional evolution snapshot contains invalid values.");
         var payload = JsonSerializer.SerializeToUtf8Bytes(message, SerializerOptions);
         if ((uint)payload.Length > ProtocolFrameHeader.MaxPayloadLength)
-            throw new ArgumentOutOfRangeException(nameof(message), "Persistent regional evolution snapshot exceeds protocol payload limit.");
+            throw new ArgumentOutOfRangeException(nameof(message), "Persistent regional evolution snapshot chunk exceeds protocol payload limit.");
         var frame = new byte[ProtocolFrameHeader.Size + payload.Length];
         ProtocolFrameHeader.Write(frame, new ProtocolFrameHeader(version, MessageType.PersistentRegionalEvolutionSnapshot, checked((uint)payload.Length)));
         payload.CopyTo(frame.AsSpan(ProtocolFrameHeader.Size));
@@ -81,43 +81,42 @@ public static class PersistentRegionalEvolutionProtocolCodec
 
         var parcels = new HashSet<ulong>();
         foreach (var item in message.Parcels)
-            if (item is null || item.ParcelId == 0 || !parcels.Add(item.ParcelId) || !settlements.Contains(item.SettlementId)
+            if (item is null || item.ParcelId == 0 || item.SettlementId == 0 || !parcels.Add(item.ParcelId)
                 || !Unit(item.DevelopmentDemand) || !Unit(item.LandValue) || item.DevelopmentState > 3) return false;
 
         var buildings = new HashSet<ulong>();
         foreach (var item in message.Buildings)
-            if (item is null || item.BuildingId == 0 || !buildings.Add(item.BuildingId) || !parcels.Contains(item.ParcelId)
+            if (item is null || item.BuildingId == 0 || item.ParcelId == 0 || !buildings.Add(item.BuildingId)
                 || item.Use > 6 || item.BuiltYear > message.CurrentYear || item.LastChangedYear > message.CurrentYear
                 || !Unit(item.Condition) || !Unit(item.Occupancy) || item.Capacity < 0 || item.Status > 5) return false;
-        foreach (var item in message.Parcels) if (item.BuildingId != 0 && !buildings.Contains(item.BuildingId)) return false;
 
         foreach (var item in message.ServiceCatchments)
-            if (item is null || !settlements.Contains(item.SettlementId) || item.Kind > 2 || !Positive(item.RadiusMeters) || !Unit(item.Coverage)) return false;
+            if (item is null || item.SettlementId == 0 || item.Kind > 2 || !Positive(item.RadiusMeters) || !Unit(item.Coverage)) return false;
         foreach (var item in message.InfrastructureDemands)
-            if (item is null || !settlements.Contains(item.SettlementId) || item.Kind > 2 || !Unit(item.Demand) || !ValidReason(item.Reason)) return false;
+            if (item is null || item.SettlementId == 0 || item.Kind > 2 || !Unit(item.Demand) || !ValidReason(item.Reason)) return false;
 
         var relationIds = new HashSet<ulong>();
         foreach (var item in message.Relations)
-            if (item is null || item.RelationId == 0 || !relationIds.Add(item.RelationId) || !settlements.Contains(item.FromSettlementId)
-                || !settlements.Contains(item.ToSettlementId) || item.FromSettlementId == item.ToSettlementId || item.Kind > 3
+            if (item is null || item.RelationId == 0 || !relationIds.Add(item.RelationId) || item.FromSettlementId == 0
+                || item.ToSettlementId == 0 || item.FromSettlementId == item.ToSettlementId || item.Kind > 3
                 || !Unit(item.Strength) || item.SinceYear > message.CurrentYear) return false;
 
         ulong previousEventId = 0;
         foreach (var item in message.Events)
         {
             if (item is null || item.EventId == 0 || item.EventId <= previousEventId || item.Year > message.CurrentYear || item.Kind > 14
-                || !settlements.Contains(item.SettlementId) || (item.BuildingId != 0 && !buildings.Contains(item.BuildingId)) || !ValidReason(item.Reason)) return false;
+                || item.SettlementId == 0 || !ValidReason(item.Reason)) return false;
             previousEventId = item.EventId;
         }
         foreach (var item in message.CommutingFlows)
-            if (item is null || !ValidFlowSettlements(item.FromSettlementId, item.ToSettlementId, settlements) || item.WorkerCount <= 0) return false;
+            if (item is null || !ValidFlowSettlements(item.FromSettlementId, item.ToSettlementId) || item.WorkerCount <= 0) return false;
         foreach (var item in message.FreightFlows)
-            if (item is null || !ValidFlowSettlements(item.FromSettlementId, item.ToSettlementId, settlements) || item.CommodityId == 0
+            if (item is null || !ValidFlowSettlements(item.FromSettlementId, item.ToSettlementId) || item.CommodityId == 0
                 || !NonNegative(item.Quantity) || item.ShipmentCount <= 0 || !NonNegative(item.DeliveredQuantity) || item.DeliveredQuantity > item.Quantity) return false;
         return true;
     }
 
-    private static bool ValidFlowSettlements(ulong from, ulong to, HashSet<ulong> settlements) => from != to && settlements.Contains(from) && settlements.Contains(to);
+    private static bool ValidFlowSettlements(ulong from, ulong to) => from != 0 && to != 0 && from != to;
     private static bool ValidReason(string value) => !string.IsNullOrWhiteSpace(value) && value.Length <= MaximumReasonLength;
     private static bool Finite(double value) => double.IsFinite(value);
     private static bool Unit(double value) => Finite(value) && value is >= 0d and <= 1d;
