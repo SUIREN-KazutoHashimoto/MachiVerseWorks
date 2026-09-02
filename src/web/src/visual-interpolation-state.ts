@@ -4,6 +4,8 @@ export interface VisualPosition {
   readonly z: number;
 }
 
+export type MutablePositionBuffer = Float32Array | Float64Array;
+
 interface PositionTrack {
   previous: VisualPosition;
   current: VisualPosition;
@@ -39,8 +41,8 @@ export class VisualInterpolationState<Id> {
     }
   }
 
-  /** Writes a sampled position directly into a caller-owned render buffer. */
-  public writeSampledPosition(id: Id, now: number, target: Float32Array, offset: number): boolean {
+  /** Writes a sampled position directly into a caller-owned buffer. */
+  public writeSampledPosition(id: Id, now: number, target: MutablePositionBuffer, offset: number): boolean {
     const track = this.tracks.get(id);
     if (track === undefined) return false;
     const alpha = clamp((now - track.receivedAt) / track.interpolationDurationMs, 0, 1);
