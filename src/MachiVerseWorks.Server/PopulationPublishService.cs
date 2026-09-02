@@ -1,16 +1,21 @@
 using System.Net.WebSockets;
 using MachiVerseWorks.Protocol;
+using MachiVerseWorks.Simulation;
 
 namespace MachiVerseWorks.Server;
 
-internal readonly record struct PendingPopulationDelivery(ClientConnection Connection, ClientInspectionState Inspection);
+internal readonly record struct PendingPopulationDelivery(
+    ClientConnection Connection,
+    ClientInspectionState Inspection,
+    EntityInspectionSelection EntityInspection);
 
 internal sealed class PopulationPublishService(
     IObservationSource observationSource,
     ServerOptions options,
     ClientConnectionRegistry connections,
     ObservationCache cache,
-    SnapshotDeliveryScheduler deliveryScheduler) : BackgroundService
+    SnapshotDeliveryScheduler deliveryScheduler,
+    EntityInspectionRegistry inspections) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -25,14 +30,24 @@ internal sealed class PopulationPublishService(
                 try
                 {
                     var inspectedIds = pending
-                        .Where(static item => item.Inspection.PersonId.HasValue)
-                        .Select(static item => item.Inspection.PersonId!.Value)
+                        .SelectMany(static item => EnumeratePersonIds(item))
                         .ToHashSet();
+                    var inspectedTrainIds = pending
+                        .Where(static item => item.EntityInspection.Target is { EntityType: ProtocolEntityType.Train })
+                        .Select(static item => item.EntityInspection.Target!.Value.EntityId)
+                        .ToHashSet();
+                    var requiresRegional = pending.Any(static item => item.EntityInspection.Target is { EntityType: ProtocolEntityType.Settlement or ProtocolEntityType.Parcel or ProtocolEntityType.Building });
+
                     var snapshot = observationSource.CapturePopulationPublishSnapshot(inspectedIds);
+                    var trains = observationSource.CaptureTrainSnapshots(inspectedTrainIds);
+                    PersistentRegionalEvolutionSnapshotMessage? regional = null;
+                    if (requiresRegional && observationSource.CapturePersistentRegionalEvolutionSnapshot() is { } regionalSource)
+                        regional = PersistentRegionalEvolutionMessageMapper.ToProtocol(regionalSource.Evolution, regionalSource.Interactions);
+
                     var statistics = PopulationMessageMapper.Create(snapshot.Statistics);
                     foreach (var delivery in pending)
                     {
-                        deliveryScheduler.StartReserved(delivery.Connection.Id, () => PublishConnectionAsync(delivery, snapshot, statistics, stoppingToken));
+                        deliveryScheduler.StartReserved(delivery.Connection.Id, () => PublishConnectionAsync(delivery, snapshot, statistics, trains, regional, stoppingToken));
                     }
                 }
                 catch
@@ -55,6 +70,7 @@ internal sealed class PopulationPublishService(
     private PendingPopulationDelivery[] CapturePendingDeliveries()
     {
         var candidates = connections.CreateSnapshot();
+        inspections.Prune(candidates.Select(static connection => connection.Id).ToHashSet());
         var pending = new List<PendingPopulationDelivery>(candidates.Length);
         foreach (var connection in candidates)
         {
@@ -65,7 +81,10 @@ internal sealed class PopulationPublishService(
             {
                 continue;
             }
-            pending.Add(new PendingPopulationDelivery(connection, connection.CaptureInspectionState()));
+            var entityInspection = connection.NegotiatedVersion.SupportsPersistentRegionalEvolution
+                ? inspections.Capture(connection.Id)
+                : default;
+            pending.Add(new PendingPopulationDelivery(connection, connection.CaptureInspectionState(), entityInspection));
         }
         return pending.ToArray();
     }
@@ -74,6 +93,8 @@ internal sealed class PopulationPublishService(
         PendingPopulationDelivery delivery,
         PopulationPublishSnapshot snapshot,
         PopulationStatisticsMessage statistics,
+        IReadOnlyDictionary<ulong, TrainSnapshot> trains,
+        PersistentRegionalEvolutionSnapshotMessage? regional,
         CancellationToken cancellationToken)
     {
         var connection = delivery.Connection;
@@ -97,11 +118,24 @@ internal sealed class PopulationPublishService(
                 var personKey = new EncodedObservationCacheKey("person", connection.NegotiatedVersion, revision, ObservationCacheIdentity.ForEntity(personId));
                 _ = await connection.SendCachedAsync(personMessage, connection.NegotiatedVersion, personKey, cache, sendCancellation.Token);
             }
+
+            if (delivery.EntityInspection.Target is { } target
+                && inspections.IsCurrent(connection.Id, delivery.EntityInspection))
+            {
+                var entityMessage = EntityInspectionMessageMapper.Create(target, snapshot, trains, regional);
+                _ = await connection.SendAsync(entityMessage, connection.NegotiatedVersion, sendCancellation.Token);
+            }
         }
         catch (Exception exception) when (exception is WebSocketException or OperationCanceledException or ObjectDisposedException)
         {
             connection.Abort();
             connections.Remove(connection.Id);
         }
+    }
+
+    private static IEnumerable<ulong> EnumeratePersonIds(PendingPopulationDelivery delivery)
+    {
+        if (delivery.Inspection.PersonId is { } legacyId) yield return legacyId;
+        if (delivery.EntityInspection.Target is { EntityType: ProtocolEntityType.Person } target) yield return target.EntityId;
     }
 }
