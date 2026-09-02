@@ -4,7 +4,7 @@ using MachiVerseWorks.Protocol;
 namespace MachiVerseWorks.Server;
 
 internal sealed class EconomyPublishService(
-    SimulationRuntime simulation,
+    IObservationSource observationSource,
     ServerOptions options,
     ClientConnectionRegistry connections) : BackgroundService
 {
@@ -23,7 +23,7 @@ internal sealed class EconomyPublishService(
                     && connection.Socket.State == WebSocketState.Open).ToArray();
                 if (targets.Length == 0) continue;
 
-                var message = EconomyMessageMapper.Create(simulation.Read(static world => world.CreateEconomySnapshot()));
+                var message = EconomyMessageMapper.Create(observationSource.CaptureEconomySnapshot());
                 foreach (var connection in targets)
                 {
                     try
