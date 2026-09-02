@@ -20,10 +20,10 @@ public sealed partial class SimulationWorld
 
             foreach (var building in buildings)
             {
-                var center = Center(building.Bounds);
-                var nearest = FindNearestSettlement(source.Settlements, center);
+                var buildingCenter = Center(building.Bounds);
+                var nearest = FindNearestSettlement(source.Settlements, buildingCenter);
                 if (nearest?.SettlementId != settlement.SettlementId) continue;
-                var distance = Distance2D(center, settlement.Center);
+                var distance = Distance2D(buildingCenter, settlement.Center);
                 if (distance > settlement.InfluenceRadiusMeters * 1.5d) continue;
                 var localWeight = building.Kind switch
                 {
@@ -33,18 +33,18 @@ public sealed partial class SimulationWorld
                     BuildingKind.Industrial => 1.5d,
                     _ => 1d,
                 };
-                weightedX += center.X * localWeight;
-                weightedY += center.Y * localWeight;
-                weightedZ += center.Z * localWeight;
+                weightedX += buildingCenter.X * localWeight;
+                weightedY += buildingCenter.Y * localWeight;
+                weightedZ += buildingCenter.Z * localWeight;
                 weight += localWeight;
             }
 
             var observedCenter = new WorldPoint(weightedX / weight, weightedY / weight, weightedZ / weight);
-            var center = new WorldPoint(
+            var evolvedCenter = new WorldPoint(
                 settlement.Center.X * 0.75d + observedCenter.X * 0.25d,
                 settlement.Center.Y * 0.75d + observedCenter.Y * 0.25d,
                 settlement.Center.Z * 0.75d + observedCenter.Z * 0.25d);
-            var connectivity = MeasureRegionalConnectivity(center, settlement.InfluenceRadiusMeters, roads, railway);
+            var connectivity = MeasureRegionalConnectivity(evolvedCenter, settlement.InfluenceRadiusMeters, roads, railway);
             var accessibility = Math.Clamp(settlement.Accessibility * 0.55d + connectivity * 0.45d, 0d, 1d);
             var scale = PersistentRegionalEvolutionEngine.Classify(
                 settlement.Population,
@@ -54,7 +54,7 @@ public sealed partial class SimulationWorld
                 accessibility);
             result[settlementIndex] = settlement with
             {
-                Center = center,
+                Center = evolvedCenter,
                 Accessibility = accessibility,
                 Scale = scale,
             };
