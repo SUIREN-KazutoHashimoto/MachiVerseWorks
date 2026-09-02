@@ -1,8 +1,8 @@
 # MachiVerseWorks.Server
 
-Headless ServerはASP.NET Core / Kestrel上で1つの`SimulationWorld`をserver-authoritativeに実行し、HTTP health endpointとProtocol 2.x binary WebSocketを提供します。現在のServer Protocol上限は[`ProtocolVersion.Current`](../MachiVerseWorks.Protocol/ProtocolVersion.cs)の **2.16** です。
+Headless ServerはASP.NET Core / Kestrel上で1つの`SimulationWorld`をserver-authoritativeに実行し、HTTP health endpointとProtocol 2.x binary WebSocketを提供します。現在のServer Protocol上限は[`ProtocolVersion.Current`](../MachiVerseWorks.Protocol/ProtocolVersion.cs)の **2.17** です。
 
-Serverはread-onlyな**Observation Gateway**と、authoritative mutationを扱う**Administration / Management command boundary**を分離する方向で整理します。現行publish / subscription / inspection処理がObservation Gatewayの既存基盤であり、generic cache / request deduplication等の追加基盤は[`GATEWAY_ROADMAP.md`](../../roadmap/GATEWAY_ROADMAP.md)で段階実装します。
+Serverはread-onlyな**Observation Gateway**と、authoritative mutationを扱う**Administration / Management command boundary**を分離します。Gateway Phase 1でpublish / subscription / inspection処理のmodule boundaryを確立し、generic cache / request deduplication等の最適化基盤は[`GATEWAY_ROADMAP.md`](../../roadmap/GATEWAY_ROADMAP.md) Phase 2以降で段階実装します。
 
 ## Runtime boundary
 
@@ -27,7 +27,18 @@ Serverはread-onlyな**Observation Gateway**と、authoritative mutationを扱�
 
 Observation Gatewayは、現行のpublish / subscription / inspection処理をread-only delivery boundaryとして整理し、将来の共通cache / deduplication / resync基盤までを含むarchitecture名です。
 
-### 現在実装済みの基盤
+### Gateway Phase 1で確立済みの境界
+
+- `IObservationSource`: Gateway側が参照するread-only source contract
+- `SimulationObservationSource`: `SimulationRuntime`からdetached snapshot / read modelを取得する唯一のObservation adapter
+- `AddObservationGateway()`: Observation Request queue / WebSocket session / publisher群をまとめて登録するmodule boundary
+- `ObservationProtocolAdapter`: negotiated Protocol versionごとのserialize / deserialize codec選択
+- `ClientConnection` / `ClientSubscriptionState` / `SnapshotDeliveryScheduler`: connection-local request / subscription / delivery state
+- Observation publisher / WebSocket sessionから`SimulationRuntime`への直接依存を除去
+- Gateway moduleから`AdminCommandQueue` / `AdminCommandExecutorV2`への依存を除外
+- dependency test、non-observation WebSocket requestのnegative test、旧codecとのwire byte equivalence testで境界を固定
+
+### 現在実装済みの観測基盤
 
 - `SubscribeVolume`等のobservation subscription
 - Person inspection等のexplicit inspection
@@ -138,6 +149,7 @@ negotiated minorに応じて次のread model / messageを配信します。messa
 | 2.14 | Gas |
 | 2.15 | Optical Communication |
 | 2.16 | Radio / Spectrum |
+| 2.17 | World Environment / Terrain |
 
 Protocol 2.9は新しいServer→Client domain snapshotではなく、Client→Serverのread-only `ClearPersonInspection` Observation Requestを追加します。
 
