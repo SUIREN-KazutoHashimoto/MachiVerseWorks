@@ -56,7 +56,11 @@ public sealed record PersistentRegionalEvolutionSnapshot(
     IReadOnlyList<RegionalRelation> Relations,
     IReadOnlyList<RegionalEvolutionEvent> Events);
 
-public sealed record PersistentRegionalEvolutionCheckpoint(PersistentRegionalEvolutionSnapshot Snapshot);
+public sealed record PersistentRegionalEvolutionCheckpoint(
+    PersistentRegionalEvolutionSnapshot Snapshot,
+    ulong TicksPerYear = PersistentRegionalEvolutionOptions.DefaultTicksPerYear,
+    ulong NextRelationId = 1UL,
+    IReadOnlyList<PersistentRegionalMaterializationBinding>? MaterializedBuildings = null);
 
 public sealed record PersistentRegionalEvolutionOptions
 {
@@ -110,6 +114,16 @@ public static class PersistentRegionalEvolutionEngine
         return state;
     }
 
+    public static PersistentRegionalEvolutionSnapshot RefreshDerivedCollections(PersistentRegionalEvolutionSnapshot source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        return source with
+        {
+            ServiceCatchments = BuildServiceCatchments(source.Settlements),
+            InfrastructureDemands = BuildInfrastructureDemands(source.Settlements),
+        };
+    }
+
     public static SettlementScale Classify(int population, int jobs, double services, double density, double accessibility)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(population);
@@ -155,7 +169,7 @@ public static class PersistentRegionalEvolutionEngine
                 DormantSinceYear = active ? null : old.DormantSinceYear ?? year };
             settlements[i] = next;
             if (scale != old.Scale) events.Add(new(new(nextEventId++), year, RegionalEvolutionEventKind.ClassificationChanged, old.SettlementId, null, $"{old.Scale}->{scale}"));
-            if (populationDelta != 0) events.Add(new(new(nextEventId++), year, populationDelta > 0 ? RegionalEvolutionEventKind.Growth : RegionalEvolutionEventKind.Decline, old.SettlementId, null, $"population {populationDelta:+#;-#;0}"));
+            if (populationDelta != 0) events.Add(new(new(nextEventId++), year, populationDelta > 0 ? RegionalEvolutionEventKind.Growth : RegionalEvolutionEventKind.Decline, old.SettlementId, null, FormattableString.Invariant($"population {populationDelta:+#;-#;0}"))));
             if (!active && old.IsActive) events.Add(new(new(nextEventId++), year, RegionalEvolutionEventKind.SettlementDormancy, old.SettlementId, null, "population and jobs fell below persistence threshold"));
             if (active && !old.IsActive) events.Add(new(new(nextEventId++), year, RegionalEvolutionEventKind.SettlementRecovery, old.SettlementId, null, "activity recovered"));
         }
@@ -184,14 +198,19 @@ public static class PersistentRegionalEvolutionEngine
                 : condition < 0.35 && parcel.DevelopmentDemand > 0.62 ? BuildingLifecycleStatus.Renovating
                 : BuildingLifecycleStatus.Active;
             if (age > 120 && condition < 0.12 && parcel.DevelopmentDemand < 0.35) status = BuildingLifecycleStatus.Demolished;
-            if (status != b.Status) events.Add(new(new(nextEventId++), year, status switch
+            if (status != b.Status)
             {
-                BuildingLifecycleStatus.Vacant => RegionalEvolutionEventKind.BuildingVacated,
-                BuildingLifecycleStatus.Abandoned => RegionalEvolutionEventKind.BuildingAbandoned,
-                BuildingLifecycleStatus.Demolished => RegionalEvolutionEventKind.BuildingDemolished,
-                BuildingLifecycleStatus.Renovating => RegionalEvolutionEventKind.BuildingRenovated,
-                _ => RegionalEvolutionEventKind.BuildingUseChanged
-            }, parcel.SettlementId, b.BuildingId, $"{b.Status}->{status}"));
+                var eventKind = status switch
+                {
+                    BuildingLifecycleStatus.Vacant => RegionalEvolutionEventKind.BuildingVacated,
+                    BuildingLifecycleStatus.Abandoned => RegionalEvolutionEventKind.BuildingAbandoned,
+                    BuildingLifecycleStatus.Demolished => RegionalEvolutionEventKind.BuildingDemolished,
+                    BuildingLifecycleStatus.Renovating => RegionalEvolutionEventKind.BuildingRenovated,
+                    _ => (RegionalEvolutionEventKind?)null,
+                };
+                if (eventKind is { } kind)
+                    events.Add(new(new(nextEventId++), year, kind, parcel.SettlementId, b.BuildingId, $"{b.Status}->{status}"));
+            }
             if (status == BuildingLifecycleStatus.Renovating) condition = Math.Min(1d, condition + 0.35);
             return b with { Condition = condition, Occupancy = occupancy, Status = status, LastChangedYear = status == b.Status ? b.LastChangedYear : year };
         }).ToArray();
@@ -202,17 +221,23 @@ public static class PersistentRegionalEvolutionEngine
         IReadOnlyList<SettlementEvolutionState> settlements, IReadOnlyList<ParcelEvolutionState> parcels,
         IReadOnlyList<BuildingLifecycleState> buildings, IReadOnlyList<RegionalEvolutionEvent> events)
     {
-        var catchments = settlements.Where(x => x.IsActive).SelectMany(s => Enum.GetValues<RegionalServiceKind>().Select(k =>
+        var catchments = BuildServiceCatchments(settlements);
+        var demands = BuildInfrastructureDemands(settlements);
+        var relations = BuildRelations(settlements, year);
+        return new(year, tickCount, settlements.ToArray(), parcels.ToArray(), buildings.ToArray(), catchments, demands, relations, events.OrderBy(x => x.Id.Value).ToArray());
+    }
+
+    private static ServiceCatchment[] BuildServiceCatchments(IReadOnlyList<SettlementEvolutionState> settlements) =>
+        settlements.Where(x => x.IsActive).SelectMany(s => Enum.GetValues<RegionalServiceKind>().Select(k =>
             new ServiceCatchment(s.SettlementId, k, s.InfluenceRadiusMeters * (0.65 + (int)k * 0.12), Math.Clamp(s.ServiceIndex * (0.9 + s.Accessibility * 0.1), 0d, 1d)))).ToArray();
-        var demands = settlements.Where(x => x.IsActive).SelectMany(s => new[]
+
+    private static InfrastructureDemandSignal[] BuildInfrastructureDemands(IReadOnlyList<SettlementEvolutionState> settlements) =>
+        settlements.Where(x => x.IsActive).SelectMany(s => new[]
         {
             new InfrastructureDemandSignal(s.SettlementId, InfrastructureDemandKind.Road, Math.Clamp((s.Population / 50000d + s.Jobs / 25000d) * (1.1 - s.Accessibility), 0d, 1d), "population/jobs/accessibility"),
             new InfrastructureDemandSignal(s.SettlementId, InfrastructureDemandKind.Transit, Math.Clamp((s.Density + s.ServiceIndex) * 0.5 * (1.1 - s.Accessibility * 0.4), 0d, 1d), "density/services/accessibility"),
             new InfrastructureDemandSignal(s.SettlementId, InfrastructureDemandKind.Utility, Math.Clamp((s.Population / 80000d + s.Jobs / 40000d) * 0.5, 0d, 1d), "population/jobs")
         }).ToArray();
-        var relations = BuildRelations(settlements, year);
-        return new(year, tickCount, settlements.ToArray(), parcels.ToArray(), buildings.ToArray(), catchments, demands, relations, events.OrderBy(x => x.Id.Value).ToArray());
-    }
 
     private static RegionalRelation[] BuildRelations(IReadOnlyList<SettlementEvolutionState> settlements, int year)
     {
