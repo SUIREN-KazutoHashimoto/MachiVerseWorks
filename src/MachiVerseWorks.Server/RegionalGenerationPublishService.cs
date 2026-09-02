@@ -16,6 +16,12 @@ internal sealed class RegionalGenerationPublishService(
     ObservationDeliveryCoordinator deliveryCoordinator,
     ILogger<RegionalGenerationPublishService> logger) : BackgroundService
 {
+    private static readonly Action<ILogger, ulong, ulong, Exception?> LogOversizedSnapshot =
+        LoggerMessage.Define<ulong, ulong>(
+            LogLevel.Error,
+            new EventId(1, nameof(LogOversizedSnapshot)),
+            "Regional Generation observation generation {Generation} revision {Revision} cannot fit the Protocol 2.18 single-frame contract; delivery was skipped without disconnecting Clients.");
+
     private readonly Dictionary<Guid, (ulong Generation, ulong Revision)> _delivered = [];
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -48,10 +54,7 @@ internal sealed class RegionalGenerationPublishService(
                 }
                 catch (ArgumentOutOfRangeException exception)
                 {
-                    logger.LogError(exception,
-                        "Regional Generation observation generation {Generation} revision {Revision} cannot fit the Protocol 2.18 single-frame contract; delivery was skipped without disconnecting Clients.",
-                        observation.Generation,
-                        observation.Revision);
+                    LogOversizedSnapshot(logger, observation.Generation, observation.Revision, exception);
                     continue;
                 }
 
