@@ -3,7 +3,7 @@ using System.Net.WebSockets;
 namespace MachiVerseWorks.Server;
 
 internal sealed class WaterSewerPublishService(
-    SimulationRuntime simulation,
+    IObservationSource observationSource,
     ServerOptions options,
     ClientConnectionRegistry connections) : BackgroundService
 {
@@ -22,7 +22,7 @@ internal sealed class WaterSewerPublishService(
                     && connection.Socket.State == WebSocketState.Open).ToArray();
                 if (targets.Length == 0) continue;
 
-                var snapshot = simulation.Read(static world => world.CreateWaterSewerSnapshot());
+                var snapshot = observationSource.CaptureWaterSewerSnapshot();
                 if (snapshot.WaterNodes.Count == 0
                     && snapshot.WaterPipes.Count == 0
                     && snapshot.SewerNodes.Count == 0
