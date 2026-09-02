@@ -152,7 +152,6 @@ public sealed partial class SimulationWorld
 
     public RadioSnapshot CreateRadioSnapshot()
     {
-        RecalculateRadioPlan();
         var conflicts = CreateSpectrumConflicts();
         var serviceAreas = CreateRadioServiceAreas();
         return new RadioSnapshot(
