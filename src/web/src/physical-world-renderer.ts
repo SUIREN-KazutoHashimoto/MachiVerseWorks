@@ -17,6 +17,8 @@ import {
   type WorldEnvironmentSnapshotMessage,
 } from './world-environment-protocol.ts';
 
+export const SURFACE_WATER_PRESENTATION_OFFSET_METERS = 0.25;
+
 export interface WaterPointBatch {
   readonly kind: SurfaceWaterKind;
   readonly positions: Float32Array;
@@ -130,7 +132,15 @@ export class PhysicalWorldRenderer {
       if (visual === null) continue;
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute('position', new THREE.BufferAttribute(batch.positions, 3));
-      const material = new THREE.PointsMaterial({ color: visual.color, size: visual.pointSize, sizeAttenuation: true, transparent: true, opacity: 0.78, depthWrite: false });
+      const material = new THREE.PointsMaterial({
+        color: visual.color,
+        size: visual.pointSize,
+        sizeAttenuation: true,
+        transparent: true,
+        opacity: 0.78,
+        depthTest: true,
+        depthWrite: false,
+      });
       const points = new THREE.Points(geometry, material);
       points.name = `surface-water-${visual.label}`;
       points.renderOrder = 2;
@@ -200,7 +210,8 @@ function buildWaterPointBatches(snapshot: WorldEnvironmentSnapshotMessage): read
     if (sample.surfaceWater === SurfaceWaterKind.None) continue;
     let positions = byKind.get(sample.surfaceWater);
     if (positions === undefined) { positions = []; byKind.set(sample.surfaceWater, positions); }
-    positions.push(sample.x, sample.z, sample.y);
+    // This is a presentation-only lift to keep authoritative water markers from being coplanar with terrain.
+    positions.push(sample.x, sample.z + SURFACE_WATER_PRESENTATION_OFFSET_METERS, sample.y);
   }
   return Object.freeze([...byKind.entries()].sort(([left], [right]) => left - right).map(([kind, positions]) => Object.freeze({
     kind,
