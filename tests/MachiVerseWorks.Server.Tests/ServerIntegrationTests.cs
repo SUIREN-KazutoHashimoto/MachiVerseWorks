@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.WebSockets;
 using MachiVerseWorks.Protocol;
+using MachiVerseWorks.Simulation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -68,6 +69,43 @@ public sealed class ServerIntegrationTests
         Assert.IsTrue(double.IsFinite(spawnMessage.Z));
         Assert.IsTrue(double.IsFinite(spawnMessage.VelocityZ));
         Assert.IsTrue(sawUpdate);
+    }
+
+    [TestMethod]
+    public async Task Protocol217SubscriptionPublishesWorldEnvironmentSnapshot()
+    {
+        var additionalConfiguration = new Dictionary<string, string?>
+        {
+            ["Simulation:Seed"] = "29027",
+            ["Simulation:SpatialCellSize"] = "4096",
+        };
+        await using var host = await ServerTestHost.StartAsync(initialAgentCount: 0, snapshotRate: 2, additionalConfiguration: additionalConfiguration);
+        var simulation = host.App.Services.GetRequiredService<SimulationRuntime>();
+        var volume = new WorldVolume(-500_000d, -500_000d, -12_000d, 500_000d, 500_000d, 12_000d);
+        var directMessage = simulation.Read(world => WorldEnvironmentMessageMapper.ToProtocol(world.CreateDetailedWorldEnvironmentSnapshot(volume)));
+        var directFrame = WorldEnvironmentProtocolCodec.Serialize(directMessage, ProtocolVersion.Current);
+        Assert.IsTrue(directFrame.Length > ProtocolFrameHeader.Size);
+        Assert.IsTrue(directMessage.Features.Count > 0);
+
+        using var socket = await host.ConnectWebSocketAsync();
+        await ServerTestHost.HandshakeAsync(socket);
+        await ServerTestHost.SendAsync(socket, new SubscribeVolumeMessage(volume.MinX, volume.MinY, volume.MinZ, volume.MaxX, volume.MaxY, volume.MaxZ), ProtocolVersion.Current);
+
+        for (var index = 0; index < 16; index++)
+        {
+            var message = (await ServerTestHost.ReceiveAsync(socket, TimeSpan.FromSeconds(3))).Message;
+            if (message is ProtocolErrorMessage error)
+            {
+                Assert.Fail($"World environment subscription was rejected: {error.Code}: {string.Join(", ", error.Parameters.Select(static item => $"{item.Key}={item.Value}"))}");
+            }
+            if (message is not WorldEnvironmentSnapshotMessage environment) continue;
+            Assert.AreEqual(64, environment.Samples.Count);
+            Assert.AreEqual(environment.Samples.Count, environment.TerrainSamples.Count);
+            Assert.IsTrue(environment.Features.Count > 0);
+            Assert.AreEqual(environment.Features.Count, environment.Toponyms.Count);
+            return;
+        }
+        Assert.Fail("WorldEnvironmentSnapshot was not published after a valid Protocol 2.17 subscription.");
     }
 
     [TestMethod]
