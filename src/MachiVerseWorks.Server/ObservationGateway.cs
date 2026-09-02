@@ -15,6 +15,7 @@ internal interface IObservationSource
 
     SimulationPublishSnapshot CapturePublishSnapshot();
     PopulationPublishSnapshot CapturePopulationPublishSnapshot(IReadOnlySet<ulong> inspectedPersonIds);
+    IReadOnlyDictionary<ulong, TrainSnapshot> CaptureTrainSnapshots(IReadOnlySet<ulong> inspectedTrainIds);
     EconomySnapshot CaptureEconomySnapshot();
     LogisticsSnapshot CaptureLogisticsSnapshot();
     PowerSnapshot CapturePowerSnapshot();
@@ -40,6 +41,15 @@ internal sealed class SimulationObservationSource(SimulationRuntime simulation) 
 
     public PopulationPublishSnapshot CapturePopulationPublishSnapshot(IReadOnlySet<ulong> inspectedPersonIds) =>
         simulation.CapturePopulationPublishSnapshot(inspectedPersonIds);
+
+    public IReadOnlyDictionary<ulong, TrainSnapshot> CaptureTrainSnapshots(IReadOnlySet<ulong> inspectedTrainIds)
+    {
+        ArgumentNullException.ThrowIfNull(inspectedTrainIds);
+        if (inspectedTrainIds.Count == 0) return new Dictionary<ulong, TrainSnapshot>();
+        return simulation.Read(world => world.CreateTrainSnapshot()
+            .Where(item => inspectedTrainIds.Contains(item.Id.Value))
+            .ToDictionary(item => item.Id.Value));
+    }
 
     public EconomySnapshot CaptureEconomySnapshot() => simulation.Read(static world => world.CreateEconomySnapshot());
     public LogisticsSnapshot CaptureLogisticsSnapshot() => simulation.Read(static world => world.CreateLogisticsSnapshot());
@@ -92,6 +102,7 @@ internal static class ObservationProtocolAdapter
             WorldEnvironmentSnapshotMessage worldEnvironment => WorldEnvironmentProtocolCodec.Serialize(worldEnvironment, version),
             RegionalGenerationSnapshotMessage regionalGeneration => RegionalGenerationProtocolCodec.Serialize(regionalGeneration, version),
             PersistentRegionalEvolutionSnapshotMessage regionalEvolution => PersistentRegionalEvolutionProtocolCodec.Serialize(regionalEvolution, version),
+            InspectEntityMessage or ClearEntityInspectionMessage or EntityInspectionSnapshotMessage => EntityInspectionProtocolCodec.Serialize(message, version),
             InspectPersonMessage or PopulationStatisticsMessage or PersonDebugMessage => PopulationProtocolCodec.Serialize(message, version),
             _ => ProtocolCodec.Serialize(message, version),
         };
@@ -107,6 +118,8 @@ internal static class ObservationProtocolAdapter
 
         if (header.MessageType == MessageType.ClearPersonInspection)
             return PersonInspectionProtocolCodec.TryDeserialize(frame, out envelope, out error);
+        if (header.MessageType is MessageType.InspectEntity or MessageType.ClearEntityInspection or MessageType.EntityInspectionSnapshot)
+            return EntityInspectionProtocolCodec.TryDeserialize(frame, out envelope, out error);
 
         return header.MessageType is MessageType.InspectPerson or MessageType.PopulationStatistics or MessageType.PersonDebug
             ? PopulationProtocolCodec.TryDeserialize(frame, out envelope, out error)
@@ -123,6 +136,7 @@ internal static class ObservationGatewayServiceCollectionExtensions
         services.AddSingleton<ObservationCache>();
         services.AddSingleton<ClientConnectionRegistry>();
         services.AddSingleton<ObservationRequestQueue>();
+        services.AddSingleton<EntityInspectionRegistry>();
         services.AddSingleton<SnapshotDeliveryScheduler>();
         services.AddSingleton<WebSocketSessionHandler>();
         services.AddHostedService<ObservationRequestProcessor>();
