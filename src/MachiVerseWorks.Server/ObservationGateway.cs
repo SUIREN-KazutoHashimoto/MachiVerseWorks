@@ -4,6 +4,12 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace MachiVerseWorks.Server;
 
+internal readonly record struct RegionalGenerationObservation(
+    ulong Generation,
+    ulong Revision,
+    RegionalGenerationSnapshot? Snapshot,
+    ulong TickCount);
+
 /// <summary>
 /// Detached, read-only boundary from the authoritative Simulation runtime into the Observation Gateway.
 /// Gateway services may consume this contract but must not retain or mutate SimulationWorld state.
@@ -27,7 +33,7 @@ internal interface IObservationSource
     OpticalSnapshot CaptureOpticalSnapshot();
     RadioSnapshot CaptureRadioSnapshot();
     VersionedObservation<WorldEnvironmentSnapshot> CaptureWorldEnvironmentSnapshot(WorldVolume volume);
-    RegionalGenerationSnapshot? CaptureRegionalGenerationSnapshot() => null;
+    RegionalGenerationObservation CaptureRegionalGenerationObservation() => new(0, 0, null, 0);
     (PersistentRegionalEvolutionSnapshot Evolution, RegionalInteractionSnapshot Interactions)? CapturePersistentRegionalEvolutionSnapshot();
     bool PersonExists(ulong personId);
 }
@@ -106,9 +112,19 @@ internal sealed class SimulationObservationSource(SimulationRuntime simulation) 
     public VersionedObservation<WorldEnvironmentSnapshot> CaptureWorldEnvironmentSnapshot(WorldVolume volume) =>
         simulation.CaptureWorldEnvironmentSnapshot(volume);
 
-    public RegionalGenerationSnapshot? CaptureRegionalGenerationSnapshot() =>
-        simulation.Read<RegionalGenerationSnapshot?>(static world =>
-            world.TryCreateRegionalGenerationSnapshot(out var snapshot) ? snapshot : null);
+    public RegionalGenerationObservation CaptureRegionalGenerationObservation()
+    {
+        while (true)
+        {
+            var generation = simulation.ObservationGeneration;
+            var revision = simulation.ObservationRevision;
+            var tickCount = simulation.TickCount;
+            var snapshot = simulation.Read<RegionalGenerationSnapshot?>(static world =>
+                world.TryCreateRegionalGenerationSnapshot(out var captured) ? captured : null);
+            if (generation == simulation.ObservationGeneration && revision == simulation.ObservationRevision)
+                return new RegionalGenerationObservation(generation, revision, snapshot, tickCount);
+        }
+    }
 
     public (PersistentRegionalEvolutionSnapshot Evolution, RegionalInteractionSnapshot Interactions)? CapturePersistentRegionalEvolutionSnapshot() =>
         simulation.Read<(PersistentRegionalEvolutionSnapshot Evolution, RegionalInteractionSnapshot Interactions)?>(static world =>
