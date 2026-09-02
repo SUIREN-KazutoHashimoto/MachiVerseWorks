@@ -27,11 +27,11 @@ internal sealed class LogisticsPublishService(
                 {
                     _ = deliveryCoordinator.TrySchedule(
                         connection,
-                        stoppingToken,
                         async sendCancellation =>
                         {
                             _ = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation);
-                        });
+                        },
+                        stoppingToken);
                 }
             }
         }
