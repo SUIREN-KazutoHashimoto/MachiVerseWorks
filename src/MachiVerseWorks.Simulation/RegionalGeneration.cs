@@ -324,7 +324,7 @@ public sealed record RegionalGenerationOptions
         RegionalGenerationQualityPreset.Draft => 4,
         RegionalGenerationQualityPreset.Standard => 8,
         RegionalGenerationQualityPreset.HighQuality => 12,
-        _ => throw new ArgumentOutOfRangeException(nameof(Preset)), Preset, "Unknown regional generation quality preset."),
+        _ => throw new ArgumentOutOfRangeException(nameof(Preset), Preset, "Unknown regional generation quality preset."),
     };
 
     public int ResolveIterationBudget() => IterationBudget ?? Preset switch
@@ -332,7 +332,7 @@ public sealed record RegionalGenerationOptions
         RegionalGenerationQualityPreset.Draft => 1,
         RegionalGenerationQualityPreset.Standard => 3,
         RegionalGenerationQualityPreset.HighQuality => 6,
-        _ => throw new ArgumentOutOfRangeException(nameof(Preset)), Preset, "Unknown regional generation quality preset."),
+        _ => throw new ArgumentOutOfRangeException(nameof(Preset), Preset, "Unknown regional generation quality preset."),
     };
 }
 
