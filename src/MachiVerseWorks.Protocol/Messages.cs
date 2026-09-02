@@ -5,6 +5,14 @@ public interface IProtocolMessage
     MessageType Type { get; }
 }
 
+/// <summary>
+/// Marks a Client-to-Server request that changes only what the client observes.
+/// Observation requests must not mutate authoritative Simulation state.
+/// </summary>
+public interface IObservationRequestMessage : IProtocolMessage
+{
+}
+
 public sealed record HelloMessage : IProtocolMessage
 {
     public MessageType Type => MessageType.Hello;
@@ -15,12 +23,12 @@ public sealed record HelloAckMessage(ProtocolVersion ProtocolVersion, ushort Tic
     public MessageType Type => MessageType.HelloAck;
 }
 
-public sealed record SubscribeVolumeMessage(double MinX, double MinY, double MinZ, double MaxX, double MaxY, double MaxZ) : IProtocolMessage
+public sealed record SubscribeVolumeMessage(double MinX, double MinY, double MinZ, double MaxX, double MaxY, double MaxZ) : IObservationRequestMessage
 {
     public MessageType Type => MessageType.SubscribeVolume;
 }
 
-public sealed record InspectPersonMessage(ulong PersonId) : IProtocolMessage
+public sealed record InspectPersonMessage(ulong PersonId) : IObservationRequestMessage
 {
     public MessageType Type => MessageType.InspectPerson;
 }
