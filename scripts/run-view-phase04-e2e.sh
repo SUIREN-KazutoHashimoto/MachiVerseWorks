@@ -38,15 +38,26 @@ npm --prefix "$ROOT_DIR/src/web" run typecheck
 npm --prefix "$ROOT_DIR/src/web" test
 npm --prefix "$ROOT_DIR/src/web" run build
 npm --prefix "$ROOT_DIR/src/web" run dev -- --host 127.0.0.1 --port "$WEB_PORT" --strictPort >"$ARTIFACT_DIR/vite.log" 2>&1 & WEB_PID=$!
-wait_http "http://127.0.0.1:$WEB_PORT/tests/browser/view-phase04-e2e.html"
 
-URL="http://127.0.0.1:$WEB_PORT/tests/browser/view-phase04-e2e.html"
-node "$ROOT_DIR/scripts/run-headless-browser-e2e.mjs" "$CHROME" "$URL" "$ARTIFACT_DIR/browser.html" "$ARTIFACT_DIR/chrome.log"
+BASELINE_URL="http://127.0.0.1:$WEB_PORT/tests/browser/view-phase04-e2e.html"
+EVOLUTION_URL="http://127.0.0.1:$WEB_PORT/tests/browser/view-phase04-evolution-e2e.html"
+wait_http "$BASELINE_URL"
+wait_http "$EVOLUTION_URL"
+
+node "$ROOT_DIR/scripts/run-headless-browser-e2e.mjs" "$CHROME" "$BASELINE_URL" "$ARTIFACT_DIR/browser.html" "$ARTIFACT_DIR/chrome.log"
 grep -Fq 'data-status="passed"' "$ARTIFACT_DIR/browser.html" || { cat "$ARTIFACT_DIR/browser.html" >&2; cat "$ARTIFACT_DIR/chrome.log" >&2; exit 1; }
+
+node "$ROOT_DIR/scripts/run-headless-browser-e2e.mjs" "$CHROME" "$EVOLUTION_URL" "$ARTIFACT_DIR/evolution-browser.html" "$ARTIFACT_DIR/evolution-chrome.log"
+grep -Fq 'data-status="passed"' "$ARTIFACT_DIR/evolution-browser.html" || { cat "$ARTIFACT_DIR/evolution-browser.html" >&2; cat "$ARTIFACT_DIR/evolution-chrome.log" >&2; exit 1; }
 
 extract_metric() {
   local name="$1"
   grep -o "data-${name}=\"[^\"]*\"" "$ARTIFACT_DIR/browser.html" | head -n 1 | cut -d'"' -f2
+}
+
+extract_evolution_metric() {
+  local name="$1"
+  grep -o "data-${name}=\"[^\"]*\"" "$ARTIFACT_DIR/evolution-browser.html" | head -n 1 | cut -d'"' -f2
 }
 
 {
@@ -57,7 +68,11 @@ extract_metric() {
   echo "buildings=$(extract_metric buildings)"
   echo "labels=$(extract_metric labels)"
   echo "road_signs=$(extract_metric road-signs)"
+  echo "evolution_current_year=$(extract_evolution_metric current-year)"
+  echo "evolution_settlements=$(extract_evolution_metric settlements)"
+  echo "evolution_draw_calls=$(extract_evolution_metric draw-calls)"
 } | tee "$ARTIFACT_DIR/rendering-baseline.txt"
 
 cat "$ARTIFACT_DIR/browser.html"
-echo "View Phase 4 Settlement & Structure Rendering browser E2E passed."
+cat "$ARTIFACT_DIR/evolution-browser.html"
+echo "View Phase 4 Settlement & Structure Rendering browser E2E passed (static + Phase31 evolution)."
