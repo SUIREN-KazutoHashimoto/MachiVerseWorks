@@ -11,9 +11,9 @@ GatewayはSimulationの意味的正本ではありません。Activity、Status�
 
 Gateway Roadmapの分離は責務と進捗管理の分離であり、直ちに別process / repository / deploy unitへ分離することを意味しません。現行では`MachiVerseWorks.Server`内のObservation側責務を明確化し、将来必要なら独立deploy可能な境界へ育てます。
 
-> **現在:** Gateway Phase 3 — Subscription, Delivery & Resynchronization 完了  
-> **次の実装タスク:** Gateway Phase 4 `G4-001` — Entity ID / Entity Typeを共通targetとするgeneric inspection request / response contractを設計する  
-> **並行可能:** Simulation Phase 30 / View Phase 2
+> **現在:** Gateway Phase 4 — Generic Entity & Temporal Observation 進行中  
+> **次の実装タスク:** Gateway Phase 4 `G4-004` — authoritative committed / scheduled Planned Future sourceを接続する  
+> **並行可能:** Simulation側Planned Future source / View Phase 7 / 8
 
 ## 最上位原則
 
@@ -33,7 +33,7 @@ Gateway Roadmapの分離は責務と進捗管理の分離であり、直ちに�
 | 1 | Observation Boundary Foundation | 現行SimulationRuntime / Server publish / Protocol 2.x | ✅ 完了 |
 | 2 | Shared Observation Cache & Request Deduplication | Gateway Phase 1 | ✅ 完了 |
 | 3 | Subscription, Delivery & Resynchronization | Gateway Phase 1 / 2 | ✅ 完了 |
-| 4 | Generic Entity & Temporal Observation | Gateway Phase 1 / Simulation semantic observation | ⏳ Simulation依存待ち |
+| 4 | Generic Entity & Temporal Observation | Gateway Phase 1 / Simulation semantic observation | 🚧 進行中 |
 | 5 | Historical Observation & Replay Delivery | Gateway Phase 3 / Simulation Phase 35 | ⏳ Simulation依存待ち |
 | 6 | Gateway Fidelity, Scalability & Closeout | Gateway Phase 1〜5 | ⏳ 待機 |
 
@@ -168,20 +168,24 @@ Phase 3ではdesired subscriptionとcommitted delivery markerを分離し、stat
 
 ## Gateway Phase 4 — Generic Entity & Temporal Observation
 
-> **状態: ⏳ Simulation依存待ち**  
+> **状態: 🚧 進行中**  
 > **必須依存:** Gateway Phase 1、対象domainのauthoritative semantic observation source  
 > **統合依存:** View Phase 7 / 8
 
 Selection / Inspectorから共通利用できるEntity observationを、Gateway側で意味を再計算せず配送する。
 
-- ⬜ **G4-001** — Entity ID / Entity Typeを共通targetとするgeneric inspection request / response contractを設計する（旧`OBS-008`）
-- ⬜ **G4-002** — Current state / RelationsをSimulation提供値のままgeneric inspectionへ載せる（旧`OBS-008`）
-- ⬜ **G4-003** — bounded Recent Past / semantic eventをSimulationのrecent-state / semantic-event sourceから配信する（旧`OBS-008`）
+- ✅ **G4-001** — Entity ID / Entity Typeを共通targetとするgeneric inspection request / response contractを設計する（旧`OBS-008`）
+- ✅ **G4-002** — Current state / RelationsをSimulation提供値のままgeneric inspectionへ載せる（旧`OBS-008`）
+- ✅ **G4-003** — bounded Recent Past / semantic eventをSimulationのrecent-state / semantic-event sourceから配信する（旧`OBS-008`）
 - ⬜ **G4-004** — committed / scheduled Planned FutureをSimulation提供値のまま配信し、predictionと区別する（旧`OBS-008`）
-- ⬜ **G4-005** — selected Entityだけ高詳細Observationへ昇格できるconnection-local subscriptionを実装する
-- ⬜ **G4-006** — recent/planned payloadの件数・期間・payload size上限をProtocol互換で定義する
-- ⬜ **G4-007** — Person / Building / Vehicle / Train等の複数domainでGatewayがActivity / ETA等を再計算していないことをcontract testする
+- ✅ **G4-005** — selected Entityだけ高詳細Observationへ昇格できるconnection-local subscriptionを実装する
+- ✅ **G4-006** — recent/planned payloadの件数・期間・payload size上限をProtocol互換で定義する
+- ✅ **G4-007** — Person / Building / Vehicle / Train等の複数domainでGatewayがActivity / ETA等を再計算していないことをcontract testする
 - ⬜ **G4-008** — View Phase 7 / 8とのInspector / temporal observation E2Eを追加する
+
+Phase 4ではProtocol 2.20に`InspectEntity` / `ClearEntityInspection` / `EntityInspectionSnapshot`を追加し、Person / Vehicle / Train / Settlement / Parcel / Buildingを同じEntity Type + Entity ID契約で選択できるようにした。Current StateはSimulation snapshot、Relationsはsource上の参照・regional relation、Recent PastはSimulation Phase 31のsemantic eventを使用し、GatewayではActivity / ETA / future eventを生成しない。Recentは最大32件・32年、Plannedは最大16件・16年に加えてframe / string sizeをboundedとする。legacy Person inspectionとgeneric selectionは独立したconnection-local stateとして維持し、どちらもsend gate取得後にselection revisionを再検証してstale payloadを送らない。
+
+`G4-004`はauthoritative committed / scheduled Planned Future sourceがSimulation側にまだ存在しないため、Protocol上は`PlannedFutureAvailable=false`と空配列を返してpredictionを捏造しない。`G4-008`はView Phase 7 / 8との統合時に実施する。
 
 ### Gateway Phase 4 完了条件
 

@@ -13,6 +13,8 @@ public sealed class ObservationRequestContractTests
             new SubscribeVolumeMessage(0, 0, 0, 1, 1, 1),
             new InspectPersonMessage(1),
             new ClearPersonInspectionMessage(),
+            new InspectEntityMessage(ProtocolEntityType.Building, 1),
+            new ClearEntityInspectionMessage(),
         ];
 
         foreach (var request in requests)

@@ -15,6 +15,10 @@ internal interface IObservationSource
 
     SimulationPublishSnapshot CapturePublishSnapshot();
     PopulationPublishSnapshot CapturePopulationPublishSnapshot(IReadOnlySet<ulong> inspectedPersonIds);
+    IReadOnlyDictionary<ulong, TrainSnapshot> CaptureTrainSnapshots(IReadOnlySet<ulong> inspectedTrainIds);
+    IReadOnlyDictionary<ulong, VehicleSnapshot> CaptureVehicleSnapshots(IReadOnlySet<ulong> inspectedVehicleIds);
+    IReadOnlyDictionary<ulong, ulong> CaptureGeneratedBuildingIds(IReadOnlySet<ulong> materializedBuildingIds) =>
+        new Dictionary<ulong, ulong>();
     EconomySnapshot CaptureEconomySnapshot();
     LogisticsSnapshot CaptureLogisticsSnapshot();
     PowerSnapshot CapturePowerSnapshot();
@@ -40,6 +44,52 @@ internal sealed class SimulationObservationSource(SimulationRuntime simulation) 
 
     public PopulationPublishSnapshot CapturePopulationPublishSnapshot(IReadOnlySet<ulong> inspectedPersonIds) =>
         simulation.CapturePopulationPublishSnapshot(inspectedPersonIds);
+
+    public IReadOnlyDictionary<ulong, TrainSnapshot> CaptureTrainSnapshots(IReadOnlySet<ulong> inspectedTrainIds)
+    {
+        ArgumentNullException.ThrowIfNull(inspectedTrainIds);
+        if (inspectedTrainIds.Count == 0) return new Dictionary<ulong, TrainSnapshot>();
+        return simulation.Read(world =>
+        {
+            var result = new Dictionary<ulong, TrainSnapshot>(inspectedTrainIds.Count);
+            foreach (var id in inspectedTrainIds)
+            {
+                if (world.TryGetTrainSnapshot(new TrainId(id), out var snapshot)) result.Add(id, snapshot);
+            }
+            return result;
+        });
+    }
+
+    public IReadOnlyDictionary<ulong, VehicleSnapshot> CaptureVehicleSnapshots(IReadOnlySet<ulong> inspectedVehicleIds)
+    {
+        ArgumentNullException.ThrowIfNull(inspectedVehicleIds);
+        if (inspectedVehicleIds.Count == 0) return new Dictionary<ulong, VehicleSnapshot>();
+        return simulation.Read(world =>
+        {
+            var result = new Dictionary<ulong, VehicleSnapshot>(inspectedVehicleIds.Count);
+            foreach (var id in inspectedVehicleIds)
+            {
+                if (world.TryGetVehicleSnapshot(new VehicleId(id), out var snapshot)) result.Add(id, snapshot);
+            }
+            return result;
+        });
+    }
+
+    public IReadOnlyDictionary<ulong, ulong> CaptureGeneratedBuildingIds(IReadOnlySet<ulong> materializedBuildingIds)
+    {
+        ArgumentNullException.ThrowIfNull(materializedBuildingIds);
+        if (materializedBuildingIds.Count == 0) return new Dictionary<ulong, ulong>();
+        return simulation.Read(world =>
+        {
+            var result = new Dictionary<ulong, ulong>(materializedBuildingIds.Count);
+            foreach (var id in materializedBuildingIds)
+            {
+                if (world.TryGetGeneratedBuildingId(new BuildingId(id), out var generatedId))
+                    result.Add(id, generatedId.Value);
+            }
+            return result;
+        });
+    }
 
     public EconomySnapshot CaptureEconomySnapshot() => simulation.Read(static world => world.CreateEconomySnapshot());
     public LogisticsSnapshot CaptureLogisticsSnapshot() => simulation.Read(static world => world.CreateLogisticsSnapshot());
@@ -92,6 +142,7 @@ internal static class ObservationProtocolAdapter
             WorldEnvironmentSnapshotMessage worldEnvironment => WorldEnvironmentProtocolCodec.Serialize(worldEnvironment, version),
             RegionalGenerationSnapshotMessage regionalGeneration => RegionalGenerationProtocolCodec.Serialize(regionalGeneration, version),
             PersistentRegionalEvolutionSnapshotMessage regionalEvolution => PersistentRegionalEvolutionProtocolCodec.Serialize(regionalEvolution, version),
+            InspectEntityMessage or ClearEntityInspectionMessage or EntityInspectionSnapshotMessage => EntityInspectionProtocolCodec.Serialize(message, version),
             InspectPersonMessage or PopulationStatisticsMessage or PersonDebugMessage => PopulationProtocolCodec.Serialize(message, version),
             _ => ProtocolCodec.Serialize(message, version),
         };
@@ -107,6 +158,8 @@ internal static class ObservationProtocolAdapter
 
         if (header.MessageType == MessageType.ClearPersonInspection)
             return PersonInspectionProtocolCodec.TryDeserialize(frame, out envelope, out error);
+        if (header.MessageType is MessageType.InspectEntity or MessageType.ClearEntityInspection or MessageType.EntityInspectionSnapshot)
+            return EntityInspectionProtocolCodec.TryDeserialize(frame, out envelope, out error);
 
         return header.MessageType is MessageType.InspectPerson or MessageType.PopulationStatistics or MessageType.PersonDebug
             ? PopulationProtocolCodec.TryDeserialize(frame, out envelope, out error)
@@ -125,6 +178,7 @@ internal static class ObservationGatewayServiceCollectionExtensions
         services.AddSingleton<ClientConnectionRegistry>();
         services.AddSingleton<ObservationDeliveryCoordinator>();
         services.AddSingleton<ObservationRequestQueue>();
+        services.AddSingleton<EntityInspectionRegistry>();
         services.AddSingleton<WebSocketSessionHandler>();
         services.AddHostedService<ObservationRequestProcessor>();
         services.AddHostedService<SnapshotPublishService>();
