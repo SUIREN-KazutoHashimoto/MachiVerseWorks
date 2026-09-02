@@ -44,7 +44,7 @@
   "error.protocol.5": "Serverがrequestを受理できませんでした。",
   "error.protocol.1000": "Server内部でエラーが発生しました。",
   "error.protocol.unknown": "Protocol error ({code})",
-  "hint.camera": "ドラッグ: 移動 / ホイール: ズーム",
+  "hint.camera": "WASD: 移動 / E・Space/Q・Ctrl: 上下 / Shift: 高速 / 左ドラッグ: 視線 / ホイール: 速度・追従距離",
   "status.trains": "列車",
   "railwayDebug.title": "Railway Debug",
   "railwayDebug.none": "運行情報なし",

@@ -1,40 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as THREE from 'three';
 
 import {
   ViewNavigationController,
   createEntityNavigationTarget,
   createStaticNavigationTarget,
   getCameraFocusAtSimulationAltitude,
+  isNavigationKeyboardInputTarget,
 } from '../src/view-navigation.ts';
-
-class FakeCamera {
-  position = { x: 0, y: 500, z: 0 };
-  zoom = 1;
-  left = -400;
-  right = 400;
-  top = 300;
-  bottom = -300;
-  near = 0.1;
-  far = 2_000;
-  matrixWorld = { elements: new Float64Array(16) };
-  direction = normalize({ x: 0, y: -500, z: -250 });
-
-  constructor() { this.updateMatrixWorld(true); }
-  lookAt(x, y, z) {
-    this.direction = normalize({ x: x - this.position.x, y: y - this.position.y, z: z - this.position.z });
-    this.updateMatrixWorld(true);
-  }
-  updateMatrixWorld() {
-    const right = normalize(cross(this.direction, { x: 0, y: 1, z: 0 }));
-    const up = normalize(cross(right, this.direction));
-    const elements = this.matrixWorld.elements;
-    elements[0] = right.x; elements[1] = right.y; elements[2] = right.z;
-    elements[4] = up.x; elements[5] = up.y; elements[6] = up.z;
-    elements[8] = -this.direction.x; elements[9] = -this.direction.y; elements[10] = -this.direction.z;
-  }
-  updateProjectionMatrix() {}
-}
 
 class FakeSurface {
   listeners = new Map();
@@ -43,70 +17,162 @@ class FakeSurface {
   addEventListener(type, listener) { this.listeners.set(type, listener); }
   removeEventListener(type, listener) { if (this.listeners.get(type) === listener) this.listeners.delete(type); }
   setPointerCapture() {}
+  emit(type, event) {
+    const listener = this.listeners.get(type);
+    if (listener) listener(event);
+  }
+}
+
+function createCamera() {
+  const camera = new THREE.PerspectiveCamera(55, 16 / 9, 0.1, 50_000);
+  camera.position.set(0, 500, 0);
+  camera.lookAt(0, 0, -250);
+  camera.updateProjectionMatrix();
+  camera.updateMatrixWorld(true);
+  return camera;
 }
 
 test('jump centers a remote target without depending on distance from the world origin', () => {
-  const camera = new FakeCamera();
+  const camera = createCamera();
   const navigation = new ViewNavigationController(camera, new FakeSurface());
   const target = createStaticNavigationTarget('settlement', 'remote-town', { x: 1_000_000_000, y: -2_000_000_000, z: 75 });
 
   assert.equal(navigation.jump(target, 0), true);
   const focus = getCameraFocusAtSimulationAltitude(camera, 75);
   assert.ok(focus !== undefined);
-  assert.ok(Math.abs(focus.x - 1_000_000_000) < 1e-6);
-  assert.ok(Math.abs(focus.y + 2_000_000_000) < 1e-6);
+  assert.ok(Math.abs(focus.x - 1_000_000_000) < 1e-4);
+  assert.ok(Math.abs(focus.y + 2_000_000_000) < 1e-4);
   assert.equal(focus.z, 75);
 });
 
-test('focus applies target preferred zoom while keeping target centered', () => {
-  const camera = new FakeCamera();
+test('focus maps legacy preferred zoom to perspective camera distance', () => {
+  const camera = createCamera();
   const navigation = new ViewNavigationController(camera, new FakeSurface());
-  const target = createStaticNavigationTarget('geographic-feature', 'ridge', { x: 250, y: -400, z: 120 }, 6);
+  const target = createStaticNavigationTarget('geographic-feature', 'ridge', { x: 250, y: -400, z: 120 }, 5);
 
   assert.equal(navigation.focus(target, 0), true);
-  assert.equal(camera.zoom, 6);
+  const targetThree = new THREE.Vector3(250, 120, -400);
+  assert.ok(Math.abs(camera.position.distanceTo(targetThree) - 50) < 1e-6);
   const focus = getCameraFocusAtSimulationAltitude(camera, 120);
   assert.ok(focus !== undefined);
-  assert.ok(Math.abs(focus.x - 250) < 1e-9);
-  assert.ok(Math.abs(focus.y + 400) < 1e-9);
+  assert.ok(Math.abs(focus.x - 250) < 1e-6);
+  assert.ok(Math.abs(focus.y + 400) < 1e-6);
 });
 
-test('rotate keeps pitch and pan follows camera-local screen axes', () => {
-  const camera = new FakeCamera();
+test('mouse look changes yaw and pitch while clamping before inversion', () => {
+  const camera = createCamera();
   const navigation = new ViewNavigationController(camera, new FakeSurface());
-  const beforeVertical = camera.direction.y;
+  const before = new THREE.Vector3();
+  camera.getWorldDirection(before);
 
-  navigation.rotateBy(Math.PI / 2);
-  const beforePanX = camera.position.x;
-  const beforePanZ = camera.position.z;
-  navigation.pan(100, 0);
+  navigation.lookBy(100, -100_000);
+  const after = new THREE.Vector3();
+  camera.getWorldDirection(after);
 
-  assert.ok(Math.abs(camera.direction.y - beforeVertical) < 1e-12);
-  assert.ok(Math.abs(camera.direction.x) > 0.1);
-  assert.ok(Math.abs(camera.position.x - beforePanX) < 1e-9);
-  assert.ok(Math.abs(camera.position.z - beforePanZ) > 99);
+  assert.notEqual(after.x, before.x);
+  assert.ok(after.y < 1);
+  assert.ok(after.y > 0.99);
+  navigation.lookBy(0, 200_000);
+  camera.getWorldDirection(after);
+  assert.ok(after.y > -1);
+  assert.ok(after.y < -0.99);
 });
 
-test('altitude remains within the near/far visibility range of the observation plane', () => {
-  const camera = new FakeCamera();
+test('WASD movement follows camera basis and Shift multiplies movement speed', () => {
+  const camera = createCamera();
+  camera.position.set(0, 100, 0);
+  camera.lookAt(0, 100, -100);
+  camera.updateMatrixWorld(true);
   const navigation = new ViewNavigationController(camera, new FakeSurface());
 
-  navigation.adjustAltitude(100_000);
-  const highFocus = getCameraFocusAtSimulationAltitude(camera, 0);
-  assert.ok(highFocus !== undefined);
-  const highDistance = distance3(camera.position, { x: highFocus.x, y: highFocus.z, z: highFocus.y });
-  assert.ok(highDistance < camera.far);
+  navigation.setKeyState('KeyW', true);
+  navigation.update(0);
+  navigation.update(100);
+  assert.ok(Math.abs(camera.position.z + 4) < 1e-6);
 
-  navigation.adjustAltitude(-100_000);
-  const lowFocus = getCameraFocusAtSimulationAltitude(camera, 0);
-  assert.ok(lowFocus !== undefined);
-  const lowDistance = distance3(camera.position, { x: lowFocus.x, y: lowFocus.z, z: lowFocus.y });
-  assert.ok(lowDistance > camera.near);
-  assert.ok(camera.position.y > 0);
+  navigation.setKeyState('ShiftLeft', true);
+  navigation.update(200);
+  assert.ok(Math.abs(camera.position.z + 20) < 1e-6);
+
+  navigation.setKeyState('KeyW', false);
+  navigation.setKeyState('ShiftLeft', false);
+  navigation.setKeyState('KeyD', true);
+  navigation.update(300);
+  assert.ok(Math.abs(camera.position.x - 4) < 1e-6);
 });
 
-test('entity follow uses allocation-free position writes and tracks later samples', () => {
-  const camera = new FakeCamera();
+test('combined movement axes are normalized to the configured movement speed', () => {
+  const camera = createCamera();
+  camera.position.set(0, 100, 0);
+  camera.lookAt(0, 100, -100);
+  camera.updateMatrixWorld(true);
+  const navigation = new ViewNavigationController(camera, new FakeSurface());
+  const before = camera.position.clone();
+
+  navigation.setKeyState('KeyW', true);
+  navigation.setKeyState('KeyD', true);
+  navigation.setKeyState('KeyE', true);
+  navigation.update(0);
+  navigation.update(100);
+
+  assert.ok(Math.abs(camera.position.distanceTo(before) - 4) < 1e-6);
+});
+
+test('vertical movement supports E/Q and enforces minimum camera height', () => {
+  const camera = createCamera();
+  camera.position.set(0, 2, 0);
+  const navigation = new ViewNavigationController(camera, new FakeSurface());
+
+  navigation.setKeyState('KeyQ', true);
+  navigation.update(0);
+  navigation.update(100);
+  assert.equal(camera.position.y, 1.7);
+
+  navigation.setKeyState('KeyQ', false);
+  navigation.setKeyState('KeyE', true);
+  navigation.update(200);
+  assert.ok(camera.position.y > 1.7);
+});
+
+test('form controls and editable content are excluded from navigation keyboard input', () => {
+  const form = { tagName: 'FORM', parentElement: null };
+  const button = { tagName: 'BUTTON', parentElement: form };
+  const buttonChild = { tagName: 'SPAN', parentElement: button };
+  const input = { tagName: 'INPUT', parentElement: form };
+  const editable = { tagName: 'DIV', isContentEditable: true, parentElement: null };
+  const canvas = { tagName: 'CANVAS', parentElement: null };
+
+  assert.equal(isNavigationKeyboardInputTarget(input), true);
+  assert.equal(isNavigationKeyboardInputTarget(buttonChild), true);
+  assert.equal(isNavigationKeyboardInputTarget(editable), true);
+  assert.equal(isNavigationKeyboardInputTarget(canvas), false);
+  assert.equal(isNavigationKeyboardInputTarget(null), false);
+});
+
+test('wheel changes free movement speed and follow distance by mode', () => {
+  const camera = createCamera();
+  const surface = new FakeSurface();
+  const navigation = new ViewNavigationController(camera, surface);
+  const stop = () => {};
+  const wheel = (deltaY) => surface.emit('wheel', {
+    deltaY,
+    preventDefault: stop,
+    stopImmediatePropagation: stop,
+  });
+
+  const speed = navigation.moveSpeed;
+  wheel(-100);
+  assert.ok(navigation.moveSpeed > speed);
+
+  const target = createStaticNavigationTarget('position', undefined, { x: 10, y: 20, z: 0 });
+  assert.equal(navigation.follow(target, 0), true);
+  const followDistance = navigation.followDistance;
+  wheel(-100);
+  assert.ok(navigation.followDistance > followDistance);
+});
+
+test('entity follow uses allocation-free position writes, orbits the target, and tracks later samples', () => {
+  const camera = createCamera();
   const navigation = new ViewNavigationController(camera, new FakeSurface());
   const position = new Float64Array([10, 20, 0]);
   const store = {
@@ -128,13 +194,32 @@ test('entity follow uses allocation-free position writes and tracks later sample
 
   const focus = getCameraFocusAtSimulationAltitude(camera, 40);
   assert.ok(focus !== undefined);
-  assert.ok(Math.abs(focus.x - 500) < 1e-9);
-  assert.ok(Math.abs(focus.y + 750) < 1e-9);
-  assert.equal(camera.zoom, 4);
+  assert.ok(Math.abs(focus.x - 500) < 1e-6);
+  assert.ok(Math.abs(focus.y + 750) < 1e-6);
+  assert.ok(Math.abs(navigation.followDistance - 12) < 1e-9);
+});
+
+test('clearing follow preserves the current camera orientation for free flight', () => {
+  const camera = createCamera();
+  const navigation = new ViewNavigationController(camera, new FakeSurface());
+  const target = createStaticNavigationTarget('position', undefined, { x: 0, y: 0, z: 0 });
+
+  assert.equal(navigation.follow(target, 0), true);
+  navigation.lookBy(80, -20);
+  navigation.update(16);
+  const before = new THREE.Vector3();
+  camera.getWorldDirection(before);
+
+  navigation.clearFollow();
+  navigation.update(32);
+  const after = new THREE.Vector3();
+  camera.getWorldDirection(after);
+
+  assert.ok(before.distanceTo(after) < 1e-9);
 });
 
 test('failed follow does not retain a latent target that can activate later', () => {
-  const camera = new FakeCamera();
+  const camera = createCamera();
   const navigation = new ViewNavigationController(camera, new FakeSurface());
   let available = false;
   const target = {
@@ -148,25 +233,8 @@ test('failed follow does not retain a latent target that can activate later', ()
   };
 
   assert.equal(navigation.follow(target, 0), false);
-  const before = { ...camera.position };
+  const before = camera.position.clone();
   available = true;
   navigation.update(100);
-  assert.deepEqual(camera.position, before);
+  assert.ok(camera.position.distanceTo(before) < 1e-12);
 });
-
-function normalize(vector) {
-  const length = Math.hypot(vector.x, vector.y, vector.z);
-  return { x: vector.x / length, y: vector.y / length, z: vector.z / length };
-}
-
-function cross(left, right) {
-  return {
-    x: left.y * right.z - left.z * right.y,
-    y: left.z * right.x - left.x * right.z,
-    z: left.x * right.y - left.y * right.x,
-  };
-}
-
-function distance3(left, right) {
-  return Math.hypot(left.x - right.x, left.y - right.y, left.z - right.z);
-}

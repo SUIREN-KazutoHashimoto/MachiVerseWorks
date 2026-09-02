@@ -61,7 +61,8 @@ try {
 
 async function runFullScenario() {
   connection.setSubscription({ minX: -600, minY: -600, minZ: -128, maxX: 600, maxY: 600, maxZ: 512 }); await waitUntil(() => store.size === expectedTotal, `${String(expectedTotal)} agents received`); renderView(performance.now());
-  view.camera.position.x = 2_000; view.camera.position.z = 2_000; connection.setSubscription(view.getSubscriptionVolume()); await waitUntil(() => store.size === 0, 'out-of-range agents removed after camera move'); assert(sawRemove, 'AgentRemove was observed after camera move');
+  // Perspective observation reaches roughly 3 km, so move well beyond the origin before asserting removals.
+  view.camera.position.x = 10_000; view.camera.position.z = 10_000; connection.setSubscription(view.getSubscriptionVolume()); await waitUntil(() => store.size === 0, 'out-of-range agents removed after camera move'); assert(sawRemove, 'AgentRemove was observed after camera move');
   view.camera.position.x = 0; view.camera.position.z = 0; view.camera.zoom = 8; view.camera.updateProjectionMatrix(); connection.setSubscription(view.getSubscriptionVolume()); await waitUntil(() => store.size > 0 && store.size < expectedTotal, 'nearby subscription restored after camera return');
   connection.disconnect(); observation.resetConnectionState(); await sleep(100); connection.connect(); await waitUntil(() => connectionState === 'connected', 'browser reconnected'); await waitUntil(() => store.size > 0 && store.size < expectedTotal, 'client state restored from retained subscription after reconnect'); renderView(performance.now());
 }
