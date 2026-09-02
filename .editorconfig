@@ -36,3 +36,14 @@ dotnet_diagnostic.CA1859.severity = none
 dotnet_diagnostic.CA1512.severity = none
 # IOpticalRoutingSolver is an intentional substitution boundary; keep the field interface-typed.
 dotnet_diagnostic.CA1859.severity = none
+
+[src/MachiVerseWorks.Simulation/RegionalGenerator.cs]
+# Phase30 keeps generator helpers expressed in domain collection abstractions and keeps
+# EvaluateSuitability on the generator instance as part of the generator-facing API.
+dotnet_diagnostic.CA1822.severity = none
+dotnet_diagnostic.CA1859.severity = none
+
+[src/MachiVerseWorks.Simulation/SimulationWorld.RegionalMaterialization.cs]
+# Materialization helpers intentionally accept read-only views so generation-to-world
+# handoff does not acquire mutation capability over caller-owned lookup collections.
+dotnet_diagnostic.CA1859.severity = none
