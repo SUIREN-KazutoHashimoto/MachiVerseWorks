@@ -334,24 +334,20 @@ public sealed partial class SimulationWorld
                     ground.Y + 20d,
                     ground.Z + 12d);
                 var fallback = CreateBuilding(fallbackBounds, BuildingKind.MixedUse);
-                MaterializeSettlementPopulationAndJobs(settlement, new[] { fallback }, actualPoiBySettlement.GetValueOrDefault(settlement.Id, []));
+                MaterializeSettlementPopulationAndJobs(settlement, new[] { fallback });
                 continue;
             }
 
             var settlementBuildings = generatedSettlementBuildings
                 .Select(item => actualBuildings[item.Id])
                 .ToArray();
-            MaterializeSettlementPopulationAndJobs(
-                settlement,
-                settlementBuildings,
-                actualPoiBySettlement.GetValueOrDefault(settlement.Id, []));
+            MaterializeSettlementPopulationAndJobs(settlement, settlementBuildings);
         }
     }
 
     private void MaterializeSettlementPopulationAndJobs(
         Settlement settlement,
-        IReadOnlyList<BuildingId> settlementBuildings,
-        IReadOnlyList<PoiId> settlementPois)
+        IReadOnlyList<BuildingId> settlementBuildings)
     {
         var residential = settlementBuildings
             .Where(id => TryGetBuildingSnapshot(id, out var building)
@@ -369,9 +365,7 @@ public sealed partial class SimulationWorld
             MapIndustrySector(settlement.InitialEconomy),
             initialCashBalance: checked((long)Math.Max(10_000d, settlement.Jobs * 2_000d)),
             dailyProductionCapacity: Math.Max(1d, settlement.Jobs * 0.75d));
-        PoiId? workplacePoi = settlementPois.FirstOrDefault();
-        if (workplacePoi == default) workplacePoi = null;
-        var establishment = CreateEstablishment(company, workplace, workplacePoi);
+        var establishment = CreateEstablishment(company, workplace);
         var job = CreateJob(establishment, Math.Max(1, settlement.Jobs), dailyWage: 120);
 
         var remainingPopulation = settlement.Population;
