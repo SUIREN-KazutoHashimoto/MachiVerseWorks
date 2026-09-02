@@ -78,6 +78,7 @@ public sealed class ServerIntegrationTests
         {
             ["Simulation:Seed"] = "29027",
             ["Simulation:SpatialCellSize"] = "4096",
+            ["Server:MaximumSubscriptionCellCount"] = "524288",
         };
         await using var host = await ServerTestHost.StartAsync(initialAgentCount: 0, snapshotRate: 2, additionalConfiguration: additionalConfiguration);
         var simulation = host.App.Services.GetRequiredService<SimulationRuntime>();
