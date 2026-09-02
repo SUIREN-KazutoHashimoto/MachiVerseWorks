@@ -21,9 +21,14 @@ export interface ReadonlyRegionalGenerationStore {
   getToponym(id: bigint): HumanToponymObservation | undefined;
   getCorridor(id: bigint): RegionalCorridorObservation | undefined;
   getRoadSign(id: bigint): RoadSignObservation | undefined;
+  getSettlementForDistrict(districtId: bigint): SettlementObservation | undefined;
   getSettlementForParcel(parcelId: bigint): SettlementObservation | undefined;
   getDistrictForParcel(parcelId: bigint): DistrictObservation | undefined;
   getParcelForBuilding(buildingId: bigint): ParcelObservation | undefined;
+  getDistrictForBuilding(buildingId: bigint): DistrictObservation | undefined;
+  getSettlementForBuilding(buildingId: bigint): SettlementObservation | undefined;
+  getBuildingForPoi(poiId: bigint): GeneratedBuildingObservation | undefined;
+  getSettlementForPoi(poiId: bigint): SettlementObservation | undefined;
 }
 
 /** Read-only View index over Simulation-provided Regional Generation stable IDs. */
@@ -50,6 +55,11 @@ export class RegionalGenerationStore implements ReadonlyRegionalGenerationStore 
   public getCorridor(id: bigint): RegionalCorridorObservation | undefined { return this.corridors.get(id); }
   public getRoadSign(id: bigint): RoadSignObservation | undefined { return this.roadSigns.get(id); }
 
+  public getSettlementForDistrict(districtId: bigint): SettlementObservation | undefined {
+    const district = this.districts.get(districtId);
+    return district === undefined ? undefined : this.settlements.get(district.settlementId);
+  }
+
   public getSettlementForParcel(parcelId: bigint): SettlementObservation | undefined {
     const parcel = this.parcels.get(parcelId);
     return parcel === undefined ? undefined : this.settlements.get(parcel.settlementId);
@@ -63,6 +73,27 @@ export class RegionalGenerationStore implements ReadonlyRegionalGenerationStore 
   public getParcelForBuilding(buildingId: bigint): ParcelObservation | undefined {
     const building = this.buildings.get(buildingId);
     return building === undefined ? undefined : this.parcels.get(building.parcelId);
+  }
+
+  public getDistrictForBuilding(buildingId: bigint): DistrictObservation | undefined {
+    const parcel = this.getParcelForBuilding(buildingId);
+    return parcel === undefined ? undefined : this.districts.get(parcel.districtId);
+  }
+
+  public getSettlementForBuilding(buildingId: bigint): SettlementObservation | undefined {
+    const parcel = this.getParcelForBuilding(buildingId);
+    return parcel === undefined ? undefined : this.settlements.get(parcel.settlementId);
+  }
+
+  public getBuildingForPoi(poiId: bigint): GeneratedBuildingObservation | undefined {
+    const poi = this.pois.get(poiId);
+    if (poi === undefined || poi.buildingId === 0n) return undefined;
+    return this.buildings.get(poi.buildingId);
+  }
+
+  public getSettlementForPoi(poiId: bigint): SettlementObservation | undefined {
+    const poi = this.pois.get(poiId);
+    return poi === undefined ? undefined : this.settlements.get(poi.settlementId);
   }
 
   public replace(snapshot: RegionalGenerationSnapshotMessage): void {
