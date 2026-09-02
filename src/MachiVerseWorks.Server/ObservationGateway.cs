@@ -56,7 +56,7 @@ internal sealed class SimulationObservationSource(SimulationRuntime simulation) 
         simulation.CaptureWorldEnvironmentSnapshot(volume);
 
     public (PersistentRegionalEvolutionSnapshot Evolution, RegionalInteractionSnapshot Interactions)? CapturePersistentRegionalEvolutionSnapshot() =>
-        simulation.Read(static world =>
+        simulation.Read<(PersistentRegionalEvolutionSnapshot Evolution, RegionalInteractionSnapshot Interactions)?>(static world =>
         {
             if (!world.TryCreatePersistentRegionalEvolutionSnapshot(out var evolution) || evolution is null) return null;
             return (evolution, world.CreateRegionalInteractionSnapshot());
