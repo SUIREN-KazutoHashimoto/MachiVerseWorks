@@ -10,7 +10,7 @@ SimulationがWorldの唯一の意味的正本です。Activity、Status、分類
 
 > **現在:** Phase 29 — World & Physical Environment Generation は実装完了、develop統合待ち  
 > **次の実装タスク:** Phase 30 `P30-001` — Settlement / SettlementOrigin / RegionalRole / historical growth eventの正本契約  
-> **Gateway:** Gateway Phase 1 `G1-001` から独立進行可能  
+> **Gateway:** Gateway Phase 1 `G1-002` から独立進行可能  
 > **Application version:** `0.47.0`  
 > **Protocol:** `2.17`  
 > **Save format:** `11`
