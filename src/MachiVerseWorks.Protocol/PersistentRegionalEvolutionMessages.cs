@@ -89,7 +89,8 @@ public sealed record PersistentRegionalEvolutionSnapshotMessage(
     IReadOnlyList<ProtocolRegionalRelation> Relations,
     IReadOnlyList<ProtocolRegionalEvolutionEvent> Events,
     IReadOnlyList<ProtocolRegionalCommutingFlow> CommutingFlows,
-    IReadOnlyList<ProtocolRegionalFreightFlow> FreightFlows) : IProtocolMessage
+    IReadOnlyList<ProtocolRegionalFreightFlow> FreightFlows,
+    bool IsFullSnapshot = true) : IProtocolMessage
 {
     public MessageType Type => MessageType.PersistentRegionalEvolutionSnapshot;
 }
