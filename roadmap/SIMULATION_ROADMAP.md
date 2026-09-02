@@ -8,10 +8,10 @@
 
 SimulationがWorldの唯一の意味的正本です。Activity、Status、分類、予定、ETA、状態遷移、semantic event等の意味的処理はSimulation側で完結させ、Gateway / Viewへ推測・補完・再計算させません。
 
-> **現在:** Phase 29 — World & Physical Environment Generation は実装完了、develop統合待ち  
+> **現在:** Phase 30 — Regional & Urban Generation  
 > **次の実装タスク:** Phase 30 `P30-001` — Settlement / SettlementOrigin / RegionalRole / historical growth eventの正本契約  
 > **Gateway:** Gateway Phase 1 `G1-002` から独立進行可能  
-> **Application version:** `0.48.0`  
+> **Application version:** ルート [`VERSION`](../VERSION) を正本とする  
 > **Protocol:** `2.17`  
 > **Save format:** `11`
 
@@ -35,7 +35,7 @@ SimulationがWorldの唯一の意味的正本です。Activity、Status、分類
 | 26 | Optical Communication | ✅ 完了 |
 | 27 | Remote MCP Administration | ✅ 完了 |
 | 28 | Radio & Spectrum Foundation | ✅ 完了 |
-| 29 | World & Physical Environment Generation | ✅ 実装完了・develop統合待ち |
+| 29 | World & Physical Environment Generation | ✅ 完了・develop統合済み |
 | 30 | Regional & Urban Generation | ⬜ 次 |
 | 31 | Persistent Regional & Settlement Evolution | ⬜ 未着手 |
 | 32 | Simulation Scheduling & Workload Optimization | ⬜ 未着手 |
@@ -129,7 +129,7 @@ Gatewayは[`GATEWAY_ROADMAP.md`](GATEWAY_ROADMAP.md)で独立してPhase 1から
 
 ## Phase 29 — World & Physical Environment Generation
 
-> **状態: ✅ 実装完了 / develop統合待ち**  
+> **状態: ✅ 完了 / develop統合済み**  
 > **依存:** Phase 0〜28  
 > Global EnvironmentとDetailed 3D Terrainを分離しつつ、両方をSimulation authoritative boundaryから決定する。View / Camera / Gateway subscription状態は生成正本にしない。
 
@@ -191,7 +191,7 @@ Gatewayは[`GATEWAY_ROADMAP.md`](GATEWAY_ROADMAP.md)で独立してPhase 1から
 - Integrated baseline delivery E2E: Server restart reproducibility
 - Benchmark: dedicated World Environment benchmark workflow
 - Gateway follow-up: request / subscription / shared cache / generalized dedup / delivery / resyncは`GATEWAY_ROADMAP.md`
-- Integration: PR #183 のdevelop merge完了時に「develop統合済み」とする
+- Integration: PR #183 で `develop` へ統合済み
 
 ---
 
@@ -270,80 +270,240 @@ Gatewayは[`GATEWAY_ROADMAP.md`](GATEWAY_ROADMAP.md)で独立してPhase 1から
 
 ## Phase 31 — Persistent Regional & Settlement Evolution
 
-> **状態: ⬜ 未着手** / **依存:** Phase 30  
-> 初期Worldを完成品として固定せず、Population / Economy / Parcel / Building / Transport / Settlement関係を時間経過で継続変化させる。
+> **状態: ⬜ 未着手**  
+> **依存:** Phase 15 / 19 / 21 / 22 / 24〜30  
+> Phase 30が生成した初期Worldを固定された完成品として扱わず、Simulation時間の進行に応じて都市・町・村・集落・Parcel・Building・交通・地域間関係が継続的に変化するauthoritativeな地域Simulationを確立する。Settlementの規模分類は固定typeではなく実際の人口・機能・サービス・接続性から派生させ、一極集中を強制しない。
 
-- ⬜ Settlement分類・territory・influenceを実World stateから再評価する
-- ⬜ 転居・雇用・service catchment・物流・development demandを既存domainへ接続する
-- ⬜ Building建設・aging・renovation・用途変更・vacancy・demolitionを履歴付きで扱う
-- ⬜ Settlementの成立・成長・縮小・廃村・Metro / Urban Region関係を動的に扱う
-- ⬜ Persistent Regional stateをSaveとauthoritative observation source / domain payloadへ統合する。deliveryはGateway Roadmapで扱う
-- ⬜ 100年以上のlong-run deterministic E2EとWorld-scale benchmarkを追加する
+- ⬜ **P31-001** — Persistent Regional Simulationの責務、時間粒度、Settlement / Parcel / Buildingのauthoritative境界を仕様化する
+- ⬜ **P31-002** — Settlement population・jobs・services・density・accessibility等からHamlet / Village / Town / City等を派生分類するstable ruleを実装する
+- ⬜ **P31-003** — Settlement center / territory / influenceを固定境界ではなく実World stateから再評価できる契約を実装する
+- ⬜ **P31-004** — 既存Population / Householdの転居・転入・転出を住宅・雇用・生活利便性・交通accessibilityへ接続する
+- ⬜ **P31-005** — 既存Industry / Jobs / EconomyとPopulationを接続し、Settlement内外の雇用・通勤需要を継続更新する
+- ⬜ **P31-006** — 商業・教育・医療等のserviceごとに到達可能性とservice catchment / influenceを計算する最小モデルを実装する
+- ⬜ **P31-007** — Settlement間の物流・商流を既存Logistics / Freightへ接続し、地域間依存をauthoritative stateとして観測できるようにする
+- ⬜ **P31-008** — Population / Economy / Accessibility / Land ValueからParcel単位の住宅・商業・工業等のdevelopment demandを計算する
+- ⬜ **P31-009** — development demandとParcel suitabilityから空地への新規Building / POI建設を時間経過イベントとして実装する
+- ⬜ **P31-010** — BuildingのbuiltAt / condition / use / capacity等を用いるaging・renovation・用途変更・redevelopment lifecycleを実装する
+- ⬜ **P31-011** — demand低下・事業停止・人口減少等からvacancy・closure・abandonment・demolition・空地化を実装する
+- ⬜ **P31-012** — 交通量・人口・産業・service需要からRoad / Transit / Utilityへの整備・増強需要signalを生成する共通境界を実装する
+- ⬜ **P31-013** — 既存Road / Transit networkの接続性変化がSettlement成長・土地利用・通勤・物流へフィードバックする最小ruleを実装する
+- ⬜ **P31-014** — 既存Settlement外で人口・雇用・交通nodeが集積した場合に新しいSettlementが成立できるemergence ruleを実装する
+- ⬜ **P31-015** — 人口・service・建物が減少したSettlementの縮小・分類降格・廃村化を履歴を失わず表現する
+- ⬜ **P31-016** — 通勤・物流・service依存・連続市街地等から複数SettlementのMetro / Urban Region関係を動的に派生する
+- ⬜ **P31-017** — 単一中心への固定吸収を避け、複数中心が競合・補完・専門化できるregional interaction ruleを実装する
+- ⬜ **P31-018** — Settlement growth / decline / Building lifecycle / regional relationの主要変化をstable historical eventとして記録する
+- ⬜ **P31-019** — Persistent Regional stateと必要な履歴をcheckpoint / Save Data / authoritative observation source / Protocol domain payloadへ統合し、Gatewayからread-only配信できるようにする
+- ⬜ **P31-020** — 複数都市・町・村・集落が100年以上成長・停滞・衰退・再成長するlong-run deterministic E2Eを追加する
+- ⬜ **P31-021** — 大都市・郊外・農村・遠隔集落を同一ruleで進めるWorld-scale Simulation benchmarkを記録する
+- ⬜ **P31-022** — Persistent Regional & Settlement Evolutionのspecification / architecture / ADR / ROADMAPを同期する
+
+### Phase 31 完了条件
+
+- 初期生成後もSettlement / Parcel / Building / Population / Economy / Transportの状態が時間経過で継続的に変化する。
+- 都市・町・村・集落の分類と影響圏が実Simulation状態から派生し、固定テンプレートや単一中心への強制収束に依存しない。
+- 遠隔地・郊外・農村を集計値だけの別Simulationへ置換せず、都市部と同じauthoritative model・ruleで成長・衰退を再現できる。
+- 建設・老朽化・用途変更・再開発・閉鎖・解体・Settlement成立/消滅等が履歴として追跡できる。
+
+---
 
 ## Phase 32 — Simulation Scheduling & Workload Optimization
 
-> **状態: ⬜ 未着手** / **依存:** Phase 31  
-> Fidelityを落とさず、event scheduling / dirty update / spatial invalidationで結果に影響しない仕事を除去する。Camera / Gateway subscription依存Simulation LODは禁止する。
+> **状態: ⬜ 未着手**  
+> **依存:** Phase 31  
+> World-scale Simulationの精度・rule・Entity解像度を落とさず、状態が変化しないEntityや影響を受けない領域への不要な仕事を除去する。Camera距離ではなく、次回event時刻・dependency・dirty state・spatial relationによって実行workloadを決定する。
 
-- ⬜ deterministic World event scheduler / next-event scheduling
-- ⬜ time-derived state / dependency dirty update / spatial invalidation
-- ⬜ deterministic batch execution / dormancy / wake-up
-- ⬜ workload metrics、観測有無invariance、最適化前後equivalence test
-- ⬜ large World benchmarkとdocs同期
+- ⬜ **P32-001** — Simulation Fidelity / Workload / Rendering LODを別概念として仕様化し、Camera依存Simulation LODを禁止するADRを追加する
+- ⬜ **P32-002** — stable time orderingを持つWorld-level Event Scheduler / priority queueを実装する
+- ⬜ **P32-003** — Entity / systemが次に状態変化し得る時刻を登録するnext-event scheduling契約を実装する
+- ⬜ **P32-004** — age / building age / contract duration等、current timeから厳密に派生可能なstateを毎tick mutationしないtime-derived state境界を実装する
+- ⬜ **P32-005** — dependency change時のみ再評価対象をdirty化するDependency / Dirty Update基盤を実装する
+- ⬜ **P32-006** — Road / Parcel / Utility / Settlement等の変更影響を空間範囲へ限定するspatial invalidationを実装する
+- ⬜ **P32-007** — 同一時刻・同一ruleの大量処理を結果を変えずbatch化できるdeterministic batch execution境界を実装する
+- ⬜ **P32-008** — activityのないEntityを次回eventまでwork queueから外すscheduled dormancyを実装し、Cameraや描画状態を判定条件に使用しない
+- ⬜ **P32-009** — dependency変化・予定event・外部commandによる正確なwake-up / rescheduleを実装する
+- ⬜ **P32-010** — event同時刻競合・stable ID ordering・random stream消費順を含むdeterministic execution policyを実装する
+- ⬜ **P32-011** — Scheduler stateをSaveへ直接保持する場合とauthoritative stateから再構築する場合の互換契約を定義する
+- ⬜ **P32-012** — system別event count / dirty count / skipped work / queue depth / execution costを観測するSimulation workload metricsを追加する
+- ⬜ **P32-013** — 同じWorldを常時表示した場合と一度も表示しなかった場合でauthoritative state digestが一致するE2Eを追加する
+- ⬜ **P32-014** — 都市・郊外・農村・遠隔集落についてScheduler最適化前後でstate digestが一致するequivalence testを追加する
+- ⬜ **P32-015** — large Worldでnaive tick scanとoptimized schedulingのCPU / allocation / queue / throughput benchmarkを記録する
+- ⬜ **P32-016** — Simulation Scheduling & Workload Optimizationのspecification / architecture / performance guideline / ROADMAPを同期する
+
+### Phase 32 完了条件
+
+- 遠い・見えないという理由だけでSimulation modelやEntity解像度を簡略化しない。
+- Event scheduling / dirty update / time-derived state / spatial invalidationによって、結果に影響しない処理を実行しない。
+- 同一seed・inputでは最適化前後および観測有無でauthoritative stateが一致する。
+- World規模拡大時のCPU・allocation・event queue負荷を継続benchmarkできる。
+
+---
 
 ## Phase 33 — Deterministic Parallel Simulation
 
-> **状態: ⬜ 未着手** / **依存:** Phase 32  
-> worker数・partition配置・実行順の違いをauthoritative World結果へ漏らさず並列化する。
+> **状態: ⬜ 未着手**  
+> **依存:** Phase 32  
+> Spatial Partitionやdomain単位でSimulation workloadを並列化しながら、worker数・partition配置・実行順の違いをWorld結果へ漏らさないdeterministic executionを確立する。Partitionは計算・memory localityの単位であり、Simulation Fidelityの境界にはしない。
 
-- ⬜ partition ownership / boundary queue / deterministic RNG stream
-- ⬜ deterministic worker scheduling / reduction
-- ⬜ domain workloadの段階的parallel化
-- ⬜ 1/2/4/8/16 workerおよび異なるpartition分割でstate digest一致E2E
-- ⬜ scaling / sync / locality benchmarkとdocs同期
+- ⬜ **P33-001** — deterministic parallelismのordering / ownership / synchronization / RNG policyを仕様化する
+- ⬜ **P33-002** — Spatial Partitionのownershipと跨境Entity / referenceの参照契約を実装する
+- ⬜ **P33-003** — Partition間event / dirty propagationをstable orderで受け渡すboundary queueを実装する
+- ⬜ **P33-004** — Entity / system / purposeごとに独立したdeterministic random streamを割り当て、worker schedulingからRNG結果を分離する
+- ⬜ **P33-005** — Phase 32 Schedulerから安全にparallel work batchを抽出するworker schedulingを実装する
+- ⬜ **P33-006** — parallel aggregation / reductionで浮動小数点順序等が結果を不安定化しないdeterministic reduction方針を実装する
+- ⬜ **P33-007** — Road / Population / Economy / Logistics / Utility / Regional evolutionのうち依存関係を満たすworkloadを段階的にparallel化する
+- ⬜ **P33-008** — Partition migration / load rebalanceを実装する場合もstable IDとauthoritative stateを保持する契約を定義する
+- ⬜ **P33-009** — 1 / 2 / 4 / 8 / 16 workerで同一World state digestを得るdeterminism E2Eを追加する
+- ⬜ **P33-010** — 異なるSpatial Partition分割・worker割当でも同一World state digestを得るdistribution-invariance testを追加する
+- ⬜ **P33-011** — partition boundary上のRoad / Utility / migration / logistics eventを跨ぐlong-run E2Eを追加する
+- ⬜ **P33-012** — worker scaling・CPU utilization・memory locality・sync cost・throughput benchmarkを記録する
+- ⬜ **P33-013** — Deterministic Parallel Simulationのspecification / architecture / ADR / performance guideline / ROADMAPを同期する
+
+### Phase 33 完了条件
+
+- worker数やPartition配置を変更しても同一seed・inputから同一authoritative World stateを得られる。
+- Partition境界は計算配置のためだけに存在し、郊外・遠隔地・別PartitionのSimulation Fidelityを変更しない。
+- parallelismによる性能向上とsync overheadを継続benchmarkできる。
+
+---
 
 ## Phase 35 — Historical World & Replay
 
-> **状態: ⬜ 未着手** / **依存:** Phase 31〜33  
-> Settlement / Building / Network等の変化を時間軸で追跡し、指定時点のread-only World projectionを再構築する。
+> **状態: ⬜ 未着手**  
+> **依存:** Phase 31〜33  
+> Worldの現在値だけでなく、Settlementの成立・成長・衰退、Buildingの建設・改修・用途変更・解体、交通網や地域関係の変化を時間軸で追跡・再構築できる履歴基盤を整える。View側のtimeline / time sliderはView Roadmap Phase 9で扱い、Simulation側はread-only Historical projectionまでを責務とする。
 
-- ⬜ stable Historical Event / periodic snapshot / replay contract
-- ⬜ Entity lifetime / Building / Settlement / Network履歴query
-- ⬜ historical projectionのSave / authoritative observation source / domain payload統合。配送・replay deliveryはGateway Phase 5で扱う
-- ⬜ live Simulationを巻き戻さないread-only historical projection
-- ⬜ 100年以上のreplay E2E、storage / reconstruction benchmark、docs同期
+- ⬜ **P35-001** — Historical Event / Snapshot / Replayの責務・保持範囲・determinism・Save境界を仕様化する
+- ⬜ **P35-002** — Entity created / changed / destroyedと主要domain eventをstable ID・SimulationTime付きで記録するhistory contractを実装する
+- ⬜ **P35-003** — 長期間Replayを全event先頭から再実行しなくて済むperiodic historical snapshotを実装する
+- ⬜ **P35-004** — Snapshot + Eventから指定SimulationTimeのread-only World stateをdeterministicに再構築する
+- ⬜ **P35-005** — Entity lifetime / provenanceをqueryし、現存しないBuilding / Settlement / Infrastructureも履歴から参照できるようにする
+- ⬜ **P35-006** — Buildingの建設・改修・用途変更・vacancy・解体履歴をquery可能にする
+- ⬜ **P35-007** — Settlementの人口・分類・中心・territory・role・Urban Region関係の時系列をquery可能にする
+- ⬜ **P35-008** — Road / Railway / Utility等のnetwork変更履歴をquery可能にする
+- ⬜ **P35-009** — Historical query / snapshot metadata / timelineのauthoritative historical observation source / Protocol domain payloadを実装し、Gateway Phase 5からread-only配信できるようにする
+- ⬜ **P35-011** — live Simulationを停止・巻き戻しせずHistorical Viewへ提供できるread-only projectionを実装する
+- ⬜ **P35-012** — retention / snapshot interval / event compactionを設定可能にし、保持対象期間の再構築可能性を損なわないpolicyを実装する
+- ⬜ **P35-013** — Historical stateをSave Dataへ統合し、load後もtimelineを継続できるようにする
+- ⬜ **P35-014** — 100年以上のSettlement / Building / Network変化を指定時点へ再構築するdeterministic Replay E2Eを追加する
+- ⬜ **P35-015** — history storage size / snapshot creation / reconstruction time benchmarkを記録する
+- ⬜ **P35-016** — Historical World & Replayのspecification / architecture / ADR / ROADMAPを同期する
+
+> 旧`P35-010`と`P35-015`のtimeline rendering benchmark部分はView Roadmap Phase 9へ移管した。
+
+### Phase 35 完了条件
+
+- 「この場所・建物・Settlementが昔どうだったか」をstable IDと時間から追跡できる。
+- 指定時点のWorldをdeterministicに再構築し、authoritative historical projectionとしてGatewayへ提供できる。
+- Historical projectionの参照・Gateway配信がlive Simulationのauthoritative stateへ影響しない。
+
+---
 
 ## Phase 36 — World & City Management Commands
 
-> **状態: ⬜ 未着手** / **依存:** Phase 20 / 30 / 31 / 35  
-> World / City / Serverを編集するserver-authoritative command境界を整備する。UIはManagement Roadmapで扱い、read-only observation deliveryはGateway Roadmapで扱う。
+> **状態: ⬜ 未着手**  
+> **依存:** Phase 20 / 30 / 31 / 35  
+> World・地域・都市・Serverを明示的に編集・管理するためのserver-authoritative command / validation / authorization境界を整える。Phase 35を必須依存にするのは、Management mutationによるBuilding / Settlement / Network変更もHistorical Event / Replayの正本契約へ記録し、履歴を迂回する第二のmutation経路を作らないためである。Browserのread-only Selection / InspectorはView Roadmap、mutation / administration UIはManagement Roadmapで扱う。
 
-- ⬜ common command authorization / validation / ack / structured error
-- ⬜ Road / Building / Parcel / Zone / Railway / Utility / Radio / namingのbuild / edit / remove
-- ⬜ Simulation runtime control / configuration / Save load-save
-- ⬜ destructive confirmation metadata
-- ⬜ Historical Event契約を迂回しないmutation boundaryとdocs同期
+- ⬜ **P36-001** — Build / Edit commandの認可・validation・ack / error契約を仕様化する
+- ⬜ **P36-002** — Protocolへserver-authoritative command request / resultの共通枠組みを追加する
+- ⬜ **P36-005** — Road / Laneのbuild / edit / remove commandをserver-authoritative境界として実装する
+- ⬜ **P36-006** — Building / POI / Parcel / Zoneのbuild / edit commandをserver-authoritative境界として実装する
+- ⬜ **P36-007** — Railway track / station / platformのbuild / edit commandをserver-authoritative境界として実装する
+- ⬜ **P36-008** — Power Infrastructureのbuild / edit commandをserver-authoritative境界として実装する
+- ⬜ **P36-009** — Water / Sewer Infrastructureのbuild / edit commandをserver-authoritative境界として実装する
+- ⬜ **P36-010** — Gas Infrastructureのbuild / edit commandをserver-authoritative境界として実装する
+- ⬜ **P36-011** — Optical Communication Infrastructureのbuild / edit commandをserver-authoritative境界として実装する
+- ⬜ **P36-012** — Radio Site / Antenna / Spectrum設定のbuild / edit commandをserver-authoritative境界として実装する
+- ⬜ **P36-013** — Geographic Feature名・Settlement / 地区 / 道路名・Road Signのserver-authoritative edit / override境界を実装する
+- ⬜ **P36-015** — Simulation speed / pause / resume / explicit step等の運転controlをServer commandとして実装する
+- ⬜ **P36-017** — Server configurationの変更可能項目・restart必要項目を区別するmetadataとserver-authoritative変更境界を実装する
+- ⬜ **P36-018** — current Save formatのsave / load操作をServer commandとして実装する
+- ⬜ **P36-019** — destructive commandのconfirmation metadataとstable error code / structured parameter契約を実装する
+- ⬜ **P36-022** — World & City Management Commandsのspecification / architecture / command contract / ROADMAPを同期する
+
+> 旧`P36-003` / `P36-004`のSelection / InspectorはView Roadmap Phase 7へ移管した。旧`P36-005`〜`P36-019`に含まれていたmutation / administration UI部分と`P36-014` / `P36-020` / `P36-021`のManagement側作業はManagement Roadmapへ移管した。旧`P36-016`のDashboard / statistics分析系は将来Analytics系へ分離し、本Phase完了条件には含めない。
+
+### Phase 36 完了条件
+
+- build / edit / remove / naming / signage / runtime control / configuration / Save操作のserver-authoritative command境界が存在する。
+- build / edit操作は必ずServer-authoritative commandを経由し、Clientが正本状態を直接変更できない。
+- 自動生成された名称・標識を由来情報を保持したまま明示的にoverrideできるcommand境界を持つ。
+- Management Clientがstable command result / error / permission / confirmation metadataを利用できる。
+- World mutationがPhase 35のHistorical Event / Replay契約を迂回しない。
+- read-only View / Gatewayへmutation command責務を持ち込まない。
+
+---
 
 ## Phase 37 — Distribution & Compatibility
 
-> **状態: ⬜ 未着手** / **依存:** Phase 36  
-> Save migrationと配布物を整備し、開発環境外でもversion付き成果物として起動・更新・復元できるようにする。
+> **状態: ⬜ 未着手**  
+> **依存:** Phase 36  
+> Save migrationと配布物を整備し、開発環境外でもversion付き成果物として起動・更新・復元できる状態にする。artifact packaging等の一部Taskは安定した既存境界だけで先行できるが、Phase closeoutはManagement commandを含む対象Client / Server境界が揃った後とする。
 
-- ⬜ Save migration framework / old fixture / failure contract
-- ⬜ Windows / Linux Server publish artifact、Web production artifact、container image
-- ⬜ VERSION / commit SHA / license / notices / checksum / SBOM
-- ⬜ release smoke、install / upgrade / rollback / backup / restore、release automation
+### Save互換性
+
+- ⬜ **P37-001** — Save migrationのsupport範囲・失敗契約・version policyを仕様化する
+- ⬜ **P37-002** — Save formatごとのmigration stepを登録できるframeworkを実装する
+- ⬜ **P37-003** — repositoryに旧Save format fixtureを保持し、自動migration testを追加する
+- ⬜ **P37-004** — migration中断・unsupported version・破損dataを安全に拒否する
+- ⬜ **P37-005** — migration前後でstable IDと継続可能stateを保持するintegration testを追加する
+
+### 配布・Deployment
+
+- ⬜ **P37-006** — Server standalone binaryのsupported OS / architecture matrixを定義する
+- ⬜ **P37-007** — Windows / Linux向けServer publish artifactをCIで生成する
+- ⬜ **P37-008** — 必要性を検証した上で追加architecture / OS向けartifactを生成する
+- ⬜ **P37-009** — Web Client production buildのbase path / Server endpoint設定をdeployment向けに整理する
+- ⬜ **P37-010** — static hosting向けWeb Client artifactをCIで生成する
+- ⬜ **P37-011** — Server用container imageとruntime configuration契約を実装する
+- ⬜ **P37-012** — release artifactへVERSION・commit SHA・license / third-party noticeを同梱する
+- ⬜ **P37-013** — release artifactのchecksum / SBOM等、配布時に必要なintegrity metadataを生成する
+- ⬜ **P37-014** — package / binary / Web / containerを起動するrelease smoke testをCIへ追加する
+- ⬜ **P37-015** — install / upgrade / rollback / backup / restore手順をdocument化する
+- ⬜ **P37-016** — develop→main release時のversion / artifact / release note手順を自動化可能な形へ整理する
+- ⬜ **P37-017** — Distribution / Compatibilityのarchitecture / development docs / ROADMAPを同期する
+
+### Phase 37 完了条件
+
+- 開発toolchainを手作業構築しなくても、配布artifactからServerとWeb Clientを起動できる。
+- 対応対象の旧Save Dataを明示的なmigration経路で読み込める。
+- release artifactのversion・commit・license・integrity情報を追跡できる。
+
+---
 
 ## Phase 38 — Extension Platform
 
-> **状態: ⬜ 未着手** / **依存:** Phase 37  
-> Simulation正本と互換性境界を壊さず、外部拡張や高精度solverを導入できるversioned public extension基盤を作る。
+> **状態: ⬜ 未着手**  
+> **依存:** Phase 37  
+> 正本Simulationと互換性境界を壊さず、外部拡張・高精度solverを導入できる公開拡張基盤を作る。package / distribution / compatibility policyをPhase 37へ依存し、read-only View extensionはView Roadmap Phase 12、Addon管理UIはManagement Roadmap Phase 5、read-only View localizationはView Roadmap Phase 10で管理する。
 
-- ⬜ Extension manifest / stable ID / version / dependency / loading model
-- ⬜ trust / permission policy、data-only / code extension分離
-- ⬜ Simulation solver / rule provider public API
-- ⬜ namespaced extension Save、wire拡張契約、dependency validation
-- ⬜ template / sample extension、determinism integration test、benchmark、author guide、docs closeout
+### Extension Platform
+
+- ⬜ **P38-001** — Extension / Modで公開する範囲と非公開内部APIの境界を仕様化する
+- ⬜ **P38-002** — Extension manifest・stable ID・version・dependency契約を定義する
+- ⬜ **P38-003** — data-only extensionとcode extensionを分離したloading modelを設計する
+- ⬜ **P38-004** — code extensionの信頼境界・権限・非sandbox性を明示し、安全なdefault policyを実装する
+- ⬜ **P38-005** — Simulationへextension contentとPower / Water / Sewer / Gas / Optical / Radio / Terrain / Regional evolution等のsolver / rule providerを登録するversioned public APIを実装する
+- ⬜ **P38-006** — Extension固有Save Dataをnamespace付きで保存し、missing extension時の挙動を定義する
+- ⬜ **P38-007** — Protocolへextension固有wire typeを直接衝突させない拡張契約を設計する
+- ⬜ **P38-008** — Extensionのload order / dependency cycle / incompatible versionをvalidationする
+- ⬜ **P38-009** — Extension packageの開発・test用templateとsample extensionを追加する
+
+### Closeout
+
+- ⬜ **P38-016** — Extension有無・solver / rule差し替え有無でSave / Protocol / Simulation determinismが壊れないintegration testを追加する
+- ⬜ **P38-017** — Extension loading・solver / rule providerのstartup / memory costをbenchmarkする
+- ⬜ **P38-018** — Extension author guide / solver provider guide / compatibility policyを整備する
+- ⬜ **P38-019** — architecture / ADR / ROADMAPを同期し、Phase 10〜38で計画した旧Backlogのcloseoutを確認する
+
+> 旧Localization `P38-010`〜`P38-015`と`P38-017` / `P38-018`のlocalization部分はView Roadmap Phase 10へ移管した。
+
+### Phase 38 完了条件
+
+- 既存Simulation内部実装へ直接依存せず、versionedな公開境界からExtensionを追加できる。
+- 標準の軽量Infrastructure / Terrain solverを維持したまま、Extensionが高精度な物理solverや追加Regional ruleを安全に差し替えられる。
+- Extension固有stateがSave Dataと衝突せず、missing / incompatible extensionを安全に扱える。
+- View Addon / Management AddonがSimulation内部APIではなく同じExtension Platform contractへ依存できる。
 
 ---
 

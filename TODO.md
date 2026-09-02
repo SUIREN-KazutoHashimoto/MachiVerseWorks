@@ -49,9 +49,11 @@ Simulation / Gateway / Viewを並行して進めるときの**作業順を考え
 最初のalphaリリース準備を開始する目安は次の状態とする。
 
 - Simulation: Phase 31 完了
-- Gateway: Phase 6 完了（旧 Observation Gateway Foundation closeout 相当）
+- Gateway: Phase 3 完了
 - View: Phase 5 完了
 - Management: 初回alphaでは必須としない
+
+Gateway Phase 3まででbaseline Observation boundary、subscription / delivery、reconnect / resyncを揃え、最初の観測可能なvertical sliceを成立させる。Generic Inspector / Temporal ObservationやHistorical Replayは初回alphaの必須条件にはせず、必要になった機能だけ各Roadmapの依存に従って追加する。
 
 これはrelease milestoneのメモであり、個別作業の状態管理はRoadmap側で行う。
 
@@ -86,6 +88,6 @@ Git tag / GitHub Pre-release / release notes / 配布artifactの外向け識別�
 
 ### Release boundary
 
-初回alphaはPhase 37全体の完了を意味しない。Simulation Phase 31 + Gateway Phase 6 + View Phase 5で成立する最初の観測可能なvertical sliceを公開するため、Phase 37のうち初回配布に必要なTaskだけを先行して利用する。
+初回alphaはPhase 37全体の完了を意味しない。Simulation Phase 31 + Gateway Phase 3 + View Phase 5で成立する最初の観測可能なvertical sliceを公開するため、Phase 37のうち初回配布に必要なTaskだけを先行して利用する。
 
 本格的なSave migration、distribution compatibility、release automation、artifact traceabilityのcloseoutは、引き続きSimulation Phase 37の完了条件で管理する。
