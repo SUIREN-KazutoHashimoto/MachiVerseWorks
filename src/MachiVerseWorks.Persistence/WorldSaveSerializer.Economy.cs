@@ -19,6 +19,7 @@ public static partial class WorldSaveSerializer
         ValidateOpticalCheckpointWithinLimits(economy.Optical, limits);
         ValidateWorldEnvironmentCheckpointWithinLimits(economy.WorldEnvironment, limits);
         ValidateRegionalGenerationCheckpointWithinLimits(economy.RegionalGeneration, limits);
+        ValidatePersistentRegionalEvolutionCheckpointWithinLimits(economy.RegionalEvolution, limits);
     }
 
     private static void ValidateLogisticsCheckpointWithinLimits(LogisticsCheckpoint? logistics, WorldSaveLimits limits)
@@ -98,5 +99,18 @@ public static partial class WorldSaveSerializer
         ValidateCount(snapshot.RoadSigns.Count, limits.MaximumRoadAccessPointCount, "RegionalRoadSigns");
         foreach (var corridor in snapshot.Corridors)
             ValidateCount(corridor.Geometry.Count, limits.MaximumGeographicFeatureGeometryPointCount, "RegionalCorridorGeometryPoints");
+    }
+
+    private static void ValidatePersistentRegionalEvolutionCheckpointWithinLimits(PersistentRegionalEvolutionCheckpoint? regionalEvolution, WorldSaveLimits limits)
+    {
+        if (regionalEvolution is null) return;
+        var snapshot = regionalEvolution.Snapshot;
+        ValidateCount(snapshot.Settlements.Count, limits.MaximumBuildingCount, "RegionalEvolutionSettlements");
+        ValidateCount(snapshot.Parcels.Count, limits.MaximumBuildingCount, "RegionalEvolutionParcels");
+        ValidateCount(snapshot.Buildings.Count, limits.MaximumBuildingCount, "RegionalEvolutionBuildings");
+        ValidateCount(snapshot.ServiceCatchments.Count, limits.MaximumBuildingCount, "RegionalServiceCatchments");
+        ValidateCount(snapshot.InfrastructureDemands.Count, limits.MaximumRoadSegmentCount, "RegionalInfrastructureDemands");
+        ValidateCount(snapshot.Relations.Count, limits.MaximumRoadSegmentCount, "RegionalRelations");
+        ValidateCount(snapshot.Events.Count, limits.MaximumPersonCount, "RegionalEvolutionEvents");
     }
 }
