@@ -40,11 +40,11 @@ internal sealed class WaterSewerPublishService(
                 {
                     _ = deliveryCoordinator.TrySchedule(
                         connection,
-                        stoppingToken,
                         async sendCancellation =>
                         {
                             _ = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation);
-                        });
+                        },
+                        stoppingToken);
                 }
             }
         }
