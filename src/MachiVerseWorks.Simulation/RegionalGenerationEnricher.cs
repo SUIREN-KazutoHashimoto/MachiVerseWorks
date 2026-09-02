@@ -272,12 +272,11 @@ public sealed class RegionalGenerationEnricher
                 buildingId);
             parcels.Add(parcel);
             if (buildingId is { } id)
-                buildings.Add(CreateBuilding(source, parcel, id, state));
+                buildings.Add(CreateBuilding(parcel, id, state));
         }
     }
 
     private static GeneratedBuilding CreateBuilding(
-        RegionalGenerationSnapshot source,
         Parcel parcel,
         GeneratedBuildingId id,
         ParcelDevelopmentState state)
@@ -371,7 +370,7 @@ public sealed class RegionalGenerationEnricher
         return decision.Build ? ParcelDevelopmentState.Developing : ParcelDevelopmentState.Vacant;
     }
 
-    private static IReadOnlyList<DistrictKind> GetDesiredRoleDistricts(Settlement settlement)
+    private static DistrictKind[] GetDesiredRoleDistricts(Settlement settlement)
     {
         var result = new List<DistrictKind>();
         if (settlement.Role is RegionalRole.TransportHub or RegionalRole.Port)
