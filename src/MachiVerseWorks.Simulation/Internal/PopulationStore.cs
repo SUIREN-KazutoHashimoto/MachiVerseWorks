@@ -50,6 +50,29 @@ internal sealed class PopulationStore
         return id;
     }
 
+    public bool RelocateHousehold(HouseholdId id, TripEndpoint residence)
+    {
+        if (!householdIndex.TryGetValue(id, out var householdPosition)) return false;
+        var household = households[householdPosition];
+        var previous = household.Residence;
+        if (previous == residence) return true;
+        household.Residence = residence;
+
+        for (var index = 0; index < persons.Count; index++)
+        {
+            var person = persons[index];
+            if (person.HouseholdId != id) continue;
+            person.Residence = residence;
+            if (person.TravelState == PersonTravelState.AtActivity
+                && person.CurrentActivity == ActivityKind.Home
+                && person.CurrentLocation == previous)
+            {
+                person.CurrentLocation = residence;
+            }
+        }
+        return true;
+    }
+
     public TripRequestId PeekTripRequestId()
     {
         EnsureCapacity(nextTripRequestId, "Trip request");
@@ -231,7 +254,7 @@ internal sealed class PopulationStore
 internal sealed class HouseholdState(HouseholdId id, TripEndpoint residence)
 {
     public HouseholdId Id { get; } = id;
-    public TripEndpoint Residence { get; } = residence;
+    public TripEndpoint Residence { get; set; } = residence;
     public int PersonCount { get; set; }
 }
 
@@ -248,7 +271,7 @@ internal sealed class PersonState(
     public PersonId Id { get; } = id;
     public HouseholdId HouseholdId { get; } = householdId;
     public PersonDemographics Demographics { get; } = demographics;
-    public TripEndpoint Residence { get; } = residence;
+    public TripEndpoint Residence { get; set; } = residence;
     public TripEndpoint CurrentLocation { get; set; } = currentLocation;
     public ActivityKind CurrentActivity { get; set; } = currentActivity;
     public PersonTravelState TravelState { get; set; } = PersonTravelState.AtActivity;
