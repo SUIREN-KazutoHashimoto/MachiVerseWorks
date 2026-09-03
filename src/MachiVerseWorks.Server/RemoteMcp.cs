@@ -355,7 +355,7 @@ internal sealed class RemoteMcpAdminGateway(AdminCommandQueue queue, RemoteMcpOp
         var completion = new TaskCompletionSource<AdminCommandResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         if (!queue.TryWrite(new AdminCommandRequest(command, completion, cancellationToken)))
             return new RemoteMcpResult(false, "queue_full", "Administration command queue is full.");
-        var result = await completion.Task.WaitAsync(cancellationToken);
+        var result = await completion.Task.ConfigureAwait(false);
         var remoteResult = FromAdmin(result);
         logs.AddSafe(new RemoteMcpLogEntry(
             DateTimeOffset.UtcNow,
