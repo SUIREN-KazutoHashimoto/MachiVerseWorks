@@ -8,7 +8,7 @@ public sealed class PopulationProtocolCodecTests
     [TestMethod]
     public void PopulationStatisticsRoundTripsInProtocol25()
     {
-        var expected = new PopulationStatisticsMessage(12, 34, 20, 9, 5, 10, 8, 3, 4, 2, 5, 2, 1234);
+        var expected = new PopulationStatisticsMessage(12, 34, 20, 9, 5, 10, 8, 3, 4, 2, 5, 2, 1234, 7);
 
         var frame = PopulationProtocolCodec.Serialize(expected, ProtocolVersion.Current);
 
@@ -17,6 +17,21 @@ public sealed class PopulationProtocolCodecTests
         Assert.IsNotNull(envelope);
         Assert.AreEqual(ProtocolVersion.Current, envelope.Version);
         Assert.AreEqual(expected, envelope.Message);
+    }
+
+    [TestMethod]
+    public void PopulationStatisticsProtocol220KeepsLegacyLayoutAndDefaultsTransitCount()
+    {
+        var version = new ProtocolVersion(2, 20);
+        var frame = PopulationProtocolCodec.Serialize(new PopulationStatisticsMessage(1, 2, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 42, 9), version);
+
+        Assert.IsTrue(PopulationProtocolCodec.TryDeserialize(frame, out var envelope, out var error));
+        Assert.AreEqual(ProtocolDecodeError.None, error);
+        Assert.IsNotNull(envelope);
+        Assert.AreEqual(version, envelope.Version);
+        var decoded = (PopulationStatisticsMessage)envelope.Message;
+        Assert.AreEqual(42UL, decoded.TickCount);
+        Assert.AreEqual(0U, decoded.TransitCount);
     }
 
     [TestMethod]
