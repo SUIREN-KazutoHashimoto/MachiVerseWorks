@@ -7,6 +7,8 @@ on:
       - 'src/MachiVerseWorks.Simulation/Regional*.cs'
       - 'src/MachiVerseWorks.Simulation/Settlement*.cs'
       - 'src/MachiVerseWorks.Simulation/PersistentRegional*.cs'
+      - 'src/MachiVerseWorks.Simulation/WorldEnvironment*.cs'
+      - 'src/MachiVerseWorks.Simulation/Geometry.cs'
       - 'src/MachiVerseWorks.Simulation/SimulationWorld.Regional*.cs'
       - 'src/MachiVerseWorks.Simulation/SimulationWorld.PersistentRegional*.cs'
       - 'src/MachiVerseWorks.Simulation/SimulationWorld.cs'
