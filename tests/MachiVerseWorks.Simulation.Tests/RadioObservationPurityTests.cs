@@ -6,7 +6,7 @@ namespace MachiVerseWorks.Simulation.Tests;
 public sealed class RadioObservationPurityTests
 {
     [TestMethod]
-    public void CreateRadioSnapshotDoesNotRecalculateAuthoritativeState()
+    public void MutationsRefreshAuthoritativeStateWhileSnapshotsRemainPure()
     {
         var solver = new CountingRadioPropagationSolver();
         var world = new SimulationWorld(
@@ -23,24 +23,23 @@ public sealed class RadioObservationPurityTests
             FadeMarginDb: 6d);
         var link = world.CreateRadioLink(source, destination, block, budget, utilization: 0.5d);
 
-        Assert.AreEqual(0, solver.SolveCount, "Radio mutation should defer the derived-plan refresh until Step.");
-        world.Step();
+        Assert.IsTrue(solver.SolveCount > 0, "Authoritative Radio mutations must refresh derived link state immediately.");
         Assert.IsTrue(world.TryGetRadioLinkSnapshot(link, out var before));
+        Assert.AreNotEqual(RadioLinkState.Unreachable, before.State);
         var solveCountBeforeObservation = solver.SolveCount;
-        Assert.IsTrue(solveCountBeforeObservation > 0);
 
         _ = world.CreateRadioSnapshot();
         _ = world.CreateRadioSnapshot();
 
-        Assert.AreEqual(solveCountBeforeObservation, solver.SolveCount);
+        Assert.AreEqual(solveCountBeforeObservation, solver.SolveCount, "Pure Radio observations must not invoke propagation solving.");
         Assert.IsTrue(world.TryGetRadioLinkSnapshot(link, out var after));
         Assert.AreEqual(before, after);
 
         world.SetRadioLinkUtilization(link, 0.75d);
-        Assert.AreEqual(solveCountBeforeObservation, solver.SolveCount, "Radio mutation should only mark the plan dirty.");
-        world.Step();
 
-        Assert.IsTrue(solver.SolveCount > solveCountBeforeObservation);
+        Assert.IsTrue(solver.SolveCount > solveCountBeforeObservation, "Radio mutation must synchronously refresh the derived plan.");
+        Assert.IsTrue(world.TryGetRadioLinkSnapshot(link, out var updated));
+        Assert.AreEqual(0.75d, updated.Utilization, 0d);
     }
 
     private sealed class CountingRadioPropagationSolver : IRadioPropagationSolver
