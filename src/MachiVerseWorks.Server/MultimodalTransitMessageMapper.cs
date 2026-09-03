@@ -44,7 +44,7 @@ internal static class MultimodalTransitMessageMapper
         var patternById = transit.Patterns.ToDictionary(static item => item.Id);
 
         IReadOnlyList<TransitVehicleSnapshot> selectedVehicles;
-        IReadOnlySet<TransitPatternId>? selectedPatternIds = null;
+        IReadOnlySet<TransitServicePatternId>? selectedPatternIds = null;
         IReadOnlySet<TransitStopId>? selectedStopIds = null;
         if (volume is { } selectedVolume)
         {
