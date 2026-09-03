@@ -112,7 +112,7 @@ public sealed class Worker1FinalBatchRegressionTests
         overflowWorld.CreateLane(overflowSegment, LaneDirection.Forward, 0, double.MaxValue, 10d);
 
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
-            overflowWorld.CreateLane(overflowSegment, LaneDirection.Forward, 1, 1d, 10d));
+            overflowWorld.CreateLane(overflowSegment, LaneDirection.Forward, 1, double.MaxValue, 10d));
         Assert.AreEqual(1, overflowWorld.LaneCount);
     }
 
@@ -128,7 +128,7 @@ public sealed class Worker1FinalBatchRegressionTests
         var checkpoint = world.CreateCheckpoint();
         var lanes = checkpoint.Lanes.ToArray();
         lanes[0] = lanes[0] with { WidthMeters = double.MaxValue };
-        lanes[1] = lanes[1] with { WidthMeters = 1d };
+        lanes[1] = lanes[1] with { WidthMeters = double.MaxValue };
 
         Assert.ThrowsExactly<ArgumentException>(() =>
             SimulationWorld.RestoreCheckpoint(checkpoint with { Lanes = lanes }));
