@@ -93,9 +93,20 @@ public sealed class ServerIntegrationTests
         await ServerTestHost.HandshakeAsync(socket);
         await ServerTestHost.SendAsync(socket, new SubscribeVolumeMessage(volume.MinX, volume.MinY, volume.MinZ, volume.MaxX, volume.MaxY, volume.MaxZ), ProtocolVersion.Current);
 
-        for (var index = 0; index < 16; index++)
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+        while (DateTime.UtcNow < deadline)
         {
-            var message = (await ServerTestHost.ReceiveAsync(socket, TimeSpan.FromSeconds(3))).Message;
+            var remaining = deadline - DateTime.UtcNow;
+            IProtocolMessage message;
+            try
+            {
+                message = (await ServerTestHost.ReceiveAsync(socket, remaining)).Message;
+            }
+            catch (OperationCanceledException) when (DateTime.UtcNow >= deadline)
+            {
+                break;
+            }
+
             if (message is ProtocolErrorMessage error)
             {
                 Assert.Fail($"World environment subscription was rejected: {error.Code}: {string.Join(", ", error.Parameters.Select(static item => $"{item.Key}={item.Value}"))}");
@@ -107,7 +118,7 @@ public sealed class ServerIntegrationTests
             Assert.AreEqual(environment.Features.Count, environment.Toponyms.Count);
             return;
         }
-        Assert.Fail("WorldEnvironmentSnapshot was not published after a valid Protocol 2.17 subscription.");
+        Assert.Fail("WorldEnvironmentSnapshot was not published after a valid Protocol 2.17 subscription within 15 seconds.");
     }
 
     [TestMethod]
