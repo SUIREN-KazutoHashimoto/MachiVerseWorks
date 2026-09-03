@@ -182,7 +182,7 @@ public sealed partial class SimulationWorld
         try { _ = restoredTime.Advance(config.TickRate); }
         catch (OverflowException) { throw new ArgumentOutOfRangeException(nameof(checkpoint), "Simulation time must allow at least one additional tick."); }
         var world = new SimulationWorld(config) { Time = restoredTime, _random = new DeterministicRandom(checkpoint.RandomState) };
-        world._agents.Restore(checkpoint.Agents, checkpoint.NextAgentId, checkpoint.TotalCreatedAgentCount, world._spatialIndex);
+        world._agents.Restore(checkpoint.Agents, checkpoint.NextAgentId, ResolveTotalCreatedAgentCount(checkpoint), world._spatialIndex);
         world.RestoreUrbanObjects(checkpoint);
         world._roads.Restore(checkpoint);
         world._railway.Restore(checkpoint);
@@ -215,6 +215,14 @@ public sealed partial class SimulationWorld
         world._multimodalTransit.Restore(checkpoint.MultimodalTransit);
         ValidateMultimodalTransitCheckpointReferences(checkpoint);
         return world;
+    }
+
+    private static int ResolveTotalCreatedAgentCount(SimulationCheckpoint checkpoint)
+    {
+        if (checkpoint.TotalCreatedAgentCount > 0) return Math.Max(checkpoint.TotalCreatedAgentCount, checkpoint.Agents.Count);
+        var issuedCount = checkpoint.NextAgentId - 1;
+        if (issuedCount <= int.MaxValue) return Math.Max((int)issuedCount, checkpoint.Agents.Count);
+        return checkpoint.Agents.Count;
     }
 
     private double NextCoordinate(double minimum, double maximum) => minimum == maximum ? minimum : _random.NextDouble(minimum, maximum);
