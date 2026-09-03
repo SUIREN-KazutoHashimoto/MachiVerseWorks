@@ -43,6 +43,7 @@ public sealed partial class SimulationWorld
 
             var nextUse = SelectRedevelopmentUse(building.Use, settlement);
             if (nextUse == building.Use) continue;
+            SynchronizePersistentRegionalMaterializationUse(building.BuildingId, nextUse, building.Capacity);
             buildings[buildingIndex] = building with
             {
                 Use = nextUse,
@@ -65,7 +66,7 @@ public sealed partial class SimulationWorld
         {
             Parcels = parcels,
             Buildings = buildings,
-            Events = events.OrderBy(static item => item.Id.Value).ToArray(),
+            Events = PersistentRegionalEvolutionRetention.RetainNewest(events),
         };
     }
 
