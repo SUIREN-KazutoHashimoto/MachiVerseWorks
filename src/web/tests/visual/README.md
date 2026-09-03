@@ -4,6 +4,8 @@ This directory stores the approved Golden Images used by the View browser E2E jo
 
 The visual checks intentionally run on the same deterministic View fixtures that already perform structural and numeric assertions. This keeps image regression coverage paired with renderer diagnostics instead of treating screenshots as the only source of truth.
 
+The canonical View Golden Images are captured at FHD (`1920x1080`) with device pixel ratio 1 so CI compares the same full-resolution presentation that is reviewed manually.
+
 ## Covered inspection points
 
 - `view-physical-world.png`: View Phase 3 physical-world rendering (terrain, water, geographic features, and natural toponyms).
