@@ -12,8 +12,8 @@ internal sealed class MultimodalTransitStore
     private readonly Dictionary<TaxiRequestId, TaxiRequestStateData> taxiRequests = [];
     private readonly Dictionary<JourneyId, JourneySnapshot> journeys = [];
     private readonly Dictionary<PassengerId, PassengerStateData> passengers = [];
-    private readonly Dictionary<TripRequestId, TaxiRequestId> taxiRequestByTrip = [];
-    private readonly Dictionary<TripRequestId, PassengerId> passengerByTrip = [];
+    private readonly Dictionary<TripRequestId, TaxiRequestId> taxiRequestByTrip = new(4);
+    private readonly Dictionary<TripRequestId, PassengerId> passengerByTrip = new(4);
     private readonly Dictionary<TransitStopId, List<TransitPatternEdge>> outgoingPatternEdges = [];
     private readonly Dictionary<SpatialCell, List<TransitStopId>> stopSpatialIndex = [];
     private ulong nextStopId = 1, nextLineId = 1, nextPatternId = 1, nextTripId = 1, nextVehicleId = 1, nextTaxiRequestId = 1, nextJourneyId = 1, nextPassengerId = 1;
@@ -27,6 +27,7 @@ internal sealed class MultimodalTransitStore
     public ulong NextJourneyId => nextJourneyId;
     public ulong NextPassengerId => nextPassengerId;
     public int StopCount => stops.Count;
+    public int PatternCount => patterns.Count;
     public int VehicleCount => vehicles.Count;
     public int TaxiRequestCount => taxiRequests.Count;
     public int JourneyCount => journeys.Count;
@@ -227,17 +228,17 @@ internal sealed class MultimodalTransitStore
         return false;
     }
 
-    public TransitPatternEdge[] GetOutgoingPatternEdges(TransitStopId stopId) => outgoingPatternEdges.TryGetValue(stopId, out var edges)
-        ? edges.OrderBy(static item => item.PatternId.Value).ThenBy(static item => item.PatternStopIndex).ToArray()
-        : [];
+    public IReadOnlyList<TransitPatternEdge> GetOutgoingPatternEdges(TransitStopId stopId) =>
+        outgoingPatternEdges.TryGetValue(stopId, out var edges) ? edges : Array.Empty<TransitPatternEdge>();
 
-    public TransitStopSnapshot[] GetTransferCandidates(WorldPoint position, double radiusMeters)
+    public int CopyTransferCandidateIds(WorldPoint position, double radiusMeters, Span<TransitStopId> destination)
     {
         if (!double.IsFinite(radiusMeters) || radiusMeters < 0d) throw new ArgumentOutOfRangeException(nameof(radiusMeters));
-        if (radiusMeters == 0d) return [];
+        if (radiusMeters == 0d) return 0;
         var center = SpatialGrid.ToCell(position, TransferSpatialCellSizeMeters);
         var cellRadius = checked((int)Math.Ceiling(radiusMeters / TransferSpatialCellSizeMeters));
-        var ids = new HashSet<TransitStopId>();
+        var radiusSquared = radiusMeters * radiusMeters;
+        var count = 0;
         for (var x = (long)center.X - cellRadius; x <= (long)center.X + cellRadius; x++)
         {
             if (x < int.MinValue || x > int.MaxValue) continue;
@@ -248,16 +249,29 @@ internal sealed class MultimodalTransitStore
                 {
                     if (z < int.MinValue || z > int.MaxValue) continue;
                     if (!stopSpatialIndex.TryGetValue(new SpatialCell((int)x, (int)y, (int)z), out var cellStops)) continue;
-                    foreach (var id in cellStops) ids.Add(id);
+                    for (var stopIndex = 0; stopIndex < cellStops.Count; stopIndex++)
+                    {
+                        var id = cellStops[stopIndex];
+                        if (DistanceSquared(position, stops[id].Position) > radiusSquared) continue;
+                        if (count >= destination.Length) throw new ArgumentException("Transfer candidate destination buffer is too small.", nameof(destination));
+                        destination[count++] = id;
+                    }
                 }
             }
         }
 
-        var radiusSquared = radiusMeters * radiusMeters;
-        return ids.Select(id => stops[id])
-            .Where(stop => DistanceSquared(position, stop.Position) <= radiusSquared)
-            .OrderBy(static stop => stop.Id.Value)
-            .ToArray();
+        for (var index = 1; index < count; index++)
+        {
+            var value = destination[index];
+            var insertionIndex = index - 1;
+            while (insertionIndex >= 0 && destination[insertionIndex].Value > value.Value)
+            {
+                destination[insertionIndex + 1] = destination[insertionIndex];
+                insertionIndex--;
+            }
+            destination[insertionIndex + 1] = value;
+        }
+        return count;
     }
 
     public TransitStopSnapshot[] GetStops() => stops.Values.OrderBy(static item => item.Id.Value).ToArray();
@@ -439,6 +453,14 @@ internal sealed class MultimodalTransitStore
                 pattern.LineId,
                 pattern.RailwayServiceId,
                 checked(next.TravelTicksFromPrevious + current.DwellTicks)));
+            if (edges.Count > 1)
+            {
+                edges.Sort(static (left, right) =>
+                {
+                    var patternComparison = left.PatternId.Value.CompareTo(right.PatternId.Value);
+                    return patternComparison != 0 ? patternComparison : left.PatternStopIndex.CompareTo(right.PatternStopIndex);
+                });
+            }
         }
     }
 
