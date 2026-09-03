@@ -103,6 +103,9 @@ export interface PersistentRegionalEvolutionSnapshotMessage {
   readonly commutingFlows: readonly RegionalCommutingFlowObservation[];
   readonly freightFlows: readonly RegionalFreightFlowObservation[];
   readonly isFullSnapshot: boolean;
+  readonly snapshotId: bigint;
+  readonly chunkIndex: number;
+  readonly chunkCount: number;
 }
 
 export interface PersistentRegionalEvolutionProtocolEnvelope { readonly version: ProtocolVersion; readonly message: PersistentRegionalEvolutionSnapshotMessage; }
@@ -129,6 +132,9 @@ interface WirePersistentRegionalEvolutionSnapshot {
   readonly commutingFlows: readonly WireRegionalCommutingFlow[];
   readonly freightFlows: readonly WireRegionalFreightFlow[];
   readonly isFullSnapshot: boolean;
+  readonly snapshotId?: WireUInt64;
+  readonly chunkIndex?: number;
+  readonly chunkCount?: number;
 }
 
 export function isPersistentRegionalEvolutionFrame(frame: ArrayBuffer): boolean {
@@ -170,6 +176,17 @@ function normalizeChunk(raw: WirePersistentRegionalEvolutionSnapshot): Persisten
     throw new ProtocolDecodeFailure('PersistentRegionalEvolution snapshot metadata is invalid.');
   }
 
+  const hasBatchMetadata = raw.snapshotId !== undefined || raw.chunkIndex !== undefined || raw.chunkCount !== undefined;
+  if (hasBatchMetadata && (raw.snapshotId === undefined || raw.chunkIndex === undefined || raw.chunkCount === undefined))
+    throw new ProtocolDecodeFailure('PersistentRegionalEvolution batch metadata must be complete.');
+  const snapshotId = raw.snapshotId === undefined ? 0n : parseUInt64(raw.snapshotId, 'PersistentRegionalEvolution snapshot ID');
+  const chunkIndex = raw.chunkIndex === undefined ? 0 : raw.chunkIndex;
+  const chunkCount = raw.chunkCount === undefined ? 1 : raw.chunkCount;
+  if (!integerAtLeast(chunkIndex, 0) || !integerAtLeast(chunkCount, 1) || chunkIndex >= chunkCount)
+    throw new ProtocolDecodeFailure('PersistentRegionalEvolution batch metadata is invalid.');
+  if (chunkCount > 1 && (snapshotId === 0n || (chunkIndex === 0) !== raw.isFullSnapshot))
+    throw new ProtocolDecodeFailure('PersistentRegionalEvolution multi-chunk metadata is inconsistent.');
+
   const settlements = Object.freeze(raw.settlements.map((item) => normalizeSettlement(item, raw.currentYear)));
   uniquePositiveIds(settlements.map((item) => item.settlementId), 'Settlement');
   const parcels = Object.freeze(raw.parcels.map(normalizeParcel));
@@ -204,6 +221,9 @@ function normalizeChunk(raw: WirePersistentRegionalEvolutionSnapshot): Persisten
     commutingFlows,
     freightFlows,
     isFullSnapshot: raw.isFullSnapshot,
+    snapshotId,
+    chunkIndex,
+    chunkCount,
   });
 }
 
@@ -282,7 +302,7 @@ function uniquePositiveIds(ids: readonly bigint[], label: string): void {
 }
 
 function quoteLosslessUInt64Properties(json: string): string {
-  return json.replace(/("(?:tickCount|settlementId|parcelId|buildingId|relationId|eventId|fromSettlementId|toSettlementId|commodityId)"\s*:\s*)(\d+)/g, '$1"$2"');
+  return json.replace(/("(?:tickCount|snapshotId|settlementId|parcelId|buildingId|relationId|eventId|fromSettlementId|toSettlementId|commodityId)"\s*:\s*)(\d+)/g, '$1"$2"');
 }
 
 function parsePositiveUInt64(value: WireUInt64, label: string): bigint {
