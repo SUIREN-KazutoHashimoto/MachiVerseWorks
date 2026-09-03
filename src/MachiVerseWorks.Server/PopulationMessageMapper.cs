@@ -18,7 +18,8 @@ internal static class PopulationMessageMapper
         checked((uint)statistics.HealthcareCount),
         checked((uint)statistics.RecreationCount),
         checked((uint)statistics.ErrandCount),
-        statistics.TickCount);
+        statistics.TickCount,
+        checked((uint)statistics.TransitCount));
 
     public static PersonDebugMessage Create(PersonSnapshot person) => new(
         person.Id.Value,
