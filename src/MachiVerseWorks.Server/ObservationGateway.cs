@@ -21,6 +21,7 @@ internal interface IObservationSource
     double SpatialCellSize { get; }
 
     SimulationPublishSnapshot CapturePublishSnapshot();
+    SimulationPublishSnapshot CapturePublishSnapshot(WorldVolume volume) => CapturePublishSnapshot();
     PopulationPublishSnapshot CapturePopulationPublishSnapshot(IReadOnlySet<ulong> inspectedPersonIds);
     IReadOnlyDictionary<ulong, TrainSnapshot> CaptureTrainSnapshots(IReadOnlySet<ulong> inspectedTrainIds);
     IReadOnlyDictionary<ulong, VehicleSnapshot> CaptureVehicleSnapshots(IReadOnlySet<ulong> inspectedVehicleIds);
@@ -49,6 +50,7 @@ internal sealed class SimulationObservationSource(SimulationRuntime simulation) 
     public double SpatialCellSize => simulation.SpatialCellSize;
 
     public SimulationPublishSnapshot CapturePublishSnapshot() => simulation.CapturePublishSnapshot();
+    public SimulationPublishSnapshot CapturePublishSnapshot(WorldVolume volume) => simulation.CapturePublishSnapshot(volume);
 
     public PopulationPublishSnapshot CapturePopulationPublishSnapshot(IReadOnlySet<ulong> inspectedPersonIds) =>
         simulation.CapturePopulationPublishSnapshot(inspectedPersonIds);
