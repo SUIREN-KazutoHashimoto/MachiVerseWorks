@@ -76,6 +76,7 @@ internal sealed class PersistentRegionalEvolutionPublishService(
                 foreach (var versionGroup in targets.GroupBy(static connection => connection.NegotiatedVersion))
                 {
                     var version = versionGroup.Key;
+                    var versionTargets = versionGroup.ToArray();
                     var failedEncoding = new FailedEncoding(sourceIdentity, version);
                     if (_failedEncodings.Contains(failedEncoding)) continue;
 
@@ -104,7 +105,7 @@ internal sealed class PersistentRegionalEvolutionPublishService(
                     }
                     if (!encodable) continue;
 
-                    foreach (var connection in versionGroup)
+                    foreach (var connection in versionTargets)
                     {
                         if (_delivered.TryGetValue(connection.Id, out var delivered) && delivered == sourceIdentity) continue;
                         if (deliveryCoordinator.TryScheduleCached(
@@ -157,7 +158,7 @@ internal sealed class PersistentRegionalEvolutionPublishService(
 
     private static string CreateIdentityText(PersistentRegionalObservationIdentity observation) =>
         FormattableString.Invariant(
-            $"year:{observation.CurrentYear}:economic:{observation.EconomicCycle}:logistics:{observation.LogisticsCycle}:events:{observation.EventCount}:interactions:{observation.InteractionEventCount}");
+            $"year:{observation.CurrentYear}:economic:{observation.EconomicCycle}:logistics:{observation.LogisticsCycle}:employments:{observation.EmploymentCount}:shipments:{observation.ShipmentCount}:delivered:{observation.DeliveredShipmentCount}");
 
     private readonly record struct SourceIdentity(
         ulong Generation,
