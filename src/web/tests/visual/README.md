@@ -9,7 +9,13 @@ Visual Regression は、構造・数値 assertion を既に持つ決定論的な
 ## 対象シーン
 
 - `view-physical-world.png`: View Phase 3 の Physical World Rendering。Terrain、Water、GeographicFeature、自然地名を確認します。
+- `view-integrated-world-overview.png`: Terrain 上へ Settlement / Building / Agent を同時配置した統合Worldの広域確認です。
+- `view-terrain-closeup.png`: 統合Worldの地形起伏を中距離から確認します。
+- `view-city-center.png`: Settlement / Parcel / Building と Terrain の位置関係を都市中心部の距離で確認します。
+- `view-agent-grounding.png`: Terrain sample 上に配置した Agent を近距離で確認します。画像比較に加えて Agent Z と authoritative terrain sample Z の差が 1µm 以下であることを数値 assertion します。
 - `view-settlement-structure.png`: View Phase 4 の Settlement / Structure Rendering。Settlement、District、Parcel、Building、POI、Label、Road Sign を確認します。
+
+Phase 3 の追加4 checkpoint は既存 `WorldEnvironment` の決定論的 Server fixture を利用し、Visual E2E のときだけテスト用 Settlement / Building / Agent を同じ `WorldView.scene` に重ねます。通常の View / Simulation state は変更しません。`physical-world` checkpoint は既存 Golden と互換を保つため従来どおり空の `EntityStore` で実行します。
 
 ## 固定実行環境
 
@@ -30,7 +36,9 @@ Golden 更新時も、可能な限り同じ固定ブラウザー・フォント�
 - `diagnostics/<name>.json`
 - Browser HTML と Chrome log
 
-`diagnostics/<name>.json` には既存 fixture の構造・描画 metric、canvas dimensions、device pixel ratio、使用した Browser version、Visual E2E の font family / package version を記録します。
+`view-physical-world` Artifact は、比較前に5 checkpointすべてを撮影します。最初の差分で失敗しても `actual/` にはCamera Tour全体が残るため、Golden追加・差分調査を1回のCIで行えます。
+
+`diagnostics/<name>.json` には既存 fixture の構造・描画 metric、canvas dimensions、device pixel ratio、使用した Browser version、Visual E2E の font family / package version を記録します。統合checkpointでは Agentの `z` / `groundZ` / `groundingDeltaMeters` と Building件数も保存します。
 
 CDP command は1回あたり30秒で timeout し、DevTools WebSocket が `close` / `error` になった場合は保留中 command を即座に reject します。renderer target の異常終了時に GitHub Actions の matrix job timeout まで停止し続けないようにします。
 
@@ -59,6 +67,8 @@ MVW_UPDATE_VISUAL_GOLDEN=1 bash scripts/run-view-phase04-e2e.sh
 ## 差分閾値
 
 共通 comparator は、既定で各 channel `8/255` を noise threshold とし、画像全体に対する changed-pixel ratio の上限を `0.1%` とします。
+
+Phase 3 の `view-city-center.png` は `0.05%`、`view-agent-grounding.png` は `0.02%` を上限とし、近距離の接地・位置ずれを広域画像より厳しく検出します。
 
 Phase 4 の Settlement / Structure シーンは背景面積が大きく、全画面 `0.1%` では主要オブジェクトの消失を見逃す可能性があるため、`run-view-phase04-e2e.sh` では既定上限を **`0.01%`** に厳格化します。FHD では約 207 pixel を超える有意差で失敗するため、Settlement や Building の透明化・背景色化のように件数 assertion だけでは検出できない回帰も Visual Regression で検出します。
 
