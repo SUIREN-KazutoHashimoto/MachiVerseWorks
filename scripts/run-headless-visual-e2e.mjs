@@ -41,7 +41,7 @@ try {
     '--lang=en-US',
     '--enable-unsafe-swiftshader',
     '--use-angle=swiftshader',
-    '--window-size=1280,960',
+    '--window-size=1920,1080',
     '--remote-debugging-port=0',
     `--user-data-dir=${profileDirectory}`,
     targetUrl,
@@ -115,7 +115,7 @@ try {
     const canvas = document.querySelector('#viewport canvas, #host canvas');
     if (!(canvas instanceof HTMLCanvasElement)) throw new Error('Visual E2E canvas was not found.');
     const rect = canvas.getBoundingClientRect();
-    return { x: rect.left, y: rect.top, width: rect.width, height: rect.height, scale: 0.25 };
+    return { x: rect.left, y: rect.top, width: rect.width, height: rect.height, scale: 1 };
   })()`);
   const screenshot = await devToolsSocket.command('Page.captureScreenshot', {
     format: 'png',
