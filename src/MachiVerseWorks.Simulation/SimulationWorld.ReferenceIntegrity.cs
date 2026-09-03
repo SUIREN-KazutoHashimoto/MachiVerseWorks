@@ -11,7 +11,7 @@ public sealed partial class SimulationWorld
         || _radioSiteInfrastructure.Values.Any(item => item.BuildingId == id);
 
     private bool ContainsLogisticsVehicleReference(VehicleId id) =>
-        _logisticsShipments.Any(item => item.VehicleId == id);
+        _logisticsShipments.Any(item => item.State == ShipmentState.InTransit && item.VehicleId == id);
 
     private bool ContainsLogisticsRoadAccessPointReference(RoadAccessPointId id) =>
         _logisticsInventories.Values.Any(item => item.RoadAccessPointId == id)
