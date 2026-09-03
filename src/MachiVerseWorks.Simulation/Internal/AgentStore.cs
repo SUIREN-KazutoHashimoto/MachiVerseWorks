@@ -10,7 +10,7 @@ internal sealed class AgentStore
     private ulong _nextId = 1;
 
     public int ActiveCount { get; private set; }
-    public int TotalCreatedCount => _states.Count;
+    public int TotalCreatedCount => checked((int)(_nextId - 1));
     public ulong NextId => _nextId;
 
     public void EnsureCapacity(int count)
@@ -52,11 +52,19 @@ internal sealed class AgentStore
 
     public bool Remove(AgentId id, SpatialIndex spatialIndex)
     {
-        if (!_indexById.Remove(id, out var index)) return false;
-        var states = CollectionsMarshal.AsSpan(_states);
-        ref var state = ref states[index];
-        state.IsActive = false;
+        if (!_indexById.TryGetValue(id, out var index)) return false;
+
         spatialIndex.Remove(id);
+        var lastIndex = _states.Count - 1;
+        if (index != lastIndex)
+        {
+            var moved = _states[lastIndex];
+            _states[index] = moved;
+            _indexById[moved.Id] = index;
+        }
+
+        _states.RemoveAt(lastIndex);
+        _indexById.Remove(id);
         ActiveCount--;
         return true;
     }
@@ -117,7 +125,7 @@ internal sealed class AgentStore
         for (var index = 0; index < _states.Count; index++)
         {
             var state = _states[index];
-            checkpoint[index] = new SimulationAgentCheckpoint(state.Id, state.Position, state.Velocity, state.IsActive);
+            checkpoint[index] = new SimulationAgentCheckpoint(state.Id, state.Position, state.Velocity, true);
         }
         return checkpoint;
     }
@@ -130,10 +138,11 @@ internal sealed class AgentStore
         for (var index = 0; index < agents.Count; index++)
         {
             var checkpoint = agents[index];
-            var state = new AgentState(checkpoint.Id, checkpoint.Position, checkpoint.Velocity) { IsActive = checkpoint.IsActive };
+            if (!checkpoint.IsActive) continue;
+            var state = new AgentState(checkpoint.Id, checkpoint.Position, checkpoint.Velocity);
+            var activeIndex = _states.Count;
             _states.Add(state);
-            if (!state.IsActive) continue;
-            _indexById.Add(state.Id, index);
+            _indexById.Add(state.Id, activeIndex);
             spatialIndex.Register(state.Id, state.Position);
             ActiveCount++;
         }
