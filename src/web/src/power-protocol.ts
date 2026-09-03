@@ -12,6 +12,7 @@ const NODE_PAYLOAD_LENGTH = 33;
 const LINE_PAYLOAD_LENGTH = 33;
 const GENERATOR_PAYLOAD_LENGTH = 33;
 const LOAD_PAYLOAD_LENGTH = 65;
+const NUMERIC_TOLERANCE = 1e-9;
 
 export enum PowerNodeKind {
   GeneratorBus = 0,
@@ -145,6 +146,10 @@ export function decodePowerFrame(frame: ArrayBuffer): PowerProtocolEnvelope {
   validateNonNegative(statistics.demandMegawatts, 'demand');
   validateNonNegative(statistics.servedMegawatts, 'served demand');
   validateNonNegative(statistics.unservedMegawatts, 'unserved demand');
+  if (statistics.generationOutputMegawatts > statistics.generationCapacityMegawatts + NUMERIC_TOLERANCE
+    || statistics.servedMegawatts > statistics.demandMegawatts + NUMERIC_TOLERANCE) {
+    throw new ProtocolDecodeFailure('Power statistics contain inconsistent capacity or demand values.');
+  }
 
   let cursor = offset + FIXED_PAYLOAD_LENGTH;
   const nodes: PowerNode[] = [];
@@ -184,7 +189,7 @@ export function decodePowerFrame(frame: ArrayBuffer): PowerProtocolEnvelope {
       outputMegawatts: view.getFloat64(cursor + 24, true),
       operatingState: view.getUint8(cursor + 32) as GeneratorOperatingState,
     };
-    if (generator.generatorId === 0n || generator.nodeId === 0n || !Number.isFinite(generator.capacityMegawatts) || generator.capacityMegawatts <= 0 || !Number.isFinite(generator.outputMegawatts) || generator.outputMegawatts < 0 || generator.operatingState < GeneratorOperatingState.Online || generator.operatingState > GeneratorOperatingState.Offline) throw new ProtocolDecodeFailure('Power Generator entry is invalid.');
+    if (generator.generatorId === 0n || generator.nodeId === 0n || !Number.isFinite(generator.capacityMegawatts) || generator.capacityMegawatts <= 0 || !Number.isFinite(generator.outputMegawatts) || generator.outputMegawatts < 0 || generator.outputMegawatts > generator.capacityMegawatts + NUMERIC_TOLERANCE || generator.operatingState < GeneratorOperatingState.Online || generator.operatingState > GeneratorOperatingState.Offline) throw new ProtocolDecodeFailure('Power Generator entry is invalid.');
     generators.push(generator);
     cursor += GENERATOR_PAYLOAD_LENGTH;
   }
@@ -206,6 +211,7 @@ export function decodePowerFrame(frame: ArrayBuffer): PowerProtocolEnvelope {
     validateNonNegative(load.demandMegawatts, 'load demand');
     validateNonNegative(load.servedMegawatts, 'load served demand');
     validateNonNegative(load.unservedMegawatts, 'load unserved demand');
+    if (load.servedMegawatts > load.demandMegawatts + NUMERIC_TOLERANCE) throw new ProtocolDecodeFailure('Power Load served demand exceeds demand.');
     loads.push(load);
     cursor += LOAD_PAYLOAD_LENGTH;
   }
