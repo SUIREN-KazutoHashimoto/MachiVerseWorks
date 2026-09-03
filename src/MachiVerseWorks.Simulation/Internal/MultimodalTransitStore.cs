@@ -165,16 +165,33 @@ internal sealed class MultimodalTransitStore
 
     public bool TryGetPassengerForTrip(TripRequestId id, out PassengerStateData state)
     {
-        if (passengerByTrip.TryGetValue(id, out var passengerId) && passengers.TryGetValue(passengerId, out state!)) return true;
-        state = null!;
-        return false;
+        if (!passengerByTrip.TryGetValue(id, out var passengerId) || !passengers.TryGetValue(passengerId, out state!))
+        {
+            state = null!;
+            return false;
+        }
+        if (state.State == PassengerState.Arrived)
+        {
+            passengerByTrip.Remove(id);
+            passengers.Remove(passengerId);
+            journeys.Remove(state.JourneyId);
+        }
+        return true;
     }
 
     public bool TryGetTaxiRequestForTrip(TripRequestId id, out TaxiRequestStateData state)
     {
-        if (taxiRequestByTrip.TryGetValue(id, out var requestId) && taxiRequests.TryGetValue(requestId, out state!)) return true;
-        state = null!;
-        return false;
+        if (!taxiRequestByTrip.TryGetValue(id, out var requestId) || !taxiRequests.TryGetValue(requestId, out state!))
+        {
+            state = null!;
+            return false;
+        }
+        if (state.State == TaxiRequestState.Completed)
+        {
+            taxiRequestByTrip.Remove(id);
+            taxiRequests.Remove(requestId);
+        }
+        return true;
     }
 
     public bool RetireCompletedTrip(TripRequestId id)
@@ -349,18 +366,26 @@ internal sealed class MultimodalTransitStore
         }
         foreach (var item in checkpoint.TaxiRequests)
         {
+            if (item.State == TaxiRequestState.Completed) continue;
             var state = new TaxiRequestStateData(item.Id, item.TripRequestId, item.Pickup, item.DropOff, item.RequestedTick) { State = item.State, AssignedVehicleId = item.AssignedVehicleId, PickupTick = item.PickupTick, CompletedTick = item.CompletedTick };
             taxiRequests.Add(item.Id, state);
             if (!taxiRequestByTrip.TryAdd(item.TripRequestId, item.Id)) throw new ArgumentException($"Trip Request {item.TripRequestId.Value} has duplicate Taxi requests.", nameof(checkpoint));
             if (item.AssignedVehicleId is { } vehicleId && item.State is (TaxiRequestState.Assigned or TaxiRequestState.PickingUp or TaxiRequestState.Riding) && vehicles.TryGetValue(vehicleId, out var vehicle)) vehicle.ActiveTaxiRequestId = item.Id;
         }
         foreach (var item in checkpoint.Journeys) journeys.Add(item.Id, new JourneySnapshot(item.Id, item.TripRequestId, item.DepartureTick, item.EstimatedArrivalTick, Array.AsReadOnly(item.Legs.ToArray())));
+        var orphanJourneys = new HashSet<JourneyId>();
         foreach (var item in checkpoint.Passengers)
         {
+            if (item.State == PassengerState.Arrived)
+            {
+                orphanJourneys.Add(item.JourneyId);
+                continue;
+            }
             passengers.Add(item.Id, new PassengerStateData(item.Id, item.TripRequestId, item.JourneyId, item.StateEnteredTick) { LegIndex = item.LegIndex, State = item.State });
             if (!passengerByTrip.TryAdd(item.TripRequestId, item.Id) || taxiRequestByTrip.ContainsKey(item.TripRequestId))
                 throw new ArgumentException($"Trip Request {item.TripRequestId.Value} has duplicate active multimodal records.", nameof(checkpoint));
         }
+        foreach (var journeyId in orphanJourneys) journeys.Remove(journeyId);
         nextStopId = checkpoint.NextStopId; nextLineId = checkpoint.NextLineId; nextPatternId = checkpoint.NextPatternId; nextTripId = checkpoint.NextTripId; nextVehicleId = checkpoint.NextVehicleId; nextTaxiRequestId = checkpoint.NextTaxiRequestId; nextJourneyId = checkpoint.NextJourneyId; nextPassengerId = checkpoint.NextPassengerId;
     }
 
