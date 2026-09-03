@@ -6,6 +6,7 @@ on:
     paths:
       - 'src/MachiVerseWorks.Simulation/Radio*.cs'
       - 'src/MachiVerseWorks.Simulation/DeterministicRadioPropagationSolver.cs'
+      - 'src/MachiVerseWorks.Simulation/Geometry.cs'
       - 'src/MachiVerseWorks.Simulation/SimulationWorld.Radio*.cs'
       - 'src/MachiVerseWorks.Simulation/SimulationWorld.cs'
       - 'src/MachiVerseWorks.Simulation/SimulationNumeric.cs'
@@ -16,6 +17,7 @@ on:
     paths:
       - 'src/MachiVerseWorks.Simulation/Radio*.cs'
       - 'src/MachiVerseWorks.Simulation/DeterministicRadioPropagationSolver.cs'
+      - 'src/MachiVerseWorks.Simulation/Geometry.cs'
       - 'src/MachiVerseWorks.Simulation/SimulationWorld.Radio*.cs'
       - 'src/MachiVerseWorks.Simulation/SimulationWorld.cs'
       - 'src/MachiVerseWorks.Simulation/SimulationNumeric.cs'
