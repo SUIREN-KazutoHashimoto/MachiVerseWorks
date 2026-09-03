@@ -6,6 +6,7 @@ on:
     paths:
       - 'src/MachiVerseWorks.Simulation/**'
       - 'benchmarks/MachiVerseWorks.Benchmarks/RegionalGenerationBenchmarks.cs'
+      - 'scripts/compare-benchmark-results.py'
       - '.github/workflows/regional-generation-benchmark.yml'
 
 permissions:
@@ -18,6 +19,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
+      - name: Checkout benchmark base
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .benchmark-base
+
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
@@ -26,13 +34,42 @@ jobs:
       - name: Restore
         run: dotnet restore MachiVerseWorks.slnx
 
-      - name: Run Regional Generation benchmark
+      - name: Restore benchmark base
+        if: github.event_name == 'pull_request'
+        working-directory: .benchmark-base
+        run: dotnet restore MachiVerseWorks.slnx
+
+      - name: Run base Regional Generation benchmark
+        if: github.event_name == 'pull_request'
+        working-directory: .benchmark-base
         env:
-          MACHIVERSE_BENCHMARK_ARTIFACTS: ${{ github.workspace }}/.artifacts/benchmarks/regional-generation
+          MACHIVERSE_BENCHMARK_ARTIFACTS: ${{ github.workspace }}/.artifacts/benchmarks/regional-generation/base
         run: >-
           dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj
           --configuration Release --no-restore --
           --filter '*RegionalGenerationBenchmarks*' --job short
+
+      - name: Hide benchmark base project from BenchmarkDotNet discovery
+        if: github.event_name == 'pull_request'
+        run: >-
+          mv .benchmark-base/benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj
+          .benchmark-base/benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj.base
+
+      - name: Run Regional Generation benchmark
+        env:
+          MACHIVERSE_BENCHMARK_ARTIFACTS: ${{ github.workspace }}/.artifacts/benchmarks/regional-generation/head
+        run: >-
+          dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj
+          --configuration Release --no-restore --
+          --filter '*RegionalGenerationBenchmarks*' --job short
+
+      - name: Compare benchmark regression
+        if: github.event_name == 'pull_request'
+        run: >-
+          python3 scripts/compare-benchmark-results.py
+          --base .artifacts/benchmarks/regional-generation/base
+          --head .artifacts/benchmarks/regional-generation/head
+          --report .artifacts/benchmarks/regional-generation/comparison.json
 
       - name: Upload benchmark artifacts
         if: always()

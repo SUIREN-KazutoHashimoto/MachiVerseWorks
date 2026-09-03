@@ -16,9 +16,11 @@ Phase 0 の初期セットアップが完了していても、自動的にversio
 
 ## 2. カウント規則
 
-- `A`: `main` 向け PR を作成するときに `+1` し、`B = 0`, `C = 0` にする。
-- `B`: `develop` 向け PR を作成するときに `+1` し、`C = 0` にする。
-- `C`: 通常の開発コミットを作成するときに `+1` する。
+- `A`: releaseとして`main`へ統合するversion更新で`+1`し、`B = 0`, `C = 0`にする。
+- `B`: `develop`上の統合versionを進める明示的なversion更新で`+1`し、`C = 0`にする。
+- `C`: 必要に応じた通常のversion更新で`+1`する。
+
+並行作業ブランチや通常のPull Requestごとに`VERSION`更新を強制しない。複数PRが同じbase versionから同時に分岐する場合の機械的なA/B/C更新競合を避け、versionを進める操作はintegration/release境界で明示的に行う。
 
 例:
 
@@ -75,13 +77,14 @@ Client / Server 間のwire互換性を表します。
 
 - `A.B.C` の3整数形式であること
 - 前後に不要な文字や空白行を持たないこと
-- `develop`向けPull Requestでは、baseが`A.B.C`ならPR側を厳密に`A.(B+1).0`とすること
-- `main`向けPull Requestでは、baseが`A.B.C`ならPR側を厳密に`(A+1).0.0`とすること
-- その他のPR targetでは、PR側の`VERSION`がtarget/base branchより大きいこと
+- PR側の`VERSION`がtarget/base branchと同一なら、通常のコード統合として許可すること
+- `develop`向けPull Requestで`VERSION`を変更する場合、baseが`A.B.C`ならPR側を厳密に`A.(B+1).0`とすること
+- `main`向けPull Requestで`VERSION`を変更する場合、baseが`A.B.C`ならPR側を厳密に`(A+1).0.0`とすること
+- その他のPR targetで`VERSION`を変更する場合、PR側の`VERSION`がtarget/base branchより大きいこと
 
-baseとの比較は`A`, `B`, `C`を整数tupleとして行います。`develop` / `main`では単なる増加だけでなく、上記のbranch別transitionを要求します。versionの後退・再利用・誤ったincrement種別を検出した場合はrepository jobを失敗させるため、必須`ci-gate`も失敗します。
+baseとの比較は`A`, `B`, `C`を整数tupleとして行います。`VERSION`が変更された`develop` / `main` PRでは単なる増加だけでなく、上記のbranch別transitionを要求します。未変更の通常PRは許可し、versionの後退・再利用・変更時の誤ったincrement種別を検出した場合はrepository jobを失敗させるため、必須`ci-gate`も失敗します。
 
-通常コミットの`C + 1`は運用規則として維持しますが、merge commit、bot、release運用との衝突を避けるため現時点のpush CIでは1 commitごとのpatch incrementまでは強制しません。PR境界ではtarget branchに対応するA/B transitionを必須とします。
+通常コミットやworker PRごとのversion更新は強制しません。並行開発との衝突を避け、integration/releaseで`VERSION`を変更した場合だけtarget branchに対応するtransitionを厳密に検証します。
 
 通常開発へ移行するときは、CIの必須ファイル一覧にも `VERSION` を追加します。
 

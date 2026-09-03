@@ -120,13 +120,13 @@ public sealed partial class SimulationWorld
         var delayed = 0;
         var inventoryUnits = 0d;
         var inTransitUnits = 0d;
-        foreach (var inventory in _logisticsInventories.Values) inventoryUnits += inventory.Quantity;
+        foreach (var inventory in _logisticsInventories.Values) inventoryUnits = SimulationNumeric.SaturatingAddNonNegative(inventoryUnits, inventory.Quantity);
         foreach (var shipment in _logisticsShipments)
         {
             if (shipment.State is ShipmentState.Pickup or ShipmentState.Loading or ShipmentState.InTransit or ShipmentState.Unloading)
             {
                 inTransit++;
-                inTransitUnits += shipment.Quantity;
+                inTransitUnits = SimulationNumeric.SaturatingAddNonNegative(inTransitUnits, shipment.Quantity);
                 if (shipment.PlannedDeliveryTick != 0 && Time.TickCount > shipment.PlannedDeliveryTick) delayed++;
             }
         }
@@ -146,6 +146,7 @@ public sealed partial class SimulationWorld
 
     private void StepLogistics(SimulationTime nextTime)
     {
+        PruneCompletedLogisticsHistory(nextTime.TickCount);
         while (_processedLogisticsCycle < _processedEconomicCycle)
         {
             ProcessLogisticsCycle(nextTime.TickCount);
@@ -231,8 +232,10 @@ public sealed partial class SimulationWorld
 
     private void AllocateOpenOrders(ulong tickCount)
     {
-        foreach (var order in _logisticsOrders.Where(static item => item.State == LogisticsOrderState.Open).OrderBy(static item => item.Id.Value))
+        for (var orderIndex = 0; orderIndex < _logisticsOrders.Count; orderIndex++)
         {
+            var order = _logisticsOrders[orderIndex];
+            if (order.State != LogisticsOrderState.Open) continue;
             var supplier = _logisticsInventories.Values
                 .Where(item => item.Role == InventoryRole.Supplier
                     && item.CommodityId == order.CommodityId
@@ -243,9 +246,9 @@ public sealed partial class SimulationWorld
             if (supplier is null) continue;
             if (!_logisticsInventories.TryGetValue((order.DestinationEstablishmentId, order.CommodityId), out var destination)) continue;
 
-            supplier.Quantity -= order.Quantity;
             EnsureLogisticsIdCapacity(_nextShipmentId, "Shipment");
-            var shipmentId = new ShipmentId(_nextShipmentId++);
+            var loadingCompleteTick = checked(tickCount + LogisticsDefaults.LoadingTicks);
+            var shipmentId = new ShipmentId(_nextShipmentId);
             var shipment = new LogisticsShipmentStateData(
                 shipmentId,
                 order.Id,
@@ -256,7 +259,10 @@ public sealed partial class SimulationWorld
                 supplier.RoadAccessPointId,
                 destination.RoadAccessPointId,
                 tickCount,
-                checked(tickCount + LogisticsDefaults.LoadingTicks));
+                loadingCompleteTick);
+
+            supplier.Quantity -= order.Quantity;
+            _nextShipmentId++;
             _logisticsShipments.Add(shipment);
             _logisticsShipmentIndex.Add(shipmentId, shipment);
             order.State = LogisticsOrderState.Allocated;
@@ -266,8 +272,10 @@ public sealed partial class SimulationWorld
 
     private void AdvanceShipments(ulong tickCount)
     {
-        foreach (var shipment in _logisticsShipments.Where(static item => item.State != ShipmentState.Delivered).OrderBy(static item => item.Id.Value))
+        for (var shipmentIndex = 0; shipmentIndex < _logisticsShipments.Count; shipmentIndex++)
         {
+            var shipment = _logisticsShipments[shipmentIndex];
+            if (shipment.State == ShipmentState.Delivered) continue;
             if (shipment.State == ShipmentState.Pickup)
             {
                 shipment.State = ShipmentState.Loading;
@@ -277,15 +285,25 @@ public sealed partial class SimulationWorld
             if (shipment.State == ShipmentState.Loading && tickCount >= shipment.LoadingCompleteTick)
             {
                 if (!TryCreateFreightRoute(shipment.PickupAccessPointId, shipment.DeliveryAccessPointId, out var route)) continue;
-                shipment.VehicleId = CreateVehicle(
-                    route,
-                    LogisticsDefaults.FreightVehicleDimensions,
-                    LogisticsDefaults.FreightVehiclePerformance,
-                    initialSpeedMetersPerSecond: 0d);
+                var travelTicks = Math.Max(1UL, checked((ulong)Math.Ceiling(route.EstimatedTravelTimeSeconds * Config.TickRate)));
+                var plannedDeliveryTick = checked(tickCount + travelTicks + LogisticsDefaults.UnloadingTicks);
+                VehicleId spawnedVehicleId;
+                try
+                {
+                    spawnedVehicleId = CreateVehicle(
+                        route,
+                        LogisticsDefaults.FreightVehicleDimensions,
+                        LogisticsDefaults.FreightVehiclePerformance,
+                        initialSpeedMetersPerSecond: 0d);
+                }
+                catch (InvalidOperationException)
+                {
+                    continue;
+                }
+                shipment.VehicleId = spawnedVehicleId;
                 shipment.State = ShipmentState.InTransit;
                 shipment.DispatchedTick = tickCount;
-                var travelTicks = Math.Max(1UL, checked((ulong)Math.Ceiling(route.EstimatedTravelTimeSeconds * Config.TickRate)));
-                shipment.PlannedDeliveryTick = checked(tickCount + travelTicks + LogisticsDefaults.UnloadingTicks);
+                shipment.PlannedDeliveryTick = plannedDeliveryTick;
                 continue;
             }
 
@@ -312,6 +330,27 @@ public sealed partial class SimulationWorld
                     if (!_activeLogisticsOrderKeys.Remove((order.DestinationEstablishmentId, order.CommodityId)))
                         throw new InvalidOperationException($"Completed Logistics Order {order.Id.Value} was missing from the active-order index.");
                 }
+            }
+        }
+    }
+
+    private void PruneCompletedLogisticsHistory(ulong tickCount)
+    {
+        var windowTicks = _persistentRegionalEvolutionOptions.TicksPerYear;
+        var minimumDeliveredTick = tickCount > windowTicks ? tickCount - windowTicks : 0UL;
+        for (var shipmentIndex = _logisticsShipments.Count - 1; shipmentIndex >= 0; shipmentIndex--)
+        {
+            var shipment = _logisticsShipments[shipmentIndex];
+            if (shipment.State != ShipmentState.Delivered
+                || shipment.DeliveredTick is not { } deliveredTick
+                || deliveredTick >= minimumDeliveredTick) continue;
+
+            _logisticsShipmentIndex.Remove(shipment.Id);
+            _logisticsShipments.RemoveAt(shipmentIndex);
+            if (_logisticsOrderIndex.TryGetValue(shipment.OrderId, out var order) && order.State == LogisticsOrderState.Completed)
+            {
+                _logisticsOrderIndex.Remove(order.Id);
+                _logisticsOrders.Remove(order);
             }
         }
     }
@@ -456,6 +495,8 @@ public sealed partial class SimulationWorld
             _logisticsShipments.Add(state);
             _logisticsShipmentIndex.Add(state.Id, state);
         }
+        _logisticsOrders.Sort(static (left, right) => left.Id.Value.CompareTo(right.Id.Value));
+        _logisticsShipments.Sort(static (left, right) => left.Id.Value.CompareTo(right.Id.Value));
         _nextCommodityId = checkpoint.NextCommodityId;
         _nextLogisticsOrderId = checkpoint.NextOrderId;
         _nextShipmentId = checkpoint.NextShipmentId;

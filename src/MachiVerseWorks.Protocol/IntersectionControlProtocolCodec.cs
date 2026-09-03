@@ -82,6 +82,8 @@ public static class IntersectionControlProtocolCodec
         }
 
         var movements = new ProtocolIntersectionMovementState[checked((int)movementCount)];
+        var movementIds = new HashSet<ulong>();
+        var connectionIds = new HashSet<ulong>();
         var offset = HeaderLength;
         for (var index = 0; index < movements.Length; index++)
         {
@@ -98,6 +100,9 @@ public static class IntersectionControlProtocolCodec
             var granted = payload[offset + 62];
             if (movementId == 0
                 || connectionId == 0
+                || movementId != connectionId
+                || !movementIds.Add(movementId)
+                || !connectionIds.Add(connectionId)
                 || fromLaneId == 0
                 || toLaneId == 0
                 || !Enum.IsDefined(turn)
@@ -135,9 +140,13 @@ public static class IntersectionControlProtocolCodec
         if (message.IntersectionNodeId == 0) throw new ArgumentOutOfRangeException(nameof(message));
         if (!Enum.IsDefined(message.Mode)) throw new ArgumentOutOfRangeException(nameof(message));
         ArgumentNullException.ThrowIfNull(message.Movements);
+        var movementIds = new HashSet<ulong>();
+        var connectionIds = new HashSet<ulong>();
         foreach (var movement in message.Movements)
         {
-            if (movement.MovementId == 0 || movement.ConnectionId == 0 || movement.FromLaneId == 0 || movement.ToLaneId == 0)
+            if (movement.MovementId == 0 || movement.ConnectionId == 0 || movement.MovementId != movement.ConnectionId
+                || !movementIds.Add(movement.MovementId) || !connectionIds.Add(movement.ConnectionId)
+                || movement.FromLaneId == 0 || movement.ToLaneId == 0)
                 throw new ArgumentOutOfRangeException(nameof(message));
             if (!Enum.IsDefined(movement.TurnMovement)
                 || !Enum.IsDefined(movement.Indication)

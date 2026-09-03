@@ -9,12 +9,15 @@ interface ClientIntersection {
   receivedAt: number;
 }
 
+const INTERSECTION_STALE_AFTER_MS = 1_500;
+
 export interface ReadonlyVehicleStore {
   readonly size: number;
   writeSampledTransforms(now: number, positions: Float32Array, scales: Float32Array, yawRadians: Float32Array): number;
 }
 
 export interface ReadonlyIntersectionControlStore {
+  readonly size: number;
   active(now?: number, staleAfterMs?: number): IterableIterator<IntersectionControlSnapshotMessage>;
 }
 
@@ -67,16 +70,33 @@ export class VehicleStore implements ReadonlyVehicleStore {
 
 export class IntersectionControlStore implements ReadonlyIntersectionControlStore {
   private readonly intersections = new Map<bigint, ClientIntersection>();
+  private lastPrunedAt = Number.NEGATIVE_INFINITY;
+
+  public get size(): number { return this.intersections.size; }
 
   public apply(snapshot: IntersectionControlSnapshotMessage, receivedAt = performance.now()): void {
     this.intersections.set(snapshot.intersectionNodeId, { snapshot, receivedAt });
+    if (receivedAt - this.lastPrunedAt >= INTERSECTION_STALE_AFTER_MS) {
+      this.pruneStale(receivedAt, INTERSECTION_STALE_AFTER_MS);
+      this.lastPrunedAt = receivedAt;
+    }
   }
 
-  public clear(): void { this.intersections.clear(); }
+  public clear(): void {
+    this.intersections.clear();
+    this.lastPrunedAt = Number.NEGATIVE_INFINITY;
+  }
 
-  public *active(now = performance.now(), staleAfterMs = 1_500): IterableIterator<IntersectionControlSnapshotMessage> {
-    for (const value of this.intersections.values()) {
-      if (now - value.receivedAt <= staleAfterMs) yield value.snapshot;
+  public *active(now = performance.now(), staleAfterMs = INTERSECTION_STALE_AFTER_MS): IterableIterator<IntersectionControlSnapshotMessage> {
+    this.pruneStale(now, staleAfterMs);
+    this.lastPrunedAt = now;
+    for (const value of this.intersections.values()) yield value.snapshot;
+  }
+
+  private pruneStale(now: number, staleAfterMs: number): void {
+    if (!Number.isFinite(now) || !Number.isFinite(staleAfterMs) || staleAfterMs < 0) throw new RangeError('Intersection retention timing must be finite and non-negative.');
+    for (const [id, value] of this.intersections) {
+      if (now - value.receivedAt > staleAfterMs) this.intersections.delete(id);
     }
   }
 }

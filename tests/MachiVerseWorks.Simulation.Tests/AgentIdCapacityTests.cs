@@ -45,4 +45,21 @@ public sealed class AgentIdCapacityTests
         Assert.AreEqual(0, world.TotalCreatedAgentCount);
         Assert.AreEqual(0, world.CreateSnapshot(volume).Length);
     }
+
+    [TestMethod]
+    public void SparseCheckpointDoesNotTreatNextIdAsHistoricalCreatedCount()
+    {
+        var checkpoint = new SimulationWorld(new SimulationConfig(seed: 789)).CreateCheckpoint() with
+        {
+            NextAgentId = 100,
+            TotalCreatedAgentCount = 0,
+        };
+        var world = SimulationWorld.RestoreCheckpoint(checkpoint);
+
+        Assert.AreEqual(0, world.TotalCreatedAgentCount);
+        var id = world.CreateAgent(new WorldPoint(0, 0, 0), default);
+
+        Assert.AreEqual(100UL, id.Value);
+        Assert.AreEqual(1, world.TotalCreatedAgentCount);
+    }
 }

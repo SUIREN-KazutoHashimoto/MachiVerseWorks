@@ -159,19 +159,21 @@ public sealed class WorldEnvironmentTests
         var first = new SimulationWorld(new SimulationConfig(worldEnvironment: config));
         var second = new SimulationWorld(new SimulationConfig(worldEnvironment: config));
 
-        var firstFeatures = first.GetGeographicFeatures(volume, 64).ToArray();
-        var secondFeatures = second.GetGeographicFeatures(volume, 64).ToArray();
+        var firstSnapshot = first.CreateWorldEnvironmentSnapshot(volume, maximumFeatures: 64);
+        var secondSnapshot = second.CreateWorldEnvironmentSnapshot(volume, maximumFeatures: 64);
 
-        CollectionAssert.AreEqual(firstFeatures, secondFeatures);
-        Assert.IsTrue(firstFeatures.Length > 0);
-        var feature = firstFeatures[0];
-        Assert.IsTrue(feature.Id.Value > 0);
-        Assert.IsTrue(feature.AreaSquareMeters > 0d);
-        Assert.IsTrue(first.TryGetNaturalToponym(feature.Id, out var firstName));
-        Assert.IsTrue(second.TryGetNaturalToponym(feature.Id, out var secondName));
+        CollectionAssert.AreEqual(firstSnapshot.Features.ToArray(), secondSnapshot.Features.ToArray());
+        CollectionAssert.AreEqual(firstSnapshot.Toponyms.ToArray(), secondSnapshot.Toponyms.ToArray());
+        Assert.IsTrue(firstSnapshot.Features.Count > 0);
+        Assert.AreEqual(firstSnapshot.Features.Count, firstSnapshot.Toponyms.Count);
+        var feature = firstSnapshot.Features[0];
+        var firstName = firstSnapshot.Toponyms.Single(item => item.FeatureId == feature.Id);
+        var secondName = secondSnapshot.Toponyms.Single(item => item.FeatureId == feature.Id);
         Assert.AreEqual(firstName, secondName);
-        Assert.AreEqual(feature.Id, firstName!.Provenance.SourceFeatureId);
+        Assert.AreEqual(feature.Id, firstName.Provenance.SourceFeatureId);
         Assert.AreEqual("phase29-natural-v1", firstName.Provenance.GeneratorKey);
+        Assert.IsFalse(first.TryGetNaturalToponym(feature.Id, out _), "Generated observation toponyms must remain local projections, not authoritative world state.");
+        Assert.IsFalse(second.TryGetNaturalToponym(feature.Id, out _));
     }
 
     [TestMethod]

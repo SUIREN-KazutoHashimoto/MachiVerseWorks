@@ -1,3 +1,4 @@
+import { initializeLocalization, type Localizer } from './localization.ts';
 import { RadioAntennaPatternKind, RadioLinkState, type RadioSnapshotMessage, type SpectrumSnapshotMessage } from './radio-protocol.ts';
 
 const SVG_NAMESPACE='http://www.w3.org/2000/svg';
@@ -8,11 +9,11 @@ export class RadioDebugOverlay {
   private readonly svg:SVGSVGElement;
   private spectrum:SpectrumSnapshotMessage|null=null;
 
-  public constructor(host:HTMLElement){
+  public constructor(host:HTMLElement,private readonly localizer:Localizer=initializeLocalization()){
     this.element=document.createElement('div');this.element.dataset.radioDebug='true';
     Object.assign(this.element.style,{position:'absolute',right:'12px',bottom:'12px',zIndex:'21',width:'430px',maxWidth:'48vw',padding:'8px 10px',background:'rgba(0,0,0,0.72)',color:'#fff',font:'12px/1.4 monospace',pointerEvents:'none'});
     this.summary=document.createElement('pre');Object.assign(this.summary.style,{margin:'0 0 6px',whiteSpace:'pre-wrap'});
-    this.svg=document.createElementNS(SVG_NAMESPACE,'svg');this.svg.setAttribute('viewBox','0 0 410 190');this.svg.setAttribute('width','410');this.svg.setAttribute('height','190');this.svg.setAttribute('aria-label','Radio spectrum debug view');
+    this.svg=document.createElementNS(SVG_NAMESPACE,'svg');this.svg.setAttribute('viewBox','0 0 410 190');this.svg.setAttribute('width','410');this.svg.setAttribute('height','190');this.svg.setAttribute('aria-label',this.localizer.t('radioDebug.ariaLabel'));
     this.element.append(this.summary,this.svg);host.append(this.element);this.clear();
   }
 
@@ -20,16 +21,16 @@ export class RadioDebugOverlay {
     const s=message.statistics;const spectrum=this.spectrum;
     const channels=[...new Set(message.emissions.map(x=>`${x.centerFrequencyMegahertz.toFixed(1)}MHz/${x.bandwidthMegahertz.toFixed(1)}MHz`))];
     this.summary.textContent=[
-      `Radio tick ${s.tickCount} | sites ${s.siteCount} | tx ${message.transmitters.length} | rx ${message.receivers.length} | emissions ${message.emissions.length}`,
-      `links H/I/U ${s.healthyLinkCount}/${s.interferedLinkCount}/${s.unreachableLinkCount} | peak ${(s.peakSpectrumUtilization*100).toFixed(1)}% | conflicts ${s.conflictCount}`,
-      `channels ${channels.slice(0,4).join(', ')||'-'}${channels.length>4?' ...':''}`,
-      `spectrum ${spectrum===null?'waiting':`${spectrum.bands.length} bands / ${spectrum.frequencyBlocks.length} blocks / ${spectrum.conflicts.length} conflicts`}`,
+      this.localizer.t('radioDebug.summary',{tick:this.localizer.formatNumber(s.tickCount),sites:this.localizer.formatNumber(s.siteCount),transmitters:this.localizer.formatNumber(message.transmitters.length),receivers:this.localizer.formatNumber(message.receivers.length),emissions:this.localizer.formatNumber(message.emissions.length)}),
+      this.localizer.t('radioDebug.links',{healthy:this.localizer.formatNumber(s.healthyLinkCount),interfered:this.localizer.formatNumber(s.interferedLinkCount),unreachable:this.localizer.formatNumber(s.unreachableLinkCount),peak:this.localizer.formatNumber(s.peakSpectrumUtilization*100),conflicts:this.localizer.formatNumber(s.conflictCount)}),
+      this.localizer.t('radioDebug.channels',{channels:channels.slice(0,4).join(', ')||'-',more:channels.length>4?' ...':''}),
+      spectrum===null?this.localizer.t('radioDebug.spectrumWaiting'):this.localizer.t('radioDebug.spectrum',{bands:this.localizer.formatNumber(spectrum.bands.length),blocks:this.localizer.formatNumber(spectrum.frequencyBlocks.length),conflicts:this.localizer.formatNumber(spectrum.conflicts.length)}),
     ].join('\n');
     this.render(message);
   }
 
   public applySpectrum(message:SpectrumSnapshotMessage):void{this.spectrum=message;}
-  public clear():void{this.spectrum=null;this.summary.textContent='Radio/Spectrum: waiting for snapshot';this.svg.replaceChildren();}
+  public clear():void{this.spectrum=null;this.summary.textContent=this.localizer.t('radioDebug.waiting');this.svg.replaceChildren();}
   public dispose():void{this.element.remove();}
 
   private render(message:RadioSnapshotMessage):void{

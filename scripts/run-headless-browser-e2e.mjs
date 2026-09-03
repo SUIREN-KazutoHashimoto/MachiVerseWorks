@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
-import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createServer } from 'node:net';
 
 const [browserExecutable, targetUrl, outputPath, logPath] = process.argv.slice(2);
 if (!browserExecutable || !targetUrl || !outputPath || !logPath) {
@@ -13,7 +12,6 @@ if (!browserExecutable || !targetUrl || !outputPath || !logPath) {
 }
 
 const timeoutMs = 120_000;
-const remoteDebuggingPort = await reservePort();
 const profileDirectory = await mkdtemp(join(tmpdir(), 'machiverseworks-e2e-'));
 let browser;
 let devToolsSocket;
@@ -29,7 +27,7 @@ try {
     '--enable-unsafe-swiftshader',
     '--use-angle=swiftshader',
     '--window-size=1280,720',
-    `--remote-debugging-port=${String(remoteDebuggingPort)}`,
+    '--remote-debugging-port=0',
     `--user-data-dir=${profileDirectory}`,
     targetUrl,
   ], {
@@ -40,6 +38,7 @@ try {
     void appendFile(logPath, chunk);
   });
 
+  const remoteDebuggingPort = await waitForDevToolsPort(profileDirectory, browser, timeoutMs);
   const page = await waitForPage(remoteDebuggingPort, targetUrl, browser, timeoutMs);
   devToolsSocket = await createDevToolsClient(page.webSocketDebuggerUrl);
 
@@ -103,20 +102,23 @@ try {
   });
 }
 
-async function reservePort() {
-  const server = createServer();
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
-  });
-  const address = server.address();
-  if (address === null || typeof address === 'string') {
-    server.close();
-    throw new Error('Failed to reserve a DevTools port.');
+async function waitForDevToolsPort(profileDirectory, browserProcess, timeout) {
+  const activePortPath = join(profileDirectory, 'DevToolsActivePort');
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    ensureBrowserRunning(browserProcess);
+    try {
+      const contents = await readFile(activePortPath, 'utf8');
+      const [portText] = contents.split(/\r?\n/, 1);
+      const port = Number.parseInt(portText ?? '', 10);
+      if (Number.isInteger(port) && port > 0 && port <= 65_535) return port;
+      throw new Error(`Chrome wrote an invalid DevToolsActivePort value at ${activePortPath}.`);
+    } catch (error) {
+      if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) throw error;
+    }
+    await sleep(50);
   }
-  const port = address.port;
-  await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
-  return port;
+  throw new Error(`Timed out waiting for Chrome DevToolsActivePort in ${profileDirectory}.`);
 }
 
 async function waitForPage(port, url, browserProcess, timeout) {

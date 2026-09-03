@@ -5,7 +5,9 @@ import {
   RegionalRelationKind,
   SettlementScale,
   SettlementTrend,
+  type BuildingLifecycleObservation,
   type PersistentRegionalEvolutionSnapshotMessage,
+  type SettlementEvolutionObservation,
 } from './persistent-regional-evolution-protocol.ts';
 import type { ReadonlyPersistentRegionalEvolutionStore } from './persistent-regional-evolution-store.ts';
 import {
@@ -22,6 +24,10 @@ import type { ReadonlyRegionalGenerationStore } from './regional-generation-stor
 
 const PRESENTATION_OFFSET = 0.8;
 const LABEL_SCALE = 42;
+const MAX_VISIBLE_TOPONYM_LABELS = 192;
+const TOPONYM_ATLAS_CELL_WIDTH = 256;
+const TOPONYM_ATLAS_CELL_HEIGHT = 64;
+const TOPONYM_ATLAS_COLUMNS = 8;
 
 export interface SettlementStructureRenderingMetrics {
   readonly settlements: number;
@@ -44,10 +50,13 @@ export interface SettlementStructureStableRelations {
 
 /**
  * Maps authoritative Regional Generation geometry plus optional Protocol 2.19 evolution state to presentation primitives.
- * Settlement scale/trend and lifecycle state are consumed as provided by Simulation; this renderer never reclassifies them.
+ * Static baseline resources and dynamic evolution resources are kept in separate groups so annual evolution updates do not
+ * rebuild immutable corridor/district/POI/sign/toponym presentation data.
  */
 export class SettlementStructureRenderer {
   private readonly root = new THREE.Group();
+  private readonly staticRoot = new THREE.Group();
+  private readonly dynamicRoot = new THREE.Group();
   private renderedRevision = -1;
   private renderedEvolutionRevision = -1;
   private lastMetrics: SettlementStructureRenderingMetrics = emptyMetrics();
@@ -55,6 +64,9 @@ export class SettlementStructureRenderer {
 
   public constructor(private readonly scene: THREE.Scene) {
     this.root.name = 'regional-generation';
+    this.staticRoot.name = 'regional-generation-static';
+    this.dynamicRoot.name = 'regional-generation-evolution';
+    this.root.add(this.staticRoot, this.dynamicRoot);
     this.scene.add(this.root);
   }
 
@@ -63,47 +75,59 @@ export class SettlementStructureRenderer {
 
   public update(store: ReadonlyRegionalGenerationStore, evolution: ReadonlyPersistentRegionalEvolutionStore | null = null): void {
     const evolutionRevision = evolution?.revision ?? -1;
-    if (store.revision === this.renderedRevision && evolutionRevision === this.renderedEvolutionRevision) return;
+    const baselineChanged = store.revision !== this.renderedRevision;
+    const evolutionChanged = evolutionRevision !== this.renderedEvolutionRevision;
+    if (!baselineChanged && !evolutionChanged) return;
+
+    const snapshot = store.snapshot;
     this.renderedRevision = store.revision;
     this.renderedEvolutionRevision = evolutionRevision;
-    this.clearRoot();
-    const snapshot = store.snapshot;
+    this.root.userData.currentYear = evolution?.snapshot?.currentYear ?? null;
+
     if (snapshot === null) {
+      this.clearGroup(this.staticRoot);
+      this.clearGroup(this.dynamicRoot);
       this.lastMetrics = emptyMetrics();
       this.lastRelations = emptyRelations();
       return;
     }
-    this.renderSnapshot(snapshot, evolution);
-  }
 
-  public dispose(): void {
-    this.clearRoot();
-    this.lastRelations = emptyRelations();
-    this.scene.remove(this.root);
-  }
+    this.lastRelations = createRelations(snapshot, evolution?.snapshot ?? null);
 
-  private renderSnapshot(snapshot: RegionalGenerationSnapshotMessage, evolution: ReadonlyPersistentRegionalEvolutionStore | null): void {
-    this.root.userData.currentYear = evolution?.snapshot?.currentYear ?? null;
-    this.lastRelations = createRelations(snapshot);
-    this.addCorridors(snapshot);
+    let labelCount = this.lastMetrics.labels;
+    if (baselineChanged) {
+      this.clearGroup(this.staticRoot);
+      this.addCorridors(snapshot);
+      this.addDistricts(snapshot);
+      this.addPois(snapshot);
+      this.addRoadSigns(snapshot);
+      labelCount = this.addToponymLabels(snapshot);
+    }
+
+    this.clearGroup(this.dynamicRoot);
     this.addEvolutionRelations(evolution?.snapshot ?? null);
-    this.addDistricts(snapshot);
     this.addParcels(snapshot, evolution);
-    this.addBuildings(snapshot, evolution);
-    this.addSettlements(snapshot, evolution);
-    this.addPois(snapshot);
-    this.addRoadSigns(snapshot);
-    const labelCount = this.addToponymLabels(snapshot);
+    const buildingCount = this.addBuildings(snapshot, evolution);
+    const settlementCount = this.addSettlements(snapshot, evolution);
+
     this.lastMetrics = Object.freeze({
-      settlements: snapshot.settlements.length,
+      settlements: settlementCount,
       corridors: snapshot.corridors.length,
       districts: snapshot.districts.length,
       parcels: snapshot.parcels.length,
-      buildings: snapshot.buildings.length,
+      buildings: buildingCount,
       pois: snapshot.pois.length,
       labels: labelCount,
       roadSigns: snapshot.roadSigns.length,
     });
+  }
+
+  public dispose(): void {
+    this.clearGroup(this.staticRoot);
+    this.clearGroup(this.dynamicRoot);
+    this.lastRelations = emptyRelations();
+    this.root.remove(this.staticRoot, this.dynamicRoot);
+    this.scene.remove(this.root);
   }
 
   private addCorridors(snapshot: RegionalGenerationSnapshotMessage): void {
@@ -124,34 +148,33 @@ export class SettlementStructureRenderer {
       const lines = new THREE.LineSegments(geometry, material);
       lines.name = `regional-corridors-${String(kind)}`;
       lines.frustumCulled = false;
-      this.root.add(lines);
+      this.staticRoot.add(lines);
     }
   }
 
   private addEvolutionRelations(snapshot: PersistentRegionalEvolutionSnapshotMessage | null): void {
     if (snapshot === null || snapshot.relations.length === 0) return;
     const settlements = new Map(snapshot.settlements.map((item) => [item.settlementId, item] as const));
-    const groups = new Map<RegionalRelationKind, number[]>();
-    const metadata = [];
+    const groups = new Map<RegionalRelationKind, { positions: number[]; relations: object[] }>();
     for (const relation of snapshot.relations) {
       const from = settlements.get(relation.fromSettlementId);
       const to = settlements.get(relation.toSettlementId);
       if (from === undefined || to === undefined) continue;
-      const positions = groups.get(relation.kind) ?? [];
-      appendPosition(positions, from.x, from.y, from.z + 3);
-      appendPosition(positions, to.x, to.y, to.z + 3);
-      groups.set(relation.kind, positions);
-      metadata.push(Object.freeze({ relationId: relation.relationId, fromSettlementId: relation.fromSettlementId, toSettlementId: relation.toSettlementId, kind: relation.kind, strength: relation.strength, isActive: relation.isActive, sinceYear: relation.sinceYear }));
+      const group = groups.get(relation.kind) ?? { positions: [], relations: [] };
+      appendPosition(group.positions, from.x, from.y, from.z + 3);
+      appendPosition(group.positions, to.x, to.y, to.z + 3);
+      group.relations.push(Object.freeze({ relationId: relation.relationId, fromSettlementId: relation.fromSettlementId, toSettlementId: relation.toSettlementId, kind: relation.kind, strength: relation.strength, isActive: relation.isActive, sinceYear: relation.sinceYear }));
+      groups.set(relation.kind, group);
     }
-    for (const [kind, positions] of groups) {
+    for (const [kind, group] of groups) {
       const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(group.positions, 3));
       const material = new THREE.LineBasicMaterial({ color: regionalRelationColor(kind), transparent: true, opacity: 0.58 });
       const lines = new THREE.LineSegments(geometry, material);
       lines.name = `regional-evolution-relations-${String(kind)}`;
       lines.frustumCulled = false;
-      lines.userData.relations = metadata;
-      this.root.add(lines);
+      lines.userData.relations = Object.freeze([...group.relations]);
+      this.dynamicRoot.add(lines);
     }
   }
 
@@ -165,7 +188,7 @@ export class SettlementStructureRenderer {
     lines.name = 'regional-districts';
     lines.frustumCulled = false;
     lines.userData.relations = this.lastRelations.districts;
-    this.root.add(lines);
+    this.staticRoot.add(lines);
   }
 
   private addParcels(snapshot: RegionalGenerationSnapshotMessage, evolution: ReadonlyPersistentRegionalEvolutionStore | null): void {
@@ -190,67 +213,78 @@ export class SettlementStructureRenderer {
     }
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor !== null) mesh.instanceColor.needsUpdate = true;
-    this.root.add(mesh);
+    this.dynamicRoot.add(mesh);
   }
 
-  private addBuildings(snapshot: RegionalGenerationSnapshotMessage, evolution: ReadonlyPersistentRegionalEvolutionStore | null): void {
+  private addBuildings(snapshot: RegionalGenerationSnapshotMessage, evolution: ReadonlyPersistentRegionalEvolutionStore | null): number {
+    const baselineById = new Map(snapshot.buildings.map((item) => [item.buildingId, item] as const));
+    const parcelById = new Map(snapshot.parcels.map((item) => [item.parcelId, item] as const));
+    const effective: Array<{ baseline: RegionalGenerationSnapshotMessage['buildings'][number] | null; current: BuildingLifecycleObservation | null }> = snapshot.buildings.map((baseline) => ({ baseline, current: evolution?.getBuilding(baseline.buildingId) ?? null }));
+    for (const current of evolution?.snapshot?.buildings ?? []) {
+      if (!baselineById.has(current.buildingId) && parcelById.has(current.parcelId)) effective.push({ baseline: null, current });
+    }
+
     const geometry = new THREE.BoxGeometry(1, 1, 1);
     const material = new THREE.MeshBasicMaterial({ vertexColors: true });
-    const mesh = new THREE.InstancedMesh(geometry, material, Math.max(1, snapshot.buildings.length));
+    const mesh = new THREE.InstancedMesh(geometry, material, Math.max(1, effective.length));
     const matrix = new THREE.Matrix4();
     mesh.name = 'regional-buildings';
-    mesh.count = snapshot.buildings.length;
+    mesh.count = effective.length;
     mesh.frustumCulled = false;
-    mesh.userData.relations = this.lastRelations.buildings;
-    mesh.userData.evolution = snapshot.buildings.map((building) => {
-      const current = evolution?.getBuilding(building.buildingId);
-      return current === undefined ? null : Object.freeze({ buildingId: current.buildingId, parcelId: current.parcelId, use: current.use, condition: current.condition, occupancy: current.occupancy, capacity: current.capacity, status: current.status, builtYear: current.builtYear, lastChangedYear: current.lastChangedYear });
-    });
-    for (let index = 0; index < snapshot.buildings.length; index += 1) {
-      const building = snapshot.buildings[index];
-      const current = evolution?.getBuilding(building.buildingId);
+    mesh.userData.relations = Object.freeze(effective.map(({ baseline, current }) => Object.freeze({ buildingId: current?.buildingId ?? baseline!.buildingId, parcelId: current?.parcelId ?? baseline!.parcelId })));
+    mesh.userData.evolution = Object.freeze(effective.map(({ current }) => current === null ? null : Object.freeze({ buildingId: current.buildingId, parcelId: current.parcelId, use: current.use, condition: current.condition, occupancy: current.occupancy, capacity: current.capacity, status: current.status, builtYear: current.builtYear, lastChangedYear: current.lastChangedYear })));
+
+    for (let index = 0; index < effective.length; index += 1) {
+      const { baseline, current } = effective[index];
+      const bounds = baseline ?? parcelById.get(current!.parcelId)!;
       const status = current?.status ?? BuildingLifecycleStatus.Active;
-      const visualHeight = status === BuildingLifecycleStatus.Demolished ? 0.15 : Math.max(1, building.maxZ - building.minZ);
-      boundsMatrix(building, visualHeight, matrix, 0);
+      const baselineHeight = baseline === null ? evolutionBuildingHeight(current!) : Math.max(1, baseline.maxZ - baseline.minZ);
+      const visualHeight = status === BuildingLifecycleStatus.Demolished ? 0.15 : baselineHeight;
+      boundsMatrix(bounds, visualHeight, matrix, 0);
       mesh.setMatrixAt(index, matrix);
-      const use = (current?.use ?? building.use) as GeneratedBuildingUse;
+      const use = (current?.use ?? baseline!.use) as GeneratedBuildingUse;
       mesh.setColorAt(index, buildingLifecycleColor(use, status, current?.condition ?? 1));
     }
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor !== null) mesh.instanceColor.needsUpdate = true;
-    this.root.add(mesh);
+    this.dynamicRoot.add(mesh);
+    return effective.length;
   }
 
-  private addSettlements(snapshot: RegionalGenerationSnapshotMessage, evolution: ReadonlyPersistentRegionalEvolutionStore | null): void {
+  private addSettlements(snapshot: RegionalGenerationSnapshotMessage, evolution: ReadonlyPersistentRegionalEvolutionStore | null): number {
+    const baselineById = new Map(snapshot.settlements.map((item) => [item.settlementId, item] as const));
+    const effective: Array<{ baseline: RegionalGenerationSnapshotMessage['settlements'][number] | null; current: SettlementEvolutionObservation | null }> = snapshot.settlements.map((baseline) => ({ baseline, current: evolution?.getSettlement(baseline.settlementId) ?? null }));
+    for (const current of evolution?.snapshot?.settlements ?? []) {
+      if (!baselineById.has(current.settlementId)) effective.push({ baseline: null, current });
+    }
+
     const geometry = new THREE.SphereGeometry(1, 10, 8);
     const material = new THREE.MeshBasicMaterial({ vertexColors: true });
-    const mesh = new THREE.InstancedMesh(geometry, material, Math.max(1, snapshot.settlements.length));
+    const mesh = new THREE.InstancedMesh(geometry, material, Math.max(1, effective.length));
     const matrix = new THREE.Matrix4();
     const scale = new THREE.Vector3();
     const position = new THREE.Vector3();
     mesh.name = 'regional-settlements';
-    mesh.count = snapshot.settlements.length;
+    mesh.count = effective.length;
     mesh.frustumCulled = false;
-    mesh.userData.relations = this.lastRelations.settlements;
-    mesh.userData.evolution = snapshot.settlements.map((settlement) => {
-      const current = evolution?.getSettlement(settlement.settlementId);
-      return current === undefined ? null : Object.freeze({ settlementId: current.settlementId, scale: current.scale, trend: current.trend, isActive: current.isActive, population: current.population, jobs: current.jobs, influenceRadiusMeters: current.influenceRadiusMeters, establishedYear: current.establishedYear, dormantSinceYear: current.dormantSinceYear });
-    });
-    for (let index = 0; index < snapshot.settlements.length; index += 1) {
-      const settlement = snapshot.settlements[index];
-      const current = evolution?.getSettlement(settlement.settlementId);
-      const influenceRadius = current?.influenceRadiusMeters ?? settlement.influenceRadiusMeters;
-      const scaleMultiplier = current === undefined ? 1 : settlementScaleMultiplier(current.scale);
+    mesh.userData.relations = Object.freeze(effective.map(({ baseline, current }) => Object.freeze({ settlementId: current?.settlementId ?? baseline!.settlementId, nameId: baseline?.nameId ?? 0n })));
+    mesh.userData.evolution = Object.freeze(effective.map(({ current }) => current === null ? null : Object.freeze({ settlementId: current.settlementId, scale: current.scale, trend: current.trend, isActive: current.isActive, population: current.population, jobs: current.jobs, influenceRadiusMeters: current.influenceRadiusMeters, establishedYear: current.establishedYear, dormantSinceYear: current.dormantSinceYear })));
+
+    for (let index = 0; index < effective.length; index += 1) {
+      const { baseline, current } = effective[index];
+      const influenceRadius = current?.influenceRadiusMeters ?? baseline!.influenceRadiusMeters;
+      const scaleMultiplier = current === null ? 1 : settlementScaleMultiplier(current.scale);
       const markerRadius = clamp(Math.sqrt(influenceRadius) * 0.18 * scaleMultiplier, 4, 34);
-      position.set(current?.x ?? settlement.x, (current?.z ?? settlement.z) + markerRadius + PRESENTATION_OFFSET, current?.y ?? settlement.y);
+      position.set(current?.x ?? baseline!.x, (current?.z ?? baseline!.z) + markerRadius + PRESENTATION_OFFSET, current?.y ?? baseline!.y);
       scale.set(markerRadius, markerRadius, markerRadius);
       matrix.compose(position, IDENTITY_QUATERNION, scale);
       mesh.setMatrixAt(index, matrix);
-      mesh.setColorAt(index, current === undefined ? settlementRoleColor(settlement.role) : settlementEvolutionColor(current.scale, current.trend, current.isActive));
+      mesh.setColorAt(index, current === null ? settlementRoleColor(baseline!.role) : settlementEvolutionColor(current.scale, current.trend, current.isActive));
     }
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor !== null) mesh.instanceColor.needsUpdate = true;
-    this.root.add(mesh);
+    this.dynamicRoot.add(mesh);
+    return effective.length;
   }
 
   private addPois(snapshot: RegionalGenerationSnapshotMessage): void {
@@ -263,7 +297,7 @@ export class SettlementStructureRenderer {
     points.name = 'regional-pois';
     points.frustumCulled = false;
     points.userData.relations = this.lastRelations.pois;
-    this.root.add(points);
+    this.staticRoot.add(points);
   }
 
   private addRoadSigns(snapshot: RegionalGenerationSnapshotMessage): void {
@@ -276,36 +310,40 @@ export class SettlementStructureRenderer {
     points.name = 'regional-road-signs';
     points.frustumCulled = false;
     points.userData.labels = snapshot.roadSigns.map((sign) => ({ roadSignId: sign.roadSignId.toString(), corridorId: sign.corridorId.toString(), destinationSettlementId: sign.destinationSettlementId.toString(), text: sign.text, kind: sign.kind }));
-    this.root.add(points);
+    this.staticRoot.add(points);
   }
 
   private addToponymLabels(snapshot: RegionalGenerationSnapshotMessage): number {
     const toponyms = new Map(snapshot.toponyms.map((item) => [item.toponymId, item] as const));
-    const anchors = new Map<bigint, THREE.Vector3>();
-    for (const settlement of snapshot.settlements) anchors.set(settlement.nameId, simulationPosition(settlement.x, settlement.y, settlement.z + 28));
-    for (const district of snapshot.districts) anchors.set(district.nameId, simulationPosition((district.minX + district.maxX) * 0.5, (district.minY + district.maxY) * 0.5, district.maxZ + 9));
+    const anchors = new Map<bigint, { position: THREE.Vector3; priority: number }>();
+    const setAnchor = (id: bigint, position: THREE.Vector3, priority: number): void => {
+      if (id === 0n) return;
+      const existing = anchors.get(id);
+      if (existing === undefined || priority < existing.priority) anchors.set(id, { position, priority });
+    };
+    for (const settlement of snapshot.settlements) setAnchor(settlement.nameId, simulationPosition(settlement.x, settlement.y, settlement.z + 28), 0);
+    for (const district of snapshot.districts) setAnchor(district.nameId, simulationPosition((district.minX + district.maxX) * 0.5, (district.minY + district.maxY) * 0.5, district.maxZ + 9), 1);
     for (const corridor of snapshot.corridors) {
       if (corridor.nameId === 0n) continue;
       const middle = corridor.geometry[Math.floor(corridor.geometry.length / 2)];
-      anchors.set(corridor.nameId, simulationPosition(middle.x, middle.y, middle.z + 7));
+      setAnchor(corridor.nameId, simulationPosition(middle.x, middle.y, middle.z + 7), 2);
     }
-    for (const poi of snapshot.pois) if (poi.nameId !== 0n) anchors.set(poi.nameId, simulationPosition(poi.x, poi.y, poi.z + 8));
+    for (const poi of snapshot.pois) setAnchor(poi.nameId, simulationPosition(poi.x, poi.y, poi.z + 8), 3);
 
-    let count = 0;
-    for (const [toponymId, anchor] of anchors) {
-      const toponym = toponyms.get(toponymId);
-      if (toponym === undefined) continue;
-      const sprite = createTextSprite(toponym);
-      sprite.position.copy(anchor);
-      this.root.add(sprite);
-      count += 1;
-    }
-    return count;
+    const selected = [...anchors.entries()]
+      .filter(([toponymId]) => toponyms.has(toponymId))
+      .sort((a, b) => a[1].priority - b[1].priority || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+      .slice(0, MAX_VISIBLE_TOPONYM_LABELS);
+
+    if (selected.length > 0) this.staticRoot.add(createToponymLabelBatch(selected, toponyms));
+    this.staticRoot.userData.labelCapacity = MAX_VISIBLE_TOPONYM_LABELS;
+    this.staticRoot.userData.totalLabelAnchors = anchors.size;
+    return selected.length;
   }
 
-  private clearRoot(): void {
-    for (const child of [...this.root.children]) {
-      this.root.remove(child);
+  private clearGroup(group: THREE.Group): void {
+    for (const child of [...group.children]) {
+      group.remove(child);
       disposeObject(child);
     }
   }
@@ -313,12 +351,18 @@ export class SettlementStructureRenderer {
 
 const IDENTITY_QUATERNION = new THREE.Quaternion();
 
-function createRelations(snapshot: RegionalGenerationSnapshotMessage): SettlementStructureStableRelations {
+function createRelations(snapshot: RegionalGenerationSnapshotMessage, evolution: PersistentRegionalEvolutionSnapshotMessage | null): SettlementStructureStableRelations {
+  const parcelEvolution = new Map((evolution?.parcels ?? []).map((item) => [item.parcelId, item] as const));
+  const buildingRelations = snapshot.buildings.map((item) => Object.freeze({ buildingId: item.buildingId, parcelId: item.parcelId }));
+  const baselineBuildingIds = new Set(snapshot.buildings.map((item) => item.buildingId));
+  for (const item of evolution?.buildings ?? []) {
+    if (!baselineBuildingIds.has(item.buildingId)) buildingRelations.push(Object.freeze({ buildingId: item.buildingId, parcelId: item.parcelId }));
+  }
   return Object.freeze({
     settlements: Object.freeze(snapshot.settlements.map((item) => Object.freeze({ settlementId: item.settlementId, nameId: item.nameId }))),
     districts: Object.freeze(snapshot.districts.map((item) => Object.freeze({ districtId: item.districtId, settlementId: item.settlementId, nameId: item.nameId }))),
-    parcels: Object.freeze(snapshot.parcels.map((item) => Object.freeze({ parcelId: item.parcelId, settlementId: item.settlementId, districtId: item.districtId, buildingId: item.buildingId }))),
-    buildings: Object.freeze(snapshot.buildings.map((item) => Object.freeze({ buildingId: item.buildingId, parcelId: item.parcelId }))),
+    parcels: Object.freeze(snapshot.parcels.map((item) => Object.freeze({ parcelId: item.parcelId, settlementId: item.settlementId, districtId: item.districtId, buildingId: parcelEvolution.get(item.parcelId)?.buildingId ?? item.buildingId }))),
+    buildings: Object.freeze(buildingRelations),
     pois: Object.freeze(snapshot.pois.map((item) => Object.freeze({ poiId: item.poiId, settlementId: item.settlementId, buildingId: item.buildingId, nameId: item.nameId }))),
   });
 }
@@ -447,41 +491,154 @@ function buildingLifecycleColor(use: GeneratedBuildingUse, status: BuildingLifec
   }
 }
 
-function createTextSprite(toponym: HumanToponymObservation): THREE.Sprite {
+function evolutionBuildingHeight(building: BuildingLifecycleObservation): number {
+  return clamp(3 + Math.log2(Math.max(1, building.capacity) + 1), 3, 20);
+}
+
+function createToponymLabelBatch(
+  selected: readonly [bigint, { position: THREE.Vector3; priority: number }][],
+  toponyms: ReadonlyMap<bigint, HumanToponymObservation>,
+): THREE.Mesh<THREE.InstancedBufferGeometry, THREE.ShaderMaterial> {
+  const rows = Math.ceil(selected.length / TOPONYM_ATLAS_COLUMNS);
   const canvas = document.createElement('canvas');
-  canvas.width = 512; canvas.height = 96;
+  canvas.width = TOPONYM_ATLAS_COLUMNS * TOPONYM_ATLAS_CELL_WIDTH;
+  canvas.height = Math.max(1, rows) * TOPONYM_ATLAS_CELL_HEIGHT;
   const context = canvas.getContext('2d');
+  const instancePositions = new Float32Array(selected.length * 3);
+  const atlasRects = new Float32Array(selected.length * 4);
+  const metadata: object[] = [];
+  const center = new THREE.Vector3();
+
   if (context !== null) {
     context.clearRect(0, 0, canvas.width, canvas.height);
-    context.font = '600 38px sans-serif';
-    context.textAlign = 'center'; context.textBaseline = 'middle';
-    context.fillStyle = 'rgba(15,23,42,0.80)'; context.fillRect(0, 8, canvas.width, 80);
-    context.fillStyle = '#f8fafc'; context.fillText(toponym.name, canvas.width / 2, canvas.height / 2, canvas.width - 24);
+    context.font = '600 26px sans-serif';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
   }
+
+  for (let index = 0; index < selected.length; index += 1) {
+    const [toponymId, anchor] = selected[index];
+    const toponym = toponyms.get(toponymId)!;
+    const column = index % TOPONYM_ATLAS_COLUMNS;
+    const row = Math.floor(index / TOPONYM_ATLAS_COLUMNS);
+    const x = column * TOPONYM_ATLAS_CELL_WIDTH;
+    const y = row * TOPONYM_ATLAS_CELL_HEIGHT;
+    if (context !== null) {
+      context.fillStyle = 'rgba(15,23,42,0.80)';
+      context.fillRect(x + 2, y + 5, TOPONYM_ATLAS_CELL_WIDTH - 4, TOPONYM_ATLAS_CELL_HEIGHT - 10);
+      context.fillStyle = '#f8fafc';
+      context.fillText(toponym.name, x + TOPONYM_ATLAS_CELL_WIDTH / 2, y + TOPONYM_ATLAS_CELL_HEIGHT / 2, TOPONYM_ATLAS_CELL_WIDTH - 16);
+    }
+    instancePositions.set([anchor.position.x, anchor.position.y, anchor.position.z], index * 3);
+    atlasRects.set([
+      x / canvas.width,
+      1 - ((row + 1) * TOPONYM_ATLAS_CELL_HEIGHT) / canvas.height,
+      TOPONYM_ATLAS_CELL_WIDTH / canvas.width,
+      TOPONYM_ATLAS_CELL_HEIGHT / canvas.height,
+    ], index * 4);
+    center.add(anchor.position);
+    metadata.push(Object.freeze({
+      toponymId: toponym.toponymId.toString(),
+      kind: toponym.kind,
+      sourceNaturalToponymId: toponym.sourceNaturalToponymId.toString(),
+      sourceFeatureId: toponym.sourceFeatureId.toString(),
+      parentHumanToponymId: toponym.parentHumanToponymId.toString(),
+      priority: anchor.priority,
+    }));
+  }
+  center.multiplyScalar(1 / selected.length);
+  let radius = 0;
+  for (const [, anchor] of selected) radius = Math.max(radius, center.distanceTo(anchor.position));
+
   const texture = new THREE.CanvasTexture(canvas);
   texture.needsUpdate = true;
-  const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
-  const sprite = new THREE.Sprite(material);
-  sprite.name = `regional-toponym-${toponym.toponymId.toString()}`;
-  sprite.scale.set(LABEL_SCALE * 4.5, LABEL_SCALE, 1);
-  sprite.userData.toponymId = toponym.toponymId.toString();
-  sprite.userData.kind = toponym.kind;
-  sprite.userData.sourceNaturalToponymId = toponym.sourceNaturalToponymId.toString();
-  sprite.userData.sourceFeatureId = toponym.sourceFeatureId.toString();
-  sprite.userData.parentHumanToponymId = toponym.parentHumanToponymId.toString();
-  return sprite;
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+
+  const geometry = new THREE.InstancedBufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute([
+    -0.5, -0.5, 0,
+    0.5, -0.5, 0,
+    0.5, 0.5, 0,
+    -0.5, 0.5, 0,
+  ], 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute([
+    0, 0,
+    1, 0,
+    1, 1,
+    0, 1,
+  ], 2));
+  geometry.setIndex([0, 1, 2, 0, 2, 3]);
+  geometry.setAttribute('labelPosition', new THREE.InstancedBufferAttribute(instancePositions, 3));
+  geometry.setAttribute('atlasRect', new THREE.InstancedBufferAttribute(atlasRects, 4));
+  geometry.instanceCount = selected.length;
+
+  const material = new THREE.ShaderMaterial({
+    uniforms: { labelAtlas: { value: texture } },
+    vertexShader: `
+      attribute vec3 labelPosition;
+      attribute vec4 atlasRect;
+      varying vec2 vLabelUv;
+      void main() {
+        vec4 viewCenter = viewMatrix * modelMatrix * vec4(labelPosition, 1.0);
+        viewCenter.xy += position.xy * vec2(${String(LABEL_SCALE * 4.5)}, ${String(LABEL_SCALE)});
+        gl_Position = projectionMatrix * viewCenter;
+        vLabelUv = atlasRect.xy + uv * atlasRect.zw;
+      }
+    `,
+    fragmentShader: `
+      uniform sampler2D labelAtlas;
+      varying vec2 vLabelUv;
+      void main() {
+        vec4 sampled = texture2D(labelAtlas, vLabelUv);
+        if (sampled.a < 0.02) discard;
+        gl_FragColor = sampled;
+      }
+    `,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+  });
+
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = 'regional-toponym-labels';
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 100;
+  mesh.userData.atlasTexture = texture;
+  mesh.userData.toponyms = Object.freeze(metadata);
+  mesh.userData.labelCount = selected.length;
+  mesh.userData.atlasWidth = canvas.width;
+  mesh.userData.atlasHeight = canvas.height;
+  mesh.userData.labelCenter = center.clone();
+  mesh.userData.labelRadius = radius;
+  mesh.onBeforeRender = (_renderer, _scene, camera) => {
+    const distance = camera.position.distanceTo(center);
+    geometry.instanceCount = visibleToponymLabelCount(distance, radius, selected.length);
+  };
+  return mesh;
+}
+
+function visibleToponymLabelCount(distance: number, radius: number, total: number): number {
+  const referenceDistance = Math.max(500, radius * 0.75);
+  if (distance > referenceDistance * 6) return Math.min(total, 24);
+  if (distance > referenceDistance * 3) return Math.min(total, 64);
+  if (distance > referenceDistance * 1.5) return Math.min(total, 128);
+  return total;
 }
 
 function disposeObject(object: THREE.Object3D): void {
   object.traverse((item) => {
     const mesh = item as THREE.Mesh;
     mesh.geometry?.dispose();
+    const atlasTexture = item.userData.atlasTexture as THREE.Texture | undefined;
+    if (atlasTexture?.isTexture === true) atlasTexture.dispose();
     const material = (item as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
     if (material === undefined) return;
     const materials = Array.isArray(material) ? material : [material];
     for (const current of materials) {
       const texture = (current as THREE.SpriteMaterial).map;
-      if (texture !== null && texture !== undefined) texture.dispose();
+      if (texture !== null && texture !== undefined && texture !== atlasTexture) texture.dispose();
       current.dispose();
     }
   });

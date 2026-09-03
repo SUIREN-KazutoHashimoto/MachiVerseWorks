@@ -105,4 +105,5 @@ public readonly record struct PopulationStatistics(
     int HealthcareCount,
     int RecreationCount,
     int ErrandCount,
-    ulong TickCount);
+    ulong TickCount,
+    int TransitCount = 0);

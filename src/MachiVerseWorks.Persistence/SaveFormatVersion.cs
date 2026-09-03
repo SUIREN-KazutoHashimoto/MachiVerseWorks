@@ -11,5 +11,6 @@ public static class SaveFormatVersion
     public const int RailwayOperations = 9;
     public const int MultimodalTransit = 10;
     public const int Economy = 11;
-    public const int Current = Economy;
+    public const int EconomyExtensions = 12;
+    public const int Current = EconomyExtensions;
 }

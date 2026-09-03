@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Nodes;
 using MachiVerseWorks.Simulation;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -40,11 +41,12 @@ public sealed class PowerSaveTests
     public void ExistingFormatElevenSaveWithoutPowerRestoresEmptyPowerState()
     {
         var world = new SimulationWorld(new SimulationConfig(tickRate: 1, seed: 2302));
-        var bytes = WorldSaveSerializer.Serialize(world);
-        var json = Encoding.UTF8.GetString(bytes);
-        json = json.Replace("      \"power\": null,\n", string.Empty, StringComparison.Ordinal);
+        var root = JsonNode.Parse(WorldSaveSerializer.Serialize(world))!.AsObject();
+        var economy = root["simulation"]!["economy"]!.AsObject();
+        Assert.IsTrue(economy.Remove("power"));
+        Assert.IsFalse(economy.ContainsKey("power"));
 
-        var restored = WorldSaveSerializer.Deserialize(Encoding.UTF8.GetBytes(json));
+        var restored = WorldSaveSerializer.Deserialize(Encoding.UTF8.GetBytes(root.ToJsonString()));
 
         Assert.AreEqual(0, restored.PowerNodeCount);
         Assert.AreEqual(0, restored.PowerLineCount);

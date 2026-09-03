@@ -134,6 +134,11 @@ internal sealed class ServerTestHost : IAsyncDisposable
         {
             decoded = RegionalGenerationProtocolCodec.TryDeserialize(frame, out envelope, out error);
         }
+        else if (header.MessageType == MessageType.RegionalGenerationSnapshotChunk)
+        {
+            decoded = RegionalGenerationSnapshotChunkProtocolCodec.TryDeserialize(frame, out var regionalChunk, out error);
+            envelope = decoded ? new ProtocolEnvelope(header.Version, regionalChunk) : null;
+        }
         else if (header.MessageType == MessageType.PersistentRegionalEvolutionSnapshot)
         {
             decoded = PersistentRegionalEvolutionProtocolCodec.TryDeserialize(frame, out envelope, out error);
@@ -147,11 +152,13 @@ internal sealed class ServerTestHost : IAsyncDisposable
         return envelope;
     }
 
-    public static async Task HandshakeAsync(ClientWebSocket socket)
+    public static async Task<HelloAckMessage> HandshakeAsync(ClientWebSocket socket, ProtocolVersion? version = null)
     {
-        await SendAsync(socket, new HelloMessage(), ProtocolVersion.Current);
+        var requestedVersion = version ?? ProtocolVersion.Current;
+        await SendAsync(socket, new HelloMessage(), requestedVersion);
         var envelope = await ReceiveAsync(socket, TimeSpan.FromSeconds(3));
-        if (envelope.Message is not HelloAckMessage) throw new InvalidOperationException("Server did not return HelloAck.");
+        if (envelope.Message is not HelloAckMessage helloAck) throw new InvalidOperationException("Server did not return HelloAck.");
+        return helloAck;
     }
 
     public async Task StopAsync()

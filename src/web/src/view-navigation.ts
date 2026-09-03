@@ -71,6 +71,7 @@ export class ViewNavigationController {
   private pitch = 0;
   private currentMoveSpeed: number;
   private currentFollowDistance: number;
+  private altitudeBaseline = 0;
 
   public constructor(
     private readonly camera: THREE.PerspectiveCamera,
@@ -153,6 +154,17 @@ export class ViewNavigationController {
     if (deltaSeconds > 0) this.updateFreeMovement(deltaSeconds);
   }
 
+  public rebaseFocusAltitude(fromAltitude: number, toAltitude: number): boolean {
+    validateFinite(fromAltitude, 'source focus altitude');
+    validateFinite(toAltitude, 'target focus altitude');
+    if (getCameraFocusAtSimulationAltitude(this.camera, fromAltitude) === undefined) return false;
+    const delta = toAltitude - fromAltitude;
+    this.camera.position.y += delta;
+    this.altitudeBaseline += delta;
+    this.camera.updateMatrixWorld(true);
+    return true;
+  }
+
   public jump(target: ViewNavigationTarget, now = performance.now()): boolean {
     if (!target.writePosition(now, this.sampledTargetPosition)) return false;
     this.followTarget = null;
@@ -221,16 +233,17 @@ export class ViewNavigationController {
     const sprinting = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
     const distance = this.currentMoveSpeed * (sprinting ? this.sprintMultiplier : 1) * deltaSeconds;
     this.camera.position.addScaledVector(this.movementDirection, distance);
-    this.camera.position.y = Math.max(this.minimumHeight, this.camera.position.y);
+    this.camera.position.y = Math.max(this.altitudeBaseline + this.minimumHeight, this.camera.position.y);
     this.camera.updateMatrixWorld(true);
   }
 
   private placeBehindSampledPosition(position: MutablePositionBuffer, distance: number): void {
     validateSampledWorldPosition(position);
     const target = simulationPositionToThree(position);
+    this.altitudeBaseline = target.y;
     const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion).normalize();
     this.camera.position.copy(target).addScaledVector(forward, -distance);
-    this.camera.position.y = Math.max(this.minimumHeight, this.camera.position.y);
+    this.camera.position.y = Math.max(this.altitudeBaseline + this.minimumHeight, this.camera.position.y);
     this.camera.lookAt(target);
     this.camera.updateMatrixWorld(true);
     this.syncAnglesFromCamera();
@@ -239,6 +252,7 @@ export class ViewNavigationController {
   private orbitSampledPosition(position: MutablePositionBuffer): void {
     validateSampledWorldPosition(position);
     const target = simulationPositionToThree(position);
+    this.altitudeBaseline = target.y;
     const cp = Math.cos(this.pitch);
     const forward = new THREE.Vector3(
       -Math.sin(this.yaw) * cp,
@@ -246,7 +260,7 @@ export class ViewNavigationController {
       -Math.cos(this.yaw) * cp,
     );
     this.camera.position.copy(target).addScaledVector(forward, -this.currentFollowDistance);
-    this.camera.position.y = Math.max(this.minimumHeight, this.camera.position.y);
+    this.camera.position.y = Math.max(this.altitudeBaseline + this.minimumHeight, this.camera.position.y);
     this.camera.lookAt(target);
     this.camera.updateMatrixWorld(true);
   }

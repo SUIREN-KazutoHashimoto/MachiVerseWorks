@@ -66,3 +66,22 @@ test('multimodal transit rejects Protocol 2.7 and invalid stop references', () =
   new DataView(malformed).setBigUint64(firstPatternStopIdOffset, 999n, true);
   assert.throws(() => decodeMultimodalTransitFrame(malformed), /Pattern stop/);
 });
+
+test('multimodal transit requires RailwayServiceId only for railway patterns', () => {
+  const lineModeOffset = PROTOCOL_HEADER_SIZE + 28 + 8;
+  const patternOffset = PROTOCOL_HEADER_SIZE + 28 + 9 + (57 * 2);
+
+  const busWithRailwayService = createFixtureFrame();
+  new DataView(busWithRailwayService).setBigUint64(patternOffset + 16, 77n, true);
+  assert.throws(() => decodeMultimodalTransitFrame(busWithRailwayService), /Pattern payload/);
+
+  const railwayWithoutService = createFixtureFrame();
+  new DataView(railwayWithoutService).setUint8(lineModeOffset, TransitMode.Railway);
+  assert.throws(() => decodeMultimodalTransitFrame(railwayWithoutService), /Pattern payload/);
+
+  const railwayWithService = createFixtureFrame();
+  const railwayView = new DataView(railwayWithService);
+  railwayView.setUint8(lineModeOffset, TransitMode.Railway);
+  railwayView.setBigUint64(patternOffset + 16, 77n, true);
+  assert.equal(decodeMultimodalTransitFrame(railwayWithService).message.patterns[0].railwayServiceId, 77n);
+});

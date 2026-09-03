@@ -56,6 +56,19 @@ public sealed class RegionalGenerationProtocolCodecTests
     }
 
     [TestMethod]
+    public void RegionalSnapshotAcceptsRockSlopeAndRejectsOwnershipHierarchyAndParentCycles()
+    {
+        var version = new ProtocolVersion(2, 18);
+        var message = CreateMessage();
+        _ = RegionalGenerationProtocolCodec.Serialize(message with { RoadSigns = [message.RoadSigns[0] with { Kind = 9 }] }, version);
+        AssertThrows<ArgumentOutOfRangeException>(() => RegionalGenerationProtocolCodec.Serialize(message with { Parcels = [message.Parcels[0] with { BuildingId = 0 }] }, version));
+        AssertThrows<ArgumentOutOfRangeException>(() => RegionalGenerationProtocolCodec.Serialize(message with { Parcels = [message.Parcels[0] with { SettlementId = 2 }] }, version));
+        AssertThrows<ArgumentOutOfRangeException>(() => RegionalGenerationProtocolCodec.Serialize(message with { Buildings = [message.Buildings[0] with { MinX = -50d }] }, version));
+        var cycle = message.Toponyms.Select(item => item.ToponymId switch { 100 => item with { ParentHumanToponymId = 103 }, 103 => item with { ParentHumanToponymId = 100 }, _ => item }).ToArray();
+        AssertThrows<ArgumentOutOfRangeException>(() => RegionalGenerationProtocolCodec.Serialize(message with { Toponyms = cycle }, version));
+    }
+
+    [TestMethod]
     public void CurrentProtocolAdvertisesRegionalGenerationSupport()
     {
         Assert.AreEqual((ushort)2, ProtocolVersion.Current.Major);

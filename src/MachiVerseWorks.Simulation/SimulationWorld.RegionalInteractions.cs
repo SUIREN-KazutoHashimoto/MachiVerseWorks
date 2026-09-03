@@ -11,6 +11,7 @@ public sealed partial class SimulationWorld
     private RegionalInteractionSnapshot CreateRegionalInteractionSnapshot(
         IReadOnlyList<SettlementEvolutionState> settlements)
     {
+        var settlementIndex = new SettlementSpatialIndex(settlements);
         var commuting = new Dictionary<(SettlementId From, SettlementId To), int>();
         foreach (var employment in _economyEmployments.Values.OrderBy(static item => item.PersonId.Value))
         {
@@ -22,8 +23,8 @@ public sealed partial class SimulationWorld
             {
                 continue;
             }
-            var from = FindNearestSettlement(settlements, home);
-            var to = FindNearestSettlement(settlements, work);
+            var from = settlementIndex.FindNearest(home);
+            var to = settlementIndex.FindNearest(work);
             if (from is null || to is null || from.SettlementId == to.SettlementId) continue;
             var key = (from.SettlementId, to.SettlementId);
             commuting[key] = commuting.GetValueOrDefault(key) + 1;
@@ -45,8 +46,8 @@ public sealed partial class SimulationWorld
             {
                 continue;
             }
-            var from = FindNearestSettlement(settlements, sourcePoint);
-            var to = FindNearestSettlement(settlements, destinationPoint);
+            var from = settlementIndex.FindNearest(sourcePoint);
+            var to = settlementIndex.FindNearest(destinationPoint);
             if (from is null || to is null || from.SettlementId == to.SettlementId) continue;
             var key = (from.SettlementId, to.SettlementId, shipment.CommodityId);
             var accumulator = freight.GetValueOrDefault(key);

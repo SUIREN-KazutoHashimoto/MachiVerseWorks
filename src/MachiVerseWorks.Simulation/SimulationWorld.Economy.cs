@@ -9,6 +9,7 @@ public sealed partial class SimulationWorld
     private readonly List<EconomyJobState> _economyJobs = [];
     private readonly Dictionary<JobId, EconomyJobState> _economyJobIndex = [];
     private readonly Dictionary<PersonId, EconomyEmploymentState> _economyEmployments = [];
+    private readonly Dictionary<JobId, int> _economyFilledWorkerCounts = [];
     private readonly Dictionary<HouseholdId, EconomyHouseholdState> _economyHouseholds = [];
     private ulong _nextCompanyId = 1;
     private ulong _nextEstablishmentId = 1;
@@ -81,6 +82,7 @@ public sealed partial class SimulationWorld
         var state = new EconomyJobState(id, establishmentId, requiredWorkerCount, dailyWage);
         _economyJobIndex.Add(id, state);
         _economyJobs.Add(state);
+        _economyFilledWorkerCounts.Add(id, 0);
         return id;
     }
 
@@ -92,12 +94,21 @@ public sealed partial class SimulationWorld
             throw new ArgumentException($"Job {jobId.Value} does not exist.", nameof(jobId));
         if (_economyEmployments.ContainsKey(personId))
             throw new InvalidOperationException($"Person {personId.Value} already has an Employment.");
-        if (GetFilledWorkerCount(jobId) >= job.RequiredWorkerCount)
+        var filledWorkerCount = GetFilledWorkerCount(jobId);
+        if (filledWorkerCount >= job.RequiredWorkerCount)
             throw new InvalidOperationException($"Job {jobId.Value} has no vacant positions.");
         _economyEmployments.Add(personId, new EconomyEmploymentState(personId, jobId, Time.TickCount));
+        _economyFilledWorkerCounts[jobId] = checked(filledWorkerCount + 1);
     }
 
-    public bool EndEmployment(PersonId personId) => _economyEmployments.Remove(personId);
+    public bool EndEmployment(PersonId personId)
+    {
+        if (!_economyEmployments.Remove(personId, out var employment)) return false;
+        var filledWorkerCount = GetFilledWorkerCount(employment.JobId);
+        if (filledWorkerCount <= 0) throw new InvalidOperationException($"Job {employment.JobId.Value} employment count is inconsistent.");
+        _economyFilledWorkerCounts[employment.JobId] = filledWorkerCount - 1;
+        return true;
+    }
 
     public void SetHouseholdCashBalance(HouseholdId householdId, long cashBalance)
     {
@@ -177,7 +188,7 @@ public sealed partial class SimulationWorld
 
     public EconomyStatistics CreateEconomyStatistics()
     {
-        var vacantPositions = 0;
+        long vacantPositions = 0;
         for (var index = 0; index < _economyJobs.Count; index++)
         {
             var job = _economyJobs[index];
@@ -189,14 +200,14 @@ public sealed partial class SimulationWorld
             _economyEstablishments.Count,
             _economyJobs.Count,
             _economyEmployments.Count,
-            vacantPositions,
-            _economyHouseholds.Values.Sum(static item => item.CashBalance),
-            _economyHouseholds.Values.Sum(static item => item.Income),
-            _economyHouseholds.Values.Sum(static item => item.Spending),
-            _economyCompanies.Sum(static item => item.CashBalance),
-            _economyCompanies.Sum(static item => item.Revenue),
-            _economyCompanies.Sum(static item => item.Expense),
-            _economyCompanies.Sum(static item => item.ProducedUnits),
+            SimulationNumeric.SaturatingToInt32NonNegative(vacantPositions),
+            SimulationNumeric.SaturatingLongSum(_economyHouseholds.Values, static item => item.CashBalance),
+            SimulationNumeric.SaturatingLongSum(_economyHouseholds.Values, static item => item.Income),
+            SimulationNumeric.SaturatingLongSum(_economyHouseholds.Values, static item => item.Spending),
+            SimulationNumeric.SaturatingLongSum(_economyCompanies, static item => item.CashBalance),
+            SimulationNumeric.SaturatingLongSum(_economyCompanies, static item => item.Revenue),
+            SimulationNumeric.SaturatingLongSum(_economyCompanies, static item => item.Expense),
+            SimulationNumeric.SaturatingDoubleSum(_economyCompanies, static item => item.ProducedUnits),
             _processedEconomicCycle,
             Time.TickCount);
     }
@@ -222,18 +233,21 @@ public sealed partial class SimulationWorld
     {
         foreach (var company in _economyCompanies.OrderBy(static item => item.Id.Value))
         {
-            var requiredWorkers = 0;
-            var filledWorkers = 0;
+            long requiredWorkers = 0;
+            long filledWorkers = 0;
             for (var index = 0; index < _economyJobs.Count; index++)
             {
                 var job = _economyJobs[index];
                 if (!_economyEstablishmentIndex.TryGetValue(job.EstablishmentId, out var establishment) || establishment.CompanyId != company.Id)
                     continue;
-                requiredWorkers = checked(requiredWorkers + job.RequiredWorkerCount);
-                filledWorkers = checked(filledWorkers + GetFilledWorkerCount(job.Id));
+                requiredWorkers += job.RequiredWorkerCount;
+                filledWorkers += GetFilledWorkerCount(job.Id);
             }
             var utilization = requiredWorkers == 0 ? 0d : Math.Min(1d, (double)filledWorkers / requiredWorkers);
-            company.ProducedUnits += company.DailyProductionCapacity * utilization;
+            var producedUnits = company.ProducedUnits + (company.DailyProductionCapacity * utilization);
+            if (!double.IsFinite(producedUnits) || producedUnits < 0d)
+                throw new OverflowException($"Company {company.Id.Value} production would exceed the finite numeric range.");
+            company.ProducedUnits = producedUnits;
         }
     }
 
@@ -250,10 +264,15 @@ public sealed partial class SimulationWorld
             var payment = Math.Min(company.CashBalance, job.DailyWage);
             if (payment <= 0) continue;
             var household = EnsureHouseholdEconomyState(person.HouseholdId);
-            company.CashBalance = checked(company.CashBalance - payment);
-            company.Expense = checked(company.Expense + payment);
-            household.CashBalance = checked(household.CashBalance + payment);
-            household.Income = checked(household.Income + payment);
+            var companyCashBalance = checked(company.CashBalance - payment);
+            var companyExpense = checked(company.Expense + payment);
+            var householdCashBalance = checked(household.CashBalance + payment);
+            var householdIncome = checked(household.Income + payment);
+
+            company.CashBalance = companyCashBalance;
+            company.Expense = companyExpense;
+            household.CashBalance = householdCashBalance;
+            household.Income = householdIncome;
         }
     }
 
@@ -268,10 +287,15 @@ public sealed partial class SimulationWorld
         {
             var spending = Math.Min(household.CashBalance, EconomyDefaults.DailyHouseholdConsumption);
             if (spending <= 0) continue;
-            household.CashBalance = checked(household.CashBalance - spending);
-            household.Spending = checked(household.Spending + spending);
-            company.CashBalance = checked(company.CashBalance + spending);
-            company.Revenue = checked(company.Revenue + spending);
+            var householdCashBalance = checked(household.CashBalance - spending);
+            var householdSpending = checked(household.Spending + spending);
+            var companyCashBalance = checked(company.CashBalance + spending);
+            var companyRevenue = checked(company.Revenue + spending);
+
+            household.CashBalance = householdCashBalance;
+            household.Spending = householdSpending;
+            company.CashBalance = companyCashBalance;
+            company.Revenue = companyRevenue;
         }
     }
 
@@ -343,7 +367,7 @@ public sealed partial class SimulationWorld
     private static TripEndpoint CreateEstablishmentLocation(EconomyEstablishmentState state) =>
         state.PoiId is { } poiId ? TripEndpoint.ForPoi(poiId) : TripEndpoint.ForBuilding(state.BuildingId!.Value);
 
-    private int GetFilledWorkerCount(JobId jobId) => _economyEmployments.Values.Count(item => item.JobId == jobId);
+    private int GetFilledWorkerCount(JobId jobId) => _economyFilledWorkerCounts.GetValueOrDefault(jobId);
 
     private bool ContainsEconomyBuildingReference(BuildingId id) => _economyEstablishments.Any(item => item.BuildingId == id);
     private bool ContainsEconomyPoiReference(PoiId id) => _economyEstablishments.Any(item => item.PoiId == id);
@@ -373,6 +397,7 @@ public sealed partial class SimulationWorld
         _economyJobs.Clear();
         _economyJobIndex.Clear();
         _economyEmployments.Clear();
+        _economyFilledWorkerCounts.Clear();
         _economyHouseholds.Clear();
         _nextCompanyId = 1;
         _nextEstablishmentId = 1;
@@ -381,7 +406,7 @@ public sealed partial class SimulationWorld
         if (checkpoint is null)
         {
             for (var index = 0; index < _population.HouseholdCount; index++)
-                EnsureHouseholdEconomyState(_population.GetPersonAt(index).HouseholdId);
+                EnsureHouseholdEconomyState(_population.GetHouseholdAt(index).Id);
             return;
         }
 
@@ -407,9 +432,13 @@ public sealed partial class SimulationWorld
             var state = new EconomyJobState(item.Id, item.EstablishmentId, item.RequiredWorkerCount, item.DailyWage);
             _economyJobs.Add(state);
             _economyJobIndex.Add(state.Id, state);
+            _economyFilledWorkerCounts.Add(state.Id, 0);
         }
         foreach (var item in checkpoint.Employments)
+        {
             _economyEmployments.Add(item.PersonId, new EconomyEmploymentState(item.PersonId, item.JobId, item.StartedTick));
+            _economyFilledWorkerCounts[item.JobId] = checked(GetFilledWorkerCount(item.JobId) + 1);
+        }
         foreach (var item in checkpoint.Households)
             _economyHouseholds.Add(item.HouseholdId, new EconomyHouseholdState(item.HouseholdId)
             {
@@ -516,9 +545,11 @@ public sealed partial class SimulationWorld
         public double ProducedUnits { get; set; }
     }
 
-    private sealed class EconomyEstablishmentState(EstablishmentId id, CompanyId companyId, BuildingId? buildingId, PoiId? poiId)
+    private sealed class EconomyEstablishmentState(CompanyId companyId, BuildingId? buildingId, PoiId? poiId)
     {
-        public EstablishmentId Id { get; } = id;
+        public EconomyEstablishmentState(EstablishmentId id, CompanyId companyId, BuildingId? buildingId, PoiId? poiId)
+            : this(companyId, buildingId, poiId) => Id = id;
+        public EstablishmentId Id { get; }
         public CompanyId CompanyId { get; } = companyId;
         public BuildingId? BuildingId { get; } = buildingId;
         public PoiId? PoiId { get; } = poiId;

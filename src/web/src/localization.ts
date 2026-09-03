@@ -10,10 +10,14 @@ const resources: Readonly<Record<string, LocaleResource>> = {
 };
 
 export class Localizer {
+  private readonly numberFormatter: Intl.NumberFormat;
+
   public constructor(
     public readonly locale: string,
     private readonly resource: LocaleResource,
-  ) {}
+  ) {
+    this.numberFormatter = new Intl.NumberFormat(locale);
+  }
 
   public t(key: string, parameters: LocaleParameters = {}): string {
     const template = this.resource[key] ?? key;
@@ -21,6 +25,10 @@ export class Localizer {
       const value = parameters[parameterName];
       return value === undefined ? `{${parameterName}}` : String(value);
     });
+  }
+
+  public formatNumber(value: number | bigint): string {
+    return this.numberFormatter.format(value);
   }
 }
 

@@ -1,3 +1,4 @@
+using System.Text;
 using MachiVerseWorks.Protocol;
 using MachiVerseWorks.Simulation;
 
@@ -6,6 +7,10 @@ namespace MachiVerseWorks.Server;
 internal static class RadioMessageMapper
 {
     private const int MaximumDebugEntries = 512;
+    private const int SpectrumFixedLength = 14;
+    private const int BandFixedLength = 26;
+    private const int FrequencyBlockLength = 32;
+    private const int ConflictFixedLength = 34;
 
     public static (RadioSnapshotMessage Radio, SpectrumSnapshotMessage Spectrum) Create(RadioSnapshot snapshot)
     {
@@ -35,12 +40,39 @@ internal static class RadioMessageMapper
             .Select(static item => new ProtocolRadioLink(item.Id.Value, item.FromSiteId.Value, item.ToSiteId.Value, item.FrequencyBlockId.Value, item.DistanceMeters, item.PathLossDb, item.ReceivedPowerDbm, item.InterferenceDbm, item.SinrDb, item.Utilization, (ProtocolRadioLinkState)item.State, item.IsInService)).ToArray();
         var serviceAreas = snapshot.ServiceAreas.Where(item => siteIds.Contains(item.SiteId.Value)).Take(MaximumDebugEntries)
             .Select(static item => new ProtocolRadioServiceArea(item.SiteId.Value, item.FrequencyBlockId.Value, item.RadiusMeters, item.MinimumSinrDb)).ToArray();
-        var bands = snapshot.Bands.Take(MaximumDebugEntries)
-            .Select(static item => new ProtocolSpectrumBand(item.Id.Value, item.Name, item.MinimumFrequencyMegahertz, item.MaximumFrequencyMegahertz)).ToArray();
-        var blocks = snapshot.FrequencyBlocks.Take(MaximumDebugEntries)
-            .Select(static item => new ProtocolFrequencyBlock(item.Id.Value, item.BandId.Value, item.CenterFrequencyMegahertz, item.BandwidthMegahertz)).ToArray();
-        var conflicts = snapshot.Conflicts.Take(MaximumDebugEntries)
-            .Select(static item => new ProtocolSpectrumConflict(item.FirstBlockId.Value, item.SecondBlockId.Value, item.FirstSiteId.Value, item.SecondSiteId.Value, item.Reason)).ToArray();
+
+        var spectrumBudget = checked((int)ProtocolFrameHeader.MaxPayloadLength) - SpectrumFixedLength;
+        var bands = new List<ProtocolSpectrumBand>();
+        foreach (var item in snapshot.Bands.OrderBy(static item => item.Id.Value).Take(MaximumDebugEntries))
+        {
+            var entryLength = checked(BandFixedLength + Encoding.UTF8.GetByteCount(item.Name));
+            if (entryLength > spectrumBudget) break;
+            bands.Add(new ProtocolSpectrumBand(item.Id.Value, item.Name, item.MinimumFrequencyMegahertz, item.MaximumFrequencyMegahertz));
+            spectrumBudget -= entryLength;
+        }
+
+        var blocks = new List<ProtocolFrequencyBlock>();
+        foreach (var item in snapshot.FrequencyBlocks.OrderBy(static item => item.Id.Value).Take(MaximumDebugEntries))
+        {
+            if (FrequencyBlockLength > spectrumBudget) break;
+            blocks.Add(new ProtocolFrequencyBlock(item.Id.Value, item.BandId.Value, item.CenterFrequencyMegahertz, item.BandwidthMegahertz));
+            spectrumBudget -= FrequencyBlockLength;
+        }
+
+        var conflicts = new List<ProtocolSpectrumConflict>();
+        foreach (var item in snapshot.Conflicts
+                     .OrderBy(static item => item.FirstBlockId.Value)
+                     .ThenBy(static item => item.SecondBlockId.Value)
+                     .ThenBy(static item => item.FirstSiteId.Value)
+                     .ThenBy(static item => item.SecondSiteId.Value)
+                     .Take(MaximumDebugEntries))
+        {
+            var entryLength = checked(ConflictFixedLength + Encoding.UTF8.GetByteCount(item.Reason));
+            if (entryLength > spectrumBudget) break;
+            conflicts.Add(new ProtocolSpectrumConflict(item.FirstBlockId.Value, item.SecondBlockId.Value, item.FirstSiteId.Value, item.SecondSiteId.Value, item.Reason));
+            spectrumBudget -= entryLength;
+        }
+
         return (
             new RadioSnapshotMessage(
                 statistics,
@@ -51,6 +83,6 @@ internal static class RadioMessageMapper
                 Array.AsReadOnly(emissions),
                 Array.AsReadOnly(links),
                 Array.AsReadOnly(serviceAreas)),
-            new SpectrumSnapshotMessage(s.TickCount, Array.AsReadOnly(bands), Array.AsReadOnly(blocks), Array.AsReadOnly(conflicts)));
+            new SpectrumSnapshotMessage(s.TickCount, bands.AsReadOnly(), blocks.AsReadOnly(), conflicts.AsReadOnly()));
     }
 }

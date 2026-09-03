@@ -15,7 +15,7 @@ public sealed class EconomySaveTests
         for (ulong tick = 0; tick < EconomyDefaults.TicksPerEconomicDay + 50UL; tick++) original.Step();
 
         var bytes = WorldSaveSerializer.Serialize(original);
-        StringAssert.Contains(Encoding.UTF8.GetString(bytes), "\"formatVersion\": 11");
+        StringAssert.Contains(Encoding.UTF8.GetString(bytes), "\"formatVersion\": 12");
         StringAssert.Contains(Encoding.UTF8.GetString(bytes), "\"economy\"");
         var restored = WorldSaveSerializer.Deserialize(bytes);
 

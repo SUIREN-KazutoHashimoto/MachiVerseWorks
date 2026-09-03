@@ -34,26 +34,27 @@ public sealed class RegionalGenerationSaveTests
     {
         AssertBoundary(
             "settlements",
-            new WorldSaveLimits(maximumBytes: 100_000, maximumBuildingCount: 1),
+            RegionalGenerationLimits.MaximumSettlements,
             "simulation.economy.regionalGeneration.snapshot.settlements");
         AssertBoundary(
             "growthEvents",
-            new WorldSaveLimits(maximumBytes: 100_000, maximumPersonCount: 1),
+            RegionalGenerationLimits.MaximumGrowthEvents,
             "simulation.economy.regionalGeneration.snapshot.growthEvents");
         AssertBoundary(
             "corridors",
-            new WorldSaveLimits(maximumBytes: 100_000, maximumRoadSegmentCount: 1),
+            RegionalGenerationLimits.MaximumCorridors,
             "simulation.economy.regionalGeneration.snapshot.corridors");
         AssertBoundary(
             "roadSigns",
-            new WorldSaveLimits(maximumBytes: 100_000, maximumRoadAccessPointCount: 1),
+            RegionalGenerationLimits.MaximumRoadSigns,
             "simulation.economy.regionalGeneration.snapshot.roadSigns");
     }
 
     [TestMethod]
     public void RegionalCorridorGeometryIsRejectedBeforeDtoMaterializationAboveLimits()
     {
-        var json = """
+        var geometry = string.Join(',', Enumerable.Repeat("{}", RegionalGenerationLimits.MaximumCorridorGeometryPoints + 1));
+        var json = $$"""
             {
               "formatVersion": 11,
               "simulation": {
@@ -62,7 +63,7 @@ public sealed class RegionalGenerationSaveTests
                     "snapshot": {
                       "corridors": [
                         {
-                          "geometry": [{},{},{}]
+                          "geometry": [{{geometry}}]
                         }
                       ]
                     }
@@ -71,9 +72,7 @@ public sealed class RegionalGenerationSaveTests
               }
             }
             """;
-        var limits = new WorldSaveLimits(
-            maximumBytes: 100_000,
-            maximumGeographicFeatureGeometryPointCount: 2);
+        var limits = new WorldSaveLimits(maximumBytes: 1_000_000);
 
         var exception = Assert.ThrowsExactly<InvalidDataException>(() =>
             WorldSaveSerializer.Deserialize(Encoding.UTF8.GetBytes(json), limits));
@@ -82,10 +81,11 @@ public sealed class RegionalGenerationSaveTests
         StringAssert.Contains(exception.Message, "before deserialization");
     }
 
-    private static void AssertBoundary(string property, WorldSaveLimits limits, string path)
+    private static void AssertBoundary(string property, int maximum, string path)
     {
-        var atLimit = CreateJson(property, "{}");
-        var aboveLimit = CreateJson(property, "{},{}");
+        var limits = new WorldSaveLimits(maximumBytes: 1_000_000);
+        var atLimit = CreateJson(property, maximum);
+        var aboveLimit = CreateJson(property, maximum + 1);
 
         var atLimitException = Assert.ThrowsExactly<InvalidDataException>(() =>
             WorldSaveSerializer.Deserialize(Encoding.UTF8.GetBytes(atLimit), limits));
@@ -99,20 +99,24 @@ public sealed class RegionalGenerationSaveTests
         StringAssert.Contains(aboveLimitException.Message, "before deserialization");
     }
 
-    private static string CreateJson(string property, string values) => $$"""
-        {
-          "formatVersion": 11,
-          "simulation": {
-            "economy": {
-              "regionalGeneration": {
-                "snapshot": {
-                  "{{property}}": [{{values}}]
+    private static string CreateJson(string property, int count)
+    {
+        var values = string.Join(',', Enumerable.Repeat("{}", count));
+        return $$"""
+            {
+              "formatVersion": 11,
+              "simulation": {
+                "economy": {
+                  "regionalGeneration": {
+                    "snapshot": {
+                      "{{property}}": [{{values}}]
+                    }
+                  }
                 }
               }
             }
-          }
-        }
-        """;
+            """;
+    }
 
     private static WorldEnvironmentConfig CreateConfig(ulong worldSeed) => new(
         worldSeed,

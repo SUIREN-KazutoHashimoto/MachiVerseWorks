@@ -3,11 +3,13 @@ namespace MachiVerseWorks.Simulation;
 public sealed partial class SimulationWorld
 {
     private const double DefaultTerrainPartitionSizeMeters = 16_384d;
+    internal const int MaximumTerrainPartitionCacheEntries = 512;
     private WorldEnvironmentGenerator? _worldEnvironmentGenerator;
     private readonly Dictionary<TerrainPartitionId, TerrainPartition> _terrainPartitions = [];
+    private readonly LinkedList<TerrainPartitionId> _terrainPartitionLru = [];
+    private readonly Dictionary<TerrainPartitionId, LinkedListNode<TerrainPartitionId>> _terrainPartitionLruNodes = [];
     private readonly Dictionary<GeographicFeatureId, GeographicFeature> _geographicFeatures = [];
     private readonly Dictionary<ToponymId, NaturalToponym> _naturalToponyms = [];
-    private readonly Dictionary<GeographicFeatureId, NaturalToponym> _derivedNaturalToponyms = [];
 
     public WorldEnvironmentConfig WorldEnvironment => Config.WorldEnvironment;
     public RegionalEnvironmentSample QueryEnvironment(WorldPoint position) => EnvironmentGenerator.Sample(position);
@@ -22,12 +24,20 @@ public sealed partial class SimulationWorld
         var partitionX = checked((long)Math.Floor(x / partitionSize));
         var partitionY = checked((long)Math.Floor(y / partitionSize));
         var id = new TerrainPartitionId(partitionX, partitionY);
-        if (_terrainPartitions.TryGetValue(id, out var existing)) return existing;
+        if (_terrainPartitions.TryGetValue(id, out var existing))
+        {
+            TouchTerrainPartition(id);
+            return existing;
+        }
+
         var minX = partitionX * partitionSize;
         var minY = partitionY * partitionSize;
         var bounds = new WorldVolume(minX, minY, Config.WorldEnvironment.SeaLevelMeters - 12_000d, minX + partitionSize, minY + partitionSize, Config.WorldEnvironment.SeaLevelMeters + 12_000d);
         var partition = new TerrainPartition(id, bounds, new TerrainSurface(EnvironmentGenerator, bounds));
         _terrainPartitions.Add(id, partition);
+        var node = _terrainPartitionLru.AddLast(id);
+        _terrainPartitionLruNodes.Add(id, node);
+        EvictTerrainPartitionsIfNeeded();
         return partition;
     }
 
@@ -64,22 +74,13 @@ public sealed partial class SimulationWorld
         return TerrainConstraintEvaluator.Evaluate(surface, volume, footprint, kind);
     }
 
-    public IReadOnlyList<GeographicFeature> GetGeographicFeatures(WorldVolume volume, int maximumFeatures = 128)
-    {
-        var generated = EnvironmentGenerator.DetectGeographicFeatures(volume, maximumFeatures);
-        foreach (var feature in generated)
-        {
-            if (_derivedNaturalToponyms.ContainsKey(feature.Id)) continue;
-            _derivedNaturalToponyms.Add(feature.Id, EnvironmentGenerator.CreateToponym(feature));
-        }
-        return generated;
-    }
+    public IReadOnlyList<GeographicFeature> GetGeographicFeatures(WorldVolume volume, int maximumFeatures = 128) =>
+        EnvironmentGenerator.DetectGeographicFeatures(volume, maximumFeatures);
 
     public bool TryGetNaturalToponym(GeographicFeatureId featureId, out NaturalToponym? toponym)
     {
         toponym = _naturalToponyms.Values.FirstOrDefault(item => item.FeatureId == featureId);
-        if (toponym is not null) return true;
-        return _derivedNaturalToponyms.TryGetValue(featureId, out toponym);
+        return toponym is not null;
     }
 
     public WorldEnvironmentSnapshot CreateWorldEnvironmentSnapshot(WorldVolume volume, int sampleColumns = 8, int sampleRows = 8, int maximumFeatures = 128)
@@ -102,6 +103,32 @@ public sealed partial class SimulationWorld
         return new WorldEnvironmentSnapshot(Config.WorldEnvironment, volume, samples, features, toponyms, Time.TickCount);
     }
 
+    private void TouchTerrainPartition(TerrainPartitionId id)
+    {
+        if (!_terrainPartitionLruNodes.TryGetValue(id, out var node)) return;
+        _terrainPartitionLru.Remove(node);
+        _terrainPartitionLru.AddLast(node);
+    }
+
+    private void EvictTerrainPartitionsIfNeeded()
+    {
+        while (_terrainPartitions.Count > MaximumTerrainPartitionCacheEntries)
+        {
+            var oldest = _terrainPartitionLru.First;
+            if (oldest is null) throw new InvalidOperationException("Terrain partition LRU state is inconsistent.");
+            _terrainPartitionLru.RemoveFirst();
+            _terrainPartitionLruNodes.Remove(oldest.Value);
+            _terrainPartitions.Remove(oldest.Value);
+        }
+    }
+
+    private void ClearTerrainPartitionCache()
+    {
+        _terrainPartitions.Clear();
+        _terrainPartitionLru.Clear();
+        _terrainPartitionLruNodes.Clear();
+    }
+
     private WorldEnvironmentGenerator EnvironmentGenerator => _worldEnvironmentGenerator ??= new WorldEnvironmentGenerator(Config.WorldEnvironment);
 
     private WorldEnvironmentCheckpoint CreateWorldEnvironmentCheckpoint() => new(
@@ -115,10 +142,9 @@ public sealed partial class SimulationWorld
         if (checkpoint.Config != Config.WorldEnvironment) throw new ArgumentException("World environment checkpoint config does not match the simulation config.", nameof(checkpoint));
         _geographicFeatures.Clear();
         _naturalToponyms.Clear();
-        _derivedNaturalToponyms.Clear();
         foreach (var feature in checkpoint.Features.OrderBy(static item => item.Id.Value)) _geographicFeatures.Add(feature.Id, feature);
         foreach (var toponym in checkpoint.Toponyms.OrderBy(static item => item.Id.Value)) _naturalToponyms.Add(toponym.Id, toponym);
-        _terrainPartitions.Clear();
+        ClearTerrainPartitionCache();
         _worldEnvironmentGenerator = new WorldEnvironmentGenerator(Config.WorldEnvironment);
     }
 
@@ -146,6 +172,7 @@ public sealed partial class SimulationWorld
         {
             if (feature.ParentId is { } parentId && !featureIds.Contains(parentId)) throw new ArgumentException("Geographic feature references a missing parent.", nameof(checkpoint));
         }
+        ValidateAcyclicParentGraph(worldEnvironment.Features.Select(static item => (item.Id, item.ParentId)), "Geographic feature", nameof(checkpoint));
         var toponymIds = new HashSet<ToponymId>();
         foreach (var toponym in worldEnvironment.Toponyms)
         {
@@ -161,6 +188,38 @@ public sealed partial class SimulationWorld
         {
             if (toponym.Provenance.ParentToponymId is { } parentId && !toponymIds.Contains(parentId))
                 throw new ArgumentException("Toponym provenance references a missing parent toponym.", nameof(checkpoint));
+        }
+        ValidateAcyclicParentGraph(worldEnvironment.Toponyms.Select(static item => (item.Id, item.Provenance.ParentToponymId)), "Natural toponym", nameof(checkpoint));
+    }
+
+    private static void ValidateAcyclicParentGraph<T>(IEnumerable<(T Id, T? ParentId)> nodes, string entityName, string parameterName)
+        where T : struct, IEquatable<T>
+    {
+        var parents = nodes.ToDictionary(static item => item.Id, static item => item.ParentId);
+        var states = new Dictionary<T, byte>(parents.Count);
+        var path = new List<T>();
+        foreach (var start in parents.Keys)
+        {
+            if (states.TryGetValue(start, out var startState) && startState == 2) continue;
+
+            path.Clear();
+            var current = start;
+            while (true)
+            {
+                if (states.TryGetValue(current, out var state))
+                {
+                    if (state == 1)
+                        throw new ArgumentException($"{entityName} parent graph contains a cycle.", parameterName);
+                    break;
+                }
+
+                states[current] = 1;
+                path.Add(current);
+                if (!parents.TryGetValue(current, out var parent) || parent is not { } parentId) break;
+                current = parentId;
+            }
+
+            foreach (var id in path) states[id] = 2;
         }
     }
 }

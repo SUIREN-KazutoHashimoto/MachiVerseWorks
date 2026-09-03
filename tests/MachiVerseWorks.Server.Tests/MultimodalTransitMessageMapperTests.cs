@@ -51,4 +51,83 @@ public sealed class MultimodalTransitMessageMapperTests
         var payloadText = error.Parameters.Single(parameter => parameter.Key == "payloadBytes").Value;
         Assert.IsTrue(ulong.Parse(payloadText, System.Globalization.CultureInfo.InvariantCulture) > ProtocolFrameHeader.MaxPayloadLength);
     }
+
+    [TestMethod]
+    public void VolumeScopedSnapshotKeepsCompletePatternReferenceClosure()
+    {
+        var firstStopId = new TransitStopId(1);
+        var secondStopId = new TransitStopId(2);
+        var lineId = new TransitLineId(1);
+        var patternId = new TransitServicePatternId(1);
+        var transit = new MultimodalTransitSnapshot(
+            Stops:
+            [
+                new TransitStopSnapshot(firstStopId, TransitStopKind.Bus, new WorldPoint(0, 0, 0), new LaneId(1)),
+                new TransitStopSnapshot(secondStopId, TransitStopKind.Bus, new WorldPoint(1_000, 0, 0), new LaneId(2)),
+            ],
+            Lines: [new TransitLineSnapshot(lineId, TransitMode.Bus)],
+            Patterns:
+            [
+                new TransitServicePatternSnapshot(
+                    patternId,
+                    lineId,
+                    [new TransitPatternStopSnapshot(firstStopId, 0, 1), new TransitPatternStopSnapshot(secondStopId, 100, 1)]),
+            ],
+            Trips: [],
+            Vehicles: [],
+            TaxiRequests: [],
+            Journeys: [],
+            Passengers: []);
+
+        var message = MultimodalTransitMessageMapper.CreateSnapshot(
+            transit,
+            tickCount: 1,
+            new WorldVolume(-10, -10, -10, 10, 10, 10));
+
+        Assert.AreEqual(1, message.Lines.Count);
+        Assert.AreEqual(1, message.Patterns.Count);
+        Assert.AreEqual(2, message.Stops.Count, "The out-of-volume stop is still required by the selected pattern reference closure.");
+        CollectionAssert.AreEquivalent(
+            new[] { firstStopId.Value, secondStopId.Value },
+            message.Stops.Select(static item => item.Id).ToArray());
+    }
+
+    [TestMethod]
+    public void VolumeScopedDeliveryRecoversWhenTwentyThousandVehicleGlobalSnapshotIsOversized()
+    {
+        var vehicles = Enumerable.Range(0, 20_000)
+            .Select(index => new TransitVehicleSnapshot(
+                new TransitVehicleId(checked((ulong)index + 1UL)),
+                TransitVehicleKind.Bus,
+                TripId: null,
+                RoadVehicleId: null,
+                StopIndex: 0,
+                Position: new WorldPoint(index < 32 ? index : 1_000_000 + index, 0, 0),
+                State: TransitVehicleMovementState.Idle,
+                EstimatedArrivalTick: 0,
+                DwellUntilTick: 0,
+                TickCount: 1))
+            .ToArray();
+        var transit = new MultimodalTransitSnapshot(
+            Stops: [],
+            Lines: [],
+            Patterns: [],
+            Trips: [],
+            Vehicles: vehicles,
+            TaxiRequests: [],
+            Journeys: [],
+            Passengers: []);
+
+        var global = MultimodalTransitMessageMapper.Create(transit, tickCount: 1);
+        Assert.IsInstanceOfType<ProtocolErrorMessage>(global);
+
+        var scoped = MultimodalTransitMessageMapper.Create(
+            transit,
+            tickCount: 1,
+            new WorldVolume(-1, -1, -1, 31.5, 1, 1));
+        var snapshot = scoped as MultimodalTransitSnapshotMessage;
+        Assert.IsNotNull(snapshot);
+        Assert.AreEqual(32, snapshot.Vehicles.Count);
+        Assert.IsTrue((ulong)MultimodalTransitProtocolCodec.GetPayloadLength(snapshot) <= ProtocolFrameHeader.MaxPayloadLength);
+    }
 }

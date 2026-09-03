@@ -61,6 +61,8 @@ internal sealed class SimulationRuntime
     public int TrackSegmentCount { get { lock (_gate) return _world.TrackSegmentCount; } }
     public int HouseholdCount { get { lock (_gate) { EnsureFixtures(); return _world.HouseholdCount; } } }
     public int PersonCount { get { lock (_gate) { EnsureFixtures(); return _world.PersonCount; } } }
+    internal ulong RoadRevision { get { lock (_gate) return _roadRevision; } }
+    internal ulong RailwayRevision { get { lock (_gate) return _railwayRevision; } }
 
     public void Step()
     {
@@ -104,6 +106,8 @@ internal sealed class SimulationRuntime
         {
             EnsureFixtures();
             var result = operation(_world);
+            var changed = !((roadTopologyChanged || railwayTopologyChanged) && result is bool booleanResult && !booleanResult);
+            if (!changed) return result;
             if (roadTopologyChanged) { _roadRevision = checked(_roadRevision + 1); _roadReadModel = null; }
             if (railwayTopologyChanged) { _railwayRevision = checked(_railwayRevision + 1); _railwayReadModel = null; }
             AdvanceObservationRevision();
@@ -152,24 +156,50 @@ internal sealed class SimulationRuntime
 
     public VersionedObservation<WorldEnvironmentSnapshot> CaptureWorldEnvironmentSnapshot(WorldVolume volume)
     {
+        WorldEnvironmentConfig config;
+        ulong tickCount;
+        ulong generation;
+        ulong revision;
         lock (_gate)
         {
             EnsureFixtures();
-            return new VersionedObservation<WorldEnvironmentSnapshot>(
-                _observationGeneration,
-                _observationRevision,
-                _world.CreateDetailedWorldEnvironmentSnapshot(volume));
+            config = _world.WorldEnvironment;
+            tickCount = _world.Time.TickCount;
+            generation = _observationGeneration;
+            revision = _observationRevision;
         }
+        return new VersionedObservation<WorldEnvironmentSnapshot>(
+            generation,
+            revision,
+            SimulationWorld.CreateDetachedDetailedWorldEnvironmentSnapshot(config, tickCount, volume));
     }
 
-    public SimulationPublishSnapshot CapturePublishSnapshot()
+    public SimulationPublishSnapshot CapturePublishSnapshot() => CapturePublishSnapshot(null);
+
+    public SimulationPublishSnapshot CapturePublishSnapshot(WorldVolume volume) => CapturePublishSnapshot((WorldVolume?)volume);
+
+    private SimulationPublishSnapshot CapturePublishSnapshot(WorldVolume? volume)
     {
         ulong tickCount; ulong observationGeneration; ulong observationRevision; AgentSnapshot[] agents; PedestrianSnapshot[] pedestrians; VehicleSnapshot[] vehicles; TrainSnapshot[] trains; RailwayOperationsSnapshot railwayOperations; MultimodalTransitSnapshot multimodalTransit; IntersectionControlSnapshot intersectionControl; RoadNetworkReadModel roadReadModel; RailwayInfrastructureReadModel railwayReadModel; double spatialCellSize;
         lock (_gate)
         {
             EnsureFixtures();
             tickCount = _world.Time.TickCount; observationGeneration = _observationGeneration; observationRevision = _observationRevision; spatialCellSize = _world.Config.SpatialCellSize;
-            agents = _world.CreateAllAgentSnapshots(); pedestrians = _world.CreateAllPedestrianSnapshots(); vehicles = _world.CreateAllVehicleSnapshots(); trains = _world.CreateTrainSnapshot(); railwayOperations = _world.CreateRailwayOperationsSnapshot(); multimodalTransit = _world.CreateMultimodalTransitSnapshot(); intersectionControl = _world.CreateIntersectionControlSnapshot();
+            if (volume is { } selectedVolume)
+            {
+                agents = _world.CreateSnapshot(selectedVolume);
+                pedestrians = _world.CreatePedestrianSnapshot(selectedVolume);
+                vehicles = _world.CreateVehicleSnapshot(selectedVolume);
+                trains = _world.CreateTrainSnapshot().Where(item => selectedVolume.Contains(item.Position)).ToArray();
+            }
+            else
+            {
+                agents = _world.CreateAllAgentSnapshots();
+                pedestrians = _world.CreateAllPedestrianSnapshots();
+                vehicles = _world.CreateAllVehicleSnapshots();
+                trains = _world.CreateTrainSnapshot();
+            }
+            railwayOperations = _world.CreateRailwayOperationsSnapshot(); multimodalTransit = _world.CreateMultimodalTransitSnapshot(); intersectionControl = _world.CreateIntersectionControlSnapshot();
             _roadReadModel ??= new RoadNetworkReadModel(_roadRevision, _world.CreateRoadNetworkSnapshot());
             _railwayReadModel ??= new RailwayInfrastructureReadModel(_railwayRevision, _world.CreateRailwayInfrastructureSnapshot());
             roadReadModel = _roadReadModel; railwayReadModel = _railwayReadModel;

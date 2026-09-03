@@ -90,6 +90,73 @@ public sealed class NestedSaveLimitTests
     }
 
     [TestMethod]
+    public void OpticalCollectionsAreRejectedBeforeDtoMaterializationAboveLimit()
+    {
+        AssertNestedBoundary(
+            CreateSimulationJson("\"economy\":{\"optical\":{\"nodes\":[{}]}}"),
+            CreateSimulationJson("\"economy\":{\"optical\":{\"nodes\":[{},{}]}}"),
+            new WorldSaveLimits(maximumBytes: 100_000, maximumRoadNodeCount: 1),
+            "simulation.economy.optical.nodes");
+        AssertNestedBoundary(
+            CreateSimulationJson("\"economy\":{\"optical\":{\"fiberCables\":[{}]}}"),
+            CreateSimulationJson("\"economy\":{\"optical\":{\"fiberCables\":[{},{}]}}"),
+            new WorldSaveLimits(maximumBytes: 100_000, maximumRoadSegmentCount: 1),
+            "simulation.economy.optical.fiberCables");
+        foreach (var property in new[] { "equipment", "backhauls", "demands" })
+        {
+            AssertNestedBoundary(
+                CreateSimulationJson($"\"economy\":{{\"optical\":{{\"{property}\":[{{}}]}}}}"),
+                CreateSimulationJson($"\"economy\":{{\"optical\":{{\"{property}\":[{{}},{{}}]}}}}"),
+                new WorldSaveLimits(maximumBytes: 100_000, maximumBuildingCount: 1),
+                $"simulation.economy.optical.{property}");
+        }
+    }
+
+    [TestMethod]
+    public void OpticalDemandRouteCableIdsAreRejectedBeforeDtoMaterializationAboveLimit()
+    {
+        var limits = new WorldSaveLimits(maximumBytes: 100_000, maximumOpticalRouteCableCount: 1);
+        AssertNestedBoundary(
+            CreateSimulationJson("\"economy\":{\"optical\":{\"demands\":[{\"routeCableIds\":[1]}]}}"),
+            CreateSimulationJson("\"economy\":{\"optical\":{\"demands\":[{\"routeCableIds\":[1,2]}]}}"),
+            limits,
+            "simulation.economy.optical.demands[].routeCableIds");
+    }
+
+    [TestMethod]
+    public void EconomyCoreCollectionsAreRejectedBeforeDtoMaterializationAboveLimit()
+    {
+        foreach (var property in new[] { "companies", "establishments" })
+        {
+            AssertNestedBoundary(
+                CreateSimulationJson($"\"economy\":{{\"{property}\":[{{}}]}}"),
+                CreateSimulationJson($"\"economy\":{{\"{property}\":[{{}},{{}}]}}"),
+                new WorldSaveLimits(maximumBytes: 100_000, maximumBuildingCount: 1),
+                $"simulation.economy.{property}");
+        }
+        foreach (var property in new[] { "jobs", "employments" })
+        {
+            AssertNestedBoundary(
+                CreateSimulationJson($"\"economy\":{{\"{property}\":[{{}}]}}"),
+                CreateSimulationJson($"\"economy\":{{\"{property}\":[{{}},{{}}]}}"),
+                new WorldSaveLimits(maximumBytes: 100_000, maximumPersonCount: 1),
+                $"simulation.economy.{property}");
+        }
+    }
+
+    [TestMethod]
+    public void MultimodalPatternStopsAndJourneyLegsAreRejectedBeforeMaterialization()
+    {
+        var limits = new WorldSaveLimits(maximumBytes: 100_000, maximumLaneConnectionCount: 1);
+        AssertNestedBoundary(
+            CreateSimulationJson("\"multimodalTransit\":{\"patterns\":[{\"stops\":[{}]}]}"),
+            CreateSimulationJson("\"multimodalTransit\":{\"patterns\":[{\"stops\":[{},{}]}]}"), limits, "simulation.multimodalTransit.patterns[].stops");
+        AssertNestedBoundary(
+            CreateSimulationJson("\"multimodalTransit\":{\"journeys\":[{\"legs\":[{}]}]}"),
+            CreateSimulationJson("\"multimodalTransit\":{\"journeys\":[{\"legs\":[{},{}]}]}"), limits, "simulation.multimodalTransit.journeys[].legs");
+    }
+
+    [TestMethod]
     public void SerializeAppliesVehicleAndPersonNestedLimitsBeforeDtoProjection()
     {
         var vehicleWorld = CreateTwoStepVehicleWorld();

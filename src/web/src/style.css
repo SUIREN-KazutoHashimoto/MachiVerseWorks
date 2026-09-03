@@ -154,3 +154,72 @@ input {
   font-size: 0.7rem;
   pointer-events: none;
 }
+
+/* Utility diagnostics share one collision-free matrix instead of competing for the four UI corners. */
+[data-logistics-debug="true"],
+[data-gas-debug="true"],
+[data-power-debug="true"],
+[data-optical-debug="true"],
+[data-water-sewer-debug="true"],
+[data-radio-debug="true"] {
+  width: min(26rem, 44vw) !important;
+  max-width: 44vw !important;
+  max-height: 18vh !important;
+  overflow: auto !important;
+  transform: translateX(-50%);
+}
+
+[data-logistics-debug="true"] {
+  top: 6rem !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: 25% !important;
+}
+
+[data-gas-debug="true"] {
+  top: 6rem !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: 75% !important;
+}
+
+[data-power-debug="true"] {
+  top: 39vh !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: 25% !important;
+}
+
+[data-optical-debug="true"] {
+  top: 39vh !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: 75% !important;
+}
+
+[data-water-sewer-debug="true"] {
+  top: auto !important;
+  right: auto !important;
+  bottom: 4rem !important;
+  left: 25% !important;
+}
+
+[data-radio-debug="true"] {
+  top: auto !important;
+  right: auto !important;
+  bottom: 4rem !important;
+  left: 75% !important;
+}
+
+@media (max-width: 760px) {
+  [data-logistics-debug="true"],
+  [data-gas-debug="true"],
+  [data-power-debug="true"],
+  [data-optical-debug="true"],
+  [data-water-sewer-debug="true"],
+  [data-radio-debug="true"] {
+    width: min(42vw, 20rem) !important;
+    max-width: 42vw !important;
+    max-height: 16vh !important;
+  }
+}

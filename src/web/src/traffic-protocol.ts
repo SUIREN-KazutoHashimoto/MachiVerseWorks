@@ -134,6 +134,7 @@ function decodeVehicleState(
   assertStableId(message.laneId, 'Lane');
   const forwardLengthSquared = message.forwardX ** 2 + message.forwardY ** 2 + message.forwardZ ** 2;
   if (![message.x, message.y, message.z, message.forwardX, message.forwardY, message.forwardZ, message.speedMetersPerSecond, message.lengthMeters, message.widthMeters, message.heightMeters].every(Number.isFinite)
+    || !Number.isFinite(forwardLengthSquared)
     || forwardLengthSquared <= 1e-12
     || message.speedMetersPerSecond < 0
     || message.lengthMeters <= 0
@@ -156,6 +157,8 @@ function decodeIntersection(view: DataView, offset: number, payloadLength: numbe
   assertStableId(intersectionNodeId, 'Intersection node');
 
   const movements: IntersectionMovementState[] = [];
+  const movementIds = new Set<bigint>();
+  const connectionIds = new Set<bigint>();
   let cursor = offset + INTERSECTION_HEADER_LENGTH;
   for (let index = 0; index < movementCount; index += 1) {
     const movement: IntersectionMovementState = {
@@ -175,6 +178,10 @@ function decodeIntersection(view: DataView, offset: number, payloadLength: numbe
     assertStableId(movement.connectionId, 'LaneConnection');
     assertStableId(movement.fromLaneId, 'From Lane');
     assertStableId(movement.toLaneId, 'To Lane');
+    if (movement.movementId !== movement.connectionId || movementIds.has(movement.movementId) || connectionIds.has(movement.connectionId))
+      throw new ProtocolDecodeFailure('Intersection movement identity is invalid or duplicated.');
+    movementIds.add(movement.movementId);
+    connectionIds.add(movement.connectionId);
     if (!isTurnMovement(movement.turnMovement)
       || !isSignalIndication(movement.indication)
       || !Number.isFinite(movement.stopLineX)

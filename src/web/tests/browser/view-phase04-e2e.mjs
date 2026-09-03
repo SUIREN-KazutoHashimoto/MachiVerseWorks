@@ -65,8 +65,10 @@ try {
   const roadSigns = requireObject('regional-road-signs', THREE.Points);
   assert(roadSigns.userData.labels[0].roadSignId === '701', 'Road Sign stable ID was not retained.');
   assert(roadSigns.userData.labels[0].destinationSettlementId === '102', 'Road Sign destination relation was not retained.');
-  assert(scene.getObjectByName('regional-toponym-1001') instanceof THREE.Sprite, 'Settlement Toponym was not rendered as a browser sprite.');
-  assert(scene.getObjectByName('regional-toponym-1007') instanceof THREE.Sprite, 'POI Toponym was not rendered as a browser sprite.');
+  const toponymLabels = requireObject('regional-toponym-labels', THREE.Mesh);
+  assert(toponymLabels.userData.labelCount === 7, 'Toponym atlas batch did not retain every browser label.');
+  assert(toponymLabels.userData.toponyms.some((item) => item.toponymId === '1001'), 'Settlement Toponym was not retained in the browser atlas batch.');
+  assert(toponymLabels.userData.toponyms.some((item) => item.toponymId === '1007'), 'POI Toponym was not retained in the browser atlas batch.');
   assert(webgl.info.render.calls > 0, 'Three.js produced no browser draw calls.');
   assert(webgl.info.memory.geometries > 0, 'Three.js produced no browser geometry.');
 

@@ -7,6 +7,7 @@ public sealed partial class SimulationWorld
     private readonly AgentStore _agents = new();
     private readonly SpatialIndex _spatialIndex;
     private DeterministicRandom _random;
+    private bool _isFaulted;
 
     public SimulationWorld(
         SimulationConfig? config = null,
@@ -23,8 +24,8 @@ public sealed partial class SimulationWorld
         _roads = new RoadNetworkStore(Config.SpatialCellSize);
         _railway = new RailwayInfrastructureStore();
         _powerDispatchSolver = powerDispatchSolver ?? new CapacityPowerDispatchSolver();
-        _waterSupplySolver = waterSupplySolver ?? new CapacityWaterSupplySolver();
-        _sewerSolver = sewerSolver ?? new CapacitySewerSolver();
+        _waterSupplySolver = CreateWaterSupplySolver(waterSupplySolver);
+        _sewerSolver = CreateSewerSolver(sewerSolver);
         _gasSupplySolver = new ValidatingGasSupplySolver(gasSupplySolver ?? new CapacityGasSupplySolver());
         _opticalRoutingSolver = opticalRoutingSolver ?? new CapacityOpticalRoutingSolver();
         _radioPropagationSolver = radioPropagationSolver ?? new DeterministicRadioPropagationSolver();
@@ -36,6 +37,7 @@ public sealed partial class SimulationWorld
     public SimulationTime Time { get; private set; }
     public int ActiveAgentCount => _agents.ActiveCount;
     public int TotalCreatedAgentCount => _agents.TotalCreatedCount;
+    public bool IsFaulted => _isFaulted;
 
     public AgentId CreateAgent(WorldPoint position)
     {
@@ -66,25 +68,36 @@ public sealed partial class SimulationWorld
 
     public void Step()
     {
-        var nextTime = Time.Advance(Config.TickRate);
-        _agents.Step(Config.TickDurationSeconds, _spatialIndex);
-        CapturePowerProductionBaselines();
-        StepPower(nextTime);
-        StepWaterSewer(nextTime);
-        StepGas(nextTime);
-        StepOptical(nextTime);
-        StepRadio(nextTime);
-        StepEconomy(nextTime);
-        ApplyPowerOperationalConstraints();
-        StepLogistics(nextTime);
-        StepPersistentRegionalEvolution(nextTime);
-        PlanPopulationAndEconomyTrips(nextTime);
-        StepVehicles(Config.TickDurationSeconds, nextTime.TickCount);
-        StepRailwayOperations(Config.TickDurationSeconds, nextTime.TickCount);
-        StepPedestrians(Config.TickDurationSeconds);
-        StepMultimodalTransit(nextTime.TickCount);
-        CompletePopulationTrips();
-        Time = nextTime;
+        if (_isFaulted)
+            throw new InvalidOperationException("Simulation world is faulted because a previous Step failed and cannot be stepped again.");
+
+        try
+        {
+            var nextTime = Time.Advance(Config.TickRate);
+            _agents.Step(Config.TickDurationSeconds, _spatialIndex);
+            CapturePowerProductionBaselines();
+            StepPower(nextTime);
+            StepWaterSewerTransactional(nextTime);
+            StepGasOptimized(nextTime);
+            StepOptical(nextTime);
+            StepRadio(nextTime);
+            StepEconomy(nextTime);
+            ApplyPowerOperationalConstraints();
+            StepLogisticsOptimized(nextTime);
+            StepPersistentRegionalEvolution(nextTime);
+            PlanPopulationAndEconomyTrips(nextTime);
+            StepVehicles(Config.TickDurationSeconds, nextTime.TickCount);
+            StepRailwayOperations(Config.TickDurationSeconds, nextTime.TickCount);
+            StepPedestrians(Config.TickDurationSeconds);
+            StepMultimodalTransit(nextTime.TickCount);
+            CompletePopulationTrips();
+            Time = nextTime;
+        }
+        catch
+        {
+            _isFaulted = true;
+            throw;
+        }
     }
 
     public bool TryGetAgentSnapshot(AgentId id, out AgentSnapshot snapshot) => _agents.TryGetSnapshot(id, Time.TickCount, out snapshot);
@@ -92,6 +105,8 @@ public sealed partial class SimulationWorld
 
     public SimulationCheckpoint CreateCheckpoint()
     {
+        if (_isFaulted)
+            throw new InvalidOperationException("A faulted Simulation world cannot be checkpointed because its domain state may represent a partial tick.");
         EnsurePedestrianNetwork();
         var railwayOperations = _railwayOperations?.CreateSnapshot();
         var economy = CreateEconomyCheckpointWithRadio() with
@@ -128,7 +143,8 @@ public sealed partial class SimulationWorld
             _railwayOperations?.NextServiceId ?? 1UL, railwayOperations?.Services ?? Array.Empty<RailwayServiceSnapshot>(),
             _railwayOperations?.NextTrainId ?? 1UL, railwayOperations?.Trains ?? Array.Empty<TrainSnapshot>(),
             _multimodalTransit.CreateCheckpoint(Time.TickCount),
-            economy);
+            economy,
+            _agents.TotalCreatedCount);
     }
 
     public static SimulationWorld RestoreCheckpoint(SimulationCheckpoint checkpoint)
@@ -139,6 +155,7 @@ public sealed partial class SimulationWorld
         ArgumentNullException.ThrowIfNull(checkpoint.LaneConnections); ArgumentNullException.ThrowIfNull(checkpoint.RoadAccessPoints);
         if (checkpoint.ElapsedTicks < 0) throw new ArgumentOutOfRangeException(nameof(checkpoint), checkpoint.ElapsedTicks, "Simulation elapsed time cannot be negative.");
         if (checkpoint.NextAgentId == 0) throw new ArgumentOutOfRangeException(nameof(checkpoint), checkpoint.NextAgentId, "Next Agent ID must be greater than zero.");
+        ArgumentOutOfRangeException.ThrowIfNegative(checkpoint.TotalCreatedAgentCount);
         var seenAgentIds = new HashSet<ulong>(checkpoint.Agents.Count); var maximumAgentId = 0UL;
         foreach (var agent in checkpoint.Agents)
         {
@@ -180,7 +197,7 @@ public sealed partial class SimulationWorld
         try { _ = restoredTime.Advance(config.TickRate); }
         catch (OverflowException) { throw new ArgumentOutOfRangeException(nameof(checkpoint), "Simulation time must allow at least one additional tick."); }
         var world = new SimulationWorld(config) { Time = restoredTime, _random = new DeterministicRandom(checkpoint.RandomState) };
-        world._agents.Restore(checkpoint.Agents, checkpoint.NextAgentId, world._spatialIndex);
+        world._agents.Restore(checkpoint.Agents, checkpoint.NextAgentId, ResolveTotalCreatedAgentCount(checkpoint), world._spatialIndex);
         world.RestoreUrbanObjects(checkpoint);
         world._roads.Restore(checkpoint);
         world._railway.Restore(checkpoint);
@@ -213,6 +230,16 @@ public sealed partial class SimulationWorld
         world._multimodalTransit.Restore(checkpoint.MultimodalTransit);
         ValidateMultimodalTransitCheckpointReferences(checkpoint);
         return world;
+    }
+
+    private static int ResolveTotalCreatedAgentCount(SimulationCheckpoint checkpoint)
+    {
+        if (checkpoint.TotalCreatedAgentCount > 0) return Math.Max(checkpoint.TotalCreatedAgentCount, checkpoint.Agents.Count);
+        var activeCount = checkpoint.Agents.Count(static item => item.IsActive);
+        var issuedCount = checkpoint.NextAgentId - 1;
+        if (issuedCount <= int.MaxValue && checkpoint.Agents.Count == (int)issuedCount)
+            return checkpoint.Agents.Count;
+        return activeCount;
     }
 
     private double NextCoordinate(double minimum, double maximum) => minimum == maximum ? minimum : _random.NextDouble(minimum, maximum);

@@ -4,8 +4,14 @@ public sealed partial class SimulationWorld
 {
     private readonly Dictionary<CompanyId, double> _powerProductionBaselines = [];
 
+    private bool HasEconomyUtilityConstraints =>
+        _powerLoads.Count != 0
+        || _waterSewerServicePoints.Count != 0
+        || _gasServicePoints.Count != 0;
+
     private void CapturePowerProductionBaselines()
     {
+        if (!HasEconomyUtilityConstraints) return;
         _powerProductionBaselines.Clear();
         foreach (var company in _economyCompanies)
             _powerProductionBaselines[company.Id] = company.ProducedUnits;
@@ -13,6 +19,8 @@ public sealed partial class SimulationWorld
 
     private void ApplyPowerOperationalConstraints()
     {
+        if (!HasEconomyUtilityConstraints) return;
+
         foreach (var company in _economyCompanies)
         {
             var baseline = _powerProductionBaselines.GetValueOrDefault(company.Id, company.ProducedUnits);

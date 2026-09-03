@@ -137,6 +137,7 @@ export class WorldView {
     this.vehicleRenderer.dispose();
     this.intersectionRenderer.dispose();
     this.renderer.dispose();
+    this.renderer.domElement.remove();
   }
 }
 

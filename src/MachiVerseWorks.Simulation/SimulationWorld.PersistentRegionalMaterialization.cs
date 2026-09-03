@@ -96,7 +96,7 @@ public sealed partial class SimulationWorld
         {
             Parcels = parcels,
             Buildings = buildings.OrderBy(static item => item.BuildingId.Value).ToArray(),
-            Events = events.OrderBy(static item => item.Id.Value).ToArray(),
+            Events = PersistentRegionalEvolutionRetention.RetainNewest(events),
         };
     }
 
@@ -184,15 +184,45 @@ public sealed partial class SimulationWorld
 
     private PersistentRegionalEvolutionSnapshot DetectEmergentSettlements(PersistentRegionalEvolutionSnapshot source)
     {
-        if (BuildingCount == 0) return source;
+        if (BuildingCount == 0 || source.Settlements.Count >= PersistentRegionalEvolutionLimits.MaximumSettlementCount) return source;
         var settlements = source.Settlements.ToList();
         var events = source.Events.ToList();
         var nextSettlementId = settlements.Count == 0 ? 1UL : checked(settlements.Max(static item => item.SettlementId.Value) + 1UL);
         var nextEventId = events.Count == 0 ? 1UL : checked(events.Max(static item => item.Id.Value) + 1UL);
         var roadAccess = CreateRoadNetworkSnapshot().AccessPoints;
+        var roadAccessBuildings = roadAccess
+            .Where(static item => item.BuildingId is not null)
+            .Select(static item => item.BuildingId!.Value)
+            .ToHashSet();
+
+        var residentsByBuilding = new Dictionary<BuildingId, int>();
+        for (var personIndex = 0; personIndex < _population.PersonCount; personIndex++)
+        {
+            if (_population.GetPersonAt(personIndex).Residence.BuildingId is not { } buildingId) continue;
+            residentsByBuilding.TryGetValue(buildingId, out var count);
+            residentsByBuilding[buildingId] = checked(count + 1);
+        }
+
+        var requiredWorkersByEstablishment = new Dictionary<EstablishmentId, int>();
+        for (var jobIndex = 0; jobIndex < _economyJobs.Count; jobIndex++)
+        {
+            var job = _economyJobs[jobIndex];
+            requiredWorkersByEstablishment.TryGetValue(job.EstablishmentId, out var workers);
+            requiredWorkersByEstablishment[job.EstablishmentId] = checked(workers + job.RequiredWorkerCount);
+        }
+        var jobsByBuilding = new Dictionary<BuildingId, int>();
+        for (var establishmentIndex = 0; establishmentIndex < _economyEstablishments.Count; establishmentIndex++)
+        {
+            var establishment = _economyEstablishments[establishmentIndex];
+            if (!requiredWorkersByEstablishment.TryGetValue(establishment.Id, out var workers)) continue;
+            if (establishment.BuildingId is not { } buildingId) continue;
+            jobsByBuilding.TryGetValue(buildingId, out var total);
+            jobsByBuilding[buildingId] = checked(total + workers);
+        }
 
         foreach (var building in CreateBuildingSnapshot().OrderBy(static item => item.Id.Value))
         {
+            if (settlements.Count >= PersistentRegionalEvolutionLimits.MaximumSettlementCount) break;
             var center = Center(building.Bounds);
             var strongestInfluence = 0d;
             foreach (var settlement in settlements)
@@ -203,21 +233,9 @@ public sealed partial class SimulationWorld
             }
             if (strongestInfluence > 0.65d) continue;
 
-            var population = 0;
-            for (var personIndex = 0; personIndex < _population.PersonCount; personIndex++)
-                if (_population.GetPersonAt(personIndex).Residence.BuildingId == building.Id) population++;
-
-            var jobs = 0;
-            for (var establishmentIndex = 0; establishmentIndex < _economyEstablishments.Count; establishmentIndex++)
-            {
-                var establishment = _economyEstablishments[establishmentIndex];
-                if (establishment.BuildingId != building.Id) continue;
-                for (var jobIndex = 0; jobIndex < _economyJobs.Count; jobIndex++)
-                    if (_economyJobs[jobIndex].EstablishmentId == establishment.Id)
-                        jobs = checked(jobs + _economyJobs[jobIndex].RequiredWorkerCount);
-            }
-
-            var connectivity = roadAccess.Any(item => item.BuildingId == building.Id) ? 0.8d : 0.2d;
+            residentsByBuilding.TryGetValue(building.Id, out var population);
+            jobsByBuilding.TryGetValue(building.Id, out var jobs);
+            var connectivity = roadAccessBuildings.Contains(building.Id) ? 0.8d : 0.2d;
             if (!PersistentRegionalEvolutionEngine.ShouldEmerge(population, jobs, connectivity, strongestInfluence)) continue;
 
             var service = Math.Clamp(jobs / Math.Max(1d, population), 0d, 1d);
@@ -251,7 +269,7 @@ public sealed partial class SimulationWorld
         return source with
         {
             Settlements = settlements.OrderBy(static item => item.SettlementId.Value).ToArray(),
-            Events = events.OrderBy(static item => item.Id.Value).ToArray(),
+            Events = PersistentRegionalEvolutionRetention.RetainNewest(events),
         };
     }
 
@@ -279,7 +297,7 @@ public sealed partial class SimulationWorld
             events.Add(new RegionalEvolutionEvent(new RegionalEvolutionEventId(nextEventId++), current.CurrentYear,
                 RegionalEvolutionEventKind.RegionalRelationEnded, relation.FromSettlementId, null,
                 $"{relation.Kind}:{relation.FromSettlementId.Value}->{relation.ToSettlementId.Value}"));
-        return current with { Events = events.OrderBy(static item => item.Id.Value).ToArray() };
+        return current with { Events = PersistentRegionalEvolutionRetention.RetainNewest(events) };
     }
 
     private bool TryResolveRegionalEndpointPosition(TripEndpoint endpoint, out WorldPoint position)

@@ -132,6 +132,7 @@ internal sealed class PopulationStore
         nextTripRequestId = checked(nextTripRequestId + 1);
     }
 
+    public HouseholdState GetHouseholdAt(int index) => households[index];
     public PersonState GetPersonAt(int index) => persons[index];
 
     public bool TryGetHousehold(HouseholdId id, out HouseholdState state)

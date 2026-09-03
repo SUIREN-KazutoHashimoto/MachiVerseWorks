@@ -15,6 +15,8 @@ const MAXIMUM_BUILDINGS = 16_384;
 const MAXIMUM_DERIVED_ITEMS = 65_536;
 const MAXIMUM_EVENTS = 262_144;
 const MAXIMUM_REASON_LENGTH = 256;
+const INT32_MIN = -2_147_483_648;
+const INT32_MAX = 2_147_483_647;
 const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
 
 type WireUInt64 = string | number;
@@ -103,6 +105,9 @@ export interface PersistentRegionalEvolutionSnapshotMessage {
   readonly commutingFlows: readonly RegionalCommutingFlowObservation[];
   readonly freightFlows: readonly RegionalFreightFlowObservation[];
   readonly isFullSnapshot: boolean;
+  readonly snapshotId: bigint;
+  readonly chunkIndex: number;
+  readonly chunkCount: number;
 }
 
 export interface PersistentRegionalEvolutionProtocolEnvelope { readonly version: ProtocolVersion; readonly message: PersistentRegionalEvolutionSnapshotMessage; }
@@ -129,6 +134,9 @@ interface WirePersistentRegionalEvolutionSnapshot {
   readonly commutingFlows: readonly WireRegionalCommutingFlow[];
   readonly freightFlows: readonly WireRegionalFreightFlow[];
   readonly isFullSnapshot: boolean;
+  readonly snapshotId?: WireUInt64;
+  readonly chunkIndex?: number;
+  readonly chunkCount?: number;
 }
 
 export function isPersistentRegionalEvolutionFrame(frame: ArrayBuffer): boolean {
@@ -170,6 +178,17 @@ function normalizeChunk(raw: WirePersistentRegionalEvolutionSnapshot): Persisten
     throw new ProtocolDecodeFailure('PersistentRegionalEvolution snapshot metadata is invalid.');
   }
 
+  const hasBatchMetadata = raw.snapshotId !== undefined || raw.chunkIndex !== undefined || raw.chunkCount !== undefined;
+  if (hasBatchMetadata && (raw.snapshotId === undefined || raw.chunkIndex === undefined || raw.chunkCount === undefined))
+    throw new ProtocolDecodeFailure('PersistentRegionalEvolution batch metadata must be complete.');
+  const snapshotId = raw.snapshotId === undefined ? 0n : parseUInt64(raw.snapshotId, 'PersistentRegionalEvolution snapshot ID');
+  const chunkIndex = raw.chunkIndex === undefined ? 0 : raw.chunkIndex;
+  const chunkCount = raw.chunkCount === undefined ? 1 : raw.chunkCount;
+  if (!integerAtLeast(chunkIndex, 0) || !integerAtLeast(chunkCount, 1) || chunkIndex >= chunkCount)
+    throw new ProtocolDecodeFailure('PersistentRegionalEvolution batch metadata is invalid.');
+  if (chunkCount > 1 && (snapshotId === 0n || (chunkIndex === 0) !== raw.isFullSnapshot))
+    throw new ProtocolDecodeFailure('PersistentRegionalEvolution multi-chunk metadata is inconsistent.');
+
   const settlements = Object.freeze(raw.settlements.map((item) => normalizeSettlement(item, raw.currentYear)));
   uniquePositiveIds(settlements.map((item) => item.settlementId), 'Settlement');
   const parcels = Object.freeze(raw.parcels.map(normalizeParcel));
@@ -204,6 +223,9 @@ function normalizeChunk(raw: WirePersistentRegionalEvolutionSnapshot): Persisten
     commutingFlows,
     freightFlows,
     isFullSnapshot: raw.isFullSnapshot,
+    snapshotId,
+    chunkIndex,
+    chunkCount,
   });
 }
 
@@ -211,8 +233,8 @@ function normalizeSettlement(raw: WireSettlementEvolution, currentYear: number):
   if (!isRecord(raw) || !finite(raw.x) || !finite(raw.y) || !finite(raw.z) || !integerAtLeast(raw.population, 0) || !integerAtLeast(raw.jobs, 0)
     || !unit(raw.serviceIndex) || !unit(raw.density) || !unit(raw.accessibility) || !positive(raw.influenceRadiusMeters)
     || !integerRange(raw.scale, SettlementScale.Hamlet, SettlementScale.Metropolis) || !integerRange(raw.trend, SettlementTrend.Growing, SettlementTrend.Dormant)
-    || typeof raw.isActive !== 'boolean' || !Number.isInteger(raw.establishedYear) || raw.establishedYear > currentYear
-    || (raw.dormantSinceYear !== null && (!Number.isInteger(raw.dormantSinceYear) || raw.dormantSinceYear > currentYear))) {
+    || typeof raw.isActive !== 'boolean' || !int32(raw.establishedYear) || raw.establishedYear > currentYear
+    || (raw.dormantSinceYear !== null && (!int32(raw.dormantSinceYear) || raw.dormantSinceYear > currentYear))) {
     throw new ProtocolDecodeFailure('PersistentRegionalEvolution Settlement values are invalid.');
   }
   return Object.freeze({ ...raw, settlementId: parsePositiveUInt64(raw.settlementId, 'Settlement ID') });
@@ -224,8 +246,8 @@ function normalizeParcel(raw: WireParcelEvolution): ParcelEvolutionObservation {
 }
 
 function normalizeBuilding(raw: WireBuildingLifecycle, currentYear: number): BuildingLifecycleObservation {
-  if (!isRecord(raw) || !integerRange(raw.use, GeneratedBuildingUse.Residential, GeneratedBuildingUse.Utility) || !Number.isInteger(raw.builtYear) || raw.builtYear > currentYear
-    || !Number.isInteger(raw.lastChangedYear) || raw.lastChangedYear > currentYear || !unit(raw.condition) || !unit(raw.occupancy)
+  if (!isRecord(raw) || !integerRange(raw.use, GeneratedBuildingUse.Residential, GeneratedBuildingUse.Utility) || !int32(raw.builtYear) || raw.builtYear > currentYear
+    || !int32(raw.lastChangedYear) || raw.lastChangedYear > currentYear || !unit(raw.condition) || !unit(raw.occupancy)
     || !integerAtLeast(raw.capacity, 0) || !integerRange(raw.status, BuildingLifecycleStatus.Active, BuildingLifecycleStatus.Demolished)) throw new ProtocolDecodeFailure('PersistentRegionalEvolution Building values are invalid.');
   return Object.freeze({ ...raw, buildingId: parsePositiveUInt64(raw.buildingId, 'Building ID'), parcelId: parsePositiveUInt64(raw.parcelId, 'Building parcel ID') });
 }
@@ -244,12 +266,12 @@ function normalizeRelation(raw: WireRegionalRelation, currentYear: number): Regi
   const fromSettlementId = parsePositiveUInt64(raw.fromSettlementId, 'Relation from settlement ID');
   const toSettlementId = parsePositiveUInt64(raw.toSettlementId, 'Relation to settlement ID');
   if (!isRecord(raw) || !integerRange(raw.kind, RegionalRelationKind.Commuting, RegionalRelationKind.Metro) || !unit(raw.strength) || typeof raw.isActive !== 'boolean'
-    || !Number.isInteger(raw.sinceYear) || raw.sinceYear > currentYear || fromSettlementId === toSettlementId) throw new ProtocolDecodeFailure('PersistentRegionalEvolution Relation values are invalid.');
+    || !int32(raw.sinceYear) || raw.sinceYear > currentYear || fromSettlementId === toSettlementId) throw new ProtocolDecodeFailure('PersistentRegionalEvolution Relation values are invalid.');
   return Object.freeze({ ...raw, relationId: parsePositiveUInt64(raw.relationId, 'Relation ID'), fromSettlementId, toSettlementId });
 }
 
 function normalizeEvent(raw: WireRegionalEvolutionEvent, currentYear: number): RegionalEvolutionEventObservation {
-  if (!isRecord(raw) || !Number.isInteger(raw.year) || raw.year > currentYear || !integerRange(raw.kind, RegionalEvolutionEventKind.Growth, RegionalEvolutionEventKind.RegionalRelationEnded) || !validReason(raw.reason)) throw new ProtocolDecodeFailure('PersistentRegionalEvolution Event values are invalid.');
+  if (!isRecord(raw) || !int32(raw.year) || raw.year > currentYear || !integerRange(raw.kind, RegionalEvolutionEventKind.Growth, RegionalEvolutionEventKind.RegionalRelationEnded) || !validReason(raw.reason)) throw new ProtocolDecodeFailure('PersistentRegionalEvolution Event values are invalid.');
   return Object.freeze({ ...raw, eventId: parsePositiveUInt64(raw.eventId, 'Event ID'), settlementId: parsePositiveUInt64(raw.settlementId, 'Event settlement ID'), buildingId: parseUInt64(raw.buildingId, 'Event building ID') });
 }
 
@@ -273,7 +295,8 @@ function finite(value: unknown): value is number { return typeof value === 'numb
 function positive(value: unknown): value is number { return finite(value) && value > 0; }
 function nonNegative(value: unknown): value is number { return finite(value) && value >= 0; }
 function unit(value: unknown): value is number { return finite(value) && value >= 0 && value <= 1; }
-function integerAtLeast(value: unknown, minimum: number): value is number { return typeof value === 'number' && Number.isInteger(value) && value >= minimum; }
+function int32(value: unknown): value is number { return typeof value === 'number' && Number.isSafeInteger(value) && value >= INT32_MIN && value <= INT32_MAX; }
+function integerAtLeast(value: unknown, minimum: number): value is number { return int32(value) && value >= minimum; }
 function integerRange(value: unknown, minimum: number, maximum: number): value is number { return integerAtLeast(value, minimum) && value <= maximum; }
 
 function uniquePositiveIds(ids: readonly bigint[], label: string): void {
@@ -282,7 +305,7 @@ function uniquePositiveIds(ids: readonly bigint[], label: string): void {
 }
 
 function quoteLosslessUInt64Properties(json: string): string {
-  return json.replace(/("(?:tickCount|settlementId|parcelId|buildingId|relationId|eventId|fromSettlementId|toSettlementId|commodityId)"\s*:\s*)(\d+)/g, '$1"$2"');
+  return json.replace(/("(?:tickCount|snapshotId|settlementId|parcelId|buildingId|relationId|eventId|fromSettlementId|toSettlementId|commodityId)"\s*:\s*)(\d+)/g, '$1"$2"');
 }
 
 function parsePositiveUInt64(value: WireUInt64, label: string): bigint {

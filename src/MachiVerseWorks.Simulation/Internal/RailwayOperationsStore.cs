@@ -12,6 +12,7 @@ internal sealed class RailwayOperationsStore
     private readonly Dictionary<RailwayServiceId, ServiceState> _services = [];
     private readonly Dictionary<TrainId, TrainState> _trains = [];
     private readonly List<TrainState> _trainOrder = [];
+    private readonly HashSet<TrainId> _completedRetirementPending = [];
     private readonly Dictionary<TrackNodeId, TrackNodeSnapshot> _nodes = [];
     private readonly Dictionary<TrackSegmentId, TrackSegmentSnapshot> _segments = [];
     private readonly Dictionary<TrackSegmentId, BlockSectionId> _segmentBlocks = [];
@@ -114,23 +115,50 @@ internal sealed class RailwayOperationsStore
         if (!_timetables.TryGetValue(timetableId, out var timetable)) throw new ArgumentException("Timetable does not exist.", nameof(timetableId));
         if (!_depots.TryGetValue(originDepotId, out var originDepot)) throw new ArgumentException("Origin depot does not exist.", nameof(originDepotId));
         if (!_depots.TryGetValue(destinationDepotId, out var destinationDepot)) throw new ArgumentException("Destination depot does not exist.", nameof(destinationDepotId));
-        if (!ContainsTrack(originDepot.TrackSegmentIds, route.Steps[0].Segment.Id)) throw new ArgumentException("Route must begin on an origin depot track.", nameof(routeId));
-        if (!ContainsTrack(destinationDepot.TrackSegmentIds, route.Steps[^1].Segment.Id)) throw new ArgumentException("Route must end on a destination depot track.", nameof(routeId));
+        var stopRouteDistances = ValidateServiceDefinition(route, timetable, originDepot, destinationDepot, nameof(timetableId));
+
+        var id = new RailwayServiceId(AllocateId(ref _nextServiceId));
+        _services.Add(id, new ServiceState(id, formationId, routeId, timetableId, originDepotId, destinationDepotId, plannedStartTick, stopRouteDistances));
+        return id;
+    }
+
+    internal void ValidateServiceDefinition(
+        RailwayRouteSnapshot routeSnapshot,
+        TimetableSnapshot timetable,
+        DepotId originDepotId,
+        DepotId destinationDepotId)
+    {
+        if (!_depots.TryGetValue(originDepotId, out var originDepot)) throw new ArgumentException("Origin depot does not exist.", nameof(originDepotId));
+        if (!_depots.TryGetValue(destinationDepotId, out var destinationDepot)) throw new ArgumentException("Destination depot does not exist.", nameof(destinationDepotId));
+        var route = BuildRoute(routeSnapshot.Id, routeSnapshot.TrackSegmentIds);
+        _ = ValidateServiceDefinition(route, timetable, originDepot, destinationDepot, nameof(routeSnapshot));
+    }
+
+    internal double GetDerivedRouteLength(RailwayRouteSnapshot routeSnapshot) =>
+        BuildRoute(routeSnapshot.Id, routeSnapshot.TrackSegmentIds).LengthMeters;
+
+    private double[] ValidateServiceDefinition(
+        RouteState route,
+        TimetableSnapshot timetable,
+        DepotSnapshot originDepot,
+        DepotSnapshot destinationDepot,
+        string parameterName)
+    {
+        if (!ContainsTrack(originDepot.TrackSegmentIds, route.Steps[0].Segment.Id)) throw new ArgumentException("Route must begin on an origin depot track.", parameterName);
+        if (!ContainsTrack(destinationDepot.TrackSegmentIds, route.Steps[^1].Segment.Id)) throw new ArgumentException("Route must end on a destination depot track.", parameterName);
 
         var stopRouteDistances = new double[timetable.Stops.Count];
         double previousDistance = -1d;
         for (var index = 0; index < timetable.Stops.Count; index++)
         {
             var stop = timetable.Stops[index];
-            if (!TryFindStopDistance(route, stop, out var stopDistance)) throw new ArgumentException($"Stop station {stop.StationId.Value} has no platform on the route.", nameof(timetableId));
-            if (stopDistance <= previousDistance) throw new ArgumentException("Timetable stops must appear in route order.", nameof(timetableId));
+            if (!_stationPlatforms.ContainsKey(stop.StationId) || !TryFindStopDistance(route, stop, out var stopDistance))
+                throw new ArgumentException($"Stop station {stop.StationId.Value} has no platform on the route.", parameterName);
+            if (stopDistance <= previousDistance) throw new ArgumentException("Timetable stops must appear in route order.", parameterName);
             stopRouteDistances[index] = stopDistance;
             previousDistance = stopDistance;
         }
-
-        var id = new RailwayServiceId(AllocateId(ref _nextServiceId));
-        _services.Add(id, new ServiceState(id, formationId, routeId, timetableId, originDepotId, destinationDepotId, plannedStartTick, stopRouteDistances));
-        return id;
+        return stopRouteDistances;
     }
 
     public TrainId CreateTrain(RailwayServiceId serviceId)
@@ -151,7 +179,19 @@ internal sealed class RailwayOperationsStore
     public void Step(double deltaSeconds, ulong tickCount)
     {
         ValidatePositiveFinite(deltaSeconds, nameof(deltaSeconds));
-        for (var index = 0; index < _trainOrder.Count; index++) StepTrain(_trainOrder[index], deltaSeconds, tickCount);
+        List<TrainState>? completed = null;
+        for (var index = 0; index < _trainOrder.Count; index++)
+        {
+            var train = _trainOrder[index];
+            StepTrain(train, deltaSeconds, tickCount);
+            if (train.State == TrainMovementState.Completed)
+            {
+                completed ??= [];
+                completed.Add(train);
+            }
+        }
+        if (completed is null) return;
+        foreach (var train in completed) RetireCompletedTrain(train);
     }
 
     public RailwayOperationsSnapshot CreateSnapshot()
@@ -195,7 +235,7 @@ internal sealed class RailwayOperationsStore
         ArgumentNullException.ThrowIfNull(timetables);
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(trains);
-        _formations.Clear(); _routes.Clear(); _timetables.Clear(); _services.Clear(); _trains.Clear(); _trainOrder.Clear(); _blockOwners.Clear(); _platformOwners.Clear();
+        _formations.Clear(); _routes.Clear(); _timetables.Clear(); _services.Clear(); _trains.Clear(); _trainOrder.Clear(); _completedRetirementPending.Clear(); _blockOwners.Clear(); _platformOwners.Clear();
 
         foreach (var formation in formations) _formations.Add(formation.Id, formation);
         foreach (var route in routes) _routes.Add(route.Id, BuildRoute(route.Id, route.TrackSegmentIds));
@@ -204,18 +244,18 @@ internal sealed class RailwayOperationsStore
         {
             var timetable = _timetables[service.TimetableId];
             var route = _routes[service.RouteId];
-            var distances = new double[timetable.Stops.Count];
-            for (var index = 0; index < distances.Length; index++)
-            {
-                if (!TryFindStopDistance(route, timetable.Stops[index], out distances[index])) throw new InvalidOperationException("Saved timetable stop is not on its route.");
-            }
+            if (!_depots.TryGetValue(service.OriginDepotId, out var originDepot) || !_depots.TryGetValue(service.DestinationDepotId, out var destinationDepot))
+                throw new InvalidOperationException("Saved Railway Service references a missing Depot.");
+            var distances = ValidateServiceDefinition(route, timetable, originDepot, destinationDepot, nameof(services));
             _services.Add(service.Id, ServiceState.FromSnapshot(service, distances));
         }
         foreach (var snapshotItem in trains)
         {
             var train = TrainState.FromSnapshot(snapshotItem);
+            if (!_services.ContainsKey(train.ServiceId)) continue;
             _trains.Add(train.Id, train);
             _trainOrder.Add(train);
+            if (train.State == TrainMovementState.Completed) _completedRetirementPending.Add(train.Id);
             if (train.CurrentBlockId is { } block && !_blockOwners.TryAdd(block, train.Id)) throw new InvalidOperationException("Saved railway operations contain a block ownership conflict.");
             if (train.AssignedPlatformId is { } assigned && !_platformOwners.TryAdd(assigned, train.Id)) throw new InvalidOperationException("Saved railway operations contain a platform ownership conflict.");
             if (train.AssignedPlatformId is { } assignedPlatform && _services.TryGetValue(train.ServiceId, out var assignedService) && assignedService.NextStopIndex < _timetables[assignedService.TimetableId].Stops.Count)
@@ -226,6 +266,20 @@ internal sealed class RailwayOperationsStore
         }
         _trainOrder.Sort(static (left, right) => left.Id.Value.CompareTo(right.Id.Value));
         _nextFormationId = nextFormationId; _nextRouteId = nextRouteId; _nextTimetableId = nextTimetableId; _nextServiceId = nextServiceId; _nextTrainId = nextTrainId;
+    }
+
+    private void RetireCompletedTrain(TrainState train)
+    {
+        if (_completedRetirementPending.Add(train.Id)) return;
+        _completedRetirementPending.Remove(train.Id);
+        if (train.CurrentBlockId is { } block) ReleaseBlock(block, train.Id);
+        if (train.AssignedPlatformId is { } assigned) ReleasePlatform(assigned, train.Id);
+        if (train.CurrentPlatformId is { } current && current != train.AssignedPlatformId) ReleasePlatform(current, train.Id);
+        foreach (var key in _blockOwners.Where(pair => pair.Value == train.Id).Select(static pair => pair.Key).ToArray()) _blockOwners.Remove(key);
+        foreach (var key in _platformOwners.Where(pair => pair.Value == train.Id).Select(static pair => pair.Key).ToArray()) _platformOwners.Remove(key);
+        _trains.Remove(train.Id);
+        _trainOrder.Remove(train);
+        _services.Remove(train.ServiceId);
     }
 
     private void StepTrain(TrainState train, double deltaSeconds, ulong tickCount)
@@ -361,10 +415,12 @@ internal sealed class RailwayOperationsStore
     private static void ArriveAtStop(TrainState train, ServiceState service, TimetableStopSnapshot stop, ulong tickCount)
     {
         var arrivalDelay = tickCount > stop.PlannedArrivalTick ? tickCount - stop.PlannedArrivalTick : 0;
-        if (arrivalDelay > service.DelayTicks) service.DelayTicks = arrivalDelay;
-        var delayedPlannedDeparture = checked(stop.PlannedDepartureTick + service.DelayTicks);
+        var nextDelayTicks = Math.Max(service.DelayTicks, arrivalDelay);
+        var delayedPlannedDeparture = checked(stop.PlannedDepartureTick + nextDelayTicks);
         var minimumDwellDeparture = checked(tickCount + stop.MinimumDwellTicks);
-        train.DwellDepartureTick = Math.Max(delayedPlannedDeparture, minimumDwellDeparture);
+        var dwellDepartureTick = Math.Max(delayedPlannedDeparture, minimumDwellDeparture);
+        service.DelayTicks = nextDelayTicks;
+        train.DwellDepartureTick = dwellDepartureTick;
         train.CurrentPlatformId = train.AssignedPlatformId;
         train.SpeedMetersPerSecond = 0d;
         train.State = TrainMovementState.Dwelling;

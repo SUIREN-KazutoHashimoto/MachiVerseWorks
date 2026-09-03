@@ -22,8 +22,8 @@ public sealed partial class SimulationWorld
     private readonly Dictionary<WaterSewerServicePointId, WaterSewerServicePointStateData> _waterSewerServicePointIndex = [];
     private readonly Dictionary<SpatialCell, List<WaterNodeId>> _waterNodeSpatialIndex = [];
     private readonly Dictionary<SpatialCell, List<SewerNodeId>> _sewerNodeSpatialIndex = [];
-    private readonly IWaterSupplySolver _waterSupplySolver;
-    private readonly ISewerSolver _sewerSolver;
+    private readonly ValidatingWaterSupplySolver _waterSupplySolver;
+    private readonly ValidatingSewerSolver _sewerSolver;
     private ulong _nextWaterNodeId = 1;
     private ulong _nextWaterPipeId = 1;
     private ulong _nextSewerNodeId = 1;
@@ -284,19 +284,23 @@ public sealed partial class SimulationWorld
         _waterSewerServicePoints.Count(static item => item.WaterState == WaterServiceState.Unavailable),
         _waterSewerServicePoints.Count(static item => item.SewerState == SewerServiceState.Unavailable),
         _waterSewerServicePoints.Count(static item => item.SewerState == SewerServiceState.Overflow),
-        _waterSources.Sum(static item => item.CapacityCubicMetersPerDay) + _reservoirs.Sum(static item => item.ReleaseCapacityCubicMetersPerDay),
-        _waterSewerServicePoints.Sum(static item => item.WaterDemandCubicMetersPerDay),
-        _waterSewerServicePoints.Sum(static item => item.WaterServedCubicMetersPerDay),
-        _waterSewerServicePoints.Sum(static item => item.WastewaterGeneratedCubicMetersPerDay),
-        _waterSewerServicePoints.Sum(static item => item.WastewaterProcessedCubicMetersPerDay),
-        _waterSewerServicePoints.Sum(static item => item.WastewaterOverflowCubicMetersPerDay),
+        SimulationNumeric.SaturatingAddNonNegative(
+            SimulationNumeric.SaturatingDoubleSum(_waterSources, static item => item.CapacityCubicMetersPerDay),
+            SimulationNumeric.SaturatingDoubleSum(_reservoirs, static item => item.ReleaseCapacityCubicMetersPerDay)),
+        SimulationNumeric.SaturatingDoubleSum(_waterSewerServicePoints, static item => item.WaterDemandCubicMetersPerDay),
+        SimulationNumeric.SaturatingDoubleSum(_waterSewerServicePoints, static item => item.WaterServedCubicMetersPerDay),
+        SimulationNumeric.SaturatingDoubleSum(_waterSewerServicePoints, static item => item.WastewaterGeneratedCubicMetersPerDay),
+        SimulationNumeric.SaturatingDoubleSum(_waterSewerServicePoints, static item => item.WastewaterProcessedCubicMetersPerDay),
+        SimulationNumeric.SaturatingDoubleSum(_waterSewerServicePoints, static item => item.WastewaterOverflowCubicMetersPerDay),
         Time.TickCount);
 
     private void StepWaterSewer(SimulationTime nextTime)
     {
         var demandContext = CreateWaterDemandContext();
-        foreach (var point in _waterSewerServicePoints)
-            point.WaterDemandCubicMetersPerDay = CalculateWaterDemand(point, nextTime, demandContext);
+        var calculatedDemands = _waterSewerServicePoints
+            .Select(point => (Point: point, Demand: CalculateWaterDemand(point, nextTime, demandContext)))
+            .ToArray();
+        foreach (var item in calculatedDemands) item.Point.WaterDemandCubicMetersPerDay = item.Demand;
 
         var waterResult = _waterSupplySolver.Solve(new WaterSupplyRequest(
             _waterNodes.Select(static item => new WaterSupplyNode(item.Id)).ToArray(),
@@ -368,14 +372,14 @@ public sealed partial class SimulationWorld
             residentsByBuilding[buildingId] = residentsByBuilding.GetValueOrDefault(buildingId) + 1;
         }
 
-        var requiredWorkersByEstablishment = new Dictionary<EstablishmentId, int>();
+        var requiredWorkersByEstablishment = new Dictionary<EstablishmentId, long>();
         foreach (var job in _economyJobs)
         {
-            requiredWorkersByEstablishment[job.EstablishmentId] = checked(
-                requiredWorkersByEstablishment.GetValueOrDefault(job.EstablishmentId) + job.RequiredWorkerCount);
+            requiredWorkersByEstablishment[job.EstablishmentId] =
+                requiredWorkersByEstablishment.GetValueOrDefault(job.EstablishmentId) + job.RequiredWorkerCount;
         }
 
-        var filledWorkersByEstablishment = new Dictionary<EstablishmentId, int>();
+        var filledWorkersByEstablishment = new Dictionary<EstablishmentId, long>();
         foreach (var employment in _economyEmployments.Values)
         {
             if (!_economyJobIndex.TryGetValue(employment.JobId, out var job)) continue;
@@ -435,7 +439,7 @@ public sealed partial class SimulationWorld
             }
         }
 
-        return point.BaseWaterDemandCubicMetersPerDay * timeFactor * useFactor;
+        return SimulationNumeric.SaturatingMultiplyNonNegative(point.BaseWaterDemandCubicMetersPerDay, timeFactor, useFactor);
     }
 
     private double GetEstablishmentWaterSewerAvailabilityFactor(EstablishmentId establishmentId)
@@ -449,14 +453,14 @@ public sealed partial class SimulationWorld
         }
         if (direct.Length == 0) return 1d;
 
-        var demand = direct.Sum(static item => item.WaterDemandCubicMetersPerDay);
+        var demand = SimulationNumeric.SaturatingDoubleSum(direct, static item => item.WaterDemandCubicMetersPerDay);
         var water = demand <= WaterSewerDefaults.FlowEpsilonCubicMetersPerDay
             ? 1d
-            : direct.Sum(static item => item.WaterServedCubicMetersPerDay) / demand;
-        var wastewater = direct.Sum(static item => item.WastewaterGeneratedCubicMetersPerDay);
+            : SimulationNumeric.SaturatingDoubleSum(direct, static item => item.WaterServedCubicMetersPerDay) / demand;
+        var wastewater = SimulationNumeric.SaturatingDoubleSum(direct, static item => item.WastewaterGeneratedCubicMetersPerDay);
         var sewer = wastewater <= WaterSewerDefaults.FlowEpsilonCubicMetersPerDay
             ? 1d
-            : direct.Sum(static item => item.WastewaterProcessedCubicMetersPerDay) / wastewater;
+            : SimulationNumeric.SaturatingDoubleSum(direct, static item => item.WastewaterProcessedCubicMetersPerDay) / wastewater;
         return Math.Clamp(Math.Min(water, sewer), 0d, 1d);
     }
 
@@ -982,8 +986,8 @@ public sealed partial class SimulationWorld
 
     private readonly record struct WaterDemandContext(
         IReadOnlyDictionary<BuildingId, int> ResidentsByBuilding,
-        IReadOnlyDictionary<EstablishmentId, int> RequiredWorkersByEstablishment,
-        IReadOnlyDictionary<EstablishmentId, int> FilledWorkersByEstablishment);
+        IReadOnlyDictionary<EstablishmentId, long> RequiredWorkersByEstablishment,
+        IReadOnlyDictionary<EstablishmentId, long> FilledWorkersByEstablishment);
 
     private sealed class WaterNodeState(WaterNodeId id, WaterNodeKind kind, WorldPoint position)
     {
