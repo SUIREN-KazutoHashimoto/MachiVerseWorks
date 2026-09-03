@@ -1,0 +1,89 @@
+name: Worker 3 review fix
+
+on:
+  push:
+    branches:
+      - fix/all-open-issues-worker-3
+    paths:
+      - .github/workflows/worker3-review-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Merge parent integration branch
+        shell: bash
+        run: |
+          git fetch origin fix/all-open-issues
+          set +e
+          git merge --no-commit --no-ff origin/fix/all-open-issues
+          merge_status=$?
+          set -e
+          if [ "$merge_status" -ne 0 ]; then
+            conflicts="$(git diff --name-only --diff-filter=U)"
+            echo "Merge conflicts:"
+            echo "$conflicts"
+            if [ "$conflicts" != "src/MachiVerseWorks.Server/AdminCommandExecutorV2.cs" ]; then
+              echo "Unexpected parent conflicts." >&2
+              exit 1
+            fi
+            git checkout --ours src/MachiVerseWorks.Server/AdminCommandExecutorV2.cs
+          fi
+
+      - name: Apply review fixes
+        run: python3 scripts/worker3-review-patch.py
+
+      - name: Finalize merge commit
+        shell: bash
+        run: |
+          git rm scripts/worker3-review-patch.py
+          git add -A
+          unresolved="$(git diff --name-only --diff-filter=U)"
+          if [ -n "$unresolved" ]; then
+            echo "Unresolved conflicts:" >&2
+            echo "$unresolved" >&2
+            exit 1
+          fi
+          git commit -m "fix: address PR review feedback and sync parent"
+
+      - name: Build .NET
+        run: dotnet build MachiVerseWorks.slnx -c Release
+
+      - name: Test .NET
+        run: dotnet test MachiVerseWorks.slnx -c Release --no-build
+
+      - name: Install web dependencies
+        working-directory: src/web
+        run: npm ci
+
+      - name: Lint web
+        working-directory: src/web
+        run: npm run lint
+
+      - name: Typecheck web
+        working-directory: src/web
+        run: npm run typecheck
+
+      - name: Test web
+        working-directory: src/web
+        run: npm test
+
+      - name: Build web
+        working-directory: src/web
+        run: npm run build
+
+      - name: Push verified merge
+        run: git push origin HEAD:fix/all-open-issues-worker-3
