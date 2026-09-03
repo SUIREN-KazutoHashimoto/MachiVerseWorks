@@ -22,8 +22,8 @@ public sealed partial class SimulationWorld
     private readonly Dictionary<WaterSewerServicePointId, WaterSewerServicePointStateData> _waterSewerServicePointIndex = [];
     private readonly Dictionary<SpatialCell, List<WaterNodeId>> _waterNodeSpatialIndex = [];
     private readonly Dictionary<SpatialCell, List<SewerNodeId>> _sewerNodeSpatialIndex = [];
-    private readonly IWaterSupplySolver _waterSupplySolver;
-    private readonly ISewerSolver _sewerSolver;
+    private readonly ValidatingWaterSupplySolver _waterSupplySolver;
+    private readonly ValidatingSewerSolver _sewerSolver;
     private ulong _nextWaterNodeId = 1;
     private ulong _nextWaterPipeId = 1;
     private ulong _nextSewerNodeId = 1;
