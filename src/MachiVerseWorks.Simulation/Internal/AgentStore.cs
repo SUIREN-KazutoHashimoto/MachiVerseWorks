@@ -8,9 +8,10 @@ internal sealed class AgentStore
     private readonly Dictionary<AgentId, int> _indexById = [];
     private WorldPoint[] _stepOriginalPositions = [];
     private ulong _nextId = 1;
+    private int _totalCreatedCount;
 
     public int ActiveCount { get; private set; }
-    public int TotalCreatedCount => checked((int)(_nextId - 1));
+    public int TotalCreatedCount => _totalCreatedCount;
     public ulong NextId => _nextId;
 
     public void EnsureCapacity(int count)
@@ -19,6 +20,7 @@ internal sealed class AgentStore
         if (count == 0) return;
         var availableIds = ulong.MaxValue - _nextId;
         if ((ulong)count > availableIds) throw new OverflowException("Agent ID space does not have enough capacity for the requested creation operation.");
+        if (count > int.MaxValue - _totalCreatedCount) throw new OverflowException("Agent creation count cannot represent the requested creation operation.");
     }
 
     public AgentId Add(WorldPoint position, WorldVector velocity, SpatialIndex spatialIndex)
@@ -27,6 +29,7 @@ internal sealed class AgentStore
         EnsureCapacity(1);
         var id = new AgentId(_nextId);
         var nextId = checked(_nextId + 1);
+        var nextTotalCreatedCount = checked(_totalCreatedCount + 1);
         var state = new AgentState(id, position, velocity);
         var index = _states.Count;
         _states.Add(state);
@@ -34,6 +37,7 @@ internal sealed class AgentStore
         spatialIndex.Register(id, position);
         ActiveCount++;
         _nextId = nextId;
+        _totalCreatedCount = nextTotalCreatedCount;
         return id;
     }
 
@@ -130,11 +134,12 @@ internal sealed class AgentStore
         return checkpoint;
     }
 
-    public void Restore(IReadOnlyList<SimulationAgentCheckpoint> agents, ulong nextId, SpatialIndex spatialIndex)
+    public void Restore(IReadOnlyList<SimulationAgentCheckpoint> agents, ulong nextId, int totalCreatedCount, SpatialIndex spatialIndex)
     {
         ArgumentNullException.ThrowIfNull(agents);
         ArgumentNullException.ThrowIfNull(spatialIndex);
-        if (_states.Count != 0 || _indexById.Count != 0 || ActiveCount != 0) throw new InvalidOperationException("Agent store must be empty before restore.");
+        if (_states.Count != 0 || _indexById.Count != 0 || ActiveCount != 0 || _totalCreatedCount != 0) throw new InvalidOperationException("Agent store must be empty before restore.");
+        if (totalCreatedCount < 0) throw new ArgumentOutOfRangeException(nameof(totalCreatedCount));
         for (var index = 0; index < agents.Count; index++)
         {
             var checkpoint = agents[index];
@@ -147,6 +152,7 @@ internal sealed class AgentStore
             ActiveCount++;
         }
         _nextId = nextId;
+        _totalCreatedCount = Math.Max(totalCreatedCount, agents.Count);
     }
 
     private void EnsureStepRollbackCapacity(int requiredLength)
