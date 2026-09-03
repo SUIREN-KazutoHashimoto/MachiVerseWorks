@@ -54,7 +54,6 @@ jobs:
           text = path.read_text(encoding='utf-8')
           text = text.replace("this.initializeTerrainCamera(message);", "this.initializeTerrainCamera();")
           text = text.replace("private initializeTerrainCamera(message: WorldEnvironmentSnapshotMessage): void", "private initializeTerrainCamera(): void")
-          text = text.replace("WORLD_ENVIRONMENT_SNAPSHOT_MESSAGE_TYPE, type WorldEnvironmentSnapshotMessage", "WORLD_ENVIRONMENT_SNAPSHOT_MESSAGE_TYPE")
           path.write_text(text, encoding='utf-8')
           PY
 
