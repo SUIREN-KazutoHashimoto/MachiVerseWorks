@@ -11,6 +11,7 @@ export interface ReadonlyWorldEnvironmentStore {
   readonly snapshot: WorldEnvironmentSnapshotMessage | null;
   getFeature(featureId: bigint): GeographicFeatureObservation | undefined;
   getToponymForFeature(featureId: bigint): NaturalToponymObservation | undefined;
+  getNearestTerrainElevation(x: number, y: number): number | undefined;
 }
 
 export class WorldEnvironmentStore implements ReadonlyWorldEnvironmentStore {
@@ -42,6 +43,24 @@ export class WorldEnvironmentStore implements ReadonlyWorldEnvironmentStore {
 
   public getToponymForFeature(featureId: bigint): NaturalToponymObservation | undefined {
     return this.toponymsByFeatureId.get(featureId);
+  }
+
+  public getNearestTerrainElevation(x: number, y: number): number | undefined {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return undefined;
+    const samples = this.currentSnapshot?.terrainSamples;
+    if (samples === undefined || samples.length === 0) return undefined;
+    let nearest = samples[0]!;
+    let nearestDistanceSquared = Number.POSITIVE_INFINITY;
+    for (const sample of samples) {
+      const dx = sample.x - x;
+      const dy = sample.y - y;
+      const distanceSquared = dx * dx + dy * dy;
+      if (distanceSquared < nearestDistanceSquared) {
+        nearest = sample;
+        nearestDistanceSquared = distanceSquared;
+      }
+    }
+    return nearest.z;
   }
 
   public clear(): void {

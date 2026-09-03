@@ -59,6 +59,8 @@ export class Application {
   private lastAudioSyncAt = Number.NEGATIVE_INFINITY;
   private lastPerformanceUiAt = Number.NEGATIVE_INFINITY;
   private audioSyncPending = false;
+  private started = false;
+  private terrainCameraInitialized = false;
   private disposed = false;
 
   public constructor(host: HTMLElement) {
@@ -108,15 +110,26 @@ export class Application {
   public focusEntity(entityId: bigint, preferredZoom?: number): boolean { return this.navigation.focusEntity(entityId, this.observation.entities, performance.now(), preferredZoom); }
   public followEntity(entityId: bigint, preferredZoom?: number): boolean { return this.navigation.followEntity(entityId, this.observation.entities, performance.now(), preferredZoom); }
 
-  public start(): void { if (this.disposed) throw new Error('Application is disposed.'); this.connection.connect(); this.animationFrame = window.requestAnimationFrame(this.animate); }
+  public start(): void {
+    if (this.disposed) throw new Error('Application is disposed.');
+    if (this.started) return;
+    this.started = true;
+    try {
+      this.connection.connect();
+      this.animationFrame = window.requestAnimationFrame(this.animate);
+    } catch (error) {
+      this.started = false;
+      throw error;
+    }
+  }
   public dispose(): void {
     if (this.disposed) return;
-    this.disposed = true; window.cancelAnimationFrame(this.animationFrame); window.removeEventListener('resize', this.handleResize); this.connection.disconnect(); this.navigation.dispose(); this.audio.dispose(); this.regionalGeneration.dispose(); this.railway.dispose(); this.railwayOperations.dispose(); this.logisticsDebug.dispose(); this.powerDebug.dispose(); this.waterSewerDebug.dispose(); this.gasDebug.dispose(); this.opticalDebug.dispose(); this.radioDebug.dispose(); this.view.dispose(); this.view.renderer.domElement.remove(); this.ui.dispose();
+    this.started = false; this.disposed = true; window.cancelAnimationFrame(this.animationFrame); window.removeEventListener('resize', this.handleResize); this.connection.disconnect(); this.navigation.dispose(); this.audio.dispose(); this.regionalGeneration.dispose(); this.railway.dispose(); this.railwayOperations.dispose(); this.logisticsDebug.dispose(); this.powerDebug.dispose(); this.waterSewerDebug.dispose(); this.gasDebug.dispose(); this.opticalDebug.dispose(); this.radioDebug.dispose(); this.view.dispose(); this.view.renderer.domElement.remove(); this.ui.dispose();
   }
   private readonly handleResize = (): void => { this.view.resize(); };
 
   private readonly animate = (now: number): void => {
-    if (this.disposed) return;
+    if (this.disposed || !this.started) return;
     const performanceMetrics = this.performanceMetrics; if (performanceMetrics !== null) performanceMetrics.recordAnimationFrame(now);
     this.navigation.update(now); this.updateSubscription(now); this.regionalGeneration.update(this.observation.regionalGeneration, this.observation.persistentRegionalEvolution); this.view.render(this.observation.entities, now, this.observation.pedestrians, this.observation.vehicles, this.observation.intersections, this.observation.roadNetwork, this.observation.worldEnvironment); this.audio.syncListenerFromCamera(this.view.camera); this.updateAudio(now); if (performanceMetrics !== null) this.updatePerformanceUi(now, performanceMetrics); this.animationFrame = window.requestAnimationFrame(this.animate);
   };
@@ -151,6 +164,7 @@ export class Application {
       case TrafficMessageType.IntersectionControlSnapshot:
         this.observation.apply(message); return;
       case WORLD_ENVIRONMENT_SNAPSHOT_MESSAGE_TYPE:
+        this.observation.apply(message); this.initializeTerrainCamera(message); return;
       case REGIONAL_GENERATION_SNAPSHOT_MESSAGE_TYPE:
       case PERSISTENT_REGIONAL_EVOLUTION_SNAPSHOT_MESSAGE_TYPE:
         this.observation.apply(message); return;
@@ -172,6 +186,17 @@ export class Application {
       case MessageType.SubscribeVolume:
       case MessageType.Error: return;
     }
+  }
+
+  private initializeTerrainCamera(message: WorldEnvironmentSnapshotMessage): void {
+    if (this.terrainCameraInitialized) return;
+    const centerX = (message.minX + message.maxX) * 0.5;
+    const centerY = (message.minY + message.maxY) * 0.5;
+    const elevation = this.observation.worldEnvironment.getNearestTerrainElevation(centerX, centerY);
+    if (elevation === undefined || !this.navigation.rebaseFocusAltitude(0, elevation)) return;
+    this.terrainCameraInitialized = true;
+    this.lastSubscription = null;
+    this.lastSubscriptionAt = Number.NEGATIVE_INFINITY;
   }
 
   private applyPopulationStatistics(message: PopulationStatisticsMessage): void { this.ui.setPopulationStatistics(message); }

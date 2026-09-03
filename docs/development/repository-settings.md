@@ -9,7 +9,7 @@ MachiVerseWorks のGitHub側設定の基準です。コードやworkflowから�
 現在のRuleset `Protect main and develop` では次を適用しています。
 
 - Pull Requestを経由しない通常変更を禁止する。
-- required status checkとして `CI / ci-gate` を指定する。
+- required status checkとして `CI / ci-gate` を指定する。`ci-gate` は通常CI・対象PRのE2E・Dependency Review（high以上でfail）を集約する。
 - merge前にbranchを最新状態へ更新する設定を有効にする。
 - unresolved conversation がある場合のmergeを禁止する。
 - force pushを禁止する。
@@ -81,7 +81,7 @@ Topicsは実装が始まった時点で、実態に合うものだけ追加し�
 GitHub設定を変更したら、少なくとも次を確認します。
 
 1. `main` / `develop` のrulesetまたはbranch protectionが有効である。
-2. PRで `CI / ci-gate` がrequired checkとして認識される。
+2. PRで `CI / ci-gate` がrequired checkとして認識され、Dependency Review失敗も `ci-gate` の失敗へ反映される。
 3. direct push / force push / branch deletionが意図した通り制限される。
 4. merge画面でmerge commitだけが標準方式として使用できる。
 5. merge後に短命branchが自動削除される。

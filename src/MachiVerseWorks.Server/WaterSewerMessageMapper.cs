@@ -32,45 +32,50 @@ internal static class WaterSewerMessageMapper
             statistics.WastewaterOverflowCubicMetersPerDay,
             statistics.TickCount);
 
-        var nodes = snapshot.WaterNodes
-            .Select(static item => new ProtocolUtilityNode(
-                ProtocolUtilityNetworkKind.Water,
-                item.Id.Value,
-                MapWaterNodeKind(item.Kind),
-                item.Position.X,
-                item.Position.Y,
-                item.Position.Z))
-            .Concat(snapshot.SewerNodes.Select(static item => new ProtocolUtilityNode(
-                ProtocolUtilityNetworkKind.Sewer,
-                item.Id.Value,
-                MapSewerNodeKind(item.Kind),
-                item.Position.X,
-                item.Position.Y,
-                item.Position.Z)))
+        var servicePointCandidates = snapshot.ServicePoints
+            .OrderByDescending(static item => item.WaterState)
+            .ThenByDescending(static item => item.SewerState)
+            .ThenBy(static item => item.Id.Value)
             .Take(MaximumDebugEntries)
             .ToArray();
+        var requiredWaterNodeIds = servicePointCandidates.Select(static item => item.WaterNodeId.Value).ToHashSet();
+        var requiredSewerNodeIds = servicePointCandidates.Select(static item => item.SewerNodeId.Value).ToHashSet();
+        var (waterNodeBudget, sewerNodeBudget) = SplitBudget(snapshot.WaterNodes.Count, snapshot.SewerNodes.Count);
+        var selectedWaterNodes = snapshot.WaterNodes
+            .OrderBy(item => requiredWaterNodeIds.Contains(item.Id.Value) ? 0 : 1)
+            .ThenBy(static item => item.Id.Value)
+            .Take(waterNodeBudget)
+            .ToArray();
+        var selectedSewerNodes = snapshot.SewerNodes
+            .OrderBy(item => requiredSewerNodeIds.Contains(item.Id.Value) ? 0 : 1)
+            .ThenBy(static item => item.Id.Value)
+            .Take(sewerNodeBudget)
+            .ToArray();
+        var nodes = selectedWaterNodes.Select(static item => new ProtocolUtilityNode(
+                ProtocolUtilityNetworkKind.Water, item.Id.Value, MapWaterNodeKind(item.Kind),
+                item.Position.X, item.Position.Y, item.Position.Z))
+            .Concat(selectedSewerNodes.Select(static item => new ProtocolUtilityNode(
+                ProtocolUtilityNetworkKind.Sewer, item.Id.Value, MapSewerNodeKind(item.Kind),
+                item.Position.X, item.Position.Y, item.Position.Z)))
+            .ToArray();
 
-        var waterNodeIds = nodes.Where(static item => item.NetworkKind == ProtocolUtilityNetworkKind.Water).Select(static item => item.NodeId).ToHashSet();
-        var sewerNodeIds = nodes.Where(static item => item.NetworkKind == ProtocolUtilityNetworkKind.Sewer).Select(static item => item.NodeId).ToHashSet();
-        var pipes = snapshot.WaterPipes
+        var waterNodeIds = selectedWaterNodes.Select(static item => item.Id.Value).ToHashSet();
+        var sewerNodeIds = selectedSewerNodes.Select(static item => item.Id.Value).ToHashSet();
+        var waterPipeCandidates = snapshot.WaterPipes
             .Where(item => waterNodeIds.Contains(item.FromNodeId.Value) && waterNodeIds.Contains(item.ToNodeId.Value))
-            .Select(static item => new ProtocolUtilityPipe(
-                ProtocolUtilityNetworkKind.Water,
-                item.Id.Value,
-                item.FromNodeId.Value,
-                item.ToNodeId.Value,
-                item.CapacityCubicMetersPerDay,
-                item.IsInService))
-            .Concat(snapshot.SewerPipes
-                .Where(item => sewerNodeIds.Contains(item.FromNodeId.Value) && sewerNodeIds.Contains(item.ToNodeId.Value))
-                .Select(static item => new ProtocolUtilityPipe(
-                    ProtocolUtilityNetworkKind.Sewer,
-                    item.Id.Value,
-                    item.FromNodeId.Value,
-                    item.ToNodeId.Value,
-                    item.CapacityCubicMetersPerDay,
-                    item.IsInService)))
-            .Take(MaximumDebugEntries)
+            .OrderBy(static item => item.Id.Value)
+            .ToArray();
+        var sewerPipeCandidates = snapshot.SewerPipes
+            .Where(item => sewerNodeIds.Contains(item.FromNodeId.Value) && sewerNodeIds.Contains(item.ToNodeId.Value))
+            .OrderBy(static item => item.Id.Value)
+            .ToArray();
+        var (waterPipeBudget, sewerPipeBudget) = SplitBudget(waterPipeCandidates.Length, sewerPipeCandidates.Length);
+        var pipes = waterPipeCandidates.Take(waterPipeBudget).Select(static item => new ProtocolUtilityPipe(
+                ProtocolUtilityNetworkKind.Water, item.Id.Value, item.FromNodeId.Value, item.ToNodeId.Value,
+                item.CapacityCubicMetersPerDay, item.IsInService))
+            .Concat(sewerPipeCandidates.Take(sewerPipeBudget).Select(static item => new ProtocolUtilityPipe(
+                ProtocolUtilityNetworkKind.Sewer, item.Id.Value, item.FromNodeId.Value, item.ToNodeId.Value,
+                item.CapacityCubicMetersPerDay, item.IsInService)))
             .ToArray();
 
         var facilities = snapshot.WaterSources
@@ -109,7 +114,8 @@ internal static class WaterSewerMessageMapper
             .Take(MaximumDebugEntries)
             .ToArray();
 
-        var servicePoints = snapshot.ServicePoints
+        var servicePoints = servicePointCandidates
+            .Where(item => waterNodeIds.Contains(item.WaterNodeId.Value) && sewerNodeIds.Contains(item.SewerNodeId.Value))
             .OrderByDescending(static item => item.WaterState)
             .ThenByDescending(static item => item.SewerState)
             .ThenBy(static item => item.Id.Value)
@@ -138,6 +144,18 @@ internal static class WaterSewerMessageMapper
             Array.AsReadOnly(pipes),
             Array.AsReadOnly(facilities),
             Array.AsReadOnly(servicePoints));
+    }
+
+    private static (int First, int Second) SplitBudget(int firstCount, int secondCount)
+    {
+        var first = Math.Min(firstCount, MaximumDebugEntries / 2);
+        var second = Math.Min(secondCount, MaximumDebugEntries / 2);
+        var remaining = MaximumDebugEntries - first - second;
+        var firstExtra = Math.Min(Math.Max(0, firstCount - first), remaining);
+        first += firstExtra;
+        remaining -= firstExtra;
+        second += Math.Min(Math.Max(0, secondCount - second), remaining);
+        return (first, second);
     }
 
     private static ProtocolUtilityNodeKind MapWaterNodeKind(WaterNodeKind kind) => kind switch
