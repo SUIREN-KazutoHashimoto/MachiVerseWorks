@@ -45,4 +45,24 @@ if text.count(old) != 1:
     raise SystemExit("RailwayOperations semantic fixture align target mismatch")
 path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
+# #287 regression test must construct Journey state through the public planner API.
+replace_once(
+    "tests/MachiVerseWorks.Simulation.Tests/MultimodalTransitTests.cs",
+    '''        var world = CreateRoadWorld();
+        var journey = world.CreateJourney(new TripRequestId(100), 0, [new JourneyLegSnapshot(TransitMode.Walk, null, null, null, null, null, null, 10)]);
+        world.CreatePassenger(new TripRequestId(100), journey);
+        var checkpoint = world.CreateCheckpoint();
+''',
+    '''        var world = CreateRoadWorld(withEndpoints: true);
+        var lane = world.CreateRoadNetworkSnapshot().Lanes.Single().Id;
+        var first = world.CreateBusStop(lane, new WorldPoint(20, 0, 0));
+        var second = world.CreateBusStop(lane, new WorldPoint(80, 0, 0));
+        var line = world.CreateTransitLine(TransitMode.Bus);
+        world.CreateTransitServicePattern(line, [new(first, 0, 1), new(second, 10, 1)]);
+        var request = new TripRequest(new TripRequestId(100), TripEndpoint.ForBuilding(new BuildingId(1)), TripEndpoint.ForBuilding(new BuildingId(2)));
+        var journey = world.PlanMultimodalJourney(request);
+        world.CreatePassenger(request.Id, journey);
+        var checkpoint = world.CreateCheckpoint();
+''')
+
 print("Batch 3 alignment applied")
