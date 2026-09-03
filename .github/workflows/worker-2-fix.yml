@@ -20,57 +20,8 @@ jobs:
         with:
           ref: fix/all-open-issues-worker-2
           fetch-depth: 0
-      - name: Align batch 1 patch markers
-        shell: python
-        run: |
-          from pathlib import Path
-          path = Path('.github/scripts/worker2_batch1.py')
-          text = path.read_text(encoding='utf-8')
-          old = 'rule_marker = "            (NestedSaveContext.WorldEnvironment, NestedSaveProperty.Features) =>"'
-          new = 'rule_marker = "            (NestedSaveContext.WorldEnvironment, NestedSaveProperty.Features) => new("'
-          if text.count(old) != 1:
-              raise SystemExit('batch 1 rule marker patch target mismatch')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
-      - name: Apply batch 1 fixes
-        run: python .github/scripts/worker2_batch1.py
-      - name: Align current protocol and save-format assertions
-        shell: python
-        run: |
-          from pathlib import Path
-          protocol = Path('src/web/src/protocol.ts')
-          text = protocol.read_text(encoding='utf-8')
-          old = 'export const CURRENT_PROTOCOL_VERSION: ProtocolVersion = Object.freeze({ major: 2, minor: 19 });'
-          new = 'export const CURRENT_PROTOCOL_VERSION: ProtocolVersion = Object.freeze({ major: 2, minor: 20 });'
-          if text.count(old) != 1:
-              raise SystemExit('web current protocol marker mismatch')
-          protocol.write_text(text.replace(old, new, 1), encoding='utf-8')
-
-          files = [
-              'tests/MachiVerseWorks.Persistence.Tests/EconomySaveTests.cs',
-              'tests/MachiVerseWorks.Persistence.Tests/MultimodalTransitSaveTests.cs',
-              'tests/MachiVerseWorks.Persistence.Tests/RailwayInfrastructureSaveTests.cs',
-              'tests/MachiVerseWorks.Persistence.Tests/RailwayOperationsSaveTests.cs',
-          ]
-          old = '\\"formatVersion\\": 11'
-          new = '\\"formatVersion\\": 12'
-          for name in files:
-              path = Path(name)
-              text = path.read_text(encoding='utf-8')
-              if old not in text:
-                  raise SystemExit(f'{name}: current format assertion marker missing')
-              path.write_text(text.replace(old, new), encoding='utf-8')
-
-          protocol_test = Path('src/web/tests/protocol.test.mjs')
-          text = protocol_test.read_text(encoding='utf-8')
-          text = text.replace('Hello frame matches current Protocol 2.4 header contract', 'Hello frame matches current Protocol 2.20 header contract')
-          text = text.replace('CURRENT_PROTOCOL_VERSION.minor, 4', 'CURRENT_PROTOCOL_VERSION.minor, 20')
-          protocol_test.write_text(text, encoding='utf-8')
-
-          radio_test = Path('src/web/tests/radio-protocol.test.mjs')
-          text = radio_test.read_text(encoding='utf-8')
-          text = text.replace('web negotiates current protocol 2.19 while retaining radio support', 'web negotiates current protocol 2.20 while retaining radio support')
-          text = text.replace('assert.deepEqual(WEB_CURRENT_PROTOCOL_VERSION, { major: 2, minor: 19 });', 'assert.deepEqual(WEB_CURRENT_PROTOCOL_VERSION, { major: 2, minor: 20 });')
-          radio_test.write_text(text, encoding='utf-8')
+      - name: Apply batch 2 fixes
+        run: python .github/scripts/worker2_batch2.py
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
@@ -100,7 +51,7 @@ jobs:
           npm run typecheck --if-present
           npm test --if-present
           npm run build
-      - name: Commit batch 1
+      - name: Commit batch 2
         shell: bash
         run: |
           set -euo pipefail
@@ -109,5 +60,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src tests
           git diff --cached --quiet && exit 1
-          git commit -m "fix: resolve worker 2 issue batch 1 (#186-#230)"
+          git commit -m "fix: resolve worker 2 issue batch 2 (#268-#283)"
           git push origin HEAD:fix/all-open-issues-worker-2
