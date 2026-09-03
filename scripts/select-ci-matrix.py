@@ -170,7 +170,32 @@ def select_e2e(files: list[str], full: bool) -> dict[str, object]:
             continue
 
         if path.startswith("src/web/"):
-            selected.update({"core-poc", "view-physical-world", "view-settlement-structure", "view-settlement-structure-live"})
+            matched = False
+            web_mappings = [
+                (("road", "routing"), {"road-network", "road-traffic", "signal-traffic", "gas"}),
+                (("traffic", "signal"), {"road-traffic", "signal-traffic"}),
+                (("population",), {"population", "pedestrian", "economy", "logistics", "gas"}),
+                (("pedestrian",), {"pedestrian"}),
+                (("railway", "rail"), {"railway", "railway-operations", "multimodal-transit"}),
+                (("multimodal", "transit"), {"multimodal-transit"}),
+                (("administration", "admin"), {"administration-console", "remote-mcp"}),
+                (("economy", "employment"), {"economy", "logistics", "gas"}),
+                (("logistics", "freight", "inventory"), {"logistics", "gas"}),
+                (("power",), {"power", "optical", "radio-spectrum"}),
+                (("water", "sewer"), {"water-sewer"}),
+                (("gas",), {"gas"}),
+                (("optical",), {"optical", "radio-spectrum"}),
+                (("radio", "spectrum"), {"radio-spectrum"}),
+                (("worldenvironment", "world-environment", "environment", "terrain"), {"world-environment", "view-physical-world"}),
+                (("settlement",), {"view-physical-world", "view-settlement-structure", "view-settlement-structure-live"}),
+                (("world-view", "worldview", "physical-world", "physicalworld"), {"view-physical-world"}),
+            ]
+            for terms, ids in web_mappings:
+                if contains_any(path, terms):
+                    selected.update(ids)
+                    matched = True
+            if not matched:
+                uncertain = True
             continue
 
         if path.startswith("src/MachiVerseWorks.Simulation/"):
@@ -189,7 +214,7 @@ def select_e2e(files: list[str], full: bool) -> dict[str, object]:
                 (("pedestrian",), {"pedestrian"}),
                 (("railway", "rail"), {"railway", "railway-operations", "multimodal-transit"}),
                 (("multimodal", "transit"), {"multimodal-transit"}),
-                (("economy", "employment"), {"economy"}),
+                (("economy", "employment"), {"economy", "logistics", "gas"}),
                 (("logistics", "freight", "inventory"), {"logistics", "gas"}),
                 (("power",), {"power", "optical", "radio-spectrum"}),
                 (("water", "sewer"), {"water-sewer"}),
