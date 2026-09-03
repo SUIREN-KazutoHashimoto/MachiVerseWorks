@@ -1,0 +1,41 @@
+name: Worker 4 Radio ID Fix
+
+on:
+  push:
+    branches:
+      - fix/all-open-issues-worker-4
+    paths:
+      - '.github/workflows/worker4-radio-id-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Reconcile Radio link allocation
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('src/MachiVerseWorks.Simulation/SimulationWorld.Radio.cs')
+          text = path.read_text(encoding='utf-8')
+          old = '''        var id = new RadioLinkId(_nextRadioLinkId);\n        var state = new RadioLinkStateData(id, fromSiteId, toSiteId, frequencyBlockId, linkBudget, utilization, isInService);\n        _radioLinks.Add(state);\n        _radioLinkIndex.Add(id, state);\n        MarkRadioCandidateIndexesDirty();\n        RecalculateRadioPlan();\n        return id;\n'''
+          new = '''        var id = new RadioLinkId(_nextRadioLinkId);\n        var state = new RadioLinkStateData(id, fromSiteId, toSiteId, frequencyBlockId, linkBudget, utilization, isInService);\n        _radioLinks.Add(state);\n        _radioLinkIndex.Add(id, state);\n        MarkRadioCandidateIndexesDirty();\n        try\n        {\n            RecalculateRadioPlan();\n            _nextRadioLinkId++;\n            return id;\n        }\n        catch\n        {\n            _radioLinks.Remove(state);\n            _radioLinkIndex.Remove(id);\n            MarkRadioCandidateIndexesDirty();\n            throw;\n        }\n'''
+          if old not in text:
+              raise SystemExit('Radio link allocation hunk not found')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+      - name: Commit fix and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/worker4-radio-id-fix.yml
+          git add src/MachiVerseWorks.Simulation/SimulationWorld.Radio.cs
+          git commit -m 'fix(radio): preserve link id allocation transaction'
+          git push origin HEAD:fix/all-open-issues-worker-4
