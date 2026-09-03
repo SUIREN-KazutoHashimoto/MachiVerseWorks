@@ -15,7 +15,7 @@ public sealed class RailwayOperationsSaveTests
         for (var tick = 0; tick < 180; tick++) original.Step();
 
         var json = WorldSaveSerializer.Serialize(original);
-        StringAssert.Contains(Encoding.UTF8.GetString(json), "\"formatVersion\": 11");
+        StringAssert.Contains(Encoding.UTF8.GetString(json), "\"formatVersion\": 12");
         StringAssert.Contains(Encoding.UTF8.GetString(json), "\"railwayOperations\"");
         var restored = WorldSaveSerializer.Deserialize(json);
 

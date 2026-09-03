@@ -35,7 +35,7 @@ public static class RadioProtocolCodec
             + message.Links.Count * LinkLength
             + message.ServiceAreas.Count * ServiceAreaLength);
         if ((uint)payloadLength > ProtocolFrameHeader.MaxPayloadLength) throw new ArgumentOutOfRangeException(nameof(message), "Radio snapshot exceeds protocol payload limit.");
-        var frame = new byte[ProtocolFrameHeader.Size + payloadLength];
+        var frame = new byte[ProtocolFrameHeader.GetFrameLength(payloadLength)];
         ProtocolFrameHeader.Write(frame, new ProtocolFrameHeader(version, MessageType.RadioSnapshot, checked((uint)payloadLength)));
         var payload = frame.AsSpan(ProtocolFrameHeader.Size);
         WriteRadioStatistics(payload, message.Statistics);
@@ -67,7 +67,7 @@ public static class RadioProtocolCodec
         payloadLength = checked(payloadLength + message.FrequencyBlocks.Count * FrequencyBlockLength);
         foreach (var conflict in message.Conflicts) payloadLength = checked(payloadLength + ConflictFixedLength + Utf8.GetByteCount(conflict.Reason));
         if ((uint)payloadLength > ProtocolFrameHeader.MaxPayloadLength) throw new ArgumentOutOfRangeException(nameof(message), "Spectrum snapshot exceeds protocol payload limit.");
-        var frame = new byte[ProtocolFrameHeader.Size + payloadLength];
+        var frame = new byte[ProtocolFrameHeader.GetFrameLength(payloadLength)];
         ProtocolFrameHeader.Write(frame, new ProtocolFrameHeader(version, MessageType.SpectrumSnapshot, checked((uint)payloadLength)));
         var payload = frame.AsSpan(ProtocolFrameHeader.Size);
         WriteUInt64(payload, message.TickCount);
@@ -126,17 +126,17 @@ public static class RadioProtocolCodec
 
         var offset = RadioFixedLength;
         var sites = new ProtocolRadioSite[siteCount];
-        for (var i = 0; i < sites.Length; i++) { sites[i] = ReadSite(payload.Slice(offset, SiteLength)); offset += SiteLength; }
+        for (var i = 0; i < sites.Length; i++) { var raw = payload.Slice(offset, SiteLength); if (raw[49] > 1) return Fail(out envelope, out error, ProtocolDecodeError.InvalidPayload); sites[i] = ReadSite(raw); offset += SiteLength; }
         var antennas = new ProtocolRadioAntenna[antennaCount];
-        for (var i = 0; i < antennas.Length; i++) { antennas[i] = ReadAntenna(payload.Slice(offset, AntennaLength)); offset += AntennaLength; }
+        for (var i = 0; i < antennas.Length; i++) { var raw = payload.Slice(offset, AntennaLength); if (raw[89] > 1) return Fail(out envelope, out error, ProtocolDecodeError.InvalidPayload); antennas[i] = ReadAntenna(raw); offset += AntennaLength; }
         var transmitters = new ProtocolRadioTransmitter[transmitterCount];
-        for (var i = 0; i < transmitters.Length; i++) { transmitters[i] = ReadTransmitter(payload.Slice(offset, TransmitterLength)); offset += TransmitterLength; }
+        for (var i = 0; i < transmitters.Length; i++) { var raw = payload.Slice(offset, TransmitterLength); if (raw[32] > 1 || raw[33] > 1) return Fail(out envelope, out error, ProtocolDecodeError.InvalidPayload); transmitters[i] = ReadTransmitter(raw); offset += TransmitterLength; }
         var receivers = new ProtocolRadioReceiver[receiverCount];
-        for (var i = 0; i < receivers.Length; i++) { receivers[i] = ReadReceiver(payload.Slice(offset, ReceiverLength)); offset += ReceiverLength; }
+        for (var i = 0; i < receivers.Length; i++) { var raw = payload.Slice(offset, ReceiverLength); if (raw[48] > 1 || raw[49] > 1) return Fail(out envelope, out error, ProtocolDecodeError.InvalidPayload); receivers[i] = ReadReceiver(raw); offset += ReceiverLength; }
         var emissions = new ProtocolRadioEmission[emissionCount];
-        for (var i = 0; i < emissions.Length; i++) { emissions[i] = ReadEmission(payload.Slice(offset, EmissionLength)); offset += EmissionLength; }
+        for (var i = 0; i < emissions.Length; i++) { var raw = payload.Slice(offset, EmissionLength); if (raw[56] > 1 || raw[57] > 1) return Fail(out envelope, out error, ProtocolDecodeError.InvalidPayload); emissions[i] = ReadEmission(raw); offset += EmissionLength; }
         var links = new ProtocolRadioLink[linkCount];
-        for (var i = 0; i < links.Length; i++) { links[i] = ReadLink(payload.Slice(offset, LinkLength)); offset += LinkLength; }
+        for (var i = 0; i < links.Length; i++) { var raw = payload.Slice(offset, LinkLength); if (raw[81] > 1) return Fail(out envelope, out error, ProtocolDecodeError.InvalidPayload); links[i] = ReadLink(raw); offset += LinkLength; }
         var areas = new ProtocolRadioServiceArea[areaCount];
         for (var i = 0; i < areas.Length; i++) { areas[i] = ReadServiceArea(payload.Slice(offset, ServiceAreaLength)); offset += ServiceAreaLength; }
         var message = new RadioSnapshotMessage(

@@ -140,6 +140,8 @@ public static partial class WorldSaveSerializer
             if (reader.ValueTextEquals("power")) return NestedSaveProperty.Power;
             if (reader.ValueTextEquals("waterSewer")) return NestedSaveProperty.WaterSewer;
             if (reader.ValueTextEquals("gas")) return NestedSaveProperty.Gas;
+            if (reader.ValueTextEquals("optical")) return NestedSaveProperty.Optical;
+            if (reader.ValueTextEquals("radio")) return NestedSaveProperty.Radio;
             if (reader.ValueTextEquals("worldEnvironment")) return NestedSaveProperty.WorldEnvironment;
             if (reader.ValueTextEquals("regionalGeneration")) return NestedSaveProperty.RegionalGeneration;
         }
@@ -178,6 +180,28 @@ public static partial class WorldSaveSerializer
             if (reader.ValueTextEquals("storages")) return NestedSaveProperty.GasStorages;
             if (reader.ValueTextEquals("servicePoints")) return NestedSaveProperty.GasServicePoints;
         }
+        else if (context == NestedSaveContext.Optical)
+        {
+            if (reader.ValueTextEquals("nodes")) return NestedSaveProperty.OpticalNodes;
+            if (reader.ValueTextEquals("fiberCables")) return NestedSaveProperty.FiberCables;
+            if (reader.ValueTextEquals("equipment")) return NestedSaveProperty.OpticalEquipment;
+            if (reader.ValueTextEquals("backhauls")) return NestedSaveProperty.OpticalBackhauls;
+            if (reader.ValueTextEquals("demands")) return NestedSaveProperty.OpticalDemands;
+        }
+        else if (context == NestedSaveContext.Radio)
+        {
+            if (reader.ValueTextEquals("sites")) return NestedSaveProperty.RadioSites;
+            if (reader.ValueTextEquals("bands")) return NestedSaveProperty.RadioBands;
+            if (reader.ValueTextEquals("frequencyBlocks")) return NestedSaveProperty.RadioFrequencyBlocks;
+            if (reader.ValueTextEquals("links")) return NestedSaveProperty.RadioLinks;
+            if (reader.ValueTextEquals("peers")) return NestedSaveProperty.RadioPeers;
+            if (reader.ValueTextEquals("antennas")) return NestedSaveProperty.RadioAntennas;
+            if (reader.ValueTextEquals("transmitters")) return NestedSaveProperty.RadioTransmitters;
+            if (reader.ValueTextEquals("receivers")) return NestedSaveProperty.RadioReceivers;
+            if (reader.ValueTextEquals("emissions")) return NestedSaveProperty.RadioEmissions;
+            if (reader.ValueTextEquals("siteInfrastructure")) return NestedSaveProperty.RadioSiteInfrastructure;
+            if (reader.ValueTextEquals("linkEntityBindings")) return NestedSaveProperty.RadioLinkEntityBindings;
+        }
         else if (context == NestedSaveContext.WorldEnvironment)
         {
             if (reader.ValueTextEquals("features")) return NestedSaveProperty.Features;
@@ -211,6 +235,8 @@ public static partial class WorldSaveSerializer
             (NestedSaveContext.Economy, NestedSaveProperty.Power) => NestedSaveContext.Power,
             (NestedSaveContext.Economy, NestedSaveProperty.WaterSewer) => NestedSaveContext.WaterSewer,
             (NestedSaveContext.Economy, NestedSaveProperty.Gas) => NestedSaveContext.Gas,
+            (NestedSaveContext.Economy, NestedSaveProperty.Optical) => NestedSaveContext.Optical,
+            (NestedSaveContext.Economy, NestedSaveProperty.Radio) => NestedSaveContext.Radio,
             (NestedSaveContext.Economy, NestedSaveProperty.WorldEnvironment) => NestedSaveContext.WorldEnvironment,
             (NestedSaveContext.Economy, NestedSaveProperty.RegionalGeneration) => NestedSaveContext.RegionalGeneration,
             (NestedSaveContext.RegionalGeneration, NestedSaveProperty.Snapshot) => NestedSaveContext.RegionalGenerationSnapshot,
@@ -264,6 +290,22 @@ public static partial class WorldSaveSerializer
             (NestedSaveContext.Gas, NestedSaveProperty.GasImportTerminals) => new(limits.MaximumBuildingCount, "simulation.economy.gas.importTerminals", NestedArrayKind.None),
             (NestedSaveContext.Gas, NestedSaveProperty.GasStorages) => new(limits.MaximumBuildingCount, "simulation.economy.gas.storages", NestedArrayKind.None),
             (NestedSaveContext.Gas, NestedSaveProperty.GasServicePoints) => new(limits.MaximumBuildingCount, "simulation.economy.gas.servicePoints", NestedArrayKind.None),
+            (NestedSaveContext.Optical, NestedSaveProperty.OpticalNodes) => new(limits.MaximumInfrastructureNodeCount, "simulation.economy.optical.nodes", NestedArrayKind.None),
+            (NestedSaveContext.Optical, NestedSaveProperty.FiberCables) => new(limits.MaximumInfrastructureSegmentCount, "simulation.economy.optical.fiberCables", NestedArrayKind.None),
+            (NestedSaveContext.Optical, NestedSaveProperty.OpticalEquipment) => new(limits.MaximumInfrastructureSiteCount, "simulation.economy.optical.equipment", NestedArrayKind.None),
+            (NestedSaveContext.Optical, NestedSaveProperty.OpticalBackhauls) => new(limits.MaximumInfrastructureSiteCount, "simulation.economy.optical.backhauls", NestedArrayKind.None),
+            (NestedSaveContext.Optical, NestedSaveProperty.OpticalDemands) => new(limits.MaximumInfrastructureSiteCount, "simulation.economy.optical.demands", NestedArrayKind.None),
+            (NestedSaveContext.Radio, NestedSaveProperty.RadioSites) => new(limits.MaximumInfrastructureSiteCount, "simulation.economy.radio.sites", NestedArrayKind.None),
+            (NestedSaveContext.Radio, NestedSaveProperty.RadioBands) => new(limits.MaximumInfrastructureNodeCount, "simulation.economy.radio.bands", NestedArrayKind.None),
+            (NestedSaveContext.Radio, NestedSaveProperty.RadioFrequencyBlocks) => new(limits.MaximumInfrastructureSegmentCount, "simulation.economy.radio.frequencyBlocks", NestedArrayKind.None),
+            (NestedSaveContext.Radio, NestedSaveProperty.RadioLinks) => new(limits.MaximumInfrastructureConnectionCount, "simulation.economy.radio.links", NestedArrayKind.None),
+            (NestedSaveContext.Radio, NestedSaveProperty.RadioPeers) => new(limits.MaximumPersonCount, "simulation.economy.radio.peers", NestedArrayKind.None),
+            (NestedSaveContext.Radio, NestedSaveProperty.RadioAntennas) => new(limits.MaximumInfrastructureSiteCount, "simulation.economy.radio.antennas", NestedArrayKind.None),
+            (NestedSaveContext.Radio, NestedSaveProperty.RadioTransmitters) => new(limits.MaximumInfrastructureSiteCount, "simulation.economy.radio.transmitters", NestedArrayKind.None),
+            (NestedSaveContext.Radio, NestedSaveProperty.RadioReceivers) => new(limits.MaximumInfrastructureSiteCount, "simulation.economy.radio.receivers", NestedArrayKind.None),
+            (NestedSaveContext.Radio, NestedSaveProperty.RadioEmissions) => new(limits.MaximumInfrastructureSegmentCount, "simulation.economy.radio.emissions", NestedArrayKind.None),
+            (NestedSaveContext.Radio, NestedSaveProperty.RadioSiteInfrastructure) => new(limits.MaximumInfrastructureSiteCount, "simulation.economy.radio.siteInfrastructure", NestedArrayKind.None),
+            (NestedSaveContext.Radio, NestedSaveProperty.RadioLinkEntityBindings) => new(limits.MaximumInfrastructureConnectionCount, "simulation.economy.radio.linkEntityBindings", NestedArrayKind.None),
             (NestedSaveContext.WorldEnvironment, NestedSaveProperty.Features) => new(limits.MaximumGeographicFeatureCount, "simulation.economy.worldEnvironment.features", NestedArrayKind.None),
             (NestedSaveContext.WorldEnvironment, NestedSaveProperty.Toponyms) => new(limits.MaximumNaturalToponymCount, "simulation.economy.worldEnvironment.toponyms", NestedArrayKind.None),
             (NestedSaveContext.GeographicFeature, NestedSaveProperty.Geometry) => new(limits.MaximumGeographicFeatureGeometryPointCount, "simulation.economy.worldEnvironment.features[].geometry", NestedArrayKind.None),
@@ -285,7 +327,7 @@ public static partial class WorldSaveSerializer
 
     private enum NestedSaveContext : byte
     {
-        Other, Root, Simulation, Vehicle, Person, BlockSection, Depot, RailwayOperations, RailwayRoute, Timetable, Economy, Logistics, Power, WaterSewer, Gas, WorldEnvironment, GeographicFeature,
+        Other, Root, Simulation, Vehicle, Person, BlockSection, Depot, RailwayOperations, RailwayRoute, Timetable, Economy, Logistics, Power, WaterSewer, Gas, Optical, Radio, WorldEnvironment, GeographicFeature,
         RegionalGeneration, RegionalGenerationSnapshot, RegionalCorridor,
     }
 
@@ -295,6 +337,8 @@ public static partial class WorldSaveSerializer
         Economy, Logistics, Commodities, Inventories, Orders, Shipments, Power, PowerNodes, PowerLines, Generators, PowerLoads,
         WaterSewer, WaterNodes, WaterPipes, SewerNodes, SewerPipes, WaterSources, Reservoirs, Pumps, TreatmentPlants, ServicePoints,
         Gas, GasNodes, GasPipelines, GasSources, GasImportTerminals, GasStorages, GasServicePoints,
+        Optical, OpticalNodes, FiberCables, OpticalEquipment, OpticalBackhauls, OpticalDemands,
+        Radio, RadioSites, RadioBands, RadioFrequencyBlocks, RadioLinks, RadioPeers, RadioAntennas, RadioTransmitters, RadioReceivers, RadioEmissions, RadioSiteInfrastructure, RadioLinkEntityBindings,
         WorldEnvironment, Features, Toponyms, Geometry,
         RegionalGeneration, Snapshot, RegionalSettlements, RegionalGrowthEvents, RegionalCorridors, RegionalDistricts, RegionalParcels, RegionalBuildings, RegionalPois, RegionalToponyms, RegionalRoadSigns, RegionalCorridorGeometry,
     }

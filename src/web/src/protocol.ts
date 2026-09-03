@@ -1,7 +1,7 @@
 export const PROTOCOL_MAGIC = 0x5057564d;
 export const PROTOCOL_HEADER_SIZE = 16;
 export const PROTOCOL_MAX_PAYLOAD_LENGTH = 1_048_576;
-export const CURRENT_PROTOCOL_VERSION = Object.freeze({ major: 2, minor: 4 });
+export const CURRENT_PROTOCOL_VERSION: ProtocolVersion = Object.freeze({ major: 2, minor: 20 });
 
 const ROAD_HEADER_LENGTH = 28;
 const ROAD_NODE_LENGTH = 33;

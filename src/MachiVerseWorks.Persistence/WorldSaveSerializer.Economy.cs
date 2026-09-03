@@ -17,6 +17,7 @@ public static partial class WorldSaveSerializer
         ValidateWaterSewerCheckpointWithinLimits(economy.WaterSewer, limits);
         ValidateGasCheckpointWithinLimits(economy.Gas, limits);
         ValidateOpticalCheckpointWithinLimits(economy.Optical, limits);
+        ValidateRadioCheckpointWithinLimits(economy.Radio, limits);
         ValidateWorldEnvironmentCheckpointWithinLimits(economy.WorldEnvironment, limits);
         ValidateRegionalGenerationCheckpointWithinLimits(economy.RegionalGeneration, limits);
         ValidatePersistentRegionalEvolutionCheckpointWithinLimits(economy.RegionalEvolution, limits);
@@ -73,6 +74,22 @@ public static partial class WorldSaveSerializer
         ValidateCount(optical.Equipment.Count, limits.MaximumBuildingCount, "OpticalEquipment");
         ValidateCount(optical.Backhauls.Count, limits.MaximumBuildingCount, "OpticalBackhauls");
         ValidateCount(optical.Demands.Count, limits.MaximumBuildingCount, "OpticalDemands");
+    }
+
+    private static void ValidateRadioCheckpointWithinLimits(RadioCheckpoint? radio, WorldSaveLimits limits)
+    {
+        if (radio is null) return;
+        ValidateCount(radio.Sites.Count, limits.MaximumInfrastructureSiteCount, "RadioSites");
+        ValidateCount(radio.Bands.Count, limits.MaximumInfrastructureNodeCount, "SpectrumBands");
+        ValidateCount(radio.FrequencyBlocks.Count, limits.MaximumInfrastructureSegmentCount, "FrequencyBlocks");
+        ValidateCount(radio.Links.Count, limits.MaximumInfrastructureConnectionCount, "RadioLinks");
+        ValidateCount(radio.Peers.Count, limits.MaximumPersonCount, "RadioPeers");
+        ValidateCount((radio.Antennas ?? []).Count, limits.MaximumInfrastructureSiteCount, "RadioAntennas");
+        ValidateCount((radio.Transmitters ?? []).Count, limits.MaximumInfrastructureSiteCount, "RadioTransmitters");
+        ValidateCount((radio.Receivers ?? []).Count, limits.MaximumInfrastructureSiteCount, "RadioReceivers");
+        ValidateCount((radio.Emissions ?? []).Count, limits.MaximumInfrastructureSegmentCount, "RadioEmissions");
+        ValidateCount((radio.SiteInfrastructure ?? []).Count, limits.MaximumInfrastructureSiteCount, "RadioSiteInfrastructure");
+        ValidateCount((radio.LinkEntityBindings ?? []).Count, limits.MaximumInfrastructureConnectionCount, "RadioLinkEntityBindings");
     }
 
     private static void ValidateWorldEnvironmentCheckpointWithinLimits(WorldEnvironmentCheckpoint? worldEnvironment, WorldSaveLimits limits)

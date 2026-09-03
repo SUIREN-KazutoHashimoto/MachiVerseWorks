@@ -19,7 +19,7 @@ public static class OpticalProtocolCodec
         ValidateCollections(message);
         var payloadLength = checked(FixedLength + message.Nodes.Count * NodeLength + message.FiberCables.Count * CableLength + message.Equipment.Count * EquipmentLength + message.Backhauls.Count * BackhaulLength + message.Demands.Count * DemandLength);
         if ((uint)payloadLength > ProtocolFrameHeader.MaxPayloadLength) throw new ArgumentOutOfRangeException(nameof(message), "Optical snapshot exceeds protocol payload limit.");
-        var frame = new byte[ProtocolFrameHeader.Size + payloadLength];
+        var frame = new byte[ProtocolFrameHeader.GetFrameLength(payloadLength)];
         ProtocolFrameHeader.Write(frame, new ProtocolFrameHeader(version, MessageType.OpticalSnapshot, checked((uint)payloadLength)));
         var p = frame.AsSpan(ProtocolFrameHeader.Size);
         WriteStatistics(p, message.Statistics);
@@ -52,9 +52,9 @@ public static class OpticalProtocolCodec
         if (p.Length != expected) { error = ProtocolDecodeError.InvalidPayload; return false; }
         var offset = FixedLength;
         var nodes = new ProtocolOpticalNode[nc]; for (var i = 0; i < nodes.Length; i++) { nodes[i] = ReadNode(p.Slice(offset, NodeLength)); offset += NodeLength; }
-        var cables = new ProtocolFiberCable[cc]; for (var i = 0; i < cables.Length; i++) { cables[i] = ReadCable(p.Slice(offset, CableLength)); offset += CableLength; }
-        var equipment = new ProtocolOpticalEquipment[ec]; for (var i = 0; i < equipment.Length; i++) { equipment[i] = ReadEquipment(p.Slice(offset, EquipmentLength)); offset += EquipmentLength; }
-        var backhauls = new ProtocolOpticalBackhaul[bc]; for (var i = 0; i < backhauls.Length; i++) { backhauls[i] = ReadBackhaul(p.Slice(offset, BackhaulLength)); offset += BackhaulLength; }
+        var cables = new ProtocolFiberCable[cc]; for (var i = 0; i < cables.Length; i++) { var raw = p.Slice(offset, CableLength); if (raw[48] > 1 || raw[49] > 1) { error = ProtocolDecodeError.InvalidPayload; return false; } cables[i] = ReadCable(raw); offset += CableLength; }
+        var equipment = new ProtocolOpticalEquipment[ec]; for (var i = 0; i < equipment.Length; i++) { var raw = p.Slice(offset, EquipmentLength); if (raw[41] > 1 || raw[42] > 1 || raw[43] > 1 || raw[44] > 1) { error = ProtocolDecodeError.InvalidPayload; return false; } equipment[i] = ReadEquipment(raw); offset += EquipmentLength; }
+        var backhauls = new ProtocolOpticalBackhaul[bc]; for (var i = 0; i < backhauls.Length; i++) { var raw = p.Slice(offset, BackhaulLength); if (raw[40] > 1 || raw[41] > 1) { error = ProtocolDecodeError.InvalidPayload; return false; } backhauls[i] = ReadBackhaul(raw); offset += BackhaulLength; }
         var demands = new ProtocolOpticalDemand[dc]; for (var i = 0; i < demands.Length; i++) { demands[i] = ReadDemand(p.Slice(offset, DemandLength)); offset += DemandLength; }
         var message = new OpticalSnapshotMessage(ReadStatistics(p), Array.AsReadOnly(nodes), Array.AsReadOnly(cables), Array.AsReadOnly(equipment), Array.AsReadOnly(backhauls), Array.AsReadOnly(demands));
         if (!IsValid(message)) { error = ProtocolDecodeError.InvalidPayload; return false; }
