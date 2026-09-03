@@ -38,8 +38,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  prepare:
+    name: prepare shared build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: src/web/.node-version
+          cache: npm
+          cache-dependency-path: src/web/package-lock.json
+      - name: Build shared E2E inputs
+        run: source scripts/prepare-e2e.sh
+      - name: Pack shared E2E inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts
+          printf '%s\n' "$GITHUB_SHA" > .e2e-prepared-commit
+          tar -cf .artifacts/e2e-prepared.tar .e2e-prepared-commit src/*/bin src/*/obj src/web/node_modules src/web/dist
+      - name: Upload shared E2E inputs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: e2e-prepared-${{ github.sha }}
+          path: .artifacts/e2e-prepared.tar
+          if-no-files-found: error
+          retention-days: 1
+
   e2e:
     name: ${{ matrix.name }}
+    needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.timeout }}
     strategy:
@@ -169,7 +204,20 @@ jobs:
           node-version-file: src/web/.node-version
           cache: npm
           cache-dependency-path: src/web/package-lock.json
+      - name: Download shared E2E inputs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: e2e-prepared-${{ github.sha }}
+          path: .artifacts/prepared
+      - name: Restore shared E2E inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -xf .artifacts/prepared/e2e-prepared.tar
+          test "$(cat .e2e-prepared-commit)" = "$GITHUB_SHA"
       - name: Run end-to-end
+        env:
+          MVW_E2E_PREPARED: '1'
         run: bash "${{ matrix.script }}"
       - name: Upload end-to-end artifacts
         if: always()
