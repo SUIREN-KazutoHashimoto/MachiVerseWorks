@@ -282,10 +282,10 @@ public sealed partial class SimulationWorld
                 if (!TryCreateFreightRoute(shipment.PickupAccessPointId, shipment.DeliveryAccessPointId, out var route)) continue;
                 var travelTicks = Math.Max(1UL, checked((ulong)Math.Ceiling(route.EstimatedTravelTimeSeconds * Config.TickRate)));
                 var plannedDeliveryTick = checked(tickCount + travelTicks + LogisticsDefaults.UnloadingTicks);
-                VehicleId vehicleId;
+                VehicleId spawnedVehicleId;
                 try
                 {
-                    vehicleId = CreateVehicle(
+                    spawnedVehicleId = CreateVehicle(
                         route,
                         LogisticsDefaults.FreightVehicleDimensions,
                         LogisticsDefaults.FreightVehiclePerformance,
@@ -295,7 +295,7 @@ public sealed partial class SimulationWorld
                 {
                     continue;
                 }
-                shipment.VehicleId = vehicleId;
+                shipment.VehicleId = spawnedVehicleId;
                 shipment.State = ShipmentState.InTransit;
                 shipment.DispatchedTick = tickCount;
                 shipment.PlannedDeliveryTick = plannedDeliveryTick;
