@@ -3,7 +3,6 @@ namespace MachiVerseWorks.Simulation.Internal;
 internal sealed class MultimodalTransitStore
 {
     private const double TransferSpatialCellSizeMeters = 300d;
-    private const int DirectTransferScanStopThreshold = 64;
 
     private readonly Dictionary<TransitStopId, TransitStopSnapshot> stops = [];
     private readonly List<TransitStopSnapshot> orderedStops = [];
@@ -18,6 +17,8 @@ internal sealed class MultimodalTransitStore
     private readonly Dictionary<TripRequestId, PassengerId> passengerByTrip = new(4);
     private readonly Dictionary<TransitStopId, List<TransitPatternEdge>> outgoingPatternEdges = [];
     private readonly Dictionary<SpatialCell, List<TransitStopId>> stopSpatialIndex = [];
+    private readonly Dictionary<TransitStopId, List<TransitStopId>> transferNeighbors = [];
+    private readonly Dictionary<WorldPoint, TransitStopId> stopByPosition = [];
     private ulong nextStopId = 1, nextLineId = 1, nextPatternId = 1, nextTripId = 1, nextVehicleId = 1, nextTaxiRequestId = 1, nextJourneyId = 1, nextPassengerId = 1;
 
     public ulong NextStopId => nextStopId;
@@ -42,6 +43,7 @@ internal sealed class MultimodalTransitStore
         var stop = new TransitStopSnapshot(id, kind, position, laneId, stationId, platformId);
         stops.Add(id, stop);
         orderedStops.Add(stop);
+        IndexTransferNeighbors(stop);
         IndexStop(stop);
         return id;
     }
@@ -240,20 +242,17 @@ internal sealed class MultimodalTransitStore
     {
         if (!double.IsFinite(radiusMeters) || radiusMeters < 0d) throw new ArgumentOutOfRangeException(nameof(radiusMeters));
         if (radiusMeters == 0d) return 0;
-        var radiusSquared = radiusMeters * radiusMeters;
-        var count = 0;
-        if (orderedStops.Count <= DirectTransferScanStopThreshold)
+        if (radiusMeters == TransferSpatialCellSizeMeters
+            && stopByPosition.TryGetValue(position, out var indexedStopId)
+            && transferNeighbors.TryGetValue(indexedStopId, out var indexedNeighbors))
         {
-            for (var index = 0; index < orderedStops.Count; index++)
-            {
-                var stop = orderedStops[index];
-                if (DistanceSquared(position, stop.Position) > radiusSquared) continue;
-                if (count >= destination.Length) throw new ArgumentException("Transfer candidate destination buffer is too small.", nameof(destination));
-                destination[count++] = stop.Id;
-            }
-            return count;
+            if (indexedNeighbors.Count > destination.Length) throw new ArgumentException("Transfer candidate destination buffer is too small.", nameof(destination));
+            for (var index = 0; index < indexedNeighbors.Count; index++) destination[index] = indexedNeighbors[index];
+            return indexedNeighbors.Count;
         }
 
+        var radiusSquared = radiusMeters * radiusMeters;
+        var count = 0;
         var center = SpatialGrid.ToCell(position, TransferSpatialCellSizeMeters);
         var cellRadius = checked((int)Math.Ceiling(radiusMeters / TransferSpatialCellSizeMeters));
         for (var x = (long)center.X - cellRadius; x <= (long)center.X + cellRadius; x++)
@@ -379,7 +378,7 @@ internal sealed class MultimodalTransitStore
     public void Restore(MultimodalTransitCheckpoint? checkpoint)
     {
         stops.Clear(); orderedStops.Clear(); lines.Clear(); patterns.Clear(); trips.Clear(); vehicles.Clear(); taxiRequests.Clear(); journeys.Clear(); passengers.Clear();
-        taxiRequestByTrip.Clear(); passengerByTrip.Clear(); outgoingPatternEdges.Clear(); stopSpatialIndex.Clear();
+        taxiRequestByTrip.Clear(); passengerByTrip.Clear(); outgoingPatternEdges.Clear(); stopSpatialIndex.Clear(); transferNeighbors.Clear(); stopByPosition.Clear();
         if (checkpoint is null) { nextStopId = nextLineId = nextPatternId = nextTripId = nextVehicleId = nextTaxiRequestId = nextJourneyId = nextPassengerId = 1; return; }
         ValidateNextId(checkpoint.NextStopId, checkpoint.Stops.Select(static x => x.Id.Value), "Transit stop");
         ValidateNextId(checkpoint.NextLineId, checkpoint.Lines.Select(static x => x.Id.Value), "Transit line");
@@ -393,6 +392,7 @@ internal sealed class MultimodalTransitStore
         {
             stops.Add(item.Id, item);
             orderedStops.Add(item);
+            IndexTransferNeighbors(item);
             IndexStop(item);
         }
         orderedStops.Sort(static (left, right) => left.Id.Value.CompareTo(right.Id.Value));
@@ -432,6 +432,36 @@ internal sealed class MultimodalTransitStore
         }
         foreach (var journeyId in orphanJourneys) journeys.Remove(journeyId);
         nextStopId = checkpoint.NextStopId; nextLineId = checkpoint.NextLineId; nextPatternId = checkpoint.NextPatternId; nextTripId = checkpoint.NextTripId; nextVehicleId = checkpoint.NextVehicleId; nextTaxiRequestId = checkpoint.NextTaxiRequestId; nextJourneyId = checkpoint.NextJourneyId; nextPassengerId = checkpoint.NextPassengerId;
+    }
+
+    private void IndexTransferNeighbors(TransitStopSnapshot stop)
+    {
+        var neighbors = new List<TransitStopId> { stop.Id };
+        var center = SpatialGrid.ToCell(stop.Position, TransferSpatialCellSizeMeters);
+        var radiusSquared = TransferSpatialCellSizeMeters * TransferSpatialCellSizeMeters;
+        for (var x = (long)center.X - 1; x <= (long)center.X + 1; x++)
+        {
+            if (x < int.MinValue || x > int.MaxValue) continue;
+            for (var y = (long)center.Y - 1; y <= (long)center.Y + 1; y++)
+            {
+                if (y < int.MinValue || y > int.MaxValue) continue;
+                for (var z = (long)center.Z - 1; z <= (long)center.Z + 1; z++)
+                {
+                    if (z < int.MinValue || z > int.MaxValue) continue;
+                    if (!stopSpatialIndex.TryGetValue(new SpatialCell((int)x, (int)y, (int)z), out var cellStops)) continue;
+                    for (var index = 0; index < cellStops.Count; index++)
+                    {
+                        var existingId = cellStops[index];
+                        if (DistanceSquared(stop.Position, stops[existingId].Position) > radiusSquared) continue;
+                        neighbors.Add(existingId);
+                        transferNeighbors[existingId].Add(stop.Id);
+                    }
+                }
+            }
+        }
+        neighbors.Sort(static (left, right) => left.Value.CompareTo(right.Value));
+        transferNeighbors.Add(stop.Id, neighbors);
+        stopByPosition.TryAdd(stop.Position, stop.Id);
     }
 
     private void IndexStop(TransitStopSnapshot stop)
