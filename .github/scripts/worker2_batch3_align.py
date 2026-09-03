@@ -15,14 +15,6 @@ replace_once(
     "src/web/src/regional-generation-protocol.ts",
     "const districtIds = uniquePositiveIds(districts.map((item) => item.districtId), 'District');",
     "uniquePositiveIds(districts.map((item) => item.districtId), 'District');")
-replace_once(
-    "src/web/src/regional-generation-protocol.ts",
-    "const parcelIds = uniquePositiveIds(parcels.map((item) => item.parcelId), 'Parcel');",
-    "uniquePositiveIds(parcels.map((item) => item.parcelId), 'Parcel');")
-replace_once(
-    "src/web/src/regional-generation-protocol.ts",
-    "const buildingIds = uniquePositiveIds(buildings.map((item) => item.buildingId), 'Building');",
-    "uniquePositiveIds(buildings.map((item) => item.buildingId), 'Building');")
 
 # Keep the Simulation validator free from analyzer-only locals after dictionary-based validation.
 replace_once(
