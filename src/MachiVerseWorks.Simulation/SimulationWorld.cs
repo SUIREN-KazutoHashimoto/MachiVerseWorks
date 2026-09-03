@@ -140,7 +140,7 @@ public sealed partial class SimulationWorld
         ArgumentNullException.ThrowIfNull(checkpoint.LaneConnections); ArgumentNullException.ThrowIfNull(checkpoint.RoadAccessPoints);
         if (checkpoint.ElapsedTicks < 0) throw new ArgumentOutOfRangeException(nameof(checkpoint), checkpoint.ElapsedTicks, "Simulation elapsed time cannot be negative.");
         if (checkpoint.NextAgentId == 0) throw new ArgumentOutOfRangeException(nameof(checkpoint), checkpoint.NextAgentId, "Next Agent ID must be greater than zero.");
-        if (checkpoint.TotalCreatedAgentCount < 0) throw new ArgumentOutOfRangeException(nameof(checkpoint), checkpoint.TotalCreatedAgentCount, "Total created Agent count cannot be negative.");
+        ArgumentOutOfRangeException.ThrowIfNegative(checkpoint.TotalCreatedAgentCount);
         var seenAgentIds = new HashSet<ulong>(checkpoint.Agents.Count); var maximumAgentId = 0UL;
         foreach (var agent in checkpoint.Agents)
         {
