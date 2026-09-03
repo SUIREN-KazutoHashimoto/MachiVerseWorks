@@ -250,6 +250,7 @@ public sealed partial class SimulationWorld
     public void RecalculateRadioPlan()
     {
         EnsureRadioCandidateIndexes();
+        var updates = new List<(RadioLinkStateData Link, RadioPropagationResult Propagation, RadioLinkState State)>();
         foreach (var link in _radioLinks.OrderBy(static item => item.Id.Value))
         {
             if (!IsRadioLinkOperational(link))
@@ -305,7 +306,8 @@ public sealed partial class SimulationWorld
 
     private double CalculateLegacyInterferenceDbm(RadioLinkStateData target, RadioSiteSnapshot targetReceiver)
     {
-        var interferingMilliwatts = 0d;
+        var combinedInterferenceDbm = -300d;
+        var hasInterference = false;
         if (!_overlappingFrequencyBlocks.TryGetValue(target.FrequencyBlockId, out var overlappingBlocks)) return -300d;
         foreach (var blockId in overlappingBlocks)
         {
@@ -326,7 +328,10 @@ public sealed partial class SimulationWorld
                     obstruction.LossDb,
                     obstruction.IsLineOfSight);
                 var result = _radioPropagationSolver.Solve(interferenceRequest);
-                interferingMilliwatts += Math.Pow(10d, result.ReceivedPowerDbm / 10d);
+                combinedInterferenceDbm = hasInterference
+                    ? DeterministicRadioPropagationSolver.CombinePowersDbm(combinedInterferenceDbm, result.ReceivedPowerDbm)
+                    : result.ReceivedPowerDbm;
+                hasInterference = true;
             }
         }
         return hasInterference ? combinedInterferenceDbm : -300d;
