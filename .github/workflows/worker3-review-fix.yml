@@ -48,6 +48,15 @@ jobs:
           python3 scripts/worker3-review-patch.py
           sed -i 's/private static IReadOnlyList<WaterSewerServicePointSnapshot> SelectServicePointCandidates/private static List<WaterSewerServicePointSnapshot> SelectServicePointCandidates/' src/MachiVerseWorks.Server/WaterSewerMessageMapper.cs
           python3 scripts/worker3-review-followup.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/web/src/application.ts')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace("this.initializeTerrainCamera(message);", "this.initializeTerrainCamera();")
+          text = text.replace("private initializeTerrainCamera(message: WorldEnvironmentSnapshotMessage): void", "private initializeTerrainCamera(): void")
+          text = text.replace("WORLD_ENVIRONMENT_SNAPSHOT_MESSAGE_TYPE, type WorldEnvironmentSnapshotMessage", "WORLD_ENVIRONMENT_SNAPSHOT_MESSAGE_TYPE")
+          path.write_text(text, encoding='utf-8')
+          PY
 
       - name: Finalize merge commit
         shell: bash
