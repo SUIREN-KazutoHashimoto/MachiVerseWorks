@@ -126,11 +126,21 @@ public sealed partial class SimulationWorld
                 throw new ArgumentException($"Train {train.Id.Value} tick is ahead of the Simulation checkpoint.", nameof(checkpoint));
             if (train.CurrentBlockId is { } block && (!blockIds.Contains(block) || !blockOwners.Add(block)))
                 throw new ArgumentException($"Train {train.Id.Value} contains a missing or conflicting current BlockSection.", nameof(checkpoint));
-            if (train.CurrentPlatformId is { } currentPlatform && !platformById.ContainsKey(currentPlatform))
-                throw new ArgumentException($"Train {train.Id.Value} references missing current Platform {currentPlatform.Value}.", nameof(checkpoint));
+
+            if (train.CurrentPlatformId is { } currentPlatform)
+            {
+                if (!platformById.ContainsKey(currentPlatform))
+                    throw new ArgumentException($"Train {train.Id.Value} references missing current Platform {currentPlatform.Value}.", nameof(checkpoint));
+                if (train.State != TrainMovementState.Dwelling || train.AssignedPlatformId != currentPlatform)
+                    throw new ArgumentException($"Train {train.Id.Value} has a current Platform inconsistent with its movement state or assignment.", nameof(checkpoint));
+            }
+            if (train.State == TrainMovementState.Dwelling
+                && (train.CurrentPlatformId is null || train.AssignedPlatformId != train.CurrentPlatformId))
+                throw new ArgumentException($"Dwelling Train {train.Id.Value} must occupy and retain assignment of the same Platform.", nameof(checkpoint));
             if (train.AssignedPlatformId is { } assignedPlatform
                 && (!platformById.ContainsKey(assignedPlatform) || !platformOwners.Add(assignedPlatform)))
                 throw new ArgumentException($"Train {train.Id.Value} contains a missing or conflicting assigned Platform.", nameof(checkpoint));
+
             if (train.CurrentDepotId is { } depot && !depotIds.Contains(depot))
                 throw new ArgumentException($"Train {train.Id.Value} references missing Depot {depot.Value}.", nameof(checkpoint));
             if (train.State == TrainMovementState.Completed && (train.SpeedMetersPerSecond > 1e-9 || train.RouteDistanceMeters + 1e-7 < route.LengthMeters))
@@ -150,8 +160,6 @@ public sealed partial class SimulationWorld
             var timetable = timetableById[service.TimetableId];
             if ((service.State == RailwayServiceState.Completed) != (train.State == TrainMovementState.Completed))
                 throw new ArgumentException($"Railway service {service.Id.Value} and Train {train.Id.Value} disagree about completion.", nameof(checkpoint));
-            if (train.State == TrainMovementState.Dwelling && train.CurrentPlatformId is null)
-                throw new ArgumentException($"Dwelling Train {train.Id.Value} must occupy a Platform.", nameof(checkpoint));
             switch (service.State)
             {
                 case RailwayServiceState.Planned:
