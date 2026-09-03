@@ -151,7 +151,19 @@ internal sealed class RailwayOperationsStore
     public void Step(double deltaSeconds, ulong tickCount)
     {
         ValidatePositiveFinite(deltaSeconds, nameof(deltaSeconds));
-        for (var index = 0; index < _trainOrder.Count; index++) StepTrain(_trainOrder[index], deltaSeconds, tickCount);
+        List<TrainState>? completed = null;
+        for (var index = 0; index < _trainOrder.Count; index++)
+        {
+            var train = _trainOrder[index];
+            StepTrain(train, deltaSeconds, tickCount);
+            if (train.State == TrainMovementState.Completed)
+            {
+                completed ??= [];
+                completed.Add(train);
+            }
+        }
+        if (completed is null) return;
+        foreach (var train in completed) RetireCompletedTrain(train);
     }
 
     public RailwayOperationsSnapshot CreateSnapshot()
@@ -202,6 +214,7 @@ internal sealed class RailwayOperationsStore
         foreach (var timetable in timetables) _timetables.Add(timetable.Id, new TimetableSnapshot(timetable.Id, timetable.Stops.ToArray()));
         foreach (var service in services)
         {
+            if (service.State == RailwayServiceState.Completed) continue;
             var timetable = _timetables[service.TimetableId];
             var route = _routes[service.RouteId];
             var distances = new double[timetable.Stops.Count];
@@ -213,7 +226,9 @@ internal sealed class RailwayOperationsStore
         }
         foreach (var snapshotItem in trains)
         {
+            if (snapshotItem.State == TrainMovementState.Completed) continue;
             var train = TrainState.FromSnapshot(snapshotItem);
+            if (!_services.ContainsKey(train.ServiceId)) continue;
             _trains.Add(train.Id, train);
             _trainOrder.Add(train);
             if (train.CurrentBlockId is { } block && !_blockOwners.TryAdd(block, train.Id)) throw new InvalidOperationException("Saved railway operations contain a block ownership conflict.");
@@ -226,6 +241,18 @@ internal sealed class RailwayOperationsStore
         }
         _trainOrder.Sort(static (left, right) => left.Id.Value.CompareTo(right.Id.Value));
         _nextFormationId = nextFormationId; _nextRouteId = nextRouteId; _nextTimetableId = nextTimetableId; _nextServiceId = nextServiceId; _nextTrainId = nextTrainId;
+    }
+
+    private void RetireCompletedTrain(TrainState train)
+    {
+        if (train.CurrentBlockId is { } block) ReleaseBlock(block, train.Id);
+        if (train.AssignedPlatformId is { } assigned) ReleasePlatform(assigned, train.Id);
+        if (train.CurrentPlatformId is { } current && current != train.AssignedPlatformId) ReleasePlatform(current, train.Id);
+        _blockOwners.Where(pair => pair.Value == train.Id).Select(static pair => pair.Key).ToArray().ToList().ForEach(key => _blockOwners.Remove(key));
+        _platformOwners.Where(pair => pair.Value == train.Id).Select(static pair => pair.Key).ToArray().ToList().ForEach(key => _platformOwners.Remove(key));
+        _trains.Remove(train.Id);
+        _trainOrder.Remove(train);
+        _services.Remove(train.ServiceId);
     }
 
     private void StepTrain(TrainState train, double deltaSeconds, ulong tickCount)
