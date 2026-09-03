@@ -20,21 +20,15 @@ public static class RadioProtocolCodec
     private const int ConflictFixedLength = 34;
     private static readonly UTF8Encoding Utf8 = new(false, true);
 
+    public static int GetSerializedLength(RadioSnapshotMessage message, ProtocolVersion version) =>
+        checked(ProtocolFrameHeader.Size + GetRadioPayloadLength(message, version));
+
+    public static int GetSerializedLength(SpectrumSnapshotMessage message, ProtocolVersion version) =>
+        checked(ProtocolFrameHeader.Size + GetSpectrumPayloadLength(message, version));
+
     public static byte[] Serialize(RadioSnapshotMessage message, ProtocolVersion version)
     {
-        ArgumentNullException.ThrowIfNull(message);
-        if (!version.SupportsRadio) throw new ArgumentOutOfRangeException(nameof(version), version, "Radio messages require Protocol 2.16 or newer.");
-        ValidateRadio(message);
-        var payloadLength = checked(
-            RadioFixedLength
-            + message.Sites.Count * SiteLength
-            + message.Antennas.Count * AntennaLength
-            + message.Transmitters.Count * TransmitterLength
-            + message.Receivers.Count * ReceiverLength
-            + message.Emissions.Count * EmissionLength
-            + message.Links.Count * LinkLength
-            + message.ServiceAreas.Count * ServiceAreaLength);
-        if ((uint)payloadLength > ProtocolFrameHeader.MaxPayloadLength) throw new ArgumentOutOfRangeException(nameof(message), "Radio snapshot exceeds protocol payload limit.");
+        var payloadLength = GetRadioPayloadLength(message, version);
         var frame = new byte[ProtocolFrameHeader.GetFrameLength(payloadLength)];
         ProtocolFrameHeader.Write(frame, new ProtocolFrameHeader(version, MessageType.RadioSnapshot, checked((uint)payloadLength)));
         var payload = frame.AsSpan(ProtocolFrameHeader.Size);
@@ -59,14 +53,7 @@ public static class RadioProtocolCodec
 
     public static byte[] Serialize(SpectrumSnapshotMessage message, ProtocolVersion version)
     {
-        ArgumentNullException.ThrowIfNull(message);
-        if (!version.SupportsRadio) throw new ArgumentOutOfRangeException(nameof(version), version, "Spectrum messages require Protocol 2.16 or newer.");
-        ValidateSpectrum(message);
-        var payloadLength = SpectrumFixedLength;
-        foreach (var band in message.Bands) payloadLength = checked(payloadLength + BandFixedLength + Utf8.GetByteCount(band.Name));
-        payloadLength = checked(payloadLength + message.FrequencyBlocks.Count * FrequencyBlockLength);
-        foreach (var conflict in message.Conflicts) payloadLength = checked(payloadLength + ConflictFixedLength + Utf8.GetByteCount(conflict.Reason));
-        if ((uint)payloadLength > ProtocolFrameHeader.MaxPayloadLength) throw new ArgumentOutOfRangeException(nameof(message), "Spectrum snapshot exceeds protocol payload limit.");
+        var payloadLength = GetSpectrumPayloadLength(message, version);
         var frame = new byte[ProtocolFrameHeader.GetFrameLength(payloadLength)];
         ProtocolFrameHeader.Write(frame, new ProtocolFrameHeader(version, MessageType.SpectrumSnapshot, checked((uint)payloadLength)));
         var payload = frame.AsSpan(ProtocolFrameHeader.Size);
@@ -179,6 +166,37 @@ public static class RadioProtocolCodec
         envelope = new ProtocolEnvelope(header.Version, message);
         error = ProtocolDecodeError.None;
         return true;
+    }
+
+    private static int GetRadioPayloadLength(RadioSnapshotMessage message, ProtocolVersion version)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        if (!version.SupportsRadio) throw new ArgumentOutOfRangeException(nameof(version), version, "Radio messages require Protocol 2.16 or newer.");
+        ValidateRadio(message);
+        var payloadLength = checked(
+            RadioFixedLength
+            + message.Sites.Count * SiteLength
+            + message.Antennas.Count * AntennaLength
+            + message.Transmitters.Count * TransmitterLength
+            + message.Receivers.Count * ReceiverLength
+            + message.Emissions.Count * EmissionLength
+            + message.Links.Count * LinkLength
+            + message.ServiceAreas.Count * ServiceAreaLength);
+        if ((uint)payloadLength > ProtocolFrameHeader.MaxPayloadLength) throw new ArgumentOutOfRangeException(nameof(message), "Radio snapshot exceeds protocol payload limit.");
+        return payloadLength;
+    }
+
+    private static int GetSpectrumPayloadLength(SpectrumSnapshotMessage message, ProtocolVersion version)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        if (!version.SupportsRadio) throw new ArgumentOutOfRangeException(nameof(version), version, "Spectrum messages require Protocol 2.16 or newer.");
+        ValidateSpectrum(message);
+        var payloadLength = SpectrumFixedLength;
+        foreach (var band in message.Bands) payloadLength = checked(payloadLength + BandFixedLength + Utf8.GetByteCount(band.Name));
+        payloadLength = checked(payloadLength + message.FrequencyBlocks.Count * FrequencyBlockLength);
+        foreach (var conflict in message.Conflicts) payloadLength = checked(payloadLength + ConflictFixedLength + Utf8.GetByteCount(conflict.Reason));
+        if ((uint)payloadLength > ProtocolFrameHeader.MaxPayloadLength) throw new ArgumentOutOfRangeException(nameof(message), "Spectrum snapshot exceeds protocol payload limit.");
+        return payloadLength;
     }
 
     private static void ValidateRadio(RadioSnapshotMessage message)

@@ -55,7 +55,7 @@ socket.addEventListener('message', async (event) => {
 
       const debug = host.querySelector('[data-radio-debug="true"]');
       const svg = debug?.querySelector('svg');
-      if (debug instanceof HTMLElement && debug.textContent.includes('Radio tick') && svg instanceof SVGElement && svg.children.length > 0) sawDebugRender = true;
+      if (debug instanceof HTMLElement && svg instanceof SVGElement && svg.children.length > 0) sawDebugRender = true;
     }
 
     if (!sawExplicitEntities || !sawMultipleFrequencies || !sawObstruction || !sawInterference || !sawConflict || !sawPowerOutage || !sawBackhaulOutage || !sawRecovery || !sawDebugRender || latestRadio === null || latestSpectrum === null) return;

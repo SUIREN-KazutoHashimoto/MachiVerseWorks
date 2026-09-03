@@ -1,3 +1,4 @@
+import { initializeLocalization, type Localizer } from './localization.ts';
 import { OpticalQualityState, type OpticalSnapshotMessage } from './optical-protocol.ts';
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
@@ -7,28 +8,28 @@ export class OpticalDebugOverlay {
   private readonly summary: HTMLPreElement;
   private readonly svg: SVGSVGElement;
 
-  public constructor(host: HTMLElement) {
+  public constructor(host: HTMLElement, private readonly localizer: Localizer = initializeLocalization()) {
     this.element = document.createElement('div');
     this.element.dataset.opticalDebug = 'true';
     Object.assign(this.element.style, { position: 'absolute', left: '12px', bottom: '12px', zIndex: '20', width: '390px', maxWidth: '46vw', padding: '8px 10px', background: 'rgba(0, 0, 0, 0.72)', color: '#fff', font: '12px/1.4 monospace', pointerEvents: 'none' });
     this.summary = document.createElement('pre');
     Object.assign(this.summary.style, { margin: '0 0 6px', whiteSpace: 'pre-wrap' });
     this.svg = document.createElementNS(SVG_NAMESPACE, 'svg');
-    this.svg.setAttribute('viewBox', '0 0 370 170'); this.svg.setAttribute('width', '370'); this.svg.setAttribute('height', '170'); this.svg.setAttribute('aria-label', 'Optical communication network debug view');
+    this.svg.setAttribute('viewBox', '0 0 370 170'); this.svg.setAttribute('width', '370'); this.svg.setAttribute('height', '170'); this.svg.setAttribute('aria-label', this.localizer.t('opticalDebug.ariaLabel'));
     this.element.append(this.summary, this.svg); host.append(this.element); this.clear();
   }
 
   public apply(message: OpticalSnapshotMessage): void {
     const s = message.statistics;
     this.summary.textContent = [
-      `Optical tick ${s.tickCount} | connected ${s.connectedDemandCount}/${s.demandCount} | unavailable ${s.unavailableDemandCount}`,
-      `Traffic ${s.allocatedGigabitsPerSecond.toFixed(2)}/${s.demandGigabitsPerSecond.toFixed(2)} Gbps | backhaul ${s.backhaulCapacityGigabitsPerSecond.toFixed(2)} Gbps`,
-      `Congested ${s.congestedDemandCount} | degraded ${s.degradedDemandCount} | peak fiber ${(s.peakFiberUtilization * 100).toFixed(1)}%`,
+      this.localizer.t('opticalDebug.summary', { tick: this.localizer.formatNumber(s.tickCount), connected: this.localizer.formatNumber(s.connectedDemandCount), demand: this.localizer.formatNumber(s.demandCount), unavailable: this.localizer.formatNumber(s.unavailableDemandCount) }),
+      this.localizer.t('opticalDebug.traffic', { allocated: this.localizer.formatNumber(s.allocatedGigabitsPerSecond), demand: this.localizer.formatNumber(s.demandGigabitsPerSecond), backhaul: this.localizer.formatNumber(s.backhaulCapacityGigabitsPerSecond) }),
+      this.localizer.t('opticalDebug.quality', { congested: this.localizer.formatNumber(s.congestedDemandCount), degraded: this.localizer.formatNumber(s.degradedDemandCount), peak: this.localizer.formatNumber(s.peakFiberUtilization * 100) }),
     ].join('\n');
     this.render(message);
   }
 
-  public clear(): void { this.summary.textContent = 'Optical: waiting for snapshot'; this.svg.replaceChildren(); }
+  public clear(): void { this.summary.textContent = this.localizer.t('opticalDebug.waiting'); this.svg.replaceChildren(); }
   public dispose(): void { this.element.remove(); }
 
   private render(message: OpticalSnapshotMessage): void {

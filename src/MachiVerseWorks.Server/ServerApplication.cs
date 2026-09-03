@@ -39,7 +39,9 @@ public static class ServerApplication
 
         if (mcpOptions.Enabled)
         {
-            builder.Logging.AddProvider(mcpLogs);
+            // Do not register the MCP query buffer as a global ILoggerProvider. General server logs may contain
+            // operator input, credentials, file-system details, or exception text and are not part of the remote
+            // diagnostics security contract. MCP-visible diagnostics must be explicitly projected as safe data.
             builder.Services.AddAuthorization(authorization =>
             {
                 authorization.AddPolicy(RemoteMcpPolicies.Read, policy => policy.RequireAuthenticatedUser().RequireClaim(RemoteMcpPolicies.ScopeClaim, "read"));

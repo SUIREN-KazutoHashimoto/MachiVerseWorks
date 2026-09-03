@@ -61,6 +61,8 @@ internal sealed class SimulationRuntime
     public int TrackSegmentCount { get { lock (_gate) return _world.TrackSegmentCount; } }
     public int HouseholdCount { get { lock (_gate) { EnsureFixtures(); return _world.HouseholdCount; } } }
     public int PersonCount { get { lock (_gate) { EnsureFixtures(); return _world.PersonCount; } } }
+    internal ulong RoadRevision { get { lock (_gate) return _roadRevision; } }
+    internal ulong RailwayRevision { get { lock (_gate) return _railwayRevision; } }
 
     public void Step()
     {
@@ -104,6 +106,8 @@ internal sealed class SimulationRuntime
         {
             EnsureFixtures();
             var result = operation(_world);
+            var changed = !((roadTopologyChanged || railwayTopologyChanged) && result is bool booleanResult && !booleanResult);
+            if (!changed) return result;
             if (roadTopologyChanged) { _roadRevision = checked(_roadRevision + 1); _roadReadModel = null; }
             if (railwayTopologyChanged) { _railwayRevision = checked(_railwayRevision + 1); _railwayReadModel = null; }
             AdvanceObservationRevision();

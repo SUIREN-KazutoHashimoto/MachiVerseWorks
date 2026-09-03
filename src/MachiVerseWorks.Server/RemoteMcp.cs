@@ -198,25 +198,34 @@ internal sealed class RemoteMcpRequestGate(RemoteMcpOptions options) : IDisposab
     {
         lease = null;
         statusCode = StatusCodes.Status200OK;
-        lock (_rateLock)
-        {
-            var now = DateTimeOffset.UtcNow;
-            if (!_rates.TryGetValue(credential, out var rate) || now - rate.WindowStart >= TimeSpan.FromMinutes(1)) rate = (now, 0);
-            if (rate.Count >= options.RequestsPerMinute)
-            {
-                _rates[credential] = rate;
-                statusCode = StatusCodes.Status429TooManyRequests;
-                return false;
-            }
-            _rates[credential] = (rate.WindowStart, rate.Count + 1);
-        }
         if (!_concurrency.Wait(0))
         {
             statusCode = StatusCodes.Status503ServiceUnavailable;
             return false;
         }
-        lease = new Lease(_concurrency);
-        return true;
+
+        try
+        {
+            lock (_rateLock)
+            {
+                var now = DateTimeOffset.UtcNow;
+                if (!_rates.TryGetValue(credential, out var rate) || now - rate.WindowStart >= TimeSpan.FromMinutes(1)) rate = (now, 0);
+                if (rate.Count >= options.RequestsPerMinute)
+                {
+                    _rates[credential] = rate;
+                    statusCode = StatusCodes.Status429TooManyRequests;
+                    return false;
+                }
+                _rates[credential] = (rate.WindowStart, rate.Count + 1);
+            }
+
+            lease = new Lease(_concurrency);
+            return true;
+        }
+        finally
+        {
+            if (lease is null) _concurrency.Release();
+        }
     }
 
     public void Dispose() => _concurrency.Dispose();
@@ -309,13 +318,10 @@ internal sealed class RemoteMcpSecurityMiddleware(RequestDelegate next, RemoteMc
 
 internal sealed record RemoteMcpLogEntry(DateTimeOffset Timestamp, string Level, string Category, int EventId, string Message);
 
-internal sealed class RemoteMcpLogBuffer(int capacity) : ILoggerProvider
+internal sealed class RemoteMcpLogBuffer(int capacity)
 {
     private readonly ConcurrentQueue<RemoteMcpLogEntry> _entries = new();
     private int _count;
-
-    public ILogger CreateLogger(string categoryName) => new BufferLogger(this, categoryName);
-    public void Dispose() { }
 
     public IReadOnlyList<RemoteMcpLogEntry> Query(int limit, string? contains)
     {
@@ -327,33 +333,20 @@ internal sealed class RemoteMcpLogBuffer(int capacity) : ILoggerProvider
             .ToArray();
     }
 
-    private void Add(RemoteMcpLogEntry entry)
+    public void AddSafe(RemoteMcpLogEntry entry)
     {
+        ArgumentNullException.ThrowIfNull(entry);
         _entries.Enqueue(entry);
         var count = Interlocked.Increment(ref _count);
         while (count > capacity && _entries.TryDequeue(out _)) count = Interlocked.Decrement(ref _count);
     }
-
-    private sealed class BufferLogger(RemoteMcpLogBuffer owner, string category) : ILogger
-    {
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-        public bool IsEnabled(LogLevel logLevel) => logLevel != LogLevel.None;
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-        {
-            if (!IsEnabled(logLevel)) return;
-            var message = formatter(state, exception);
-            if (exception is not null) message = $"{message} | {exception.GetType().Name}: {exception.Message}";
-            owner.Add(new RemoteMcpLogEntry(DateTimeOffset.UtcNow, logLevel.ToString(), category, eventId.Id, message));
-        }
-    }
 }
-
 internal sealed record RemoteMcpResult(bool Success, string Code, string Message)
 {
     public static RemoteMcpResult Rejected(string code, string message) => new(false, code, message);
 }
 
-internal sealed class RemoteMcpAdminGateway(AdminCommandQueue queue, RemoteMcpOptions options)
+internal sealed class RemoteMcpAdminGateway(AdminCommandQueue queue, RemoteMcpOptions options, RemoteMcpLogBuffer logs)
 {
     public async Task<RemoteMcpResult> ExecuteAsync(string commandText, CancellationToken cancellationToken)
     {
@@ -363,7 +356,14 @@ internal sealed class RemoteMcpAdminGateway(AdminCommandQueue queue, RemoteMcpOp
         if (!queue.TryWrite(new AdminCommandRequest(command, completion, cancellationToken)))
             return new RemoteMcpResult(false, "queue_full", "Administration command queue is full.");
         var result = await completion.Task.WaitAsync(cancellationToken);
-        return FromAdmin(result);
+        var remoteResult = FromAdmin(result);
+        logs.AddSafe(new RemoteMcpLogEntry(
+            DateTimeOffset.UtcNow,
+            remoteResult.Success ? "Information" : "Warning",
+            "MachiVerseWorks.Server.RemoteMcp.Admin",
+            1,
+            $"Administration request completed with code '{remoteResult.Code}'."));
+        return remoteResult;
     }
 
     private RemoteMcpResult FromAdmin(AdminCommandResult result) => new(
@@ -476,26 +476,37 @@ internal sealed class RemoteMcpTools
     [McpServerTool(Name = "simulation_resume", ReadOnly = false, Destructive = false, Idempotent = true, UseStructuredContent = true), Authorize(Policy = RemoteMcpPolicies.Write), Description("Resume simulation execution through the administration command queue.")]
     public static Task<RemoteMcpResult> SimulationResume(RemoteMcpAdminGateway admin, CancellationToken cancellationToken) => admin.ExecuteAsync("simulation resume", cancellationToken);
 
-    [McpServerTool(Name = "simulation_save", ReadOnly = false, Destructive = false, UseStructuredContent = true), Authorize(Policy = RemoteMcpPolicies.Write), Description("Save the authoritative world into the configured MCP save directory. Arbitrary file paths are not accepted.")]
-    public static Task<RemoteMcpResult> SimulationSave(RemoteMcpAdminGateway admin, RemoteMcpOptions options, [Description("Save slot name using letters, digits, dot, underscore, or hyphen.")] string slot, CancellationToken cancellationToken)
+    [McpServerTool(Name = "simulation_save", ReadOnly = false, Destructive = false, UseStructuredContent = true), Authorize(Policy = RemoteMcpPolicies.Write), Description("Create a new authoritative-world save slot in the configured MCP save directory. Existing slots are never overwritten.")]
+    public static Task<RemoteMcpResult> SimulationSave(RemoteMcpAdminGateway admin, RemoteMcpOptions options, [Description("Save slot name using letters, digits, dot, underscore, or hyphen.")] string slot, CancellationToken cancellationToken) =>
+        SaveToSlotAsync(admin, options, slot, overwrite: false, cancellationToken);
+
+    [McpServerTool(Name = "simulation_save_overwrite", ReadOnly = false, Destructive = true, UseStructuredContent = true), Authorize(Policy = RemoteMcpPolicies.Destructive), Description("Save the authoritative world while allowing an existing MCP save slot to be overwritten. Requires destructive scope and explicit confirmation.")]
+    public static Task<RemoteMcpResult> SimulationSaveOverwrite(RemoteMcpAdminGateway admin, RemoteMcpOptions options, [Description("Save slot name using letters, digits, dot, underscore, or hyphen.")] string slot, [Description("Must be true to confirm overwriting an existing save slot.")] bool confirm, CancellationToken cancellationToken)
     {
-        if (!IsSafeSlot(slot)) return Task.FromResult(RemoteMcpResult.Rejected("invalid_argument", "slot must be 1-64 characters and contain only letters, digits, dot, underscore, or hyphen."));
+        if (!confirm) return Task.FromResult(RemoteMcpResult.Rejected("confirmation_required", "Set confirm=true to overwrite a save slot."));
+        return SaveToSlotAsync(admin, options, slot, overwrite: true, cancellationToken);
+    }
+
+    private static async Task<RemoteMcpResult> SaveToSlotAsync(RemoteMcpAdminGateway admin, RemoteMcpOptions options, string slot, bool overwrite, CancellationToken cancellationToken)
+    {
+        if (!IsSafeSlot(slot)) return RemoteMcpResult.Rejected("invalid_argument", "slot must be 1-64 characters and contain only letters, digits, dot, underscore, or hyphen.");
         try
         {
             Directory.CreateDirectory(options.SaveDirectory);
         }
         catch (UnauthorizedAccessException)
         {
-            return Task.FromResult(RemoteMcpResult.Rejected("io_error", "The configured MCP save directory cannot be created or accessed."));
+            return RemoteMcpResult.Rejected("io_error", "The configured MCP save directory cannot be created or accessed.");
         }
         catch (IOException)
         {
-            return Task.FromResult(RemoteMcpResult.Rejected("io_error", "The configured MCP save directory cannot be created or accessed."));
+            return RemoteMcpResult.Rejected("io_error", "The configured MCP save directory cannot be created or accessed.");
         }
-        var path = Path.Combine(options.SaveDirectory, slot + ".mvw");
-        return admin.ExecuteAsync($"world save {Quote(path)}", cancellationToken);
-    }
 
+        var path = Path.Combine(options.SaveDirectory, slot + ".mvw");
+        var action = overwrite ? "save" : "save-new";
+        return await admin.ExecuteAsync($"world {action} {Quote(path)}", cancellationToken);
+    }
     [McpServerTool(Name = "entity_write", ReadOnly = false, Destructive = false, UseStructuredContent = true), Authorize(Policy = RemoteMcpPolicies.Write), Description("Create or update an allowlisted entity by mapping structured MCP input to the existing administration command boundary.")]
     public static Task<RemoteMcpResult> EntityWrite(RemoteMcpAdminGateway admin, [Description("Allowlisted entity type.")] string entity, [Description("Operation: add or update.")] string operation, [Description("Administration arguments for the selected entity operation. Each item becomes exactly one quoted command token.")] string[] arguments, CancellationToken cancellationToken)
     {

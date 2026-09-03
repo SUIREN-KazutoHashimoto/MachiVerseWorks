@@ -39,6 +39,23 @@ internal sealed class ObservationDeliveryCoordinator(
             () => DeliverAsync(connection, firstMessage, secondMessage, cancellationToken));
     }
 
+    public bool TrySchedule(
+        ClientConnection connection,
+        ObservationDeliveryLane lane,
+        IReadOnlyList<IProtocolMessage> messages,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(messages);
+        if (messages.Count == 0) return false;
+        if (messages.Any(static message => message is null)) throw new ArgumentException("Messages cannot contain null entries.", nameof(messages));
+        if (!deliveryScheduler.TryReserve(connection.Id, lane)) return false;
+
+        return deliveryScheduler.StartReserved(
+            connection.Id,
+            () => DeliverAsync(connection, messages, cancellationToken));
+    }
+
     public bool TryScheduleCached(
         ClientConnection connection,
         ObservationDeliveryLane lane,
@@ -89,6 +106,26 @@ internal sealed class ObservationDeliveryCoordinator(
             sendCancellation.CancelAfter(options.ObservationDeliveryTimeout);
             _ = await connection.SendAsync(firstMessage, connection.NegotiatedVersion, sendCancellation.Token);
             _ = await connection.SendAsync(secondMessage, connection.NegotiatedVersion, sendCancellation.Token);
+        }
+        catch (Exception exception) when (SnapshotDeliveryFailurePolicy.IsExpectedClientFailure(exception))
+        {
+            connection.Abort();
+            connections.Remove(connection.Id);
+        }
+    }
+
+    private async Task DeliverAsync(
+        ClientConnection connection,
+        IReadOnlyList<IProtocolMessage> messages,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Yield();
+            using var sendCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            sendCancellation.CancelAfter(options.ObservationDeliveryTimeout);
+            foreach (var message in messages)
+                _ = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation.Token);
         }
         catch (Exception exception) when (SnapshotDeliveryFailurePolicy.IsExpectedClientFailure(exception))
         {
