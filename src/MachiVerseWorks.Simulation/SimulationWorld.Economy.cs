@@ -393,7 +393,7 @@ public sealed partial class SimulationWorld
         if (checkpoint is null)
         {
             for (var index = 0; index < _population.HouseholdCount; index++)
-                EnsureHouseholdEconomyState(_population.GetPersonAt(index).HouseholdId);
+                EnsureHouseholdEconomyState(_population.GetHouseholdAt(index).Id);
             return;
         }
 

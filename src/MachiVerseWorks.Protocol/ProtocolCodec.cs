@@ -44,7 +44,7 @@ public static class ProtocolCodec
         if ((uint)payloadLength > ProtocolFrameHeader.MaxPayloadLength)
             throw new ArgumentException("Message payload exceeds the protocol payload limit.", nameof(message));
 
-        var frame = new byte[ProtocolFrameHeader.Size + payloadLength];
+        var frame = new byte[ProtocolFrameHeader.GetFrameLength(payloadLength)];
         ProtocolFrameHeader.Write(frame, new ProtocolFrameHeader(selectedVersion, message.Type, (uint)payloadLength));
         WritePayload(frame.AsSpan(ProtocolFrameHeader.Size), message);
         return frame;
@@ -178,6 +178,7 @@ public static class ProtocolCodec
                 WriteAgent(payload, agentUpdate.AgentId, agentUpdate.X, agentUpdate.Y, agentUpdate.Z, agentUpdate.VelocityX, agentUpdate.VelocityY, agentUpdate.VelocityZ, agentUpdate.TickCount);
                 return;
             case AgentRemoveMessage agentRemove:
+                ValidateStableId(agentRemove.AgentId, nameof(message));
                 WriteUInt64(payload, agentRemove.AgentId);
                 WriteUInt64(payload[8..], agentRemove.TickCount);
                 return;
@@ -216,6 +217,7 @@ public static class ProtocolCodec
 
     private static void WriteAgent(Span<byte> payload, ulong id, double x, double y, double z, double velocityX, double velocityY, double velocityZ, ulong tick)
     {
+        ValidateStableId(id, nameof(id));
         ValidateFinite(x, nameof(x));
         ValidateFinite(y, nameof(y));
         ValidateFinite(z, nameof(z));
@@ -432,7 +434,7 @@ public static class ProtocolCodec
             case MessageType.AgentUpdate:
                 return TryReadAgent(payload, static (id, x, y, z, vx, vy, vz, tick) => new AgentUpdateMessage(id, x, y, z, vx, vy, vz, tick), out message, out error);
             case MessageType.AgentRemove:
-                if (payload.Length != AgentRemovePayloadLength) return InvalidPayload(out message, out error);
+                if (payload.Length != AgentRemovePayloadLength || ReadUInt64(payload) == 0) return InvalidPayload(out message, out error);
                 message = new AgentRemoveMessage(ReadUInt64(payload), ReadUInt64(payload[8..]));
                 break;
             case MessageType.PedestrianSpawn:
@@ -469,6 +471,7 @@ public static class ProtocolCodec
     {
         if (payload.Length != AgentStatePayloadLength) return InvalidPayload(out message, out error);
         var id = ReadUInt64(payload);
+        if (id == 0) return InvalidPayload(out message, out error);
         var x = ReadDouble(payload[8..]);
         var y = ReadDouble(payload[16..]);
         var z = ReadDouble(payload[24..]);

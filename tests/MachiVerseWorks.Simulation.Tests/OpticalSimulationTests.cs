@@ -96,6 +96,41 @@ public sealed class OpticalSimulationTests
     }
 
     [TestMethod]
+    public void CheckpointRejectsDisconnectedOpticalDemandRoute()
+    {
+        var world = CreateRedundantWorld(out _, out _, out var alternateCable, out var demand);
+        world.Step();
+        var checkpoint = world.CreateCheckpoint();
+        var economy = checkpoint.Economy!;
+        var optical = economy.Optical!;
+        var demands = optical.Demands
+            .Select(item => item.Id == demand ? item with { RouteCableIds = new[] { alternateCable } } : item)
+            .ToArray();
+        var corrupted = checkpoint with { Economy = economy with { Optical = optical with { Demands = demands } } };
+
+        Assert.ThrowsExactly<ArgumentException>(() => SimulationWorld.RestoreCheckpoint(corrupted));
+    }
+
+    [TestMethod]
+    public void SolverResultRejectsDisconnectedOpticalDemandRoute()
+    {
+        var world = new SimulationWorld(new SimulationConfig(tickRate: 1), opticalRoutingSolver: new DisconnectedRouteSolver());
+        var building = world.CreateBuilding(new WorldVolume(0, 0, 0, 10, 10, 10), BuildingKind.Commercial);
+        var backbone = world.CreateOpticalNode(new WorldPoint(-20, 0, 0), OpticalNodeKind.BackboneGateway);
+        var endpoint = world.CreateOpticalNode(new WorldPoint(5, 0, 0), OpticalNodeKind.Endpoint);
+        var isolatedA = world.CreateOpticalNode(new WorldPoint(50, 0, 0), OpticalNodeKind.Distribution);
+        var isolatedB = world.CreateOpticalNode(new WorldPoint(60, 0, 0), OpticalNodeKind.Distribution);
+        world.CreateFiberCable(backbone, endpoint, 20d);
+        world.CreateFiberCable(isolatedA, isolatedB, 20d);
+        world.CreateOpticalEquipment(backbone, OpticalEquipmentKind.Olt, 20d, requiresPower: false);
+        world.CreateOpticalEquipment(endpoint, OpticalEquipmentKind.Onu, 20d, building, requiresPower: false);
+        world.CreateOpticalBackhaul(backbone, 20d);
+        world.CreateBuildingOpticalDemand(endpoint, building, 5d);
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => world.Step());
+    }
+
+    [TestMethod]
     public void OpticalNodeQueryUsesThreeDimensionalVolume()
     {
         var world = new SimulationWorld(new SimulationConfig(tickRate: 1, seed: 2605));
@@ -104,6 +139,21 @@ public sealed class OpticalSimulationTests
         var result = world.QueryOpticalNodes(new WorldVolume(0, 0, 0, 5, 5, 5));
         Assert.AreEqual(1, result.Length);
         Assert.AreEqual(inside, result[0].Id);
+    }
+
+    private sealed class DisconnectedRouteSolver : IOpticalRoutingSolver
+    {
+        public OpticalRoutingResult Solve(OpticalRoutingRequest request)
+        {
+            var demand = request.Demands.Single();
+            var backhaul = request.Backhauls.Single();
+            var disconnectedCable = request.FiberCables[request.FiberCables.Count - 1];
+            var allocation = Math.Min(1d, demand.RequestedGigabitsPerSecond);
+            return new OpticalRoutingResult(
+                new[] { new OpticalDemandRouteResult(demand.Id, backhaul.Id, allocation, new[] { disconnectedCable.Id }) },
+                request.FiberCables.Select(static cable => new OpticalFiberLoadResult(cable.Id, 0d)).ToArray(),
+                new[] { new OpticalBackhaulLoadResult(backhaul.Id, allocation) });
+        }
     }
 
     private static SimulationWorld CreateRedundantWorld(

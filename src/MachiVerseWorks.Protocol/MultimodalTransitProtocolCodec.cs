@@ -37,7 +37,7 @@ public static class MultimodalTransitProtocolCodec
         Validate(message);
         var payloadLength = GetPayloadLength(message);
         if ((uint)payloadLength > ProtocolFrameHeader.MaxPayloadLength) throw new ArgumentException("Multimodal Transit payload exceeds the protocol payload limit.", nameof(message));
-        var frame = new byte[ProtocolFrameHeader.Size + payloadLength];
+        var frame = new byte[ProtocolFrameHeader.GetFrameLength(payloadLength)];
         ProtocolFrameHeader.Write(frame, new ProtocolFrameHeader(version, MessageType.MultimodalTransitSnapshot, checked((uint)payloadLength)));
         var writer = new SpanWriter(frame.AsSpan(ProtocolFrameHeader.Size));
         writer.WriteUInt64(message.TickCount); writer.WriteUInt32(checked((uint)message.Lines.Count)); writer.WriteUInt32(checked((uint)message.Stops.Count)); writer.WriteUInt32(checked((uint)message.Patterns.Count)); writer.WriteUInt32(checked((uint)message.Vehicles.Count)); writer.WriteUInt32(checked((uint)message.ArrivalEstimates.Count));

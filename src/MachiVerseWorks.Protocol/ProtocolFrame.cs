@@ -24,6 +24,13 @@ public readonly record struct ProtocolFrameHeader(
     public const ushort SupportedFlags = 0;
     public const uint MaxPayloadLength = 1_048_576;
 
+    internal static int GetFrameLength(int payloadLength)
+    {
+        if (payloadLength < 0 || (uint)payloadLength > MaxPayloadLength)
+            throw new ArgumentOutOfRangeException(nameof(payloadLength), payloadLength, $"Protocol payload must be between 0 and {MaxPayloadLength} bytes.");
+        return checked(Size + payloadLength);
+    }
+
     internal static void Write(Span<byte> destination, ProtocolFrameHeader header)
     {
         if (destination.Length < Size)

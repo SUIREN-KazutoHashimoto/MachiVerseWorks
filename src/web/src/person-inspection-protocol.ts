@@ -4,7 +4,7 @@ import {
   type ProtocolVersion,
 } from './protocol.ts';
 
-export const WEB_CURRENT_PROTOCOL_VERSION: ProtocolVersion = Object.freeze({ major: 2, minor: 19 });
+export { CURRENT_PROTOCOL_VERSION as WEB_CURRENT_PROTOCOL_VERSION } from './protocol.ts';
 export const CLEAR_PERSON_INSPECTION_MESSAGE_TYPE = 5;
 
 export function encodeClearPersonInspection(version: ProtocolVersion): ArrayBuffer {

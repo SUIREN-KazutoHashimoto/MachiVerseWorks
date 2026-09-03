@@ -167,8 +167,12 @@ public sealed partial class SimulationWorld
             ValidateVector(antenna.PositionOffset);
             ValidateVector(antenna.Orientation);
             var orientationLength = Math.Sqrt((antenna.Orientation.X * antenna.Orientation.X) + (antenna.Orientation.Y * antenna.Orientation.Y) + (antenna.Orientation.Z * antenna.Orientation.Z));
-            if (orientationLength <= 1e-12 || !double.IsFinite(antenna.GainDb) || !double.IsFinite(antenna.BeamwidthDegrees) || antenna.BeamwidthDegrees <= 0d || antenna.BeamwidthDegrees > 360d || !double.IsFinite(antenna.FrontToBackRatioDb) || antenna.FrontToBackRatioDb < 0d)
+            if (orientationLength <= 1e-12 || Math.Abs(orientationLength - 1d) > 1e-9
+                || !double.IsFinite(antenna.GainDb) || !double.IsFinite(antenna.BeamwidthDegrees) || antenna.BeamwidthDegrees <= 0d || antenna.BeamwidthDegrees > 360d
+                || !double.IsFinite(antenna.FrontToBackRatioDb) || antenna.FrontToBackRatioDb < 0d)
                 throw new ArgumentOutOfRangeException(nameof(checkpoint));
+            if (antenna.PatternKind == RadioAntennaPatternKind.Omnidirectional && antenna.BeamwidthDegrees != 360d)
+                throw new ArgumentException("Omnidirectional Radio antennas must use a 360 degree beamwidth.", nameof(checkpoint));
         }
 
         var transmitterById = transmitters.ToDictionary(static item => item.Id);
