@@ -251,13 +251,26 @@ function normalizeToponym(raw: WireNaturalToponym): NaturalToponymObservation {
 
 function assertAcyclicParents(nodes: readonly (readonly [bigint, bigint])[], name: string): void {
   const parents = new Map(nodes);
+  const states = new Map<bigint, 1 | 2>();
+  const path: bigint[] = [];
   for (const start of parents.keys()) {
-    const seen = new Set<bigint>(); let current = start;
+    if (states.get(start) === 2) continue;
+
+    path.length = 0;
+    let current = start;
     while (true) {
-      const parent = parents.get(current); if (parent === undefined || parent === 0n) break;
-      if (seen.has(current)) throw new ProtocolDecodeFailure(`${name} parent graph contains a cycle.`);
-      seen.add(current); current = parent;
+      const state = states.get(current);
+      if (state === 1) throw new ProtocolDecodeFailure(`${name} parent graph contains a cycle.`);
+      if (state === 2) break;
+
+      states.set(current, 1);
+      path.push(current);
+      const parent = parents.get(current);
+      if (parent === undefined || parent === 0n) break;
+      current = parent;
     }
+
+    for (const id of path) states.set(id, 2);
   }
 }
 
