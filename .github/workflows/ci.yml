@@ -163,6 +163,10 @@ jobs:
               )
 
           if current_parts == base_parts:
+              if target in ("develop", "main"):
+                  raise SystemExit(
+                      f"Application VERSION must change for {target} PRs; base and current are both {current}."
+                  )
               print(f"Application VERSION unchanged for ordinary PR: target={target}, version={current}")
               raise SystemExit(0)
 
@@ -171,14 +175,14 @@ jobs:
               if current_parts != expected:
                   expected_text = ".".join(map(str, expected))
                   raise SystemExit(
-                      f"When a develop PR changes VERSION it must set {expected_text}; base is {base}, current is {current}."
+                      f"A develop PR must set VERSION to {expected_text}; base is {base}, current is {current}."
                   )
           elif target == "main":
               expected = (base_parts[0] + 1, 0, 0)
               if current_parts != expected:
                   expected_text = ".".join(map(str, expected))
                   raise SystemExit(
-                      f"When a main PR changes VERSION it must set {expected_text}; base is {base}, current is {current}."
+                      f"A main PR must set VERSION to {expected_text}; base is {base}, current is {current}."
                   )
           elif current_parts <= base_parts:
               raise SystemExit(
