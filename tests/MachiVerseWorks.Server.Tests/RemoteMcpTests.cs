@@ -212,7 +212,7 @@ public sealed class RemoteMcpTests
     }
 
     [TestMethod]
-    public async Task LogQueryKeepsMessageJsonValidWhenResultIsBounded()
+    public async Task LogQueryDoesNotExposeGeneralServerLoggerMessages()
     {
         await using var host = await StartMcpHostAsync(new Dictionary<string, string?> { ["Server:Mcp:MaxResultBytes"] = "1024" });
         var loggerFactory = host.App.Services.GetRequiredService<ILoggerFactory>();
@@ -227,6 +227,36 @@ public sealed class RemoteMcpTests
         var message = structured.GetProperty("message").GetString();
         Assert.IsNotNull(message);
         using var _ = JsonDocument.Parse(message);
+        Assert.IsFalse(message.Contains("entry-", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task SaveOverwriteRequiresDestructiveScopeAndConfirmation()
+    {
+        var saveDirectory = Path.Combine(Path.GetTempPath(), $"mvw-mcp-save-{Guid.NewGuid():N}");
+        try
+        {
+            await using var host = await StartMcpHostAsync(new Dictionary<string, string?> { ["Server:Mcp:SaveDirectory"] = saveDirectory });
+            await using var writeClient = await CreateMcpClientAsync(host, WriteToken);
+            var firstSave = await writeClient.CallToolAsync("simulation_save", new Dictionary<string, object?> { ["slot"] = "test" }, cancellationToken: CancellationToken.None);
+            Assert.IsFalse(firstSave.IsError is true);
+            Assert.IsTrue(GetStructured(firstSave).GetProperty("success").GetBoolean());
+
+            var duplicateSave = await writeClient.CallToolAsync("simulation_save", new Dictionary<string, object?> { ["slot"] = "test" }, cancellationToken: CancellationToken.None);
+            AssertStructuredRejection(duplicateSave, "conflict");
+            await AssertMcpProtocolFailureAsync(writeClient.CallToolAsync("simulation_save_overwrite", new Dictionary<string, object?> { ["slot"] = "test", ["confirm"] = true }, cancellationToken: CancellationToken.None));
+
+            await using var destructiveClient = await CreateMcpClientAsync(host, DestructiveToken);
+            var unconfirmed = await destructiveClient.CallToolAsync("simulation_save_overwrite", new Dictionary<string, object?> { ["slot"] = "test", ["confirm"] = false }, cancellationToken: CancellationToken.None);
+            AssertStructuredRejection(unconfirmed, "confirmation_required");
+            var confirmed = await destructiveClient.CallToolAsync("simulation_save_overwrite", new Dictionary<string, object?> { ["slot"] = "test", ["confirm"] = true }, cancellationToken: CancellationToken.None);
+            Assert.IsFalse(confirmed.IsError is true);
+            Assert.IsTrue(GetStructured(confirmed).GetProperty("success").GetBoolean());
+        }
+        finally
+        {
+            if (Directory.Exists(saveDirectory)) Directory.Delete(saveDirectory, recursive: true);
+        }
     }
 
     [TestMethod]

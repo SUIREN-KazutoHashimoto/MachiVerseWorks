@@ -309,13 +309,10 @@ internal sealed class RemoteMcpSecurityMiddleware(RequestDelegate next, RemoteMc
 
 internal sealed record RemoteMcpLogEntry(DateTimeOffset Timestamp, string Level, string Category, int EventId, string Message);
 
-internal sealed class RemoteMcpLogBuffer(int capacity) : ILoggerProvider
+internal sealed class RemoteMcpLogBuffer(int capacity)
 {
     private readonly ConcurrentQueue<RemoteMcpLogEntry> _entries = new();
     private int _count;
-
-    public ILogger CreateLogger(string categoryName) => new BufferLogger(this, categoryName);
-    public void Dispose() { }
 
     public IReadOnlyList<RemoteMcpLogEntry> Query(int limit, string? contains)
     {
@@ -327,25 +324,14 @@ internal sealed class RemoteMcpLogBuffer(int capacity) : ILoggerProvider
             .ToArray();
     }
 
-    private void Add(RemoteMcpLogEntry entry)
+    public void AddSafe(RemoteMcpLogEntry entry)
     {
+        ArgumentNullException.ThrowIfNull(entry);
         _entries.Enqueue(entry);
         var count = Interlocked.Increment(ref _count);
         while (count > capacity && _entries.TryDequeue(out _)) count = Interlocked.Decrement(ref _count);
     }
-
-    private sealed class BufferLogger(RemoteMcpLogBuffer owner, string category) : ILogger
-    {
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-        public bool IsEnabled(LogLevel logLevel) => false;
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-        {
-            // General ILogger output is deliberately outside the MCP-visible diagnostics boundary.
-            // Safe remote diagnostics must be explicitly projected instead of mirroring arbitrary state or exception text.
-        }
-    }
 }
-
 internal sealed record RemoteMcpResult(bool Success, string Code, string Message)
 {
     public static RemoteMcpResult Rejected(string code, string message) => new(false, code, message);
@@ -502,43 +488,8 @@ internal sealed class RemoteMcpTools
         }
 
         var path = Path.Combine(options.SaveDirectory, slot + ".mvw");
-        var reservationCreated = false;
-        if (!overwrite)
-        {
-            try
-            {
-                using var reservation = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-                reservationCreated = true;
-            }
-            catch (IOException) when (File.Exists(path))
-            {
-                return RemoteMcpResult.Rejected("conflict", "The requested save slot already exists. Use simulation_save_overwrite with destructive scope and confirm=true to replace it.");
-            }
-            catch (UnauthorizedAccessException)
-            {
-                return RemoteMcpResult.Rejected("io_error", "The requested MCP save slot cannot be created or accessed.");
-            }
-            catch (IOException)
-            {
-                return RemoteMcpResult.Rejected("io_error", "The requested MCP save slot cannot be created or accessed.");
-            }
-        }
-
-        try
-        {
-            var result = await admin.ExecuteAsync($"world save {Quote(path)}", cancellationToken);
-            if (result.Success) reservationCreated = false;
-            return result;
-        }
-        finally
-        {
-            if (reservationCreated)
-            {
-                try { File.Delete(path); }
-                catch (IOException) { }
-                catch (UnauthorizedAccessException) { }
-            }
-        }
+        var action = overwrite ? "save" : "save-new";
+        return await admin.ExecuteAsync($"world {action} {Quote(path)}", cancellationToken);
     }
     [McpServerTool(Name = "entity_write", ReadOnly = false, Destructive = false, UseStructuredContent = true), Authorize(Policy = RemoteMcpPolicies.Write), Description("Create or update an allowlisted entity by mapping structured MCP input to the existing administration command boundary.")]
     public static Task<RemoteMcpResult> EntityWrite(RemoteMcpAdminGateway admin, [Description("Allowlisted entity type.")] string entity, [Description("Operation: add or update.")] string operation, [Description("Administration arguments for the selected entity operation. Each item becomes exactly one quoted command token.")] string[] arguments, CancellationToken cancellationToken)

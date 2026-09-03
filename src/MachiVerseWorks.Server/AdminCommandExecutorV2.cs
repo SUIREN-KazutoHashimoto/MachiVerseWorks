@@ -381,15 +381,34 @@ internal sealed class AdminCommandExecutorV2(
     private async Task<AdminCommandResult> WorldAsync(AdminCommand command, CancellationToken cancellationToken)
     {
         var action = Action(command, "world"); var path = Path.GetFullPath(Arg(command, 1, "path"));
-        if (Eq(action, "save"))
+        if (Eq(action, "save") || Eq(action, "save-new"))
         {
             cancellationToken.ThrowIfCancellationRequested();
             var detached = SimulationWorld.RestoreCheckpoint(simulation.CaptureCheckpoint());
             cancellationToken.ThrowIfCancellationRequested();
             var data = WorldSaveSerializer.Serialize(detached);
             cancellationToken.ThrowIfCancellationRequested();
-            await File.WriteAllBytesAsync(path, data, cancellationToken);
-            return AdminCommandResult.Ok($"World saved to '{path}'.");
+            var temporaryPath = $"{path}.{Guid.NewGuid():N}.tmp";
+            try
+            {
+                await File.WriteAllBytesAsync(temporaryPath, data, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    File.Move(temporaryPath, path, overwrite: Eq(action, "save"));
+                }
+                catch (IOException) when (Eq(action, "save-new") && File.Exists(path))
+                {
+                    return new AdminCommandResult(AdminCommandResultCode.Conflict, $"World save '{path}' already exists.");
+                }
+                return AdminCommandResult.Ok($"World saved to '{path}'.");
+            }
+            finally
+            {
+                try { File.Delete(temporaryPath); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
         }
         if (Eq(action, "load"))
         {
