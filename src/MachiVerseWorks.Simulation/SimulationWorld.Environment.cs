@@ -170,15 +170,30 @@ public sealed partial class SimulationWorld
         where T : struct, IEquatable<T>
     {
         var parents = nodes.ToDictionary(static item => item.Id, static item => item.ParentId);
+        var states = new Dictionary<T, byte>(parents.Count);
+        var path = new List<T>();
         foreach (var start in parents.Keys)
         {
-            var seen = new HashSet<T>();
+            if (states.TryGetValue(start, out var startState) && startState == 2) continue;
+
+            path.Clear();
             var current = start;
-            while (parents.TryGetValue(current, out var parent) && parent is { } parentId)
+            while (true)
             {
-                if (!seen.Add(current)) throw new ArgumentException($"{entityName} parent graph contains a cycle.", parameterName);
+                if (states.TryGetValue(current, out var state))
+                {
+                    if (state == 1)
+                        throw new ArgumentException($"{entityName} parent graph contains a cycle.", parameterName);
+                    break;
+                }
+
+                states[current] = 1;
+                path.Add(current);
+                if (!parents.TryGetValue(current, out var parent) || parent is not { } parentId) break;
                 current = parentId;
             }
+
+            foreach (var id in path) states[id] = 2;
         }
     }
 }

@@ -416,6 +416,11 @@ internal sealed class AdminCommandExecutorV2(
                 stream.Flush(flushToDisk: true);
             }
 
+            if (!OperatingSystem.IsWindows() && File.Exists(path))
+            {
+                File.SetUnixFileMode(tempPath, File.GetUnixFileMode(path));
+            }
+
             cancellationToken.ThrowIfCancellationRequested();
             File.Move(tempPath, path, overwrite: true);
         }
