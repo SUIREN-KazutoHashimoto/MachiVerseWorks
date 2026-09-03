@@ -116,6 +116,11 @@ jobs:
         env:
           MACHIVERSE_BENCHMARK_ARTIFACTS: ${{ github.workspace }}/.artifacts/benchmarks/${{ matrix.id }}/base
         run: dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-restore -- --filter "${{ matrix.filter }}" --job short
+      - name: Hide benchmark base project from BenchmarkDotNet discovery
+        if: github.event_name == 'pull_request'
+        run: >-
+          mv .benchmark-base/benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj
+          .benchmark-base/benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj.base
       - name: Run benchmark
         env:
           MACHIVERSE_BENCHMARK_ARTIFACTS: ${{ github.workspace }}/.artifacts/benchmarks/${{ matrix.id }}/head
