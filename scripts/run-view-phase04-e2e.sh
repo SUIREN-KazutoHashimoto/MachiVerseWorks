@@ -33,11 +33,13 @@ wait_http() {
 }
 
 CHROME="$(find_chrome)"
-npm --prefix "$ROOT_DIR/src/web" ci
-npm --prefix "$ROOT_DIR/src/web" run lint
-npm --prefix "$ROOT_DIR/src/web" run typecheck
-npm --prefix "$ROOT_DIR/src/web" test
-npm --prefix "$ROOT_DIR/src/web" run build
+if [[ "${MVW_E2E_PREPARED:-0}" != "1" ]]; then
+  npm --prefix "$ROOT_DIR/src/web" ci
+  npm --prefix "$ROOT_DIR/src/web" run lint
+  npm --prefix "$ROOT_DIR/src/web" run typecheck
+  npm --prefix "$ROOT_DIR/src/web" test
+  npm --prefix "$ROOT_DIR/src/web" run build
+fi
 npm --prefix "$ROOT_DIR/src/web" run dev -- --host 127.0.0.1 --port "$WEB_PORT" --strictPort >"$ARTIFACT_DIR/vite.log" 2>&1 & WEB_PID=$!
 
 BASELINE_URL="http://127.0.0.1:$WEB_PORT/tests/browser/view-phase04-e2e.html"

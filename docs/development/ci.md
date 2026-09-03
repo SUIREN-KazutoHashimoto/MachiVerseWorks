@@ -72,7 +72,7 @@ SHA pinはAction repositoryの内容差し替えリスクを下げるためのsu
 
 ## 3. Benchmarks
 
-`.github/workflows/benchmarks.yml`が性能回帰の正規入口。Phaseごとにworkflowを増やさず、機能名をmatrixへ追加する。
+`.github/workflows/benchmarks.yml`が中央性能回帰の正規入口。Phaseごとにworkflowを増やさず、機能名をmatrixへ追加する。
 
 現在の主なBenchmarkDotNet matrix:
 
@@ -87,6 +87,7 @@ SHA pinはAction repositoryの内容差し替えリスクを下げるためのsu
 - `power-loads-1k-5k`
 - `water-sewer-loads-1k-5k`
 - `gas-loads-1k-5k`
+- `persistent-regional-evolution-world-scale`
 
 scenario / auxiliary job:
 
@@ -95,7 +96,8 @@ scenario / auxiliary job:
 - `benchmarkdotnet-smoke`
 - `snapshot-readmodel`
 - `phase9-2d-to-3d-regression`
-- `legacy-tick`（manual only）
+
+旧`legacy-tick` benchmarkは通常PRで常時skip checkを作らないため中央workflowから分離する。必要時はGitHub Actionsの **Legacy Tick Benchmark**（`.github/workflows/legacy-tick-benchmark.yml`）を選び、`Run workflow`から手動実行する。中央 **Benchmarks** workflowの`workflow_dispatch`ではlegacy tickは実行されない。
 
 PRと`develop` merge後に対象path変更で実行し、feature branch push単独では二重実行しない。artifactは原則14日保持する。
 
@@ -103,7 +105,7 @@ PRと`develop` merge後に対象path変更で実行し、feature branch push単�
 
 ## 4. End-to-end
 
-`.github/workflows/e2e.yml`がServer / Protocol / Web接続E2Eの正規入口。現在はPhase 6のCore PoCからPhase 28のRadio / Spectrumまで、実装済み主要domainを1つのmatrixで継続検証する。
+`.github/workflows/e2e.yml`がServer / Protocol / Web接続E2Eの正規入口。現在はPhase 6のCore PoCからPhase 29のWorld Environment、およびView Phase 3/4まで、実装済み主要domainを1つのmatrixで継続検証する。
 
 主なmatrix:
 
@@ -116,6 +118,8 @@ PRと`develop` merge後に対象path変更で実行し、feature branch push単�
 - optical communication
 - remote MCP administration
 - radio / spectrum
+- world environment
+- view physical world / settlement structure
 
 Population E2Eなど古いminor互換も個別scenarioで確認しつつ、Web Clientのcurrent negotiation上限はProtocol 2.16である。Protocol番号の正本は[`../architecture/protocol.md`](../architecture/protocol.md)、workflowの実行対象の正本は[`.github/workflows/e2e.yml`](../../.github/workflows/e2e.yml)とする。
 

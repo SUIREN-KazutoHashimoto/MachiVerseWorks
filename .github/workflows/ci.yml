@@ -6,12 +6,6 @@ on:
       - main
       - develop
       - 'release/**'
-      - 'feature/**'
-      - 'fix/**'
-      - 'perf/**'
-      - 'docs/**'
-      - 'refactor/**'
-      - 'experiment/**'
   pull_request:
     branches:
       - main
@@ -262,7 +256,7 @@ jobs:
           e2e=false
           if [[ "$EVENT_NAME" == "pull_request" && "$BASE_REF" == "develop" ]]; then
             changed_files="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
-            if grep -Eq '^(src/|scripts/|tests/fixtures/|docs/development/baselines/|Directory\.Build\.props$|Directory\.Packages\.props$|MachiVerseWorks\.slnx$|global\.json$|\.github/workflows/e2e\.yml$)' <<< "$changed_files"; then
+            if grep -Eq '^(src/|scripts/|tests/fixtures/|docs/development/baselines/|Directory\.Build\.props$|Directory\.Packages\.props$|MachiVerseWorks\.slnx$|global\.json$|\.github/workflows/ci\.yml$|\.github/workflows/e2e\.yml$)' <<< "$changed_files"; then
               e2e=true
             fi
           fi
@@ -282,6 +276,14 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
 
       - name: Resolve solution
         shell: bash

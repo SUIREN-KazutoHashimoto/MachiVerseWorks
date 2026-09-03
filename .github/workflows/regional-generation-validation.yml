@@ -4,11 +4,18 @@ on:
   push:
     branches: [develop]
     paths:
-      - 'src/MachiVerseWorks.Simulation/**'
+      - 'src/MachiVerseWorks.Simulation/Regional*.cs'
+      - 'src/MachiVerseWorks.Simulation/Settlement*.cs'
+      - 'src/MachiVerseWorks.Simulation/PersistentRegional*.cs'
+      - 'src/MachiVerseWorks.Simulation/SimulationWorld.Regional*.cs'
+      - 'src/MachiVerseWorks.Simulation/SimulationWorld.PersistentRegional*.cs'
+      - 'src/MachiVerseWorks.Simulation/SimulationWorld.cs'
+      - 'src/MachiVerseWorks.Simulation/TerrainModel.cs'
       - 'src/MachiVerseWorks.Protocol/**'
       - 'src/MachiVerseWorks.Persistence/**'
       - 'src/MachiVerseWorks.Server/**'
-      - 'tests/MachiVerseWorks.Simulation.Tests/**'
+      - 'tests/MachiVerseWorks.Simulation.Tests/*Regional*.cs'
+      - 'tests/MachiVerseWorks.Simulation.Tests/*Settlement*.cs'
       - 'tests/MachiVerseWorks.Protocol.Tests/**'
       - 'tests/MachiVerseWorks.Persistence.Tests/**'
       - 'tests/MachiVerseWorks.Server.Tests/**'
@@ -16,11 +23,18 @@ on:
   pull_request:
     branches: [develop]
     paths:
-      - 'src/MachiVerseWorks.Simulation/**'
+      - 'src/MachiVerseWorks.Simulation/Regional*.cs'
+      - 'src/MachiVerseWorks.Simulation/Settlement*.cs'
+      - 'src/MachiVerseWorks.Simulation/PersistentRegional*.cs'
+      - 'src/MachiVerseWorks.Simulation/SimulationWorld.Regional*.cs'
+      - 'src/MachiVerseWorks.Simulation/SimulationWorld.PersistentRegional*.cs'
+      - 'src/MachiVerseWorks.Simulation/SimulationWorld.cs'
+      - 'src/MachiVerseWorks.Simulation/TerrainModel.cs'
       - 'src/MachiVerseWorks.Protocol/**'
       - 'src/MachiVerseWorks.Persistence/**'
       - 'src/MachiVerseWorks.Server/**'
-      - 'tests/MachiVerseWorks.Simulation.Tests/**'
+      - 'tests/MachiVerseWorks.Simulation.Tests/*Regional*.cs'
+      - 'tests/MachiVerseWorks.Simulation.Tests/*Settlement*.cs'
       - 'tests/MachiVerseWorks.Protocol.Tests/**'
       - 'tests/MachiVerseWorks.Persistence.Tests/**'
       - 'tests/MachiVerseWorks.Server.Tests/**'
@@ -45,6 +59,13 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
+      - name: Cache NuGet packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
       - name: Restore
         run: dotnet restore MachiVerseWorks.slnx
       - name: Build

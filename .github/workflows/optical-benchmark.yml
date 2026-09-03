@@ -4,13 +4,29 @@ on:
   push:
     branches: [develop]
     paths:
-      - 'src/MachiVerseWorks.Simulation/**'
+      - 'src/MachiVerseWorks.Simulation/Optical.cs'
+      - 'src/MachiVerseWorks.Simulation/CapacityOpticalRoutingSolver.cs'
+      - 'src/MachiVerseWorks.Simulation/Geometry.cs'
+      - 'src/MachiVerseWorks.Simulation/Building*.cs'
+      - 'src/MachiVerseWorks.Simulation/WorldObjects.cs'
+      - 'src/MachiVerseWorks.Simulation/SimulationWorld.Building*.cs'
+      - 'src/MachiVerseWorks.Simulation/SimulationWorld.Optical*.cs'
+      - 'src/MachiVerseWorks.Simulation/SimulationWorld.cs'
+      - 'src/MachiVerseWorks.Simulation/SimulationNumeric.cs'
       - 'benchmarks/MachiVerseWorks.Benchmarks/OpticalBenchmarks.cs'
       - '.github/workflows/optical-benchmark.yml'
   pull_request:
     branches: [develop]
     paths:
-      - 'src/MachiVerseWorks.Simulation/**'
+      - 'src/MachiVerseWorks.Simulation/Optical.cs'
+      - 'src/MachiVerseWorks.Simulation/CapacityOpticalRoutingSolver.cs'
+      - 'src/MachiVerseWorks.Simulation/Geometry.cs'
+      - 'src/MachiVerseWorks.Simulation/Building*.cs'
+      - 'src/MachiVerseWorks.Simulation/WorldObjects.cs'
+      - 'src/MachiVerseWorks.Simulation/SimulationWorld.Building*.cs'
+      - 'src/MachiVerseWorks.Simulation/SimulationWorld.Optical*.cs'
+      - 'src/MachiVerseWorks.Simulation/SimulationWorld.cs'
+      - 'src/MachiVerseWorks.Simulation/SimulationNumeric.cs'
       - 'benchmarks/MachiVerseWorks.Benchmarks/OpticalBenchmarks.cs'
       - '.github/workflows/optical-benchmark.yml'
   workflow_dispatch:
@@ -33,6 +49,13 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
+      - name: Cache NuGet packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
       - name: Restore
         run: dotnet restore MachiVerseWorks.slnx
       - name: Run Optical 1k/5k benchmark
