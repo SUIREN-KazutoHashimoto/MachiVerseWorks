@@ -20,24 +20,10 @@ jobs:
         with:
           ref: fix/all-open-issues-worker-2
           fetch-depth: 0
-      - name: Apply batch 2 fixes
-        run: python .github/scripts/worker2_batch2.py
-      - name: Align batch 2 analyzer-safe dictionary lookup
-        shell: python
-        run: |
-          from pathlib import Path
-          path = Path('src/MachiVerseWorks.Simulation/SimulationWorld.RailwayOperations.Validation.cs')
-          text = path.read_text(encoding='utf-8')
-          old = '|| !routeById.ContainsKey(service.RouteId)'
-          new = '|| !routeById.TryGetValue(service.RouteId, out var route)'
-          if text.count(old) != 1:
-              raise SystemExit('Railway service route lookup marker mismatch')
-          text = text.replace(old, new, 1)
-          old = 'serviceDefinitionValidator.ValidateServiceDefinition(routeById[service.RouteId], timetable, service.OriginDepotId, service.DestinationDepotId);'
-          new = 'serviceDefinitionValidator.ValidateServiceDefinition(route, timetable, service.OriginDepotId, service.DestinationDepotId);'
-          if text.count(old) != 1:
-              raise SystemExit('Railway service validator route marker mismatch')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+      - name: Apply batch 3 fixes
+        run: python .github/scripts/worker2_batch3.py
+      - name: Align batch 3 fixtures
+        run: python .github/scripts/worker2_batch3_align.py
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
@@ -67,7 +53,7 @@ jobs:
           npm run typecheck --if-present
           npm test --if-present
           npm run build
-      - name: Commit batch 2
+      - name: Commit batch 3
         shell: bash
         run: |
           set -euo pipefail
@@ -76,5 +62,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src tests
           git diff --cached --quiet && exit 1
-          git commit -m "fix: resolve worker 2 issue batch 2 (#268-#283)"
+          git commit -m "fix: resolve worker 2 issue batch 3 (#284-#303)"
           git push origin HEAD:fix/all-open-issues-worker-2
