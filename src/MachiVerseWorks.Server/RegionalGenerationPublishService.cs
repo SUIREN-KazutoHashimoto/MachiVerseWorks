@@ -8,6 +8,7 @@ namespace MachiVerseWorks.Server;
 /// Publishes the authoritative Regional Generation baseline. A lightweight source identity is checked
 /// before the immutable baseline is copied, mapped, or encoded. Encoded frames are shared by protocol
 /// version and source identity so a static baseline is serialized once rather than once per client.
+/// Protocol 2.22+ receives a chunked aggregate, while older clients retain the legacy single-frame path.
 /// </summary>
 internal sealed class RegionalGenerationPublishService(
     IObservationSource observationSource,
@@ -61,12 +62,58 @@ internal sealed class RegionalGenerationPublishService(
                 var message = RegionalGenerationMessageMapper.ToProtocol(
                     observation.Snapshot ?? CreateEmptySnapshot(observation.TickCount));
                 var revision = new ObservationRevision(sourceIdentity.Generation, sourceIdentity.SourceTick);
+                IProtocolMessage[]? chunkMessages = null;
 
                 foreach (var versionGroup in targets.GroupBy(static connection => connection.NegotiatedVersion))
                 {
                     var version = versionGroup.Key;
                     var failure = new FailedEncoding(sourceIdentity, version);
                     if (_failedEncodings.Contains(failure)) continue;
+
+                    if (version.SupportsRegionalGenerationChunking)
+                    {
+                        try
+                        {
+                            chunkMessages ??= RegionalGenerationSnapshotChunker
+                                .Split(message, CreateSnapshotId(sourceIdentity))
+                                .Cast<IProtocolMessage>()
+                                .ToArray();
+                            var cacheKeys = new EncodedObservationCacheKey[chunkMessages.Length];
+                            for (var index = 0; index < chunkMessages.Length; index++)
+                            {
+                                var key = new EncodedObservationCacheKey(
+                                    "regional-generation-chunk",
+                                    version,
+                                    revision,
+                                    $"{(sourceIdentity.HasSnapshot ? "baseline" : "empty")}:chunk:{index}",
+                                    IsStatic: true);
+                                cacheKeys[index] = key;
+                                var chunk = chunkMessages[index];
+                                _ = cache.GetOrEncode(key, () => ObservationProtocolAdapter.Serialize(chunk, version));
+                            }
+
+                            foreach (var connection in versionGroup)
+                            {
+                                if (_delivered.TryGetValue(connection.Id, out var delivered) && delivered == sourceIdentity) continue;
+                                if (deliveryCoordinator.TryScheduleCached(
+                                    connection,
+                                    ObservationDeliveryLane.RegionalGeneration,
+                                    chunkMessages,
+                                    cacheKeys,
+                                    cache,
+                                    stoppingToken))
+                                {
+                                    _delivered[connection.Id] = sourceIdentity;
+                                }
+                            }
+                        }
+                        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or OverflowException)
+                        {
+                            _failedEncodings.Add(failure);
+                            LogEncodingFailure(logger, sourceIdentity.Generation, sourceIdentity.SourceTick, version.Major, version.Minor, exception);
+                        }
+                        continue;
+                    }
 
                     var cacheKey = new EncodedObservationCacheKey(
                         "regional-generation",
@@ -76,8 +123,8 @@ internal sealed class RegionalGenerationPublishService(
                         IsStatic: true);
                     try
                     {
-                        // Preflight/cache on the publisher thread. Any domain/codec failure is a server-side
-                        // source problem and must never be attributed to an individual client connection.
+                        // Legacy Protocol 2.18-2.21 preserves the existing single-frame contract. Oversized
+                        // snapshots are suppressed for those clients instead of disconnecting them.
                         _ = cache.GetOrEncode(cacheKey, () => ObservationProtocolAdapter.Serialize(message, version));
                     }
                     catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or OverflowException)
@@ -130,6 +177,12 @@ internal sealed class RegionalGenerationPublishService(
         var active = currentConnections.Select(static connection => connection.Id).ToHashSet();
         foreach (var connectionId in _delivered.Keys.Where(id => !active.Contains(id)).ToArray())
             _delivered.Remove(connectionId);
+    }
+
+    private static ulong CreateSnapshotId(SourceIdentity identity)
+    {
+        var value = identity.SourceTick ^ unchecked(identity.Generation * 0x9E3779B97F4A7C15UL);
+        return value == 0 ? 1UL : value;
     }
 
     private static RegionalGenerationSnapshot CreateEmptySnapshot(ulong tickCount) => new(
