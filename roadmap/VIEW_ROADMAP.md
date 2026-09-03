@@ -182,6 +182,7 @@ Viewを完全read-onlyなPresentation clientとして固定し、Gatewayから�
 - ✅ **V4-005** — 高密度中心市街地、低密度郊外、農村、Village / Hamlet、遠隔集落のvisual representationを同じread model契約から成立させる
 - ✅ **V4-006** — Simulation Phase 31の複数Settlementが連続市街地化・分離・成長・衰退してもView側で単一都市へ固定集約しないことをE2E確認する
 - ✅ **V4-007** — Settlement / Structure rendering baselineを記録する
+- ✅ **V4-008** — FHD Golden Imageを固定Browser / SwiftShader環境で比較するVisual Regression E2Eを整備し、構造・数値assertionと組み合わせて描画回帰を検出する
 
 Phase 4 closeoutでは、checked-in rendering baselineに加えて、実ServerからPhase 30 `RegionalGenerationSnapshot`とPhase 31 `PersistentRegionalEvolutionSnapshot`を受信するBrowser E2Eでstable ID joinとThree.js描画を検証する。
 

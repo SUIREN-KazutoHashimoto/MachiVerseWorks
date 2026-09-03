@@ -4,9 +4,10 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACT_DIR="$ROOT_DIR/.artifacts/view-phase04-e2e"
 BASELINE_FILE="$ROOT_DIR/docs/development/baselines/view-phase04-rendering-baseline.json"
+GOLDEN_FILE="$ROOT_DIR/src/web/tests/visual/golden/view-settlement-structure.png"
 WEB_PORT=5188
 WEB_PID=""
-mkdir -p "$ARTIFACT_DIR"; rm -f "$ARTIFACT_DIR"/*
+mkdir -p "$ARTIFACT_DIR"; rm -rf "$ARTIFACT_DIR"/*
 
 cleanup() {
   if [[ -n "$WEB_PID" ]] && kill -0 "$WEB_PID" 2>/dev/null; then kill "$WEB_PID" 2>/dev/null || true; wait "$WEB_PID" 2>/dev/null || true; fi
@@ -32,7 +33,13 @@ wait_http() {
   return 1
 }
 
-CHROME="$(find_chrome)"
+if [[ -n "${MVW_VISUAL_BROWSER:-}" ]]; then
+  CHROME="$MVW_VISUAL_BROWSER"
+  [[ -x "$CHROME" ]] || { echo "MVW_VISUAL_BROWSER is not executable: $CHROME" >&2; exit 1; }
+else
+  CHROME="$(find_chrome)"
+fi
+
 if [[ "${MVW_E2E_PREPARED:-0}" != "1" ]]; then
   npm --prefix "$ROOT_DIR/src/web" ci
   npm --prefix "$ROOT_DIR/src/web" run lint
@@ -49,6 +56,10 @@ wait_http "$EVOLUTION_URL"
 
 node "$ROOT_DIR/scripts/run-headless-browser-e2e.mjs" "$CHROME" "$BASELINE_URL" "$ARTIFACT_DIR/browser.html" "$ARTIFACT_DIR/chrome.log"
 grep -Fq 'data-status="passed"' "$ARTIFACT_DIR/browser.html" || { cat "$ARTIFACT_DIR/browser.html" >&2; cat "$ARTIFACT_DIR/chrome.log" >&2; exit 1; }
+
+node "$ROOT_DIR/scripts/run-headless-visual-e2e.mjs" "$CHROME" "$BASELINE_URL" "$ARTIFACT_DIR" "view-settlement-structure"
+MVW_VISUAL_MAX_CHANGED_RATIO="${MVW_VISUAL_MAX_CHANGED_RATIO:-0.0001}" \
+  bash "$ROOT_DIR/scripts/check-visual-regression.sh" "$ROOT_DIR" "$ARTIFACT_DIR" "view-settlement-structure" "$GOLDEN_FILE"
 
 node "$ROOT_DIR/scripts/run-headless-browser-e2e.mjs" "$CHROME" "$EVOLUTION_URL" "$ARTIFACT_DIR/evolution-browser.html" "$ARTIFACT_DIR/evolution-chrome.log"
 grep -Fq 'data-status="passed"' "$ARTIFACT_DIR/evolution-browser.html" || { cat "$ARTIFACT_DIR/evolution-browser.html" >&2; cat "$ARTIFACT_DIR/evolution-chrome.log" >&2; exit 1; }
@@ -80,4 +91,4 @@ node "$ROOT_DIR/scripts/check-view-phase04-rendering-baseline.mjs" "$BASELINE_FI
 
 cat "$ARTIFACT_DIR/browser.html"
 cat "$ARTIFACT_DIR/evolution-browser.html"
-echo "View Phase 4 Settlement & Structure Rendering browser E2E passed (static + Phase31 evolution + checked-in baseline)."
+echo "View Phase 4 Settlement & Structure Rendering browser E2E + visual regression passed (static + Phase31 evolution + checked-in baseline)."
