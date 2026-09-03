@@ -4,7 +4,7 @@ ServerとWeb Clientのbinary wire contractを管理します。Application `VERS
 
 ## Current contract
 
-現在のProtocolは **2.21** です。
+現在のProtocolは **2.23** です。
 
 - 2.0: 16-byte little-endian frame header、1 MiB payload上限、3D `SubscribeVolume`、Agent
 - 2.1: `RoadNetworkSnapshot`
@@ -28,6 +28,8 @@ ServerとWeb Clientのbinary wire contractを管理します。Application `VERS
 - 2.19: Persistent Regional Evolution observation
 - 2.20: Entity Inspection request / response
 - 2.21: `PopulationStatistics` に Transit count を追加
+- 2.22: `RegionalGenerationSnapshotChunk` (811) を追加し、Regional Generationのlogical snapshotを1 MiB以下の複数frameへ分割可能化
+- 2.23: Multimodal Transit deliveryを`SubscribeVolume`単位に絞り込み、world-wide single-frame依存を解消
 
 同一majorではClientがServer current以下のminorを要求できます。negotiated minorより新しいmessageは送信しません。Protocol 1.x / `SubscribeArea` / 2D wire contractは現行経路にありません。
 
@@ -50,11 +52,11 @@ core frame / Agent / Road / Pedestrianは`ProtocolCodec`、domain固有の可変
 - `OpticalProtocolCodec`
 - `RadioProtocolCodec`
 - `WorldEnvironmentProtocolCodec`
-- `RegionalGenerationProtocolCodec`
+- `RegionalGenerationProtocolCodec` + `RegionalGenerationSnapshotChunkProtocolCodec` + `RegionalGenerationSnapshotChunker`
 - `PersistentRegionalEvolutionProtocolCodec`
 - `EntityInspectionProtocol`
 
-Railway Infrastructureは1 MiBを超えるsnapshotをentity境界で複数frameへ分割できます。world-wide single-frame contractは送信前にpayload長をpreflightし、上限超過時はstructured Errorへ変換します。
+Railway Infrastructureは1 MiBを超えるsnapshotをentity境界で複数frameへ分割できます。Regional GenerationはProtocol 2.22以降でlogical JSON snapshotをchunk transportへ載せ、各frameを1 MiB以下に保ちます。Protocol 2.23以降のMultimodal TransitはClientの`SubscribeVolume`へ絞り込んで配信し、なお上限を超える場合はstructured Errorを返します。同一subscription revisionで同じoversize Errorは繰り返し送信しません。
 
 codecはstable ID、enum、finite値、payload length、collection構造などwire境界で検証します。Simulationのmutable storeやWeb UI表示文言はProtocolへ持ち込みません。
 
