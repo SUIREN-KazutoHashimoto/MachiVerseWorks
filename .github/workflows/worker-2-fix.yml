@@ -29,7 +29,17 @@ jobs:
           marker = 'x.fromSiteId===0n||x.toSiteId===0n||'
           if text.count(marker) < 2:
               raise SystemExit('Expected the Radio link patch target and replacement markers')
-          path.write_text(text.replace(marker, '', 1), encoding='utf-8')
+          text = text.replace(marker, '', 1)
+          old_order = 'x.linkId===0n||x.fromSiteId===x.toSiteId||!siteIds.has(x.fromSiteId)||!siteIds.has(x.toSiteId)||'
+          current_order = 'x.linkId===0n||!siteIds.has(x.fromSiteId)||!siteIds.has(x.toSiteId)||x.fromSiteId===x.toSiteId||'
+          if text.count(old_order) != 1:
+              raise SystemExit('Expected one outdated Radio link validation ordering')
+          text = text.replace(old_order, current_order, 1)
+          old_error = 'raise SystemExit(f"{path_name}: expected exactly one patch target, found {count}")'
+          new_error = 'raise SystemExit(f"{path_name}: expected exactly one patch target, found {count}; target={old[:240]!r}")'
+          if text.count(old_error) != 1:
+              raise SystemExit('Expected replace_once diagnostic marker')
+          path.write_text(text.replace(old_error, new_error, 1), encoding='utf-8')
       - name: Apply batch 3 fixes
         run: python .github/scripts/worker2_batch3.py
       - name: Align batch 3 fixtures
