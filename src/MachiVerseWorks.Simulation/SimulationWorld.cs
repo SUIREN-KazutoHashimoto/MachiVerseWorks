@@ -23,8 +23,8 @@ public sealed partial class SimulationWorld
         _roads = new RoadNetworkStore(Config.SpatialCellSize);
         _railway = new RailwayInfrastructureStore();
         _powerDispatchSolver = powerDispatchSolver ?? new CapacityPowerDispatchSolver();
-        _waterSupplySolver = new ValidatingWaterSupplySolver(waterSupplySolver ?? new CapacityWaterSupplySolver());
-        _sewerSolver = new ValidatingSewerSolver(sewerSolver ?? new CapacitySewerSolver());
+        _waterSupplySolver = CreateWaterSupplySolver(waterSupplySolver);
+        _sewerSolver = CreateSewerSolver(sewerSolver);
         _gasSupplySolver = new ValidatingGasSupplySolver(gasSupplySolver ?? new CapacityGasSupplySolver());
         _opticalRoutingSolver = opticalRoutingSolver ?? new CapacityOpticalRoutingSolver();
         _radioPropagationSolver = radioPropagationSolver ?? new DeterministicRadioPropagationSolver();
