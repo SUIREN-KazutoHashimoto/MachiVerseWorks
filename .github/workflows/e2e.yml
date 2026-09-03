@@ -126,6 +126,20 @@ jobs:
           browser="$(bash scripts/install-visual-browser.sh "$RUNNER_TEMP/machiverseworks-visual-browser")"
           echo "MVW_VISUAL_BROWSER=$browser" >> "$GITHUB_ENV"
           echo "MVW_VISUAL_BROWSER_VERSION=$MVW_VISUAL_BROWSER_VERSION" >> "$GITHUB_ENV"
+      - name: Install pinned visual font
+        if: matrix.id == 'view-physical-world' || matrix.id == 'view-settlement-structure'
+        shell: bash
+        env:
+          MVW_VISUAL_FONT_PACKAGE_VERSION: '2.37-8'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends "fonts-dejavu-core=$MVW_VISUAL_FONT_PACKAGE_VERSION"
+          test "$(dpkg-query -W -f='${Version}' fonts-dejavu-core)" = "$MVW_VISUAL_FONT_PACKAGE_VERSION"
+          fc-cache -f
+          fc-match 'DejaVu Sans'
+          echo "MVW_VISUAL_FONT_FAMILY=DejaVu Sans" >> "$GITHUB_ENV"
+          echo "MVW_VISUAL_FONT_PACKAGE_VERSION=$MVW_VISUAL_FONT_PACKAGE_VERSION" >> "$GITHUB_ENV"
       - name: Run end-to-end
         env:
           MVW_E2E_PREPARED: '1'
