@@ -4,6 +4,7 @@ internal sealed class RoadRouter
 {
     internal const int CacheCapacity = 1024;
     internal const int CacheStepCapacity = 100_000;
+    private const int LaneSpatialLeafCapacity = 8;
 
     private readonly Dictionary<LaneId, RoutingLane> lanes = [];
     private readonly Dictionary<LaneId, LaneConnectionSnapshot[]> outgoing = [];
@@ -11,6 +12,7 @@ internal sealed class RoadRouter
     private readonly Dictionary<RouteCacheKey, LinkedListNode<RouteCacheEntry>> cache = [];
     private readonly LinkedList<RouteCacheEntry> lru = new();
     private RoutingLane[] orderedLanes = [];
+    private LaneSpatialNode? laneSpatialRoot;
     private bool topologyDirty = true;
     private int cachedSteps;
     private long cacheHits;
@@ -24,6 +26,7 @@ internal sealed class RoadRouter
         topologyDirty = true;
         lanes.Clear();
         orderedLanes = [];
+        laneSpatialRoot = null;
         outgoing.Clear();
         connections.Clear();
         cache.Clear();
@@ -55,6 +58,7 @@ internal sealed class RoadRouter
             outgoing.Add(lane.Id, []);
         }
         orderedLanes = lanes.Values.OrderBy(static item => item.Snapshot.Id.Value).ToArray();
+        laneSpatialRoot = LaneSpatialNode.Build(orderedLanes);
 
         var grouped = new Dictionary<LaneId, List<LaneConnectionSnapshot>>();
         foreach (var connection in snapshot.Connections.OrderBy(static item => item.Id.Value))
@@ -186,24 +190,49 @@ internal sealed class RoadRouter
 
     private ResolvedLane ResolveNearestLane(WorldPoint point, RouteConstraints constraints)
     {
+        if (laneSpatialRoot is null) throw new InvalidOperationException("No Road lane is available for endpoint resolution.");
+
         var found = false;
         LaneId selected = default;
         var selectedOffset = 0d;
         var selectedDistanceSquared = double.PositiveInfinity;
-        foreach (var lane in orderedLanes)
+        var queue = new PriorityQueue<LaneSpatialNode, (double DistanceSquared, ulong StableOrder)>();
+        queue.Enqueue(laneSpatialRoot, (laneSpatialRoot.DistanceSquared(point), laneSpatialRoot.StableOrder));
+
+        while (queue.TryDequeue(out var node, out var priority))
         {
-            if (constraints.IsLaneClosed(lane.Snapshot.Id)) continue;
-            var offset = ProjectSegmentOffset(point, lane.SegmentStart, lane.SegmentEnd);
-            var projected = Interpolate(lane.SegmentStart, lane.SegmentEnd, offset);
-            var distanceSquared = DistanceSquared(point, projected);
-            if (!found || distanceSquared < selectedDistanceSquared || (distanceSquared == selectedDistanceSquared && lane.Snapshot.Id.Value < selected.Value))
+            if (priority.DistanceSquared > selectedDistanceSquared) break;
+            if (node.Items is { } items)
             {
-                found = true;
-                selected = lane.Snapshot.Id;
-                selectedOffset = offset;
-                selectedDistanceSquared = distanceSquared;
+                foreach (var lane in items)
+                {
+                    if (constraints.IsLaneClosed(lane.Snapshot.Id)) continue;
+                    var offset = ProjectSegmentOffset(point, lane.SegmentStart, lane.SegmentEnd);
+                    var projected = Interpolate(lane.SegmentStart, lane.SegmentEnd, offset);
+                    var distanceSquared = DistanceSquared(point, projected);
+                    if (!found || distanceSquared < selectedDistanceSquared || (distanceSquared == selectedDistanceSquared && lane.Snapshot.Id.Value < selected.Value))
+                    {
+                        found = true;
+                        selected = lane.Snapshot.Id;
+                        selectedOffset = offset;
+                        selectedDistanceSquared = distanceSquared;
+                    }
+                }
+                continue;
+            }
+
+            if (node.Left is { } left)
+            {
+                var distanceSquared = left.DistanceSquared(point);
+                if (distanceSquared <= selectedDistanceSquared) queue.Enqueue(left, (distanceSquared, left.StableOrder));
+            }
+            if (node.Right is { } right)
+            {
+                var distanceSquared = right.DistanceSquared(point);
+                if (distanceSquared <= selectedDistanceSquared) queue.Enqueue(right, (distanceSquared, right.StableOrder));
             }
         }
+
         if (!found) throw new InvalidOperationException("No open Road lane is available for endpoint resolution.");
         return new ResolvedLane(selected, selectedOffset);
     }
@@ -403,6 +432,123 @@ internal sealed class RoadRouter
         WorldPoint SegmentStart,
         WorldPoint SegmentEnd,
         double LengthMeters);
+
+    private sealed class LaneSpatialNode
+    {
+        private LaneSpatialNode(
+            double minX,
+            double minY,
+            double minZ,
+            double maxX,
+            double maxY,
+            double maxZ,
+            ulong stableOrder,
+            RoutingLane[]? items,
+            LaneSpatialNode? left,
+            LaneSpatialNode? right)
+        {
+            MinX = minX;
+            MinY = minY;
+            MinZ = minZ;
+            MaxX = maxX;
+            MaxY = maxY;
+            MaxZ = maxZ;
+            StableOrder = stableOrder;
+            Items = items;
+            Left = left;
+            Right = right;
+        }
+
+        public double MinX { get; }
+        public double MinY { get; }
+        public double MinZ { get; }
+        public double MaxX { get; }
+        public double MaxY { get; }
+        public double MaxZ { get; }
+        public ulong StableOrder { get; }
+        public RoutingLane[]? Items { get; }
+        public LaneSpatialNode? Left { get; }
+        public LaneSpatialNode? Right { get; }
+
+        public static LaneSpatialNode? Build(RoutingLane[] source)
+        {
+            if (source.Length == 0) return null;
+            var copy = source.ToArray();
+            return Build(copy, 0, copy.Length);
+        }
+
+        private static LaneSpatialNode Build(RoutingLane[] source, int start, int count)
+        {
+            CalculateBounds(source, start, count, out var minX, out var minY, out var minZ, out var maxX, out var maxY, out var maxZ, out var stableOrder);
+            if (count <= LaneSpatialLeafCapacity)
+            {
+                var items = new RoutingLane[count];
+                Array.Copy(source, start, items, 0, count);
+                Array.Sort(items, static (left, right) => left.Snapshot.Id.Value.CompareTo(right.Snapshot.Id.Value));
+                return new LaneSpatialNode(minX, minY, minZ, maxX, maxY, maxZ, stableOrder, items, null, null);
+            }
+
+            var spanX = maxX - minX;
+            var spanY = maxY - minY;
+            var spanZ = maxZ - minZ;
+            var axis = spanX >= spanY && spanX >= spanZ ? 0 : spanY >= spanZ ? 1 : 2;
+            Array.Sort(source, start, count, Comparer<RoutingLane>.Create((left, right) =>
+            {
+                var leftCenter = Center(left, axis);
+                var rightCenter = Center(right, axis);
+                var comparison = leftCenter.CompareTo(rightCenter);
+                return comparison != 0 ? comparison : left.Snapshot.Id.Value.CompareTo(right.Snapshot.Id.Value);
+            }));
+            var leftCount = count / 2;
+            var left = Build(source, start, leftCount);
+            var right = Build(source, start + leftCount, count - leftCount);
+            return new LaneSpatialNode(minX, minY, minZ, maxX, maxY, maxZ, stableOrder, null, left, right);
+        }
+
+        public double DistanceSquared(WorldPoint point)
+        {
+            var dx = point.X < MinX ? MinX - point.X : point.X > MaxX ? point.X - MaxX : 0d;
+            var dy = point.Y < MinY ? MinY - point.Y : point.Y > MaxY ? point.Y - MaxY : 0d;
+            var dz = point.Z < MinZ ? MinZ - point.Z : point.Z > MaxZ ? point.Z - MaxZ : 0d;
+            return dx * dx + dy * dy + dz * dz;
+        }
+
+        private static double Center(RoutingLane lane, int axis) => axis switch
+        {
+            0 => (lane.SegmentStart.X + lane.SegmentEnd.X) * 0.5d,
+            1 => (lane.SegmentStart.Y + lane.SegmentEnd.Y) * 0.5d,
+            _ => (lane.SegmentStart.Z + lane.SegmentEnd.Z) * 0.5d,
+        };
+
+        private static void CalculateBounds(
+            RoutingLane[] source,
+            int start,
+            int count,
+            out double minX,
+            out double minY,
+            out double minZ,
+            out double maxX,
+            out double maxY,
+            out double maxZ,
+            out ulong stableOrder)
+        {
+            minX = minY = minZ = double.PositiveInfinity;
+            maxX = maxY = maxZ = double.NegativeInfinity;
+            stableOrder = ulong.MaxValue;
+            var end = checked(start + count);
+            for (var index = start; index < end; index++)
+            {
+                var lane = source[index];
+                minX = Math.Min(minX, Math.Min(lane.SegmentStart.X, lane.SegmentEnd.X));
+                minY = Math.Min(minY, Math.Min(lane.SegmentStart.Y, lane.SegmentEnd.Y));
+                minZ = Math.Min(minZ, Math.Min(lane.SegmentStart.Z, lane.SegmentEnd.Z));
+                maxX = Math.Max(maxX, Math.Max(lane.SegmentStart.X, lane.SegmentEnd.X));
+                maxY = Math.Max(maxY, Math.Max(lane.SegmentStart.Y, lane.SegmentEnd.Y));
+                maxZ = Math.Max(maxZ, Math.Max(lane.SegmentStart.Z, lane.SegmentEnd.Z));
+                stableOrder = Math.Min(stableOrder, lane.Snapshot.Id.Value);
+            }
+        }
+    }
 
     private readonly record struct ResolvedLane(LaneId LaneId, double SegmentOffset);
     private readonly record struct RoutePredecessor(LaneId FromLaneId, LaneConnectionId ConnectionId);
