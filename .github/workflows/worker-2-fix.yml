@@ -33,6 +33,33 @@ jobs:
           path.write_text(text.replace(old, new, 1), encoding='utf-8')
       - name: Apply batch 1 fixes
         run: python .github/scripts/worker2_batch1.py
+      - name: Align current protocol and save-format assertions
+        shell: python
+        run: |
+          from pathlib import Path
+
+          protocol = Path('src/web/src/protocol.ts')
+          text = protocol.read_text(encoding='utf-8')
+          old = 'export const CURRENT_PROTOCOL_VERSION: ProtocolVersion = Object.freeze({ major: 2, minor: 19 });'
+          new = 'export const CURRENT_PROTOCOL_VERSION: ProtocolVersion = Object.freeze({ major: 2, minor: 20 });'
+          if text.count(old) != 1:
+              raise SystemExit('web current protocol marker mismatch')
+          protocol.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          files = [
+              'tests/MachiVerseWorks.Persistence.Tests/EconomySaveTests.cs',
+              'tests/MachiVerseWorks.Persistence.Tests/MultimodalTransitSaveTests.cs',
+              'tests/MachiVerseWorks.Persistence.Tests/RailwayInfrastructureSaveTests.cs',
+              'tests/MachiVerseWorks.Persistence.Tests/RailwayOperationsSaveTests.cs',
+          ]
+          old = '\\"formatVersion\\": 11'
+          new = '\\"formatVersion\\": 12'
+          for name in files:
+              path = Path(name)
+              text = path.read_text(encoding='utf-8')
+              if text.count(old) != 1:
+                  raise SystemExit(f'{name}: current format assertion marker mismatch')
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
@@ -69,7 +96,7 @@ jobs:
           git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src
+          git add src tests
           git diff --cached --quiet && exit 1
           git commit -m "fix: resolve worker 2 issue batch 1 (#186-#230)"
           git push origin HEAD:fix/all-open-issues-worker-2
