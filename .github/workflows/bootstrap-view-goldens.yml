@@ -1,0 +1,63 @@
+name: Bootstrap View Goldens
+
+on:
+  pull_request:
+    branches:
+      - develop
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    name: commit reviewed FHD Golden Images
+    if: github.event.pull_request.head.ref == 'feature/issue-428-visual-e2e'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: src/web/.node-version
+          cache: npm
+          cache-dependency-path: src/web/package-lock.json
+
+      - name: Prepare E2E inputs
+        shell: bash
+        run: source scripts/prepare-e2e.sh
+
+      - name: Generate reviewed FHD Goldens
+        shell: bash
+        env:
+          MVW_E2E_PREPARED: '1'
+          MVW_UPDATE_VISUAL_GOLDEN: '1'
+        run: |
+          set -euo pipefail
+          bash scripts/run-view-phase03-e2e.sh
+          bash scripts/run-view-phase04-e2e.sh
+          test -s src/web/tests/visual/golden/view-physical-world.png
+          test -s src/web/tests/visual/golden/view-settlement-structure.png
+
+      - name: Commit Golden Images and remove bootstrap workflow
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/web/tests/visual/golden/view-physical-world.png
+          git add src/web/tests/visual/golden/view-settlement-structure.png
+          git rm .github/workflows/bootstrap-view-goldens.yml
+          git commit -m 'test: add reviewed FHD visual golden images'
+          git push origin "HEAD:${HEAD_REF}"
