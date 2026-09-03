@@ -60,8 +60,9 @@ public sealed partial class SimulationWorld
     {
         if (!_spectrumBandIndex.TryGetValue(bandId, out var band)) throw new ArgumentException($"Spectrum band {bandId.Value} does not exist.", nameof(bandId));
         EnsureRadioIdCapacity(_nextFrequencyBlockId, "Frequency block");
-        var block = new FrequencyBlock(new FrequencyBlockId(_nextFrequencyBlockId++), bandId, centerFrequencyMegahertz, bandwidthMegahertz);
+        var block = new FrequencyBlock(new FrequencyBlockId(_nextFrequencyBlockId), bandId, centerFrequencyMegahertz, bandwidthMegahertz);
         RadioValidation.ValidateFrequencyBlock(block, band);
+        _nextFrequencyBlockId++;
         _frequencyBlocks.Add(block);
         _frequencyBlockIndex.Add(block.Id, block);
         return block.Id;
