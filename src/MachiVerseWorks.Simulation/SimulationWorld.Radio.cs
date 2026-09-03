@@ -292,6 +292,7 @@ public sealed partial class SimulationWorld
     private void StepRadio(SimulationTime nextTime)
     {
         _ = nextTime;
+        if (!_radioPlanDirty) return;
         RecalculateRadioPlan();
     }
 
