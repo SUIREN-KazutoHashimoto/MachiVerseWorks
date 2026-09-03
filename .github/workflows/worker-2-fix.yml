@@ -6,6 +6,8 @@ on:
       - fix/all-open-issues-worker-2
     paths:
       - .github/workflows/worker-2-fix.yml
+      - .github/scripts/worker2_batch3.py
+      - .github/scripts/worker2_batch3_align.py
 
 permissions:
   contents: write
