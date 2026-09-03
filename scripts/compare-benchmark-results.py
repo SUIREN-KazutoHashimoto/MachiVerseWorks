@@ -54,7 +54,7 @@ def finite_number(value: Any) -> float | None:
 
 def compare_metric(base: float | None, head: float | None, ratio: float) -> tuple[bool, float | None]:
     if base is None or head is None:
-        return True, None
+        return False, None
     if base == 0.0:
         return head == 0.0, None
     observed = head / base
