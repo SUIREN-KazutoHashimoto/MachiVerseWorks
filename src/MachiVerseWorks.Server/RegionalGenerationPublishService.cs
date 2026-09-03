@@ -19,8 +19,8 @@ internal sealed class RegionalGenerationPublishService(
     ObservationCache cache,
     ILogger<RegionalGenerationPublishService> logger) : BackgroundService
 {
-    private static readonly Action<ILogger, ulong, ulong, byte, byte, Exception?> LogEncodingFailure =
-        LoggerMessage.Define<ulong, ulong, byte, byte>(
+    private static readonly Action<ILogger, ulong, ulong, ushort, ushort, Exception?> LogEncodingFailure =
+        LoggerMessage.Define<ulong, ulong, ushort, ushort>(
             LogLevel.Error,
             new EventId(1, nameof(LogEncodingFailure)),
             "Regional Generation observation generation {Generation} source tick {SourceTick} cannot be encoded for Protocol {Major}.{Minor}; delivery is suppressed until the source identity changes.");
@@ -48,13 +48,10 @@ internal sealed class RegionalGenerationPublishService(
                 if (targets.All(connection => _delivered.TryGetValue(connection.Id, out var delivered) && delivered == sourceIdentity))
                     continue;
 
-                // Only materialize the immutable baseline when at least one client actually needs this identity.
                 var observation = observationSource.CaptureRegionalGenerationObservation();
                 var capturedIdentity = new SourceIdentity(observation.Generation, observation.HasSnapshot, observation.SourceTick);
                 if (capturedIdentity != sourceIdentity)
                 {
-                    // The simulation changed between the cheap identity read and full capture. Use the coherent
-                    // captured identity and let the next interval observe any subsequent change.
                     sourceIdentity = capturedIdentity;
                     _failedEncodings.RemoveWhere(item => item.Identity != sourceIdentity);
                 }
@@ -123,8 +120,6 @@ internal sealed class RegionalGenerationPublishService(
                         IsStatic: true);
                     try
                     {
-                        // Legacy Protocol 2.18-2.21 preserves the existing single-frame contract. Oversized
-                        // snapshots are suppressed for those clients instead of disconnecting them.
                         _ = cache.GetOrEncode(cacheKey, () => ObservationProtocolAdapter.Serialize(message, version));
                     }
                     catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or OverflowException)
@@ -199,7 +194,7 @@ internal sealed class RegionalGenerationPublishService(
         Pois: [],
         Toponyms: [],
         RoadSigns: [],
-        Quality: new RegionalQualityReport(0d, 0d, 0d, 0d, 0d, 0d, 0d, 0d, 0d, 0d),
+        Quality: new RegionalQualityReport(0d, 0d, 0d, 0d, 0d, 0d, 0d, 0d, 0d),
         TickCount: tickCount);
 
     private readonly record struct SourceIdentity(ulong Generation, bool HasSnapshot, ulong SourceTick);
