@@ -1,0 +1,43 @@
+name: Worker1 Water Sewer Analyzer Patch
+
+on:
+  push:
+    branches:
+      - fix/all-open-issues-worker-1
+    paths:
+      - .github/workflows/worker1-ws-analyzer-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/all-open-issues-worker-1
+      - name: Patch fields
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/MachiVerseWorks.Simulation/SimulationWorld.WaterSewer.cs')
+          text = p.read_text()
+          old1 = '    private readonly IWaterSupplySolver _waterSupplySolver;'
+          old2 = '    private readonly ISewerSolver _sewerSolver;'
+          if old1 not in text or old2 not in text:
+              raise RuntimeError('Expected Water/Sewer solver fields not found')
+          text = text.replace(old1, '    private readonly ValidatingWaterSupplySolver _waterSupplySolver;', 1)
+          text = text.replace(old2, '    private readonly ValidatingSewerSolver _sewerSolver;', 1)
+          p.write_text(text)
+          PY
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/MachiVerseWorks.Simulation/SimulationWorld.WaterSewer.cs
+          git diff --cached --check
+          git commit -m "fix: use validating Water Sewer solver fields"
+          git push origin HEAD:fix/all-open-issues-worker-1
