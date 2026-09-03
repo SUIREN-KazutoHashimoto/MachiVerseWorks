@@ -128,6 +128,8 @@ internal sealed class SnapshotPublishService(
     E2eMetrics metrics,
     ILogger<SnapshotPublishService> logger) : BackgroundService
 {
+    private readonly MultimodalTransitOversizeDeliveryGate _multimodalOversizeDeliveryGate = new();
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         ServerLog.SnapshotPublisherStarted(logger, options.SnapshotRate);
@@ -220,6 +222,14 @@ internal sealed class SnapshotPublishService(
                     ? MultimodalTransitMessageMapper.Create(publishSnapshot.MultimodalTransit, snapshot.TickCount, subscription.Volume)
                     : MultimodalTransitMessageMapper.Create(publishSnapshot.MultimodalTransit, snapshot.TickCount)
                 : null;
+            if (connection.NegotiatedVersion.SupportsScalableMultimodalTransit
+                && !_multimodalOversizeDeliveryGate.ShouldSend(
+                    connection.Id,
+                    subscription.Revision,
+                    IsMultimodalOversize(multimodalTransitMessage)))
+            {
+                multimodalTransitMessage = null;
+            }
 
             IProtocolMessage? roadMessage = null; var roadStateHandled = false;
             if (staticPlan.SendRoadSnapshot)
@@ -299,8 +309,15 @@ internal sealed class SnapshotPublishService(
         catch (Exception exception) when (SnapshotDeliveryFailurePolicy.IsExpectedClientFailure(exception))
         {
             if (!cancellationToken.IsCancellationRequested) ServerLog.SnapshotDeliveryStopped(logger, connection.Id, exception);
+            _multimodalOversizeDeliveryGate.Remove(connection.Id);
             connection.Abort(); connections.Remove(connection.Id);
         }
         catch (Exception exception) { ServerLog.UnexpectedSnapshotDeliveryFailure(logger, connection.Id, exception); throw; }
     }
+
+    private static bool IsMultimodalOversize(IProtocolMessage? message) =>
+        message is ProtocolErrorMessage error
+        && error.Parameters.Any(parameter =>
+            parameter.Key == ProtocolErrorParameterKeys.DetailCode
+            && parameter.Value == MultimodalTransitMessageMapper.TooLargeDetailCode);
 }
