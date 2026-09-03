@@ -126,11 +126,7 @@ public sealed partial class SimulationWorld
         var previous = new JourneyEdge?[stops.Length];
         Array.Fill(best, ulong.MaxValue);
         var frontier = new PriorityQueue<int, (ulong Cost, ulong StopId)>();
-        Span<TransitStopId> transferCandidateIds;
-        if (stops.Length <= 256)
-            transferCandidateIds = stackalloc TransitStopId[stops.Length];
-        else
-            transferCandidateIds = new TransitStopId[stops.Length];
+        var transferCandidateIds = new TransitStopId[stops.Length];
         for (var index = 0; index < stops.Length; index++)
         {
             var accessTicks = SecondsToTicks(Distance(origin, stops[index].Position) / DefaultWalkingSpeedMetersPerSecond);
