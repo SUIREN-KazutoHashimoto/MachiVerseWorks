@@ -17,4 +17,13 @@ appRoot.append(identity);
 
 const application = new Application(appRoot);
 application.start();
+
+if (new URLSearchParams(window.location.search).get('visualTest') === 'runtime') {
+  void import('./runtime-visual-test.ts').then(({ installRuntimeVisualTest }) => {
+    installRuntimeVisualTest(application);
+  }).catch((error: unknown) => {
+    console.error('Failed to install runtime visual test diagnostics.', error);
+  });
+}
+
 window.addEventListener('beforeunload', () => application.dispose(), { once: true });
