@@ -45,26 +45,38 @@ public sealed partial class SimulationWorld
             ?? throw new ArgumentException($"Railway service {serviceId.Value} does not exist.", nameof(serviceId));
         var timetable = operations.Timetables.First(item => item.Id == service.TimetableId);
         var infrastructure = CreateRailwayInfrastructureSnapshot();
-        var patternStops = new TransitPatternStopSnapshot[timetable.Stops.Count];
-        ulong previousDeparture = 0;
-        for (var index = 0; index < timetable.Stops.Count; index++)
+        var transitCheckpoint = _multimodalTransit.CreateCheckpoint(Time.TickCount);
+        try
         {
-            var timetableStop = timetable.Stops[index];
-            var stop = _multimodalTransit.GetStops().FirstOrDefault(item => item.Kind == TransitStopKind.Railway && item.StationId == timetableStop.StationId);
-            if (stop.Id.Value == 0)
+            var patternStops = new TransitPatternStopSnapshot[timetable.Stops.Count];
+            ulong previousDeparture = 0;
+            for (var index = 0; index < timetable.Stops.Count; index++)
             {
-                var station = infrastructure.Stations.First(item => item.Id == timetableStop.StationId);
-                var bounds = station.Bounds;
-                var position = new WorldPoint((bounds.MinX + bounds.MaxX) * 0.5d, (bounds.MinY + bounds.MaxY) * 0.5d, (bounds.MinZ + bounds.MaxZ) * 0.5d);
-                var id = CreateRailwayTransitStop(timetableStop.StationId, position, timetableStop.PreferredPlatformId);
-                _multimodalTransit.TryGetStop(id, out stop);
+                var timetableStop = timetable.Stops[index];
+                var stop = _multimodalTransit.GetStops().FirstOrDefault(item =>
+                    item.Kind == TransitStopKind.Railway
+                    && item.StationId == timetableStop.StationId
+                    && item.PlatformId == timetableStop.PreferredPlatformId);
+                if (stop.Id.Value == 0)
+                {
+                    var station = infrastructure.Stations.First(item => item.Id == timetableStop.StationId);
+                    var bounds = station.Bounds;
+                    var position = new WorldPoint((bounds.MinX + bounds.MaxX) * 0.5d, (bounds.MinY + bounds.MaxY) * 0.5d, (bounds.MinZ + bounds.MaxZ) * 0.5d);
+                    var id = CreateRailwayTransitStop(timetableStop.StationId, position, timetableStop.PreferredPlatformId);
+                    _multimodalTransit.TryGetStop(id, out stop);
+                }
+                var travel = index == 0 ? 0UL : timetableStop.PlannedArrivalTick > previousDeparture ? timetableStop.PlannedArrivalTick - previousDeparture : 1UL;
+                var dwell = Math.Max(timetableStop.MinimumDwellTicks, timetableStop.PlannedDepartureTick >= timetableStop.PlannedArrivalTick ? timetableStop.PlannedDepartureTick - timetableStop.PlannedArrivalTick : 0UL);
+                patternStops[index] = new TransitPatternStopSnapshot(stop.Id, travel, dwell);
+                previousDeparture = timetableStop.PlannedDepartureTick;
             }
-            var travel = index == 0 ? 0UL : timetableStop.PlannedArrivalTick > previousDeparture ? timetableStop.PlannedArrivalTick - previousDeparture : 1UL;
-            var dwell = Math.Max(timetableStop.MinimumDwellTicks, timetableStop.PlannedDepartureTick >= timetableStop.PlannedArrivalTick ? timetableStop.PlannedDepartureTick - timetableStop.PlannedArrivalTick : 0UL);
-            patternStops[index] = new TransitPatternStopSnapshot(stop.Id, travel, dwell);
-            previousDeparture = timetableStop.PlannedDepartureTick;
+            return _multimodalTransit.AddPattern(lineId, patternStops, serviceId);
         }
-        return _multimodalTransit.AddPattern(lineId, patternStops, serviceId);
+        catch
+        {
+            _multimodalTransit.Restore(transitCheckpoint);
+            throw;
+        }
     }
 
     public TransitTripId CreateTransitTrip(TransitServicePatternId patternId, ulong plannedStartTick) => _multimodalTransit.AddTrip(patternId, plannedStartTick);
@@ -261,15 +273,25 @@ public sealed partial class SimulationWorld
             if (vehicle.State == TransitVehicleMovementState.EnRouteToStop && vehicle.RoadVehicleId is { } roadVehicleId)
             {
                 if (!TryGetVehicleSnapshot(roadVehicleId, out var roadVehicle)) continue;
-                vehicle.Position = roadVehicle.Position;
-                if (roadVehicle.State != VehicleMovementState.Arrived) continue;
+                if (roadVehicle.State != VehicleMovementState.Arrived)
+                {
+                    vehicle.Position = roadVehicle.Position;
+                    continue;
+                }
+
+                var nextStopIndex = checked(vehicle.StopIndex + 1);
+                var stop = GetTransitStop(pattern.Stops[nextStopIndex].StopId);
+                var dwellUntilTick = checked(tickCount + pattern.Stops[nextStopIndex].DwellTicks);
+                var nextState = nextStopIndex == pattern.Stops.Count - 1
+                    ? TransitVehicleMovementState.Completed
+                    : TransitVehicleMovementState.Dwelling;
+
                 RemoveVehicleCore(roadVehicleId);
                 vehicle.RoadVehicleId = null;
-                vehicle.StopIndex++;
-                var stop = GetTransitStop(pattern.Stops[vehicle.StopIndex].StopId);
+                vehicle.StopIndex = nextStopIndex;
                 vehicle.Position = stop.Position;
-                vehicle.DwellUntilTick = checked(tickCount + pattern.Stops[vehicle.StopIndex].DwellTicks);
-                vehicle.State = vehicle.StopIndex == pattern.Stops.Count - 1 ? TransitVehicleMovementState.Completed : TransitVehicleMovementState.Dwelling;
+                vehicle.DwellUntilTick = dwellUntilTick;
+                vehicle.State = nextState;
                 continue;
             }
             if (vehicle.State is TransitVehicleMovementState.AwaitingDeparture or TransitVehicleMovementState.Dwelling)
@@ -445,7 +467,9 @@ public sealed partial class SimulationWorld
 
     private ulong SecondsToTicks(double seconds)
     {
-        if (!double.IsFinite(seconds) || seconds <= 0d) return 1;
+        if (!double.IsFinite(seconds))
+            throw new InvalidOperationException("Travel time must be finite.");
+        if (seconds <= 0d) return 1;
         var ticks = Math.Ceiling(seconds * Config.TickRate);
         return ticks >= ulong.MaxValue ? ulong.MaxValue : Math.Max(1UL, (ulong)ticks);
     }
