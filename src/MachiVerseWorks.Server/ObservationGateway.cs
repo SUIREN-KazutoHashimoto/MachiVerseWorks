@@ -268,6 +268,7 @@ internal static class ObservationProtocolAdapter
             SpectrumSnapshotMessage spectrum => RadioProtocolCodec.Serialize(spectrum, version),
             WorldEnvironmentSnapshotMessage worldEnvironment => WorldEnvironmentProtocolCodec.Serialize(worldEnvironment, version),
             RegionalGenerationSnapshotMessage regionalGeneration => RegionalGenerationProtocolCodec.Serialize(regionalGeneration, version),
+            RegionalGenerationSnapshotChunkMessage regionalGenerationChunk => RegionalGenerationSnapshotChunkProtocolCodec.Serialize(regionalGenerationChunk, version),
             PersistentRegionalEvolutionSnapshotMessage regionalEvolution => PersistentRegionalEvolutionProtocolCodec.Serialize(regionalEvolution, version),
             InspectEntityMessage or ClearEntityInspectionMessage or EntityInspectionSnapshotMessage => EntityInspectionProtocolCodec.Serialize(message, version),
             InspectPersonMessage or PopulationStatisticsMessage or PersonDebugMessage => PopulationProtocolCodec.Serialize(message, version),
