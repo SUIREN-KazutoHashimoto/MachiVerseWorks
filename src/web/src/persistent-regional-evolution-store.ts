@@ -26,10 +26,29 @@ export interface ReadonlyPersistentRegionalEvolutionStore {
   getEventsForSettlement(settlementId: bigint): readonly RegionalEvolutionEventObservation[];
 }
 
+interface PendingBatch {
+  readonly snapshotId: bigint;
+  readonly currentYear: number;
+  readonly tickCount: bigint;
+  readonly chunkCount: number;
+  nextChunkIndex: number;
+  lastEventId: bigint;
+  readonly settlements: Map<bigint, SettlementEvolutionObservation>;
+  readonly parcels: Map<bigint, ParcelEvolutionObservation>;
+  readonly buildings: Map<bigint, BuildingLifecycleObservation>;
+  readonly serviceCatchments: ServiceCatchmentObservation[];
+  readonly infrastructureDemands: InfrastructureDemandObservation[];
+  readonly relations: Map<bigint, RegionalRelationObservation>;
+  readonly events: Map<bigint, RegionalEvolutionEventObservation>;
+  readonly commutingFlows: RegionalCommutingFlowObservation[];
+  readonly freightFlows: RegionalFreightFlowObservation[];
+}
+
 /**
- * Read-only View index over authoritative Protocol 2.19 persistent regional evolution state.
- * The server publishes a full logical snapshot as ordered chunks. The first chunk resets the
- * batch (`isFullSnapshot=true`); following chunks append to the same currentYear/tickCount.
+ * Read-only View index over authoritative persistent regional evolution state.
+ * Batch-aware chunks are accumulated in private mutable staging and become visible atomically
+ * only after the final ordered chunk arrives. Legacy Protocol 2.19 chunks without batch metadata
+ * retain the original incremental assembly path for wire compatibility.
  */
 export class PersistentRegionalEvolutionStore implements ReadonlyPersistentRegionalEvolutionStore {
   private current: PersistentRegionalEvolutionSnapshotMessage | null = null;
@@ -45,6 +64,7 @@ export class PersistentRegionalEvolutionStore implements ReadonlyPersistentRegio
   private freightFlows: RegionalFreightFlowObservation[] = [];
   private relationsBySettlement = new Map<bigint, readonly RegionalRelationObservation[]>();
   private eventsBySettlement = new Map<bigint, readonly RegionalEvolutionEventObservation[]>();
+  private pending: PendingBatch | null = null;
 
   public get snapshot(): PersistentRegionalEvolutionSnapshotMessage | null { return this.current; }
   public get revision(): number { return this.currentRevision; }
@@ -76,6 +96,112 @@ export class PersistentRegionalEvolutionStore implements ReadonlyPersistentRegio
   }
 
   public apply(chunk: PersistentRegionalEvolutionSnapshotMessage): void {
+    const snapshotId = chunk.snapshotId ?? 0n;
+    const chunkIndex = chunk.chunkIndex ?? 0;
+    const chunkCount = chunk.chunkCount ?? 1;
+    if (snapshotId === 0n && chunkIndex === 0 && chunkCount === 1) {
+      this.applyLegacy(chunk);
+      return;
+    }
+    this.applyBatch(chunk, snapshotId, chunkIndex, chunkCount);
+  }
+
+  /** Compatibility seam for deterministic tests and callers that already hold one full message. */
+  public replace(snapshot: PersistentRegionalEvolutionSnapshotMessage): void {
+    if (!snapshot.isFullSnapshot) throw new ProtocolDecodeFailure('PersistentRegionalEvolution replace requires a full snapshot chunk.');
+    const chunkCount = snapshot.chunkCount ?? 1;
+    if (chunkCount !== 1) throw new ProtocolDecodeFailure('PersistentRegionalEvolution replace requires one complete logical snapshot.');
+    this.pending = null;
+    this.applyLegacy(snapshot);
+  }
+
+  public clear(): void {
+    this.pending = null;
+    if (this.current === null) return;
+    this.current = null;
+    this.resetCollections();
+    this.currentRevision += 1;
+  }
+
+  private applyBatch(chunk: PersistentRegionalEvolutionSnapshotMessage, snapshotId: bigint, chunkIndex: number, chunkCount: number): void {
+    if (snapshotId <= 0n || !Number.isInteger(chunkIndex) || !Number.isInteger(chunkCount) || chunkCount <= 0 || chunkIndex < 0 || chunkIndex >= chunkCount) {
+      this.pending = null;
+      throw new ProtocolDecodeFailure('PersistentRegionalEvolution batch metadata is invalid.');
+    }
+
+    if (chunkIndex === 0) {
+      if (!chunk.isFullSnapshot) {
+        this.pending = null;
+        throw new ProtocolDecodeFailure('PersistentRegionalEvolution batch must start with a full snapshot chunk.');
+      }
+      this.pending = createPendingBatch(snapshotId, chunk.currentYear, chunk.tickCount, chunkCount);
+    } else {
+      const pending = this.pending;
+      if (chunk.isFullSnapshot || pending === null || pending.snapshotId !== snapshotId || pending.currentYear !== chunk.currentYear
+        || pending.tickCount !== chunk.tickCount || pending.chunkCount !== chunkCount || pending.nextChunkIndex !== chunkIndex) {
+        this.pending = null;
+        throw new ProtocolDecodeFailure('PersistentRegionalEvolution continuation chunk is missing, duplicated, out of order, or belongs to a different batch.');
+      }
+    }
+
+    const pending = this.pending;
+    if (pending === null) throw new ProtocolDecodeFailure('PersistentRegionalEvolution batch staging is unavailable.');
+    try {
+      appendChunk(pending, chunk);
+    } catch (error) {
+      this.pending = null;
+      throw error;
+    }
+    pending.nextChunkIndex = chunkIndex + 1;
+    if (pending.nextChunkIndex === pending.chunkCount) this.commitPending(pending);
+  }
+
+  private commitPending(pending: PendingBatch): void {
+    const settlements = Object.freeze([...pending.settlements.values()]);
+    const parcels = Object.freeze([...pending.parcels.values()]);
+    const buildings = Object.freeze([...pending.buildings.values()]);
+    const serviceCatchments = Object.freeze([...pending.serviceCatchments]);
+    const infrastructureDemands = Object.freeze([...pending.infrastructureDemands]);
+    const relations = Object.freeze([...pending.relations.values()]);
+    const events = Object.freeze([...pending.events.values()]);
+    const commutingFlows = Object.freeze([...pending.commutingFlows]);
+    const freightFlows = Object.freeze([...pending.freightFlows]);
+
+    this.settlements = pending.settlements;
+    this.parcels = pending.parcels;
+    this.buildings = pending.buildings;
+    this.serviceCatchments = pending.serviceCatchments;
+    this.infrastructureDemands = pending.infrastructureDemands;
+    this.relations = pending.relations;
+    this.events = pending.events;
+    this.commutingFlows = pending.commutingFlows;
+    this.freightFlows = pending.freightFlows;
+    this.relationsBySettlement = groupRelations(relations);
+    this.eventsBySettlement = groupBy(events, (item) => item.settlementId);
+    this.current = Object.freeze({
+      type: PERSISTENT_REGIONAL_EVOLUTION_SNAPSHOT_MESSAGE_TYPE,
+      currentYear: pending.currentYear,
+      tickCount: pending.tickCount,
+      settlements,
+      parcels,
+      buildings,
+      serviceCatchments,
+      infrastructureDemands,
+      relations,
+      events,
+      commutingFlows,
+      freightFlows,
+      isFullSnapshot: true,
+      snapshotId: pending.snapshotId,
+      chunkIndex: 0,
+      chunkCount: 1,
+    });
+    this.pending = null;
+    this.currentRevision += 1;
+  }
+
+  private applyLegacy(chunk: PersistentRegionalEvolutionSnapshotMessage): void {
+    this.pending = null;
     if (chunk.isFullSnapshot) {
       this.resetCollections();
     } else if (this.current === null || this.current.currentYear !== chunk.currentYear || this.current.tickCount !== chunk.tickCount) {
@@ -108,20 +234,10 @@ export class PersistentRegionalEvolutionStore implements ReadonlyPersistentRegio
       commutingFlows: Object.freeze([...this.commutingFlows]),
       freightFlows: Object.freeze([...this.freightFlows]),
       isFullSnapshot: true,
+      snapshotId: chunk.snapshotId ?? 0n,
+      chunkIndex: 0,
+      chunkCount: 1,
     });
-    this.currentRevision += 1;
-  }
-
-  /** Compatibility seam for deterministic tests and callers that already hold one full message. */
-  public replace(snapshot: PersistentRegionalEvolutionSnapshotMessage): void {
-    if (!snapshot.isFullSnapshot) throw new ProtocolDecodeFailure('PersistentRegionalEvolution replace requires a full snapshot chunk.');
-    this.apply(snapshot);
-  }
-
-  public clear(): void {
-    if (this.current === null) return;
-    this.current = null;
-    this.resetCollections();
     this.currentRevision += 1;
   }
 
@@ -138,6 +254,47 @@ export class PersistentRegionalEvolutionStore implements ReadonlyPersistentRegio
     this.relationsBySettlement.clear();
     this.eventsBySettlement.clear();
   }
+}
+
+function createPendingBatch(snapshotId: bigint, currentYear: number, tickCount: bigint, chunkCount: number): PendingBatch {
+  return {
+    snapshotId,
+    currentYear,
+    tickCount,
+    chunkCount,
+    nextChunkIndex: 0,
+    lastEventId: 0n,
+    settlements: new Map(),
+    parcels: new Map(),
+    buildings: new Map(),
+    serviceCatchments: [],
+    infrastructureDemands: [],
+    relations: new Map(),
+    events: new Map(),
+    commutingFlows: [],
+    freightFlows: [],
+  };
+}
+
+function appendChunk(pending: PendingBatch, chunk: PersistentRegionalEvolutionSnapshotMessage): void {
+  for (const item of chunk.settlements) addUnique(pending.settlements, item.settlementId, item, 'Settlement');
+  for (const item of chunk.parcels) addUnique(pending.parcels, item.parcelId, item, 'Parcel');
+  for (const item of chunk.buildings) addUnique(pending.buildings, item.buildingId, item, 'Building');
+  pending.serviceCatchments.push(...chunk.serviceCatchments);
+  pending.infrastructureDemands.push(...chunk.infrastructureDemands);
+  for (const item of chunk.relations) addUnique(pending.relations, item.relationId, item, 'Relation');
+  for (const item of chunk.events) {
+    if (item.eventId <= pending.lastEventId) throw new ProtocolDecodeFailure('PersistentRegionalEvolution Event IDs must increase across the complete batch.');
+    addUnique(pending.events, item.eventId, item, 'Event');
+    pending.lastEventId = item.eventId;
+  }
+  pending.commutingFlows.push(...chunk.commutingFlows);
+  pending.freightFlows.push(...chunk.freightFlows);
+}
+
+function addUnique<T>(map: Map<bigint, T>, id: bigint, item: T, label: string): void {
+  if (map.has(id)) throw new ProtocolDecodeFailure(`PersistentRegionalEvolution ${label} ID is duplicated across chunks.`);
+  map.set(id, item);
 }
 
 const EMPTY_RELATIONS: readonly RegionalRelationObservation[] = Object.freeze([]);
