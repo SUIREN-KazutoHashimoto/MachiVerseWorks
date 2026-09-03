@@ -35,6 +35,17 @@ jobs:
           path.write_text(text, encoding='utf-8')
       - name: Apply final batch fixes
         run: python .github/scripts/worker2_batch4.py
+      - name: Align generated validator analyzer compliance
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('src/MachiVerseWorks.Protocol/RailwayInfrastructureProtocolValidator.cs')
+          text = path.read_text(encoding='utf-8')
+          old = 'throw new ArgumentOutOfRangeException("message", $"{label} IDs must be unique and greater than zero.");'
+          new = 'throw new ArgumentOutOfRangeException(nameof(ids), $"{label} IDs must be unique and greater than zero.");'
+          if text.count(old) != 1:
+              raise SystemExit('Railway validator CA2208 alignment target mismatch')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
