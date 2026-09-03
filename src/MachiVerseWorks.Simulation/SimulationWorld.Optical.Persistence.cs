@@ -101,7 +101,7 @@ public sealed partial class SimulationWorld
 
         var nodeIds = ValidateOpticalCheckpointIds(
             optical.Nodes.Select(static item => item.Id.Value), optical.NextNodeId, "Optical node");
-        var cableIds = ValidateOpticalCheckpointIds(
+        _ = ValidateOpticalCheckpointIds(
             optical.FiberCables.Select(static item => item.Id.Value), optical.NextFiberCableId, "Fiber cable");
         _ = ValidateOpticalCheckpointIds(
             optical.Equipment.Select(static item => item.Id.Value), optical.NextEquipmentId, "Optical equipment");
@@ -111,6 +111,8 @@ public sealed partial class SimulationWorld
             optical.Demands.Select(static item => item.Id.Value), optical.NextDemandId, "Optical demand");
         var buildings = checkpoint.Buildings.Select(static item => item.Id).ToHashSet();
         var establishments = checkpoint.Economy?.Establishments.Select(static item => item.Id).ToHashSet() ?? [];
+        var cableById = optical.FiberCables.ToDictionary(static item => item.Id);
+        var backhaulById = optical.Backhauls.ToDictionary(static item => item.Id);
 
         foreach (var item in optical.Nodes)
         {
@@ -163,9 +165,17 @@ public sealed partial class SimulationWorld
                 throw new ArgumentException($"Optical demand {item.Id.Value} references a missing Establishment.", nameof(checkpoint));
             if (item.BackhaulId is { } backhaulId && !backhaulIds.Contains(backhaulId.Value))
                 throw new ArgumentException($"Optical demand {item.Id.Value} references a missing Backhaul.", nameof(checkpoint));
-            foreach (var cableId in item.RouteCableIds)
-                if (!cableIds.Contains(cableId.Value))
-                    throw new ArgumentException($"Optical demand {item.Id.Value} route references a missing FiberCable.", nameof(checkpoint));
+            if (!IsValidOpticalRouteTopology(
+                    item.NodeId,
+                    item.BackhaulId,
+                    item.AllocatedGigabitsPerSecond,
+                    item.RouteCableIds,
+                    id => backhaulById.TryGetValue(id, out var backhaul) ? backhaul.NodeId : null,
+                    id => cableById.TryGetValue(id, out var cable)
+                        ? new OpticalRouteCableValidation(cable.FromNodeId, cable.ToNodeId, cable.IsInService)
+                        : null,
+                    requireInService: false))
+                throw new ArgumentException($"Optical demand {item.Id.Value} contains a disconnected or inconsistent route.", nameof(checkpoint));
         }
     }
 

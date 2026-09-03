@@ -29,6 +29,18 @@ public sealed class RailwayOperationsProtocolTests
     }
 
     [TestMethod]
+    public void RailwayOperationsRejectDuplicateAndBrokenSnapshotReferences()
+    {
+        var timetable = new ProtocolTimetable(5, [new ProtocolTimetableStop(11, 80, 100, 10, 9), new ProtocolTimetableStop(12, 170, 190, 10, 0)]);
+        var service = new ProtocolRailwayServiceState(3, 2, 4, 5, 6, 7, 1, 1, 18, 1, 1);
+        var train = new ProtocolTrainState(1, 2, 3, 4, 10, 20, 3, 1, 0, 0, 12.5, 4, 8, 9, 10, 0, 140);
+        var valid = new RailwayOperationsSnapshotMessage(1, [train], [service], [timetable]);
+        _ = RailwayOperationsProtocolCodec.Serialize(valid, ProtocolVersion.Current);
+        Assert.ThrowsExactly<InvalidDataException>(() => RailwayOperationsProtocolCodec.Serialize(valid with { Trains = [train, train] }, ProtocolVersion.Current));
+        Assert.ThrowsExactly<InvalidDataException>(() => RailwayOperationsProtocolCodec.Serialize(valid with { Services = [service with { TimetableId = 999 }] }, ProtocolVersion.Current));
+    }
+
+    [TestMethod]
     public void Protocol26CannotSerializeRailwayOperations()
     {
         var message = new RailwayOperationsSnapshotMessage(0, [], [], []);

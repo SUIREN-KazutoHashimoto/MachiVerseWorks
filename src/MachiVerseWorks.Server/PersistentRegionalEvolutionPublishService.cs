@@ -6,10 +6,9 @@ namespace MachiVerseWorks.Server;
 internal sealed class PersistentRegionalEvolutionPublishService(
     IObservationSource observationSource,
     ServerOptions options,
-    ClientConnectionRegistry connections) : BackgroundService
+    ClientConnectionRegistry connections,
+    ObservationDeliveryCoordinator deliveryCoordinator) : BackgroundService
 {
-    private static readonly TimeSpan ClientSendTimeout = TimeSpan.FromSeconds(5);
-
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(options.SnapshotInterval);
@@ -26,22 +25,13 @@ internal sealed class PersistentRegionalEvolutionPublishService(
                 var captured = observationSource.CapturePersistentRegionalEvolutionSnapshot();
                 if (captured is null) continue;
                 var message = PersistentRegionalEvolutionMessageMapper.ToProtocol(captured.Value.Evolution, captured.Value.Interactions);
-                var chunks = PersistentRegionalEvolutionProtocolChunker.Split(message);
+                var chunks = PersistentRegionalEvolutionProtocolChunker.Split(message).Cast<IProtocolMessage>().ToArray();
                 foreach (var connection in targets)
-                {
-                    try
-                    {
-                        using var sendCancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-                        sendCancellation.CancelAfter(ClientSendTimeout);
-                        foreach (var chunk in chunks)
-                            _ = await connection.SendAsync(chunk, connection.NegotiatedVersion, sendCancellation.Token);
-                    }
-                    catch (Exception exception) when (exception is WebSocketException or OperationCanceledException or ObjectDisposedException or ArgumentOutOfRangeException)
-                    {
-                        connection.Abort();
-                        connections.Remove(connection.Id);
-                    }
-                }
+                    _ = deliveryCoordinator.TrySchedule(
+                        connection,
+                        ObservationDeliveryLane.PersistentRegionalEvolution,
+                        chunks,
+                        stoppingToken);
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

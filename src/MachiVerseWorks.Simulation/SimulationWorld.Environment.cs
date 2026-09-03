@@ -172,6 +172,7 @@ public sealed partial class SimulationWorld
         {
             if (feature.ParentId is { } parentId && !featureIds.Contains(parentId)) throw new ArgumentException("Geographic feature references a missing parent.", nameof(checkpoint));
         }
+        ValidateAcyclicParentGraph(worldEnvironment.Features.Select(static item => (item.Id, item.ParentId)), "Geographic feature", nameof(checkpoint));
         var toponymIds = new HashSet<ToponymId>();
         foreach (var toponym in worldEnvironment.Toponyms)
         {
@@ -187,6 +188,38 @@ public sealed partial class SimulationWorld
         {
             if (toponym.Provenance.ParentToponymId is { } parentId && !toponymIds.Contains(parentId))
                 throw new ArgumentException("Toponym provenance references a missing parent toponym.", nameof(checkpoint));
+        }
+        ValidateAcyclicParentGraph(worldEnvironment.Toponyms.Select(static item => (item.Id, item.Provenance.ParentToponymId)), "Natural toponym", nameof(checkpoint));
+    }
+
+    private static void ValidateAcyclicParentGraph<T>(IEnumerable<(T Id, T? ParentId)> nodes, string entityName, string parameterName)
+        where T : struct, IEquatable<T>
+    {
+        var parents = nodes.ToDictionary(static item => item.Id, static item => item.ParentId);
+        var states = new Dictionary<T, byte>(parents.Count);
+        var path = new List<T>();
+        foreach (var start in parents.Keys)
+        {
+            if (states.TryGetValue(start, out var startState) && startState == 2) continue;
+
+            path.Clear();
+            var current = start;
+            while (true)
+            {
+                if (states.TryGetValue(current, out var state))
+                {
+                    if (state == 1)
+                        throw new ArgumentException($"{entityName} parent graph contains a cycle.", parameterName);
+                    break;
+                }
+
+                states[current] = 1;
+                path.Add(current);
+                if (!parents.TryGetValue(current, out var parent) || parent is not { } parentId) break;
+                current = parentId;
+            }
+
+            foreach (var id in path) states[id] = 2;
         }
     }
 }

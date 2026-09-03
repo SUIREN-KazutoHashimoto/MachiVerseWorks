@@ -158,9 +158,10 @@ main
 
 バージョンは `A.B.C` 形式で管理する。
 
-- `A`: `main` 向け PR を作成するときに `+1` し、`B = 0`, `C = 0` にリセットする。
-- `B`: `develop` 向け PR を作成するときに `+1` し、`C = 0` にリセットする。
-- `C`: 通常のコミットを作成するときに `+1` する。
+- `A`: releaseとして`main`へ統合する明示的なversion更新で`+1`し、`B = 0`, `C = 0`にリセットする。
+- `B`: `develop`上の統合versionを進める明示的なversion更新で`+1`し、`C = 0`にリセットする。
+- `C`: 必要に応じた通常のversion更新で`+1`する。
+- 並行worker branchや通常PRでは`VERSION`を据え置いてよく、version更新を各PRへ機械的に要求しない。`VERSION`を変更したPRだけbranch別transitionを厳密に検証する。
 
 例: `1.4.12`
 

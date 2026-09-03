@@ -6,6 +6,7 @@ public static class PopulationProtocolCodec
 {
     private const int InspectPersonPayloadLength = 8;
     private const int PopulationStatisticsPayloadLength = 56;
+    private const int PopulationStatisticsWithTransitPayloadLength = 60;
     private const int PersonDebugPayloadLength = 100;
     private const byte NullEnum = byte.MaxValue;
 
@@ -18,11 +19,11 @@ public static class PopulationProtocolCodec
         var payloadLength = message switch
         {
             InspectPersonMessage => InspectPersonPayloadLength,
-            PopulationStatisticsMessage => PopulationStatisticsPayloadLength,
+            PopulationStatisticsMessage => version.SupportsPopulationTransitCount ? PopulationStatisticsWithTransitPayloadLength : PopulationStatisticsPayloadLength,
             PersonDebugMessage => PersonDebugPayloadLength,
             _ => throw new ArgumentException($"Unsupported population message implementation: {message.GetType().FullName}.", nameof(message)),
         };
-        var frame = new byte[ProtocolFrameHeader.Size + payloadLength];
+        var frame = new byte[ProtocolFrameHeader.GetFrameLength(payloadLength)];
         ProtocolFrameHeader.Write(frame, new ProtocolFrameHeader(version, message.Type, checked((uint)payloadLength)));
         var payload = frame.AsSpan(ProtocolFrameHeader.Size);
         switch (message)
@@ -32,7 +33,7 @@ public static class PopulationProtocolCodec
                 WriteUInt64(payload, inspect.PersonId);
                 break;
             case PopulationStatisticsMessage statistics:
-                WriteStatistics(payload, statistics);
+                WriteStatistics(payload, statistics, version);
                 break;
             case PersonDebugMessage person:
                 WritePerson(payload, person);
@@ -64,12 +65,15 @@ public static class PopulationProtocolCodec
                 message = new InspectPersonMessage(ReadUInt64(payload));
                 break;
             case MessageType.PopulationStatistics:
-                if (payload.Length != PopulationStatisticsPayloadLength)
+                var expectedStatisticsLength = header.Version.SupportsPopulationTransitCount
+                    ? PopulationStatisticsWithTransitPayloadLength
+                    : PopulationStatisticsPayloadLength;
+                if (payload.Length != expectedStatisticsLength)
                 {
                     error = ProtocolDecodeError.InvalidPayload;
                     return false;
                 }
-                message = ReadStatistics(payload);
+                message = ReadStatistics(payload, header.Version);
                 break;
             case MessageType.PersonDebug:
                 if (!TryReadPerson(payload, out var person))
@@ -89,7 +93,7 @@ public static class PopulationProtocolCodec
         return true;
     }
 
-    private static void WriteStatistics(Span<byte> payload, PopulationStatisticsMessage message)
+    private static void WriteStatistics(Span<byte> payload, PopulationStatisticsMessage message, ProtocolVersion version)
     {
         WriteUInt32(payload, message.HouseholdCount);
         WriteUInt32(payload[4..], message.PersonCount);
@@ -104,9 +108,10 @@ public static class PopulationProtocolCodec
         WriteUInt32(payload[40..], message.RecreationCount);
         WriteUInt32(payload[44..], message.ErrandCount);
         WriteUInt64(payload[48..], message.TickCount);
+        if (version.SupportsPopulationTransitCount) WriteUInt32(payload[56..], message.TransitCount);
     }
 
-    private static PopulationStatisticsMessage ReadStatistics(ReadOnlySpan<byte> payload) => new(
+    private static PopulationStatisticsMessage ReadStatistics(ReadOnlySpan<byte> payload, ProtocolVersion version) => new(
         ReadUInt32(payload),
         ReadUInt32(payload[4..]),
         ReadUInt32(payload[8..]),
@@ -119,7 +124,8 @@ public static class PopulationProtocolCodec
         ReadUInt32(payload[36..]),
         ReadUInt32(payload[40..]),
         ReadUInt32(payload[44..]),
-        ReadUInt64(payload[48..]));
+        ReadUInt64(payload[48..]),
+        version.SupportsPopulationTransitCount ? ReadUInt32(payload[56..]) : 0u);
 
     private static void WritePerson(Span<byte> payload, PersonDebugMessage message)
     {

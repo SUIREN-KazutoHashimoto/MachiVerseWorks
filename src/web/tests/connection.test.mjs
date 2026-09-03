@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   MachiVerseConnection,
+  computeReconnectDelay,
   protocolVersionsEqual,
   resolveNegotiatedProtocolVersion,
 } from '../src/connection.ts';
@@ -41,6 +42,20 @@ test('HelloAck rejects versions newer than the client supports', () => {
     ),
     /unsupported protocol version/,
   );
+});
+
+test('reconnect delay applies jitter without going below the configured minimum', () => {
+  assert.equal(computeReconnectDelay(0, 1_000, 5_000, () => 0), 1_000);
+  assert.equal(computeReconnectDelay(0, 1_000, 5_000, () => 1), 1_000);
+  assert.equal(computeReconnectDelay(2, 1_000, 5_000, () => 0), 2_000);
+  assert.equal(computeReconnectDelay(2, 1_000, 5_000, () => 1), 4_000);
+  assert.equal(computeReconnectDelay(3, 1_000, 5_000, () => 0), 2_500);
+  assert.equal(computeReconnectDelay(8, 1_000, 5_000, () => 1), 5_000);
+});
+
+test('reconnect delay clamps an injected random source to the valid interval', () => {
+  assert.equal(computeReconnectDelay(1, 1_000, 5_000, () => -1), 1_000);
+  assert.equal(computeReconnectDelay(1, 1_000, 5_000, () => 2), 2_000);
 });
 
 test('handshake sends only the latest desired observation volume accumulated while disconnected', async () => {

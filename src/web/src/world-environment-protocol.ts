@@ -174,6 +174,7 @@ function normalizeAndValidateSnapshot(raw: WireWorldEnvironmentSnapshot): WorldE
   const featureIds = new Set(features.map((feature) => feature.featureId));
   if (featureIds.size !== features.length || featureIds.has(0n)) throw new ProtocolDecodeFailure('WorldEnvironment GeographicFeature IDs are invalid.');
   for (const feature of features) if (feature.parentFeatureId !== 0n && !featureIds.has(feature.parentFeatureId)) throw new ProtocolDecodeFailure('WorldEnvironment GeographicFeature parent reference is invalid.');
+  assertAcyclicParents(features.map((feature) => [feature.featureId, feature.parentFeatureId] as const), 'WorldEnvironment GeographicFeature');
 
   const toponyms = Object.freeze(raw.toponyms.map((toponym) => normalizeToponym(toponym)));
   const toponymIds = new Set(toponyms.map((toponym) => toponym.toponymId));
@@ -182,6 +183,7 @@ function normalizeAndValidateSnapshot(raw: WireWorldEnvironmentSnapshot): WorldE
     if (!featureIds.has(toponym.featureId) || !featureIds.has(toponym.sourceFeatureId)) throw new ProtocolDecodeFailure('WorldEnvironment Toponym feature reference is invalid.');
     if (toponym.parentToponymId !== 0n && !toponymIds.has(toponym.parentToponymId)) throw new ProtocolDecodeFailure('WorldEnvironment Toponym parent reference is invalid.');
   }
+  assertAcyclicParents(toponyms.map((toponym) => [toponym.toponymId, toponym.parentToponymId] as const), 'WorldEnvironment Toponym');
 
   return Object.freeze({
     type: WORLD_ENVIRONMENT_SNAPSHOT_MESSAGE_TYPE,
@@ -245,6 +247,31 @@ function normalizeToponym(raw: WireNaturalToponym): NaturalToponymObservation {
     sourceFeatureId: parsePositiveUInt64(raw.sourceFeatureId, 'Toponym source feature ID'),
     parentToponymId: parseUInt64(raw.parentToponymId, 'Toponym parent ID'),
   });
+}
+
+function assertAcyclicParents(nodes: readonly (readonly [bigint, bigint])[], name: string): void {
+  const parents = new Map(nodes);
+  const states = new Map<bigint, 1 | 2>();
+  const path: bigint[] = [];
+  for (const start of parents.keys()) {
+    if (states.get(start) === 2) continue;
+
+    path.length = 0;
+    let current = start;
+    while (true) {
+      const state = states.get(current);
+      if (state === 1) throw new ProtocolDecodeFailure(`${name} parent graph contains a cycle.`);
+      if (state === 2) break;
+
+      states.set(current, 1);
+      path.push(current);
+      const parent = parents.get(current);
+      if (parent === undefined || parent === 0n) break;
+      current = parent;
+    }
+
+    for (const id of path) states.set(id, 2);
+  }
 }
 
 function validateVolume(value: { readonly minX: number; readonly minY: number; readonly minZ: number; readonly maxX: number; readonly maxY: number; readonly maxZ: number }): void {

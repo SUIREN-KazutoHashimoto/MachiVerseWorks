@@ -37,7 +37,7 @@ pre-shared bearer credentialを3段階のscopeへ分離する。
 | --- | --- | --- |
 | read | `read` | status / version / diagnostics / logs / Entity inspect |
 | write | `read`, `write` | readに加えてpause / step / resume / save / Entity add・update |
-| destructive | `read`, `write`, `destructive` | 上記に加えて許可済みEntity remove |
+| destructive | `read`, `write`, `destructive` | 上記に加えてsave overwriteと許可済みEntity remove |
 
 設定tokenは32文字以上かつ相互に異なる値とする。runtimeでは比較用SHA-256 hashのみ保持し、raw tokenをlogへ出力しない。
 
@@ -80,6 +80,7 @@ write Tool:
 
 Destructive Tool:
 
+- `simulation_save_overwrite`
 - `entity_remove`
 
 公開しない操作:
@@ -110,13 +111,13 @@ Administration側が`add`のみ提供するFormation、Rail Route、Timetable、
 
 `simulation_save`はpathではなくslot名を受け取る。slotは1〜64文字のASCII英数字、`.`, `_`, `-`に限定し、`.`と`..`を禁止する。
 
-実pathは常に`Server:Mcp:SaveDirectory`配下へ生成し、既存`world save` commandへ渡す。Directory作成・アクセスの失敗はMCP adapter内でstable `io_error`へ変換する。
+実pathは常に`Server:Mcp:SaveDirectory`配下へ生成する。通常の`simulation_save`は`world save-new`へmappingして既存slotを上書きせず、既存時はstable `conflict`を返す。既存slotの更新は`destructive` scopeと`confirm=true`を要求する`simulation_save_overwrite`だけが`world save`へmappingする。Directory作成・アクセスの失敗はMCP adapter内でstable `io_error`へ変換する。
 
 Remote MCPから`world load`は公開しない。authoritative world置換はPhase 27のremote trust boundaryより広いconfirmation / failure surfaceを持つためである。
 
 ## Bounded diagnostics / logs
 
-MCP有効時だけbounded memory `ILoggerProvider`を登録する。`logs_query`はこのtailのみ検索し、filesystem上のlog fileへアクセスしない。
+MCP用のbounded memory log bufferは一般`ILoggerProvider`として登録しない。Remote MCP Administration境界がstable codeなどallowlist済み情報だけから生成したsanitized eventを明示的に投入し、`logs_query`はこのtailのみ検索する。operator入力、credential、任意filesystem path、一般exception textを含み得る通常Server logはMCPへ転送せず、filesystem上のlog fileにもアクセスしない。
 
 log resultが`MaxResultBytes`を超える場合、serialized JSON文字列を途中sliceしない。entry数を削減して再serializationし、常にvalid JSONを返す。
 

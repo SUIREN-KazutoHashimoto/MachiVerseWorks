@@ -45,26 +45,38 @@ public sealed partial class SimulationWorld
             ?? throw new ArgumentException($"Railway service {serviceId.Value} does not exist.", nameof(serviceId));
         var timetable = operations.Timetables.First(item => item.Id == service.TimetableId);
         var infrastructure = CreateRailwayInfrastructureSnapshot();
-        var patternStops = new TransitPatternStopSnapshot[timetable.Stops.Count];
-        ulong previousDeparture = 0;
-        for (var index = 0; index < timetable.Stops.Count; index++)
+        var transitCheckpoint = _multimodalTransit.CreateCheckpoint(Time.TickCount);
+        try
         {
-            var timetableStop = timetable.Stops[index];
-            var stop = _multimodalTransit.GetStops().FirstOrDefault(item => item.Kind == TransitStopKind.Railway && item.StationId == timetableStop.StationId);
-            if (stop.Id.Value == 0)
+            var patternStops = new TransitPatternStopSnapshot[timetable.Stops.Count];
+            ulong previousDeparture = 0;
+            for (var index = 0; index < timetable.Stops.Count; index++)
             {
-                var station = infrastructure.Stations.First(item => item.Id == timetableStop.StationId);
-                var bounds = station.Bounds;
-                var position = new WorldPoint((bounds.MinX + bounds.MaxX) * 0.5d, (bounds.MinY + bounds.MaxY) * 0.5d, (bounds.MinZ + bounds.MaxZ) * 0.5d);
-                var id = CreateRailwayTransitStop(timetableStop.StationId, position, timetableStop.PreferredPlatformId);
-                _multimodalTransit.TryGetStop(id, out stop);
+                var timetableStop = timetable.Stops[index];
+                var stop = _multimodalTransit.GetStops().FirstOrDefault(item =>
+                    item.Kind == TransitStopKind.Railway
+                    && item.StationId == timetableStop.StationId
+                    && item.PlatformId == timetableStop.PreferredPlatformId);
+                if (stop.Id.Value == 0)
+                {
+                    var station = infrastructure.Stations.First(item => item.Id == timetableStop.StationId);
+                    var bounds = station.Bounds;
+                    var position = new WorldPoint((bounds.MinX + bounds.MaxX) * 0.5d, (bounds.MinY + bounds.MaxY) * 0.5d, (bounds.MinZ + bounds.MaxZ) * 0.5d);
+                    var id = CreateRailwayTransitStop(timetableStop.StationId, position, timetableStop.PreferredPlatformId);
+                    _multimodalTransit.TryGetStop(id, out stop);
+                }
+                var travel = index == 0 ? 0UL : timetableStop.PlannedArrivalTick > previousDeparture ? timetableStop.PlannedArrivalTick - previousDeparture : 1UL;
+                var dwell = Math.Max(timetableStop.MinimumDwellTicks, timetableStop.PlannedDepartureTick >= timetableStop.PlannedArrivalTick ? timetableStop.PlannedDepartureTick - timetableStop.PlannedArrivalTick : 0UL);
+                patternStops[index] = new TransitPatternStopSnapshot(stop.Id, travel, dwell);
+                previousDeparture = timetableStop.PlannedDepartureTick;
             }
-            var travel = index == 0 ? 0UL : timetableStop.PlannedArrivalTick > previousDeparture ? timetableStop.PlannedArrivalTick - previousDeparture : 1UL;
-            var dwell = Math.Max(timetableStop.MinimumDwellTicks, timetableStop.PlannedDepartureTick >= timetableStop.PlannedArrivalTick ? timetableStop.PlannedDepartureTick - timetableStop.PlannedArrivalTick : 0UL);
-            patternStops[index] = new TransitPatternStopSnapshot(stop.Id, travel, dwell);
-            previousDeparture = timetableStop.PlannedDepartureTick;
+            return _multimodalTransit.AddPattern(lineId, patternStops, serviceId);
         }
-        return _multimodalTransit.AddPattern(lineId, patternStops, serviceId);
+        catch
+        {
+            _multimodalTransit.Restore(transitCheckpoint);
+            throw;
+        }
     }
 
     public TransitTripId CreateTransitTrip(TransitServicePatternId patternId, ulong plannedStartTick) => _multimodalTransit.AddTrip(patternId, plannedStartTick);
@@ -254,15 +266,25 @@ public sealed partial class SimulationWorld
             if (vehicle.State == TransitVehicleMovementState.EnRouteToStop && vehicle.RoadVehicleId is { } roadVehicleId)
             {
                 if (!TryGetVehicleSnapshot(roadVehicleId, out var roadVehicle)) continue;
-                vehicle.Position = roadVehicle.Position;
-                if (roadVehicle.State != VehicleMovementState.Arrived) continue;
-                RemoveVehicle(roadVehicleId);
+                if (roadVehicle.State != VehicleMovementState.Arrived)
+                {
+                    vehicle.Position = roadVehicle.Position;
+                    continue;
+                }
+
+                var nextStopIndex = checked(vehicle.StopIndex + 1);
+                var stop = GetTransitStop(pattern.Stops[nextStopIndex].StopId);
+                var dwellUntilTick = checked(tickCount + pattern.Stops[nextStopIndex].DwellTicks);
+                var nextState = nextStopIndex == pattern.Stops.Count - 1
+                    ? TransitVehicleMovementState.Completed
+                    : TransitVehicleMovementState.Dwelling;
+
+                RemoveVehicleCore(roadVehicleId);
                 vehicle.RoadVehicleId = null;
-                vehicle.StopIndex++;
-                var stop = GetTransitStop(pattern.Stops[vehicle.StopIndex].StopId);
+                vehicle.StopIndex = nextStopIndex;
                 vehicle.Position = stop.Position;
-                vehicle.DwellUntilTick = checked(tickCount + pattern.Stops[vehicle.StopIndex].DwellTicks);
-                vehicle.State = vehicle.StopIndex == pattern.Stops.Count - 1 ? TransitVehicleMovementState.Completed : TransitVehicleMovementState.Dwelling;
+                vehicle.DwellUntilTick = dwellUntilTick;
+                vehicle.State = nextState;
                 continue;
             }
             if (vehicle.State is TransitVehicleMovementState.AwaitingDeparture or TransitVehicleMovementState.Dwelling)
@@ -275,9 +297,11 @@ public sealed partial class SimulationWorld
                 try
                 {
                     var route = FindRoadRoute(new RouteRequest(from.Position, to.Position, RoutingCostMetric.EstimatedTravelTime));
-                    vehicle.RoadVehicleId = CreateVehicle(route, new VehicleDimensions(12d, 2.55d, 3.2d), new VehiclePerformance(22.2222222222d, 1.2d, 3d, 2.5d, 2d));
+                    var estimatedArrivalTick = checked(tickCount + pattern.Stops[vehicle.StopIndex + 1].TravelTicksFromPrevious);
+                    var spawnedRoadVehicleId = CreateVehicle(route, new VehicleDimensions(12d, 2.55d, 3.2d), new VehiclePerformance(22.2222222222d, 1.2d, 3d, 2.5d, 2d));
+                    vehicle.RoadVehicleId = spawnedRoadVehicleId;
                     vehicle.State = TransitVehicleMovementState.EnRouteToStop;
-                    vehicle.EstimatedArrivalTick = checked(tickCount + pattern.Stops[vehicle.StopIndex + 1].TravelTicksFromPrevious);
+                    vehicle.EstimatedArrivalTick = estimatedArrivalTick;
                 }
                 catch (InvalidOperationException) { }
             }
@@ -297,7 +321,7 @@ public sealed partial class SimulationWorld
                 if (!TryGetVehicleSnapshot(roadVehicleId, out var roadVehicle)) continue;
                 vehicle.Position = roadVehicle.Position;
                 if (roadVehicle.State != VehicleMovementState.Arrived) continue;
-                RemoveVehicle(roadVehicleId);
+                RemoveVehicleCore(roadVehicleId);
                 vehicle.RoadVehicleId = null;
                 if (vehicle.State == TransitVehicleMovementState.EnRouteToPickup)
                 {
@@ -305,7 +329,7 @@ public sealed partial class SimulationWorld
                     request.State = TaxiRequestState.PickingUp;
                     request.PickupTick = tickCount;
                     StartTaxiRoadLeg(vehicle, request, request.Pickup, request.DropOff, TransitVehicleMovementState.EnRouteToDropOff);
-                    request.State = TaxiRequestState.Riding;
+                    if (vehicle.State == TransitVehicleMovementState.EnRouteToDropOff) request.State = TaxiRequestState.Riding;
                 }
                 else if (vehicle.State == TransitVehicleMovementState.EnRouteToDropOff)
                 {
@@ -326,9 +350,11 @@ public sealed partial class SimulationWorld
         try
         {
             var route = FindRoadRoute(new RouteRequest(origin, destination, RoutingCostMetric.EstimatedTravelTime));
-            vehicle.RoadVehicleId = CreateVehicle(route);
+            var estimatedArrivalTick = checked(Time.TickCount + SecondsToTicks(route.EstimatedTravelTimeSeconds));
+            var roadVehicleId = CreateVehicle(route);
+            vehicle.RoadVehicleId = roadVehicleId;
             vehicle.State = state;
-            vehicle.EstimatedArrivalTick = checked(Time.TickCount + SecondsToTicks(route.EstimatedTravelTimeSeconds));
+            vehicle.EstimatedArrivalTick = estimatedArrivalTick;
         }
         catch (InvalidOperationException)
         {
@@ -356,8 +382,8 @@ public sealed partial class SimulationWorld
         var lineById = transit.Lines.ToDictionary(static item => item.Id);
         var patternById = transit.Patterns.ToDictionary(static item => item.Id);
         var roadVehicleIds = (checkpoint.Vehicles ?? []).Select(static item => item.Id).ToHashSet();
-        var transitVehicleIds = transit.Vehicles.Select(static item => item.Id).ToHashSet();
-        var tripIds = transit.Trips.Select(static item => item.Id).ToHashSet();
+        var transitVehicleById = transit.Vehicles.ToDictionary(static item => item.Id);
+        var tripById = transit.Trips.ToDictionary(static item => item.Id);
         var journeyById = transit.Journeys.ToDictionary(static item => item.Id);
 
         foreach (var stop in transit.Stops)
@@ -392,16 +418,74 @@ public sealed partial class SimulationWorld
             else if (pattern.RailwayServiceId is not null) throw new ArgumentException($"Bus Pattern {pattern.Id.Value} cannot reference a Railway Service.", nameof(checkpoint));
         }
         foreach (var trip in transit.Trips)
+        {
             if (!patternById.ContainsKey(trip.PatternId)) throw new ArgumentException($"Transit Trip {trip.Id.Value} references a missing Pattern.", nameof(checkpoint));
+            if (trip.VehicleId is { } vehicleId
+                && (!transitVehicleById.TryGetValue(vehicleId, out var vehicle)
+                    || vehicle.Kind != TransitVehicleKind.Bus
+                    || vehicle.TripId != trip.Id))
+                throw new ArgumentException($"Transit Trip {trip.Id.Value} has a mismatched Bus Vehicle reference.", nameof(checkpoint));
+        }
         foreach (var vehicle in transit.Vehicles)
         {
             if (!Enum.IsDefined(vehicle.Kind) || !Enum.IsDefined(vehicle.State)) throw new ArgumentException($"Transit Vehicle {vehicle.Id.Value} has invalid state.", nameof(checkpoint));
-            if (vehicle.Kind == TransitVehicleKind.Bus && (vehicle.TripId is not { } busTripId || !tripIds.Contains(busTripId))) throw new ArgumentException($"Bus Vehicle {vehicle.Id.Value} references a missing Trip.", nameof(checkpoint));
-            if (vehicle.Kind == TransitVehicleKind.Taxi && vehicle.TripId is not null) throw new ArgumentException($"Taxi Vehicle {vehicle.Id.Value} cannot reference a scheduled Transit Trip.", nameof(checkpoint));
             if (vehicle.RoadVehicleId is { } roadVehicleId && !roadVehicleIds.Contains(roadVehicleId)) throw new ArgumentException($"Transit Vehicle {vehicle.Id.Value} references a missing Road Vehicle.", nameof(checkpoint));
+
+            if (vehicle.Kind == TransitVehicleKind.Bus)
+            {
+                if (vehicle.TripId is not { } busTripId || !tripById.TryGetValue(busTripId, out var trip) || trip.VehicleId != vehicle.Id)
+                    throw new ArgumentException($"Bus Vehicle {vehicle.Id.Value} has a missing or mismatched Transit Trip.", nameof(checkpoint));
+                if (!patternById.TryGetValue(trip.PatternId, out var pattern) || !lineById.TryGetValue(pattern.LineId, out var line) || line.Mode != TransitMode.Bus)
+                    throw new ArgumentException($"Bus Vehicle {vehicle.Id.Value} does not reference a Bus pattern.", nameof(checkpoint));
+                if (vehicle.StopIndex < 0 || vehicle.StopIndex >= pattern.Stops.Count)
+                    throw new ArgumentException($"Bus Vehicle {vehicle.Id.Value} has an invalid StopIndex.", nameof(checkpoint));
+                if (vehicle.State is TransitVehicleMovementState.Idle or TransitVehicleMovementState.EnRouteToPickup or TransitVehicleMovementState.EnRouteToDropOff)
+                    throw new ArgumentException($"Bus Vehicle {vehicle.Id.Value} has a Taxi-only movement state.", nameof(checkpoint));
+                if (vehicle.State == TransitVehicleMovementState.EnRouteToStop)
+                {
+                    if (vehicle.RoadVehicleId is null || vehicle.StopIndex >= pattern.Stops.Count - 1)
+                        throw new ArgumentException($"Bus Vehicle {vehicle.Id.Value} cannot continue its en-route state.", nameof(checkpoint));
+                }
+                else if (vehicle.RoadVehicleId is not null)
+                {
+                    throw new ArgumentException($"Bus Vehicle {vehicle.Id.Value} has a Road Vehicle outside its en-route state.", nameof(checkpoint));
+                }
+                if (vehicle.State == TransitVehicleMovementState.AwaitingDeparture && vehicle.StopIndex != 0)
+                    throw new ArgumentException($"Bus Vehicle {vehicle.Id.Value} must await departure at its first stop.", nameof(checkpoint));
+                if (vehicle.State == TransitVehicleMovementState.Completed && vehicle.StopIndex != pattern.Stops.Count - 1)
+                    throw new ArgumentException($"Completed Bus Vehicle {vehicle.Id.Value} must be at its final stop.", nameof(checkpoint));
+            }
+            else
+            {
+                if (vehicle.TripId is not null) throw new ArgumentException($"Taxi Vehicle {vehicle.Id.Value} cannot reference a scheduled Transit Trip.", nameof(checkpoint));
+                if (vehicle.State is not (TransitVehicleMovementState.Idle or TransitVehicleMovementState.EnRouteToPickup or TransitVehicleMovementState.EnRouteToDropOff))
+                    throw new ArgumentException($"Taxi Vehicle {vehicle.Id.Value} has a Bus-only movement state.", nameof(checkpoint));
+                if (vehicle.State == TransitVehicleMovementState.Idle && vehicle.RoadVehicleId is not null)
+                    throw new ArgumentException($"Idle Taxi Vehicle {vehicle.Id.Value} cannot retain a Road Vehicle.", nameof(checkpoint));
+                if (vehicle.State is (TransitVehicleMovementState.EnRouteToPickup or TransitVehicleMovementState.EnRouteToDropOff) && vehicle.RoadVehicleId is null)
+                    throw new ArgumentException($"En-route Taxi Vehicle {vehicle.Id.Value} requires a Road Vehicle.", nameof(checkpoint));
+            }
         }
+
+        var activeTaxiVehicles = new HashSet<TransitVehicleId>();
         foreach (var request in transit.TaxiRequests)
-            if (request.AssignedVehicleId is { } vehicleId && !transitVehicleIds.Contains(vehicleId)) throw new ArgumentException($"Taxi Request {request.Id.Value} references a missing Transit Vehicle.", nameof(checkpoint));
+        {
+            if (!Enum.IsDefined(request.State)) throw new ArgumentException($"Taxi Request {request.Id.Value} has an invalid state.", nameof(checkpoint));
+            var isActive = request.State is TaxiRequestState.Assigned or TaxiRequestState.PickingUp or TaxiRequestState.Riding;
+            if (request.State == TaxiRequestState.Requested && request.AssignedVehicleId is not null)
+                throw new ArgumentException($"Requested Taxi Request {request.Id.Value} cannot already have an assigned Vehicle.", nameof(checkpoint));
+            if (isActive && request.AssignedVehicleId is null)
+                throw new ArgumentException($"Active Taxi Request {request.Id.Value} requires an assigned Vehicle.", nameof(checkpoint));
+            if (request.AssignedVehicleId is not { } vehicleId) continue;
+            if (!transitVehicleById.TryGetValue(vehicleId, out var vehicle) || vehicle.Kind != TransitVehicleKind.Taxi)
+                throw new ArgumentException($"Taxi Request {request.Id.Value} references a missing or non-Taxi Vehicle.", nameof(checkpoint));
+            if (isActive && !activeTaxiVehicles.Add(vehicleId))
+                throw new ArgumentException($"Taxi Vehicle {vehicleId.Value} is assigned to multiple active Taxi Requests.", nameof(checkpoint));
+            if (request.State == TaxiRequestState.Riding && vehicle.State != TransitVehicleMovementState.EnRouteToDropOff)
+                throw new ArgumentException($"Riding Taxi Request {request.Id.Value} is not paired with a drop-off Vehicle state.", nameof(checkpoint));
+            if (request.State == TaxiRequestState.Assigned && vehicle.State is not (TransitVehicleMovementState.Idle or TransitVehicleMovementState.EnRouteToPickup))
+                throw new ArgumentException($"Assigned Taxi Request {request.Id.Value} is paired with an invalid Vehicle state.", nameof(checkpoint));
+        }
         foreach (var journey in transit.Journeys)
         {
             if (journey.Legs.Count == 0) throw new ArgumentException($"Journey {journey.Id.Value} has no legs.", nameof(checkpoint));
@@ -417,6 +501,7 @@ public sealed partial class SimulationWorld
         foreach (var passenger in transit.Passengers)
         {
             if (!journeyById.TryGetValue(passenger.JourneyId, out var journey)) throw new ArgumentException($"Passenger {passenger.Id.Value} references a missing Journey.", nameof(checkpoint));
+            if (passenger.TripRequestId != journey.TripRequestId) throw new ArgumentException($"Passenger {passenger.Id.Value} belongs to a different TripRequest than its Journey.", nameof(checkpoint));
             if (passenger.LegIndex < 0 || passenger.LegIndex >= journey.Legs.Count) throw new ArgumentException($"Passenger {passenger.Id.Value} has an invalid Journey leg index.", nameof(checkpoint));
             if (!Enum.IsDefined(passenger.State)) throw new ArgumentException($"Passenger {passenger.Id.Value} has an invalid state.", nameof(checkpoint));
         }
@@ -434,7 +519,9 @@ public sealed partial class SimulationWorld
 
     private ulong SecondsToTicks(double seconds)
     {
-        if (!double.IsFinite(seconds) || seconds <= 0d) return 1;
+        if (!double.IsFinite(seconds))
+            throw new InvalidOperationException("Travel time must be finite.");
+        if (seconds <= 0d) return 1;
         var ticks = Math.Ceiling(seconds * Config.TickRate);
         return ticks >= ulong.MaxValue ? ulong.MaxValue : Math.Max(1UL, (ulong)ticks);
     }

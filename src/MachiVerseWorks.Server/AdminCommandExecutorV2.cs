@@ -49,7 +49,15 @@ internal sealed class AdminCommandExecutorV2(
             {
                 try
                 {
-                    request.Completion.TrySetResult(await ExecuteCoreAsync(request.Command, stoppingToken));
+                    using var executionCancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, request.CancellationToken);
+                    request.CancellationToken.ThrowIfCancellationRequested();
+                    var result = await ExecuteCoreAsync(request.Command, executionCancellation.Token);
+                    request.CancellationToken.ThrowIfCancellationRequested();
+                    request.Completion.TrySetResult(result);
+                }
+                catch (OperationCanceledException) when (request.CancellationToken.IsCancellationRequested)
+                {
+                    request.Completion.TrySetCanceled(request.CancellationToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -420,21 +428,112 @@ internal sealed class AdminCommandExecutorV2(
 
     private async Task<AdminCommandResult> WorldAsync(AdminCommand command, CancellationToken cancellationToken)
     {
-        var action = Action(command, "world"); var path = Path.GetFullPath(Arg(command, 1, "path"));
-        if (Eq(action, "save"))
+        var action = Action(command, "world");
+        var path = Path.GetFullPath(Arg(command, 1, "path"));
+        if (Eq(action, "save") || Eq(action, "save-new"))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var detached = SimulationWorld.RestoreCheckpoint(simulation.CaptureCheckpoint());
+            cancellationToken.ThrowIfCancellationRequested();
             var data = WorldSaveSerializer.Serialize(detached);
-            await File.WriteAllBytesAsync(path, data, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (Eq(action, "save"))
+            {
+                await WriteWorldSaveAtomicallyAsync(path, data, cancellationToken);
+            }
+            else
+            {
+                try
+                {
+                    await WriteWorldSaveAtomicallyNewAsync(path, data, cancellationToken);
+                }
+                catch (IOException) when (File.Exists(path))
+                {
+                    return new AdminCommandResult(AdminCommandResultCode.Conflict, $"World save '{path}' already exists.");
+                }
+            }
             return AdminCommandResult.Ok($"World saved to '{path}'.");
         }
         if (Eq(action, "load"))
         {
-            var world = WorldSaveSerializer.Deserialize(await File.ReadAllBytesAsync(path, cancellationToken));
+            await using var stream = new FileStream(
+                path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                bufferSize: 81_920,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+            var world = await WorldSaveSerializer.LoadAsync(stream, WorldSaveLimits.Default, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             simulation.ReplaceWorld(world);
+            foreach (var connection in connections.CreateSnapshot())
+            {
+                connection.Abort();
+                connections.Remove(connection.Id);
+            }
             return AdminCommandResult.Ok($"World loaded from '{path}'.");
         }
         return InvalidAction("world", action);
+    }
+
+    private static Task WriteWorldSaveAtomicallyAsync(
+        string path,
+        ReadOnlyMemory<byte> data,
+        CancellationToken cancellationToken) =>
+        WriteWorldSaveAtomicallyCoreAsync(path, data, overwrite: true, cancellationToken);
+
+    private static Task WriteWorldSaveAtomicallyNewAsync(
+        string path,
+        ReadOnlyMemory<byte> data,
+        CancellationToken cancellationToken) =>
+        WriteWorldSaveAtomicallyCoreAsync(path, data, overwrite: false, cancellationToken);
+
+    private static async Task WriteWorldSaveAtomicallyCoreAsync(
+        string path,
+        ReadOnlyMemory<byte> data,
+        bool overwrite,
+        CancellationToken cancellationToken)
+    {
+        var directory = Path.GetDirectoryName(path) ?? throw new IOException("Save path does not have a parent directory.");
+        var tempPath = Path.Combine(directory, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            await using (var stream = new FileStream(
+                tempPath,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None,
+                bufferSize: 81_920,
+                FileOptions.Asynchronous | FileOptions.SequentialScan))
+            {
+                await stream.WriteAsync(data, cancellationToken);
+                await stream.FlushAsync(cancellationToken);
+                stream.Flush(flushToDisk: true);
+            }
+
+            if (overwrite && !OperatingSystem.IsWindows() && File.Exists(path))
+            {
+                File.SetUnixFileMode(tempPath, File.GetUnixFileMode(path));
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(tempPath, path, overwrite);
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(tempPath)) File.Delete(tempPath);
+            }
+            catch (IOException)
+            {
+                // Cleanup must not hide the original save result. A later save uses a unique temp name.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Cleanup must not hide the original save result.
+            }
+        }
     }
 
     private AdminCommandResult RailwayMutate(AdminCommand command, string entity, string action)

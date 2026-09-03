@@ -54,7 +54,8 @@ internal sealed class MultimodalTransitStore
     public TransitServicePatternId AddPattern(TransitLineId lineId, IReadOnlyList<TransitPatternStopSnapshot> patternStops, RailwayServiceId? railwayServiceId = null)
     {
         if (!lines.TryGetValue(lineId, out var line)) throw new ArgumentException($"Transit line {lineId.Value} does not exist.", nameof(lineId));
-        if (railwayServiceId is not null && line.Mode != TransitMode.Railway) throw new ArgumentException("Railway Service can only be linked to a Railway line.", nameof(railwayServiceId));
+        if (line.Mode == TransitMode.Railway && railwayServiceId is null) throw new ArgumentException("Railway transit patterns require a Railway Service.", nameof(railwayServiceId));
+        if (line.Mode != TransitMode.Railway && railwayServiceId is not null) throw new ArgumentException("Railway Service can only be linked to a Railway line.", nameof(railwayServiceId));
         ArgumentNullException.ThrowIfNull(patternStops);
         if (patternStops.Count < 2) throw new ArgumentException("A service pattern requires at least two stops.", nameof(patternStops));
         var copied = new TransitPatternStopSnapshot[patternStops.Count];
@@ -91,14 +92,15 @@ internal sealed class MultimodalTransitStore
         if (trip.VehicleId is not null) throw new InvalidOperationException($"Transit trip {tripId.Value} already has a Vehicle.");
         var pattern = patterns[trip.PatternId];
         if (lines[pattern.LineId].Mode != TransitMode.Bus) throw new InvalidOperationException("Only Bus trips can create a Road Traffic bus Vehicle.");
+        var first = stops[pattern.Stops[0].StopId];
+        var dwellUntilTick = checked(trip.PlannedStartTick + pattern.Stops[0].DwellTicks);
         EnsureCapacity(nextVehicleId, "Transit vehicle");
         var id = new TransitVehicleId(nextVehicleId++);
-        var first = stops[pattern.Stops[0].StopId];
         vehicles.Add(id, new TransitVehicleState(id, TransitVehicleKind.Bus, tripId, first.Position)
         {
             State = TransitVehicleMovementState.AwaitingDeparture,
             EstimatedArrivalTick = trip.PlannedStartTick,
-            DwellUntilTick = checked(trip.PlannedStartTick + pattern.Stops[0].DwellTicks),
+            DwellUntilTick = dwellUntilTick,
         });
         trips[tripId] = trip with { VehicleId = id };
         return id;
@@ -136,9 +138,10 @@ internal sealed class MultimodalTransitStore
             checked { total += leg.EstimatedDurationTicks + leg.TransferTicks; }
             copied[index] = leg;
         }
+        var estimatedArrivalTick = checked(departureTick + total);
         EnsureCapacity(nextJourneyId, "Journey");
         var id = new JourneyId(nextJourneyId++);
-        journeys.Add(id, new JourneySnapshot(id, tripRequestId, departureTick, checked(departureTick + total), Array.AsReadOnly(copied)));
+        journeys.Add(id, new JourneySnapshot(id, tripRequestId, departureTick, estimatedArrivalTick, Array.AsReadOnly(copied)));
         return id;
     }
 
@@ -161,6 +164,8 @@ internal sealed class MultimodalTransitStore
     public bool TryGetJourney(JourneyId id, out JourneySnapshot snapshot) => journeys.TryGetValue(id, out snapshot!);
     public bool RemoveJourney(JourneyId id) => journeys.Remove(id);
     public bool TryGetVehicle(TransitVehicleId id, out TransitVehicleState state) => vehicles.TryGetValue(id, out state!);
+    public bool ContainsRoadVehicleReference(VehicleId id) => vehicles.Values.Any(item => item.RoadVehicleId == id);
+    public bool ContainsLaneReference(LaneId id) => stops.Values.Any(item => item.LaneId == id);
     public bool TryGetTaxiRequest(TaxiRequestId id, out TaxiRequestStateData state) => taxiRequests.TryGetValue(id, out state!);
 
     public bool TryGetPassengerForTrip(TripRequestId id, out PassengerStateData state)
@@ -297,16 +302,31 @@ internal sealed class MultimodalTransitStore
                     passenger.StateEnteredTick = tickCount;
                     break;
                 case PassengerState.Boarding:
-                    if (elapsed >= 1) { passenger.State = PassengerState.Riding; passenger.StateEnteredTick = tickCount; } break;
+                    if (elapsed >= 1) { passenger.State = PassengerState.Riding; passenger.StateEnteredTick = tickCount; }
+                    break;
                 case PassengerState.Riding:
-                    if (elapsed >= Math.Max(1UL, leg.EstimatedDurationTicks)) { passenger.State = PassengerState.Alighting; passenger.StateEnteredTick = tickCount; } break;
+                    if (elapsed >= Math.Max(1UL, leg.EstimatedDurationTicks)) { passenger.State = PassengerState.Alighting; passenger.StateEnteredTick = tickCount; }
+                    break;
                 case PassengerState.Alighting:
                     if (elapsed < 1) break;
-                    if (passenger.LegIndex >= journey.Legs.Count - 1) { passenger.State = PassengerState.Arrived; passenger.StateEnteredTick = tickCount; }
-                    else { passenger.LegIndex++; passenger.State = leg.TransferTicks > 0 ? PassengerState.Transfer : PassengerState.Waiting; passenger.StateEnteredTick = tickCount; }
+                    if (passenger.LegIndex >= journey.Legs.Count - 1)
+                    {
+                        passenger.State = PassengerState.Arrived;
+                    }
+                    else if (leg.TransferTicks > 0)
+                    {
+                        passenger.State = PassengerState.Transfer;
+                    }
+                    else
+                    {
+                        passenger.LegIndex++;
+                        passenger.State = PassengerState.Waiting;
+                    }
+                    passenger.StateEnteredTick = tickCount;
                     break;
                 case PassengerState.Transfer:
-                    if (elapsed < Math.Max(1UL, leg.EstimatedDurationTicks)) break;
+                    var transferTicks = IsTransferWalk(leg) ? leg.EstimatedDurationTicks : leg.TransferTicks;
+                    if (elapsed < Math.Max(1UL, transferTicks)) break;
                     if (passenger.LegIndex >= journey.Legs.Count - 1)
                     {
                         passenger.State = PassengerState.Arrived;

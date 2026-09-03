@@ -6,9 +6,9 @@ namespace MachiVerseWorks.Protocol.Tests;
 public sealed class ProtocolVersionTests
 {
     [TestMethod]
-    public void CurrentProtocolIs220AndAdvertisesEntityInspection()
+    public void CurrentProtocolIs221AndAdvertisesPopulationTransitCount()
     {
-        Assert.AreEqual(new ProtocolVersion(2, 20), ProtocolVersion.Current);
+        Assert.AreEqual(new ProtocolVersion(2, 21), ProtocolVersion.Current);
         Assert.IsTrue(ProtocolVersion.Current.SupportsMultimodalTransit);
         Assert.IsTrue(ProtocolVersion.Current.SupportsPersonInspectionClear);
         Assert.IsTrue(ProtocolVersion.Current.SupportsEconomy);
@@ -22,6 +22,8 @@ public sealed class ProtocolVersionTests
         Assert.IsTrue(ProtocolVersion.Current.SupportsRegionalGeneration);
         Assert.IsTrue(ProtocolVersion.Current.SupportsPersistentRegionalEvolution);
         Assert.IsTrue(ProtocolVersion.Current.SupportsEntityInspection);
+        Assert.IsTrue(ProtocolVersion.Current.SupportsPopulationTransitCount);
+        Assert.IsFalse(new ProtocolVersion(2, 20).SupportsPopulationTransitCount);
         Assert.IsFalse(new ProtocolVersion(2, 7).SupportsMultimodalTransit);
         Assert.IsFalse(new ProtocolVersion(2, 8).SupportsPersonInspectionClear);
         Assert.IsFalse(new ProtocolVersion(2, 9).SupportsEconomy);
@@ -54,8 +56,8 @@ public sealed class ProtocolVersionTests
     {
         var supported = ProtocolVersion.Current;
 
-        Assert.IsFalse(supported.TryNegotiate(new ProtocolVersion(2, 21), out _));
-        Assert.IsFalse(supported.TryNegotiate(new ProtocolVersion(1, 20), out _));
+        Assert.IsFalse(supported.TryNegotiate(new ProtocolVersion(2, 22), out _));
+        Assert.IsFalse(supported.TryNegotiate(new ProtocolVersion(1, 21), out _));
         Assert.IsFalse(supported.TryNegotiate(new ProtocolVersion(3, 0), out _));
     }
 }

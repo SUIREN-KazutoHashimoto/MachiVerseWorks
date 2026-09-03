@@ -59,6 +59,22 @@ public sealed class RadioProtocolTests
     }
 
     [TestMethod]
+    public void RadioAndSpectrumRejectDuplicateStableIdsAndDanglingReferences()
+    {
+        var radio = new RadioSnapshotMessage(
+            new ProtocolRadioStatistics(1, 0, 0, 0, 0, 0, 0, 0, 0, 0d, 1),
+            [new ProtocolRadioSite(1, ProtocolRadioSiteKind.Macro, 0, 0, 0, 0, 1, true)],
+            [new ProtocolRadioAntenna(1, 1, 0, 0, 0, 1, 0, 0, 1, ProtocolRadioAntennaPatternKind.Omnidirectional, 360, 0, true)],
+            [],
+            [new ProtocolRadioReceiver(1, 1, 1, 100, 200, -100, true, true), new ProtocolRadioReceiver(1, 1, 1, 100, 200, -100, true, true)],
+            [], [], []);
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => RadioProtocolCodec.Serialize(radio, ProtocolVersion.Current));
+
+        var spectrum = new SpectrumSnapshotMessage(1, [new ProtocolSpectrumBand(1, "band", 100, 200)], [new ProtocolFrequencyBlock(1, 999, 150, 10)], []);
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => RadioProtocolCodec.Serialize(spectrum, ProtocolVersion.Current));
+    }
+
+    [TestMethod]
     public void Protocol215RejectsRadioSnapshots()
     {
         var message = new RadioSnapshotMessage(new ProtocolRadioStatistics(0, 0, 0, 0, 0, 0, 0, 0, 0, 0d, 0), [], [], [], [], [], [], []);

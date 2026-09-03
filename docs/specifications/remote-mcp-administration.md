@@ -70,7 +70,7 @@ Browserから別Originの`/mcp`へ接続する場合、`Authorization`を伴うr
 
 ### `logs_query`
 
-memory上のbounded log tailのみを検索する。
+Remote MCP境界が明示的に生成したsanitized eventだけを保持するmemory上のbounded log tailを検索する。一般`ILogger`出力はこのtailへ自動転送しない。
 
 - `limit`: 1から`MaxQueryItems`
 - `contains`: categoryまたはmessageへのcase-insensitive filter
@@ -101,7 +101,7 @@ Remote MCPからの無制限な`list`は提供しない。大規模worldでread 
 
 ### `simulation_save`
 
-任意pathではなく安全なslot名のみを受け取る。実pathは`<SaveDirectory>/<slot>.mvw`としてServer側で生成し、既存`world save`へmappingする。
+任意pathではなく安全なslot名のみを受け取る。実pathは`<SaveDirectory>/<slot>.mvw`としてServer側で生成し、非上書きの`world save-new`へmappingする。既存slotが存在する場合は上書きせずstable `conflict`を返す。
 
 slotは1〜64文字のASCII英数字、`.`, `_`, `-`のみとし、`.`と`..`は禁止する。`world load`はRemote MCPへ公開しない。
 
@@ -119,6 +119,10 @@ operation allowlistはEntity単位ではなくoperation単位で定義する。
 Formation / Rail Route / Timetable / Service / Trainは現行Administration境界では`add`のみのため、Remote MCPから`update`を許可しない。Vehicle spawnおよびconnection controlはgeneric mutation allowlistへ含めない。
 
 ## Destructive Tool
+
+### `simulation_save_overwrite`
+
+`destructive` scopeと`confirm=true`を必須とし、`<SaveDirectory>/<slot>.mvw`へ`world save`で明示的に上書き保存する。通常の`simulation_save`から既存slotの破壊的更新を分離する。
 
 ### `entity_remove`
 

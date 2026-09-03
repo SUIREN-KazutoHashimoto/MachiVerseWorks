@@ -161,5 +161,22 @@ public sealed class ObservationCacheTests
         Assert.AreEqual(1UL, replaced.ObservationRevision);
     }
 
+    [TestMethod]
+    public void FailedTopologyMutationDoesNotAdvanceTopologyOrObservationRevision()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Simulation:InitialAgentCount"] = "0", ["Simulation:TickRate"] = "1" })
+            .Build();
+        var runtime = new SimulationRuntime(ServerOptions.Load(configuration), configuration);
+        var roadRevision = runtime.RoadRevision;
+        var observationRevision = runtime.ObservationRevision;
+
+        var removed = runtime.Mutate(static world => world.RemoveRoadNode(new RoadNodeId(999999)), roadTopologyChanged: true);
+
+        Assert.IsFalse(removed);
+        Assert.AreEqual(roadRevision, runtime.RoadRevision);
+        Assert.AreEqual(observationRevision, runtime.ObservationRevision);
+    }
+
     private sealed record CacheValue(int Value);
 }

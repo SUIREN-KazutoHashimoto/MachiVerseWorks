@@ -126,6 +126,88 @@ public sealed class MultimodalTransitTests
 
 
     [TestMethod]
+    public void CheckpointRejectsBrokenTaxiAssignmentInvariants()
+    {
+        var world = CreateRoadWorld();
+        var lane = world.CreateRoadNetworkSnapshot().Lanes.Single().Id;
+        var first = world.CreateBusStop(lane, new WorldPoint(20, 0, 0));
+        var second = world.CreateBusStop(lane, new WorldPoint(80, 0, 0));
+        var line = world.CreateTransitLine(TransitMode.Bus);
+        var pattern = world.CreateTransitServicePattern(line, [new(first, 0, 1), new(second, 10, 1)]);
+        var trip = world.CreateTransitTrip(pattern, 0);
+        var bus = world.CreateBusTransitVehicle(trip);
+        var taxi = world.CreateTaxiVehicle(new WorldPoint(5, 0, 0));
+        var firstRequest = world.CreateTaxiRequest(new TripRequestId(100), new WorldPoint(10, 0, 0), new WorldPoint(90, 0, 0));
+        var secondRequest = world.CreateTaxiRequest(new TripRequestId(101), new WorldPoint(20, 0, 0), new WorldPoint(70, 0, 0));
+        world.DispatchTaxiRequests();
+        var checkpoint = world.CreateCheckpoint();
+        var transit = checkpoint.MultimodalTransit!;
+
+        var duplicateActive = transit.TaxiRequests.Select(item => item.Id == secondRequest ? item with { State = TaxiRequestState.Assigned, AssignedVehicleId = taxi } : item).ToArray();
+        Assert.ThrowsExactly<ArgumentException>(() => SimulationWorld.RestoreCheckpoint(checkpoint with { MultimodalTransit = transit with { TaxiRequests = duplicateActive } }));
+
+        var busAssigned = transit.TaxiRequests.Select(item => item.Id == firstRequest ? item with { AssignedVehicleId = bus } : item).ToArray();
+        Assert.ThrowsExactly<ArgumentException>(() => SimulationWorld.RestoreCheckpoint(checkpoint with { MultimodalTransit = transit with { TaxiRequests = busAssigned } }));
+
+        var missingAssignment = transit.TaxiRequests.Select(item => item.Id == firstRequest ? item with { AssignedVehicleId = null } : item).ToArray();
+        Assert.ThrowsExactly<ArgumentException>(() => SimulationWorld.RestoreCheckpoint(checkpoint with { MultimodalTransit = transit with { TaxiRequests = missingAssignment } }));
+    }
+
+    [TestMethod]
+    public void CheckpointRejectsBrokenTripBusBijectionAndBusState()
+    {
+        var world = CreateRoadWorld();
+        var lane = world.CreateRoadNetworkSnapshot().Lanes.Single().Id;
+        var first = world.CreateBusStop(lane, new WorldPoint(20, 0, 0));
+        var second = world.CreateBusStop(lane, new WorldPoint(80, 0, 0));
+        var line = world.CreateTransitLine(TransitMode.Bus);
+        var pattern = world.CreateTransitServicePattern(line, [new(first, 0, 1), new(second, 10, 1)]);
+        var tripId = world.CreateTransitTrip(pattern, 0);
+        var busId = world.CreateBusTransitVehicle(tripId);
+        var checkpoint = world.CreateCheckpoint();
+        var transit = checkpoint.MultimodalTransit!;
+
+        var brokenTrips = transit.Trips.Select(item => item.Id == tripId ? item with { VehicleId = null } : item).ToArray();
+        Assert.ThrowsExactly<ArgumentException>(() => SimulationWorld.RestoreCheckpoint(checkpoint with { MultimodalTransit = transit with { Trips = brokenTrips } }));
+
+        var negativeStop = transit.Vehicles.Select(item => item.Id == busId ? item with { StopIndex = -1 } : item).ToArray();
+        Assert.ThrowsExactly<ArgumentException>(() => SimulationWorld.RestoreCheckpoint(checkpoint with { MultimodalTransit = transit with { Vehicles = negativeStop } }));
+
+        var stuckEnRoute = transit.Vehicles.Select(item => item.Id == busId ? item with { State = TransitVehicleMovementState.EnRouteToStop, RoadVehicleId = null } : item).ToArray();
+        Assert.ThrowsExactly<ArgumentException>(() => SimulationWorld.RestoreCheckpoint(checkpoint with { MultimodalTransit = transit with { Vehicles = stuckEnRoute } }));
+    }
+
+    [TestMethod]
+    public void GenericPatternCreationRejectsRailwayLineWithoutRailwayService()
+    {
+        var world = CreateRoadWorld();
+        var lane = world.CreateRoadNetworkSnapshot().Lanes.Single().Id;
+        var first = world.CreateBusStop(lane, new WorldPoint(20, 0, 0));
+        var second = world.CreateBusStop(lane, new WorldPoint(80, 0, 0));
+        var railwayLine = world.CreateTransitLine(TransitMode.Railway);
+
+        Assert.ThrowsExactly<ArgumentException>(() => world.CreateTransitServicePattern(railwayLine, [new(first, 0, 1), new(second, 10, 1)]));
+    }
+
+    [TestMethod]
+    public void CheckpointRejectsPassengerWhoseTripRequestDiffersFromJourney()
+    {
+        var world = CreateRoadWorld(withEndpoints: true);
+        var lane = world.CreateRoadNetworkSnapshot().Lanes.Single().Id;
+        var first = world.CreateBusStop(lane, new WorldPoint(20, 0, 0));
+        var second = world.CreateBusStop(lane, new WorldPoint(80, 0, 0));
+        var line = world.CreateTransitLine(TransitMode.Bus);
+        world.CreateTransitServicePattern(line, [new(first, 0, 1), new(second, 10, 1)]);
+        var request = new TripRequest(new TripRequestId(100), TripEndpoint.ForBuilding(new BuildingId(1)), TripEndpoint.ForBuilding(new BuildingId(2)));
+        var journey = world.PlanMultimodalJourney(request);
+        world.CreatePassenger(request.Id, journey);
+        var checkpoint = world.CreateCheckpoint();
+        var transit = checkpoint.MultimodalTransit!;
+        var passengers = transit.Passengers.Select(item => item with { TripRequestId = new TripRequestId(101) }).ToArray();
+        Assert.ThrowsExactly<ArgumentException>(() => SimulationWorld.RestoreCheckpoint(checkpoint with { MultimodalTransit = transit with { Passengers = passengers } }));
+    }
+
+    [TestMethod]
     public void DeterministicFixtureContainsWalkRailwayWalkBusAndTaxi()
     {
         var world = new SimulationWorld(new SimulationConfig(tickRate: 30, seed: 19_014, spatialCellSize: 64d));

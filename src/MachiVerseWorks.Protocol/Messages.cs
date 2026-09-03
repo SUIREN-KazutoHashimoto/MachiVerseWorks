@@ -195,7 +195,8 @@ public sealed record PopulationStatisticsMessage(
     uint HealthcareCount,
     uint RecreationCount,
     uint ErrandCount,
-    ulong TickCount) : IProtocolMessage
+    ulong TickCount,
+    uint TransitCount = 0) : IProtocolMessage
 {
     public MessageType Type => MessageType.PopulationStatistics;
 }

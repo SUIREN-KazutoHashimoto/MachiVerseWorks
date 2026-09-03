@@ -231,8 +231,17 @@ export class ClientUi {
 
   public setEconomy(message: EconomySnapshotMessage): void {
     const s = message.statistics;
-    const companies = message.companies.slice(0, 4).map((company) => `C${company.companyId.toString()}: ${company.employeeCount}人 / 売上 ${company.revenue.toString()}`);
-    const households = message.households.slice(0, 4).map((household) => `H${household.householdId.toString()}: 残高 ${household.cashBalance.toString()} / 所得 ${household.income.toString()} / 支出 ${household.spending.toString()}`);
+    const companies = message.companies.slice(0, 4).map((company) => this.localizer.t('economyDebug.companyDetail', {
+      companyId: company.companyId,
+      employeeCount: this.localizer.formatNumber(company.employeeCount),
+      revenue: this.localizer.formatNumber(company.revenue),
+    }));
+    const households = message.households.slice(0, 4).map((household) => this.localizer.t('economyDebug.householdDetail', {
+      householdId: household.householdId,
+      cashBalance: this.localizer.formatNumber(household.cashBalance),
+      income: this.localizer.formatNumber(household.income),
+      spending: this.localizer.formatNumber(household.spending),
+    }));
     const details = [...companies, ...households].join(', ');
     this.economyDebugValue.textContent = this.localizer.t('economyDebug.summary', { companies: s.companyCount, jobs: s.jobCount, employed: s.employedPersonCount, vacancies: s.vacantPositionCount, income: s.householdIncome, spending: s.householdSpending, revenue: s.companyRevenue, expense: s.companyExpense, produced: s.producedUnits.toFixed(1), cycle: s.economicCycle, details: details || '—' });
   }

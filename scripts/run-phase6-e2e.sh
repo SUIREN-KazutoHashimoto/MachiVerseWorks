@@ -57,10 +57,7 @@ wait_http() {
 CHROME="$(find_chrome)"
 
 echo "Preparing .NET and Web Client dependencies..."
-dotnet restore "$ROOT_DIR/MachiVerseWorks.slnx"
-dotnet build "$ROOT_DIR/MachiVerseWorks.slnx" --configuration Release --no-restore
-npm --prefix "$ROOT_DIR/src/web" ci
-npm --prefix "$ROOT_DIR/src/web" run build
+source "$ROOT_DIR/scripts/prepare-e2e.sh"
 
 npm --prefix "$ROOT_DIR/src/web" run dev -- --host 127.0.0.1 --port "$WEB_PORT" --strictPort \
   >"$ARTIFACT_DIR/vite.log" 2>&1 &

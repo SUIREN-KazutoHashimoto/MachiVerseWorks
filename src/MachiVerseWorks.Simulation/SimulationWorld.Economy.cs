@@ -188,7 +188,7 @@ public sealed partial class SimulationWorld
 
     public EconomyStatistics CreateEconomyStatistics()
     {
-        var vacantPositions = 0;
+        long vacantPositions = 0;
         for (var index = 0; index < _economyJobs.Count; index++)
         {
             var job = _economyJobs[index];
@@ -200,14 +200,14 @@ public sealed partial class SimulationWorld
             _economyEstablishments.Count,
             _economyJobs.Count,
             _economyEmployments.Count,
-            vacantPositions,
-            _economyHouseholds.Values.Sum(static item => item.CashBalance),
-            _economyHouseholds.Values.Sum(static item => item.Income),
-            _economyHouseholds.Values.Sum(static item => item.Spending),
-            _economyCompanies.Sum(static item => item.CashBalance),
-            _economyCompanies.Sum(static item => item.Revenue),
-            _economyCompanies.Sum(static item => item.Expense),
-            _economyCompanies.Sum(static item => item.ProducedUnits),
+            SimulationNumeric.SaturatingToInt32NonNegative(vacantPositions),
+            SimulationNumeric.SaturatingLongSum(_economyHouseholds.Values, static item => item.CashBalance),
+            SimulationNumeric.SaturatingLongSum(_economyHouseholds.Values, static item => item.Income),
+            SimulationNumeric.SaturatingLongSum(_economyHouseholds.Values, static item => item.Spending),
+            SimulationNumeric.SaturatingLongSum(_economyCompanies, static item => item.CashBalance),
+            SimulationNumeric.SaturatingLongSum(_economyCompanies, static item => item.Revenue),
+            SimulationNumeric.SaturatingLongSum(_economyCompanies, static item => item.Expense),
+            SimulationNumeric.SaturatingDoubleSum(_economyCompanies, static item => item.ProducedUnits),
             _processedEconomicCycle,
             Time.TickCount);
     }
@@ -224,27 +224,39 @@ public sealed partial class SimulationWorld
 
     private void ProcessEconomicCycle()
     {
-        ProduceGoods();
-        PayWages();
-        ProcessHouseholdConsumption();
+        var checkpoint = CreateEconomyCheckpoint();
+        try
+        {
+            ProduceGoods();
+            PayWages();
+            ProcessHouseholdConsumption();
+        }
+        catch
+        {
+            RestoreEconomy(checkpoint);
+            throw;
+        }
     }
 
     private void ProduceGoods()
     {
         foreach (var company in _economyCompanies.OrderBy(static item => item.Id.Value))
         {
-            var requiredWorkers = 0;
-            var filledWorkers = 0;
+            long requiredWorkers = 0;
+            long filledWorkers = 0;
             for (var index = 0; index < _economyJobs.Count; index++)
             {
                 var job = _economyJobs[index];
                 if (!_economyEstablishmentIndex.TryGetValue(job.EstablishmentId, out var establishment) || establishment.CompanyId != company.Id)
                     continue;
-                requiredWorkers = checked(requiredWorkers + job.RequiredWorkerCount);
-                filledWorkers = checked(filledWorkers + GetFilledWorkerCount(job.Id));
+                requiredWorkers += job.RequiredWorkerCount;
+                filledWorkers += GetFilledWorkerCount(job.Id);
             }
             var utilization = requiredWorkers == 0 ? 0d : Math.Min(1d, (double)filledWorkers / requiredWorkers);
-            company.ProducedUnits += company.DailyProductionCapacity * utilization;
+            var producedUnits = company.ProducedUnits + (company.DailyProductionCapacity * utilization);
+            if (!double.IsFinite(producedUnits) || producedUnits < 0d)
+                throw new OverflowException($"Company {company.Id.Value} production would exceed the finite numeric range.");
+            company.ProducedUnits = producedUnits;
         }
     }
 
@@ -393,7 +405,7 @@ public sealed partial class SimulationWorld
         if (checkpoint is null)
         {
             for (var index = 0; index < _population.HouseholdCount; index++)
-                EnsureHouseholdEconomyState(_population.GetPersonAt(index).HouseholdId);
+                EnsureHouseholdEconomyState(_population.GetHouseholdAt(index).Id);
             return;
         }
 
@@ -532,9 +544,11 @@ public sealed partial class SimulationWorld
         public double ProducedUnits { get; set; }
     }
 
-    private sealed class EconomyEstablishmentState(EstablishmentId id, CompanyId companyId, BuildingId? buildingId, PoiId? poiId)
+    private sealed class EconomyEstablishmentState(CompanyId companyId, BuildingId? buildingId, PoiId? poiId)
     {
-        public EstablishmentId Id { get; } = id;
+        public EconomyEstablishmentState(EstablishmentId id, CompanyId companyId, BuildingId? buildingId, PoiId? poiId)
+            : this(companyId, buildingId, poiId) => Id = id;
+        public EstablishmentId Id { get; }
         public CompanyId CompanyId { get; } = companyId;
         public BuildingId? BuildingId { get; } = buildingId;
         public PoiId? PoiId { get; } = poiId;

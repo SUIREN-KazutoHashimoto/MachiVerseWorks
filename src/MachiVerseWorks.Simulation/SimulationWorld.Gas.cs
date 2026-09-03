@@ -181,20 +181,25 @@ public sealed partial class SimulationWorld
         _gasServicePoints.Count(static item => item.DeliveryMode == GasDeliveryMode.Piped),
         _gasServicePoints.Count(static item => item.DeliveryMode == GasDeliveryMode.Delivered),
         _gasServicePoints.Count(static item => item.ServiceState == GasServiceState.Unavailable),
-        _gasSources.Where(static item => item.OperatingState == GasOperatingState.Online).Sum(static item => item.CapacityCubicMetersPerDay)
-            + _gasImportTerminals.Where(static item => item.OperatingState == GasOperatingState.Online).Sum(static item => item.CapacityCubicMetersPerDay)
-            + _gasStorages.Where(static item => item.OperatingState == GasOperatingState.Online).Sum(static item => Math.Min(item.ReleaseCapacityCubicMetersPerDay, item.StoredCubicMeters * EconomyDefaults.TicksPerEconomicDay)),
-        _gasServicePoints.Sum(static item => item.DemandCubicMetersPerDay),
-        _gasServicePoints.Sum(static item => item.ServedCubicMetersPerDay),
-        _gasServicePoints.Sum(static item => item.UnservedCubicMetersPerDay),
-        _gasStorages.Sum(static item => item.StoredCubicMeters),
+        SimulationNumeric.SaturatingAddNonNegative(
+            SimulationNumeric.SaturatingAddNonNegative(
+                SimulationNumeric.SaturatingDoubleSum(_gasSources.Where(static item => item.OperatingState == GasOperatingState.Online), static item => item.CapacityCubicMetersPerDay),
+                SimulationNumeric.SaturatingDoubleSum(_gasImportTerminals.Where(static item => item.OperatingState == GasOperatingState.Online), static item => item.CapacityCubicMetersPerDay)),
+            SimulationNumeric.SaturatingDoubleSum(_gasStorages.Where(static item => item.OperatingState == GasOperatingState.Online), static item =>
+                Math.Min(item.ReleaseCapacityCubicMetersPerDay, SimulationNumeric.SaturatingMultiplyNonNegative(item.StoredCubicMeters, (double)EconomyDefaults.TicksPerEconomicDay)))),
+        SimulationNumeric.SaturatingDoubleSum(_gasServicePoints, static item => item.DemandCubicMetersPerDay),
+        SimulationNumeric.SaturatingDoubleSum(_gasServicePoints, static item => item.ServedCubicMetersPerDay),
+        SimulationNumeric.SaturatingDoubleSum(_gasServicePoints, static item => item.UnservedCubicMetersPerDay),
+        SimulationNumeric.SaturatingDoubleSum(_gasStorages, static item => item.StoredCubicMeters),
         Time.TickCount);
 
     private void StepGas(SimulationTime nextTime)
     {
         var demandContext = CreateGasDemandContext();
-        foreach (var point in _gasServicePoints)
-            point.DemandCubicMetersPerDay = CalculateGasDemand(point, nextTime, demandContext);
+        var calculatedDemands = _gasServicePoints
+            .Select(point => (Point: point, Demand: CalculateGasDemand(point, nextTime, demandContext)))
+            .ToArray();
+        foreach (var item in calculatedDemands) item.Point.DemandCubicMetersPerDay = item.Demand;
 
         var request = new GasSupplyRequest(
             _gasNodes.Select(static item => new GasSupplyNode(item.Id)).ToArray(),
@@ -202,7 +207,7 @@ public sealed partial class SimulationWorld
             _gasSources.Select(static item => new GasSupplySource(item.Id, item.NodeId, item.OperatingState == GasOperatingState.Online ? item.CapacityCubicMetersPerDay : 0d)).ToArray(),
             _gasImportTerminals.Select(static item => new GasSupplyImportTerminal(item.Id, item.NodeId, item.OperatingState == GasOperatingState.Online ? item.CapacityCubicMetersPerDay : 0d)).ToArray(),
             _gasStorages.Select(static item => new GasSupplyStorage(item.Id, item.NodeId,
-                item.OperatingState == GasOperatingState.Online ? Math.Min(item.ReleaseCapacityCubicMetersPerDay, item.StoredCubicMeters * EconomyDefaults.TicksPerEconomicDay) : 0d)).ToArray(),
+                item.OperatingState == GasOperatingState.Online ? Math.Min(item.ReleaseCapacityCubicMetersPerDay, SimulationNumeric.SaturatingMultiplyNonNegative(item.StoredCubicMeters, (double)EconomyDefaults.TicksPerEconomicDay)) : 0d)).ToArray(),
             _gasServicePoints.Where(static item => item.DeliveryMode == GasDeliveryMode.Piped && item.NodeId is not null)
                 .Select(static item => new GasSupplyLoad(item.Id, item.NodeId!.Value, item.DemandCubicMetersPerDay)).ToArray());
         var result = _gasSupplySolver.Solve(request);
@@ -238,11 +243,11 @@ public sealed partial class SimulationWorld
             residentsByBuilding[buildingId] = residentsByBuilding.GetValueOrDefault(buildingId) + 1;
         }
 
-        var requiredWorkersByEstablishment = new Dictionary<EstablishmentId, int>();
+        var requiredWorkersByEstablishment = new Dictionary<EstablishmentId, long>();
         foreach (var job in _economyJobs)
-            requiredWorkersByEstablishment[job.EstablishmentId] = checked(requiredWorkersByEstablishment.GetValueOrDefault(job.EstablishmentId) + job.RequiredWorkerCount);
+            requiredWorkersByEstablishment[job.EstablishmentId] = requiredWorkersByEstablishment.GetValueOrDefault(job.EstablishmentId) + job.RequiredWorkerCount;
 
-        var filledWorkersByEstablishment = new Dictionary<EstablishmentId, int>();
+        var filledWorkersByEstablishment = new Dictionary<EstablishmentId, long>();
         foreach (var employment in _economyEmployments.Values)
         {
             if (!_economyJobIndex.TryGetValue(employment.JobId, out var job)) continue;
@@ -300,7 +305,7 @@ public sealed partial class SimulationWorld
                 useFactor *= 0.65d + (0.35d * Math.Min(1d, (double)filled / required));
             }
         }
-        return point.BaseDemandCubicMetersPerDay * timeFactor * useFactor;
+        return SimulationNumeric.SaturatingMultiplyNonNegative(point.BaseDemandCubicMetersPerDay, timeFactor, useFactor);
     }
 
     private double GetDeliveredGasAvailability(GasServicePointStateData point)
@@ -327,8 +332,8 @@ public sealed partial class SimulationWorld
         if (points.Length == 0 && _economyEstablishmentIndex.TryGetValue(establishmentId, out var establishment) && establishment.BuildingId is { } buildingId)
             points = _gasServicePoints.Where(item => item.BuildingId == buildingId).ToArray();
         if (points.Length == 0) return 1d;
-        var demand = points.Sum(static item => item.DemandCubicMetersPerDay);
-        return demand <= GasDefaults.FlowEpsilonCubicMetersPerDay ? 1d : Math.Clamp(points.Sum(static item => item.ServedCubicMetersPerDay) / demand, 0d, 1d);
+        var demand = SimulationNumeric.SaturatingDoubleSum(points, static item => item.DemandCubicMetersPerDay);
+        return demand <= GasDefaults.FlowEpsilonCubicMetersPerDay ? 1d : Math.Clamp(SimulationNumeric.SaturatingDoubleSum(points, static item => item.ServedCubicMetersPerDay) / demand, 0d, 1d);
     }
 
     private GasServicePointId CreateGasServicePointCore(
@@ -471,6 +476,6 @@ public sealed partial class SimulationWorld
 
     private readonly record struct GasDemandContext(
         IReadOnlyDictionary<BuildingId, int> ResidentsByBuilding,
-        IReadOnlyDictionary<EstablishmentId, int> RequiredWorkersByEstablishment,
-        IReadOnlyDictionary<EstablishmentId, int> FilledWorkersByEstablishment);
+        IReadOnlyDictionary<EstablishmentId, long> RequiredWorkersByEstablishment,
+        IReadOnlyDictionary<EstablishmentId, long> FilledWorkersByEstablishment);
 }

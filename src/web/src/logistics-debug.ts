@@ -1,9 +1,10 @@
-import { ShipmentState, type LogisticsSnapshotMessage } from './logistics-protocol.ts';
+import { initializeLocalization, type Localizer } from './localization.ts';
+import { type LogisticsSnapshotMessage } from './logistics-protocol.ts';
 
 export class LogisticsDebugOverlay {
   private readonly element: HTMLPreElement;
 
-  public constructor(host: HTMLElement) {
+  public constructor(host: HTMLElement, private readonly localizer: Localizer = initializeLocalization()) {
     this.element = document.createElement('pre');
     this.element.dataset.logisticsDebug = 'true';
     Object.assign(this.element.style, {
@@ -29,18 +30,18 @@ export class LogisticsDebugOverlay {
   public apply(message: LogisticsSnapshotMessage): void {
     const statistics = message.statistics;
     const lines = [
-      `Logistics tick=${statistics.tickCount.toString()} cycle=${statistics.logisticsCycle.toString()}`,
-      `inventory=${statistics.inventoryUnits.toFixed(1)} orders=${String(statistics.openOrderCount)} shipments=${String(statistics.shipmentCount)} delayed=${String(statistics.delayedShipmentCount)}`,
+      this.localizer.t('logisticsDebug.summary', { tick: this.localizer.formatNumber(statistics.tickCount), cycle: this.localizer.formatNumber(statistics.logisticsCycle) }),
+      this.localizer.t('logisticsDebug.inventory', { inventory: this.localizer.formatNumber(statistics.inventoryUnits), orders: this.localizer.formatNumber(statistics.openOrderCount), shipments: this.localizer.formatNumber(statistics.shipmentCount), delayed: this.localizer.formatNumber(statistics.delayedShipmentCount) }),
     ];
     for (const inventory of message.inventories.slice(0, 6)) {
-      lines.push(`INV est=${inventory.establishmentId.toString()} commodity=${inventory.commodityId.toString()} ${inventory.quantity.toFixed(1)}/${inventory.capacity.toFixed(1)}`);
+      lines.push(this.localizer.t('logisticsDebug.inventoryDetail', { establishment: this.localizer.formatNumber(inventory.establishmentId), commodity: this.localizer.formatNumber(inventory.commodityId), quantity: this.localizer.formatNumber(inventory.quantity), capacity: this.localizer.formatNumber(inventory.capacity) }));
     }
     for (const shipment of message.shipments.slice(0, 6)) {
-      lines.push(`SHP ${shipment.shipmentId.toString()} ${ShipmentState[shipment.state]} vehicle=${shipment.vehicleId === 0n ? '-' : shipment.vehicleId.toString()} qty=${shipment.quantity.toFixed(1)} delay=${shipment.delayTicks.toString()}`);
+      lines.push(this.localizer.t('logisticsDebug.shipmentDetail', { shipment: this.localizer.formatNumber(shipment.shipmentId), state: this.localizer.t(`logisticsDebug.shipmentState.${String(shipment.state)}`), vehicle: shipment.vehicleId === 0n ? '-' : this.localizer.formatNumber(shipment.vehicleId), quantity: this.localizer.formatNumber(shipment.quantity), delay: this.localizer.formatNumber(shipment.delayTicks) }));
     }
     this.element.textContent = lines.join('\n');
   }
 
-  public clear(): void { this.element.textContent = 'Logistics: waiting for snapshot'; }
+  public clear(): void { this.element.textContent = this.localizer.t('logisticsDebug.waiting'); }
   public dispose(): void { this.element.remove(); }
 }

@@ -66,8 +66,9 @@ public sealed partial class SimulationWorld
     {
         if (!_spectrumBandIndex.TryGetValue(bandId, out var band)) throw new ArgumentException($"Spectrum band {bandId.Value} does not exist.", nameof(bandId));
         EnsureRadioIdCapacity(_nextFrequencyBlockId, "Frequency block");
-        var block = new FrequencyBlock(new FrequencyBlockId(_nextFrequencyBlockId++), bandId, centerFrequencyMegahertz, bandwidthMegahertz);
+        var block = new FrequencyBlock(new FrequencyBlockId(_nextFrequencyBlockId), bandId, centerFrequencyMegahertz, bandwidthMegahertz);
         RadioValidation.ValidateFrequencyBlock(block, band);
+        _nextFrequencyBlockId++;
         _frequencyBlocks.Add(block);
         _frequencyBlockIndex.Add(block.Id, block);
         MarkRadioCandidateIndexesDirty();
@@ -88,7 +89,7 @@ public sealed partial class SimulationWorld
         RadioValidation.ValidateLinkBudget(linkBudget);
         if (!double.IsFinite(utilization) || utilization < 0d || utilization > 1d) throw new ArgumentOutOfRangeException(nameof(utilization));
         EnsureRadioIdCapacity(_nextRadioLinkId, "Radio link");
-        var id = new RadioLinkId(_nextRadioLinkId++);
+        var id = new RadioLinkId(_nextRadioLinkId);
         var state = new RadioLinkStateData(id, fromSiteId, toSiteId, frequencyBlockId, linkBudget, utilization, isInService);
         _radioLinks.Add(state);
         _radioLinkIndex.Add(id, state);
@@ -122,6 +123,7 @@ public sealed partial class SimulationWorld
     public void SetRadioSiteInService(RadioSiteId id, bool isInService)
     {
         if (!_radioSiteIndex.TryGetValue(id, out var site)) throw new ArgumentException($"Radio site {id.Value} does not exist.", nameof(id));
+        var previous = site.IsInService;
         site.IsInService = isInService;
         _radioPlanDirty = true;
         RecalculateRadioPlan();
@@ -130,6 +132,7 @@ public sealed partial class SimulationWorld
     public void SetRadioLinkInService(RadioLinkId id, bool isInService)
     {
         if (!_radioLinkIndex.TryGetValue(id, out var link)) throw new ArgumentException($"Radio link {id.Value} does not exist.", nameof(id));
+        var previous = link.IsInService;
         link.IsInService = isInService;
         _radioPlanDirty = true;
         RecalculateRadioPlan();
@@ -139,6 +142,7 @@ public sealed partial class SimulationWorld
     {
         if (!_radioLinkIndex.TryGetValue(id, out var link)) throw new ArgumentException($"Radio link {id.Value} does not exist.", nameof(id));
         if (!double.IsFinite(utilization) || utilization < 0d || utilization > 1d) throw new ArgumentOutOfRangeException(nameof(utilization));
+        var previous = link.Utilization;
         link.Utilization = utilization;
         _radioPlanDirty = true;
         RecalculateRadioPlan();
@@ -250,11 +254,9 @@ public sealed partial class SimulationWorld
         {
             if (!IsRadioLinkOperational(link))
             {
-                link.Propagation = default;
-                link.State = RadioLinkState.OutOfService;
+                updates.Add((link, default, RadioLinkState.OutOfService));
                 continue;
             }
-
             RadioPropagationRequest request;
             if (_radioLinkEntityBindings.TryGetValue(link.Id, out var binding))
             {
@@ -269,26 +271,20 @@ public sealed partial class SimulationWorld
                 var block = _frequencyBlockIndex[link.FrequencyBlockId];
                 var interferenceDbm = CalculateLegacyInterferenceDbm(link, receiver);
                 var obstruction = CalculateRadioBuildingObstruction(transmitter.Position, receiver.Position);
-                request = new RadioPropagationRequest(
-                    transmitter,
-                    receiver,
-                    block,
-                    link.LinkBudget,
-                    interferenceDbm,
-                    RadioDefaults.ThermalNoiseFloorDbm,
-                    obstruction.LossDb,
-                    obstruction.IsLineOfSight);
+                request = new RadioPropagationRequest(transmitter, receiver, block, link.LinkBudget, interferenceDbm, RadioDefaults.ThermalNoiseFloorDbm, obstruction.LossDb, obstruction.IsLineOfSight);
             }
-
             var result = _radioPropagationSolver.Solve(request);
-            link.Propagation = result;
-            link.State = !result.IsReachable
-                ? RadioLinkState.Unreachable
-                : result.SinrDb < RadioDefaults.MinimumSinrDb
-                    ? RadioLinkState.Interfered
-                    : result.SinrDb < RadioDefaults.MarginalSinrDb
-                        ? RadioLinkState.Marginal
-                        : RadioLinkState.Healthy;
+            if (!double.IsFinite(result.DistanceMeters) || !double.IsFinite(result.PathLossDb) || !double.IsFinite(result.ReceivedPowerDbm) || !double.IsFinite(result.InterferenceDbm) || !double.IsFinite(result.SinrDb))
+                throw new InvalidOperationException("Radio propagation solver returned a non-finite result.");
+            var state = !result.IsReachable ? RadioLinkState.Unreachable
+                : result.SinrDb < RadioDefaults.MinimumSinrDb ? RadioLinkState.Interfered
+                : result.SinrDb < RadioDefaults.MarginalSinrDb ? RadioLinkState.Marginal : RadioLinkState.Healthy;
+            updates.Add((link, result, state));
+        }
+        foreach (var update in updates)
+        {
+            update.Link.Propagation = update.Propagation;
+            update.Link.State = update.State;
         }
         _radioPlanDirty = false;
     }
@@ -333,7 +329,7 @@ public sealed partial class SimulationWorld
                 interferingMilliwatts += Math.Pow(10d, result.ReceivedPowerDbm / 10d);
             }
         }
-        return interferingMilliwatts <= 0d ? -300d : 10d * Math.Log10(interferingMilliwatts);
+        return hasInterference ? combinedInterferenceDbm : -300d;
     }
 
     private void MarkRadioCandidateIndexesDirty()
