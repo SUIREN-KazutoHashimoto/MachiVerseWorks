@@ -115,7 +115,7 @@ try {
     const canvas = document.querySelector('#viewport canvas, #host canvas');
     if (!(canvas instanceof HTMLCanvasElement)) throw new Error('Visual E2E canvas was not found.');
     const rect = canvas.getBoundingClientRect();
-    return { x: rect.left, y: rect.top, width: rect.width, height: rect.height, scale: 0.5 };
+    return { x: rect.left, y: rect.top, width: rect.width, height: rect.height, scale: 0.25 };
   })()`);
   const screenshot = await devToolsSocket.command('Page.captureScreenshot', {
     format: 'png',
