@@ -2,6 +2,8 @@ namespace MachiVerseWorks.Simulation;
 
 public sealed partial class SimulationWorld
 {
+    public NaturalToponym CreateNaturalToponym(GeographicFeature feature) => EnvironmentGenerator.CreateToponym(feature);
+
     public WorldEnvironmentSnapshot CreateDetailedWorldEnvironmentSnapshot(
         WorldVolume volume,
         int sampleColumns = 8,
