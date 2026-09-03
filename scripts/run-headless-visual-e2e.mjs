@@ -12,6 +12,7 @@ if (!browserExecutable || !targetUrl || !artifactDirectory || !inspectionName) {
 }
 
 const timeoutMs = 120_000;
+const commandTimeoutMs = 30_000;
 const profileDirectory = await mkdtemp(join(tmpdir(), 'machiverseworks-visual-e2e-'));
 const actualDirectory = join(artifactDirectory, 'actual');
 const diagnosticsDirectory = join(artifactDirectory, 'diagnostics');
@@ -56,7 +57,7 @@ try {
 
   const remoteDebuggingPort = await waitForDevToolsPort(profileDirectory, browser, timeoutMs);
   const page = await waitForPage(remoteDebuggingPort, targetUrl, browser, timeoutMs);
-  devToolsSocket = await createDevToolsClient(page.webSocketDebuggerUrl);
+  devToolsSocket = await createDevToolsClient(page.webSocketDebuggerUrl, commandTimeoutMs);
   await devToolsSocket.command('Page.enable');
   await devToolsSocket.command('Runtime.enable');
 
@@ -109,6 +110,10 @@ try {
   })()`);
   diagnostics.browser = browserVersion;
   diagnostics.expectedBrowserVersion = expectedBrowserVersion ?? null;
+  diagnostics.visualFont = {
+    family: process.env.MVW_VISUAL_FONT_FAMILY ?? null,
+    packageVersion: process.env.MVW_VISUAL_FONT_PACKAGE_VERSION ?? null,
+  };
   await writeFile(diagnosticsPath, `${JSON.stringify(diagnostics, null, 2)}\n`, 'utf8');
 
   if (status === 'passed') {
@@ -208,7 +213,7 @@ async function waitForPage(port, url, browserProcess, timeout) {
   throw new Error(`Timed out waiting for Chrome DevTools page: ${url}`);
 }
 
-async function createDevToolsClient(webSocketUrl) {
+async function createDevToolsClient(webSocketUrl, commandTimeout) {
   if (typeof WebSocket !== 'function') {
     throw new Error('This visual E2E runner requires a Node.js runtime with global WebSocket support.');
   }
@@ -221,21 +226,53 @@ async function createDevToolsClient(webSocketUrl) {
 
   let nextId = 1;
   const pending = new Map();
+
+  const rejectPending = (error) => {
+    for (const waiter of pending.values()) {
+      clearTimeout(waiter.timeout);
+      waiter.reject(error);
+    }
+    pending.clear();
+  };
+
   socket.addEventListener('message', (event) => {
     const message = JSON.parse(typeof event.data === 'string' ? event.data : String(event.data));
     if (typeof message.id !== 'number') return;
     const waiter = pending.get(message.id);
     if (!waiter) return;
     pending.delete(message.id);
+    clearTimeout(waiter.timeout);
     if (message.error) waiter.reject(new Error(`Chrome DevTools error: ${JSON.stringify(message.error)}`));
     else waiter.resolve(message.result);
   });
+  socket.addEventListener('close', () => {
+    rejectPending(new Error('Chrome DevTools WebSocket closed while commands were pending.'));
+  });
+  socket.addEventListener('error', () => {
+    rejectPending(new Error('Chrome DevTools WebSocket failed while commands were pending.'));
+  });
 
   const command = (method, params = {}) => new Promise((resolve, reject) => {
+    if (socket.readyState !== WebSocket.OPEN) {
+      reject(new Error(`Chrome DevTools WebSocket is not open for command ${method}.`));
+      return;
+    }
+
     const id = nextId;
     nextId += 1;
-    pending.set(id, { resolve, reject });
-    socket.send(JSON.stringify({ id, method, params }));
+    const timeout = setTimeout(() => {
+      pending.delete(id);
+      reject(new Error(`Chrome DevTools command timed out after ${String(commandTimeout)}ms: ${method}`));
+    }, commandTimeout);
+    pending.set(id, { resolve, reject, timeout });
+
+    try {
+      socket.send(JSON.stringify({ id, method, params }));
+    } catch (error) {
+      pending.delete(id);
+      clearTimeout(timeout);
+      reject(error instanceof Error ? error : new Error(String(error)));
+    }
   });
 
   return {
