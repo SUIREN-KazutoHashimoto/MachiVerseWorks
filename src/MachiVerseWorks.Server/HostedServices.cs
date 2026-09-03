@@ -216,7 +216,9 @@ internal sealed class SnapshotPublishService(
                 railwayOperationsMessage = RailwayOperationsSnapshotMessagePlanner.Create(mappedRailwayOperations);
             }
             var multimodalTransitMessage = connection.NegotiatedVersion.SupportsMultimodalTransit && (publishSnapshot.MultimodalTransit.Lines.Length > 0 || publishSnapshot.MultimodalTransit.Vehicles.Length > 0)
-                ? MultimodalTransitMessageMapper.Create(publishSnapshot.MultimodalTransit, snapshot.TickCount)
+                ? connection.NegotiatedVersion.SupportsScalableMultimodalTransit
+                    ? MultimodalTransitMessageMapper.Create(publishSnapshot.MultimodalTransit, snapshot.TickCount, subscription.Volume)
+                    : MultimodalTransitMessageMapper.Create(publishSnapshot.MultimodalTransit, snapshot.TickCount)
                 : null;
 
             IProtocolMessage? roadMessage = null; var roadStateHandled = false;
@@ -275,7 +277,8 @@ internal sealed class SnapshotPublishService(
             }
             if (multimodalTransitMessage is not null)
             {
-                var key = new EncodedObservationCacheKey("multimodal-transit", connection.NegotiatedVersion, revision, "global");
+                var multimodalIdentity = connection.NegotiatedVersion.SupportsScalableMultimodalTransit ? volumeIdentity : "global";
+                var key = new EncodedObservationCacheKey("multimodal-transit", connection.NegotiatedVersion, revision, multimodalIdentity);
                 var sent = await connection.SendCachedAsync(multimodalTransitMessage, connection.NegotiatedVersion, key, cache, sendCancellation.Token);
                 bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs;
             }
