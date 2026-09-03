@@ -9,6 +9,7 @@ on:
       - 'src/MachiVerseWorks.Simulation/PersistentRegional*.cs'
       - 'src/MachiVerseWorks.Simulation/WorldEnvironment*.cs'
       - 'src/MachiVerseWorks.Simulation/Geometry.cs'
+      - 'src/MachiVerseWorks.Simulation/SimulationConfig.cs'
       - 'src/MachiVerseWorks.Simulation/Road*.cs'
       - 'src/MachiVerseWorks.Simulation/Building*.cs'
       - 'src/MachiVerseWorks.Simulation/Population*.cs'
