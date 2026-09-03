@@ -22,7 +22,7 @@ public static class LogisticsProtocolCodec
         var payloadLength = checked(FixedPayloadLength
             + (message.Inventories.Count * InventoryPayloadLength)
             + (message.Shipments.Count * ShipmentPayloadLength));
-        var frame = new byte[ProtocolFrameHeader.Size + payloadLength];
+        var frame = new byte[ProtocolFrameHeader.GetFrameLength(payloadLength)];
         ProtocolFrameHeader.Write(frame, new ProtocolFrameHeader(version, MessageType.LogisticsSnapshot, checked((uint)payloadLength)));
         var payload = frame.AsSpan(ProtocolFrameHeader.Size);
         WriteStatistics(payload, message.Statistics);

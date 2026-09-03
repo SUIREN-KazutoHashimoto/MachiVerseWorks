@@ -152,7 +152,29 @@ function decodeSnapshot(view: DataView, offset: number, payloadLength: number): 
     timetables.push({ id, stops });
   }
   if (cursor !== end) throw new ProtocolDecodeFailure('Railway operations payload contains trailing bytes.');
+  validateSnapshotReferences(trains, services, timetables);
   return { type: RailwayOperationsMessageType.RailwayOperationsSnapshot, tickCount, trains, services, timetables };
+}
+
+function validateSnapshotReferences(trains: readonly TrainState[], services: readonly RailwayServiceStateMessage[], timetables: readonly RailwayTimetable[]): void {
+  const trainById = new Map<bigint, TrainState>();
+  for (const train of trains) { if (trainById.has(train.id)) throw new ProtocolDecodeFailure('Duplicate Railway Train ID.'); trainById.set(train.id, train); }
+  const serviceById = new Map<bigint, RailwayServiceStateMessage>();
+  for (const service of services) { if (serviceById.has(service.id)) throw new ProtocolDecodeFailure('Duplicate Railway Service ID.'); serviceById.set(service.id, service); }
+  const timetableById = new Map<bigint, RailwayTimetable>();
+  for (const timetable of timetables) { if (timetableById.has(timetable.id)) throw new ProtocolDecodeFailure('Duplicate Railway Timetable ID.'); timetableById.set(timetable.id, timetable); }
+  for (const train of trains) {
+    const service = serviceById.get(train.serviceId);
+    if (service === undefined || service.trainId !== train.id) throw new ProtocolDecodeFailure('Railway Train service reference is inconsistent.');
+  }
+  for (const service of services) {
+    const timetable = timetableById.get(service.timetableId);
+    if (timetable === undefined || service.nextStopIndex > timetable.stops.length) throw new ProtocolDecodeFailure('Railway Service timetable reference is inconsistent.');
+    if (service.trainId !== null) {
+      const train = trainById.get(service.trainId);
+      if (train === undefined || train.serviceId !== service.id) throw new ProtocolDecodeFailure('Railway Service train reference is inconsistent.');
+    }
+  }
 }
 
 export class RailwayOperationsLayer {

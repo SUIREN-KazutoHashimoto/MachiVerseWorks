@@ -121,6 +121,7 @@ public static class RailwayOperationsProtocolCodec
             }
             if (!reader.IsComplete) throw new InvalidDataException();
             message = new RailwayOperationsSnapshotMessage(tickCount, trains, services, timetables);
+            ValidateSnapshotReferences(message);
             error = ProtocolDecodeError.None;
             return true;
         }
@@ -147,6 +148,30 @@ public static class RailwayOperationsProtocolCodec
                 if (stop.StationId == 0 || stop.PlannedDepartureTick < stop.PlannedArrivalTick || (index > 0 && stop.PlannedArrivalTick < previousDeparture)) throw new ArgumentOutOfRangeException(nameof(message));
                 previousDeparture = stop.PlannedDepartureTick;
             }
+        }
+        ValidateSnapshotReferences(message);
+    }
+
+    private static void ValidateSnapshotReferences(RailwayOperationsSnapshotMessage message)
+    {
+        var trainById = new Dictionary<ulong, ProtocolTrainState>();
+        foreach (var train in message.Trains) if (!trainById.TryAdd(train.Id, train)) throw new InvalidDataException("Duplicate Train ID.");
+        var serviceById = new Dictionary<ulong, ProtocolRailwayServiceState>();
+        foreach (var service in message.Services) if (!serviceById.TryAdd(service.Id, service)) throw new InvalidDataException("Duplicate Railway Service ID.");
+        var timetableById = new Dictionary<ulong, ProtocolTimetable>();
+        foreach (var timetable in message.Timetables) if (!timetableById.TryAdd(timetable.Id, timetable)) throw new InvalidDataException("Duplicate Timetable ID.");
+
+        foreach (var train in message.Trains)
+        {
+            if (!serviceById.TryGetValue(train.ServiceId, out var service) || service.TrainId != train.Id)
+                throw new InvalidDataException("Train references a missing or mismatched Railway Service.");
+        }
+        foreach (var service in message.Services)
+        {
+            if (!timetableById.TryGetValue(service.TimetableId, out var timetable) || service.NextStopIndex > timetable.Stops.Count)
+                throw new InvalidDataException("Railway Service references an invalid Timetable position.");
+            if (service.TrainId != 0 && (!trainById.TryGetValue(service.TrainId, out var train) || train.ServiceId != service.Id))
+                throw new InvalidDataException("Railway Service references a missing or mismatched Train.");
         }
     }
 

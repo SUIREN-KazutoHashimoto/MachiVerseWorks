@@ -22,7 +22,7 @@ public static class PopulationProtocolCodec
             PersonDebugMessage => PersonDebugPayloadLength,
             _ => throw new ArgumentException($"Unsupported population message implementation: {message.GetType().FullName}.", nameof(message)),
         };
-        var frame = new byte[ProtocolFrameHeader.Size + payloadLength];
+        var frame = new byte[ProtocolFrameHeader.GetFrameLength(payloadLength)];
         ProtocolFrameHeader.Write(frame, new ProtocolFrameHeader(version, message.Type, checked((uint)payloadLength)));
         var payload = frame.AsSpan(ProtocolFrameHeader.Size);
         switch (message)

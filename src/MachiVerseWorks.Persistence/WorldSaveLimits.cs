@@ -23,6 +23,7 @@ public sealed class WorldSaveLimits
     public const int DefaultMaximumBlockSectionSegmentCount = RailwayInfrastructureLimits.MaximumBlockSectionSegmentCount;
     public const int DefaultMaximumDepotTrackSegmentCount = RailwayInfrastructureLimits.MaximumDepotTrackSegmentCount;
     public const int DefaultMaximumRailwayRouteSegmentCount = 100_000;
+    public const int DefaultMaximumOpticalRouteCableCount = 100_000;
     public const int DefaultMaximumTimetableStopCount = 100_000;
     public const int DefaultMaximumTimetableStopTotalCount = 1_000_000;
     public const int DefaultMaximumGeographicFeatureCount = 100_000;
@@ -55,7 +56,8 @@ public sealed class WorldSaveLimits
         int maximumTimetableStopTotalCount = DefaultMaximumTimetableStopTotalCount,
         int maximumGeographicFeatureCount = DefaultMaximumGeographicFeatureCount,
         int maximumGeographicFeatureGeometryPointCount = DefaultMaximumGeographicFeatureGeometryPointCount,
-        int maximumNaturalToponymCount = DefaultMaximumNaturalToponymCount)
+        int maximumNaturalToponymCount = DefaultMaximumNaturalToponymCount,
+        int maximumOpticalRouteCableCount = DefaultMaximumOpticalRouteCableCount)
     {
         MaximumBytes = RequirePositive(maximumBytes, nameof(maximumBytes), "Maximum Save Data bytes");
         MaximumAgentCount = RequirePositive(maximumAgentCount, nameof(maximumAgentCount), "Maximum Agent count");
@@ -95,6 +97,7 @@ public sealed class WorldSaveLimits
         MaximumGeographicFeatureCount = RequirePositive(maximumGeographicFeatureCount, nameof(maximumGeographicFeatureCount), "Maximum GeographicFeature count");
         MaximumGeographicFeatureGeometryPointCount = RequirePositive(maximumGeographicFeatureGeometryPointCount, nameof(maximumGeographicFeatureGeometryPointCount), "Maximum GeographicFeature geometry point count");
         MaximumNaturalToponymCount = RequirePositive(maximumNaturalToponymCount, nameof(maximumNaturalToponymCount), "Maximum NaturalToponym count");
+        MaximumOpticalRouteCableCount = RequirePositive(maximumOpticalRouteCableCount, nameof(maximumOpticalRouteCableCount), "Maximum Optical Demand route cable count");
     }
 
     public static WorldSaveLimits Default { get; } = new();
@@ -128,6 +131,7 @@ public sealed class WorldSaveLimits
     public int MaximumGeographicFeatureCount { get; }
     public int MaximumGeographicFeatureGeometryPointCount { get; }
     public int MaximumNaturalToponymCount { get; }
+    public int MaximumOpticalRouteCableCount { get; }
 
     private static int RequirePositive(int value, string parameterName, string label)
     {

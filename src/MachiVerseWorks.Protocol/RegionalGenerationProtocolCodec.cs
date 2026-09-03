@@ -104,6 +104,7 @@ public static class RegionalGenerationProtocolCodec
         {
             if (item.ParentHumanToponymId != 0UL && !toponymIds.Contains(item.ParentHumanToponymId)) return false;
         }
+        if (!AcyclicParents(message.Toponyms.Select(static item => (item.ToponymId, item.ParentHumanToponymId)))) return false;
 
         var settlementIds = new HashSet<ulong>();
         foreach (var item in message.Settlements)
@@ -142,11 +143,12 @@ public static class RegionalGenerationProtocolCodec
                 || !toponymIds.Contains(item.NameId) || !Unit(item.Accessibility)) return false;
         }
 
+        var districtById = message.Districts.ToDictionary(static item => item.DistrictId);
         var parcelIds = new HashSet<ulong>();
         foreach (var item in message.Parcels)
         {
             if (item is null || item.ParcelId == 0UL || !parcelIds.Add(item.ParcelId) || !settlementIds.Contains(item.SettlementId)
-                || !districtIds.Contains(item.DistrictId) || item.Zone > 6 || item.DevelopmentState > 3
+                || !districtById.TryGetValue(item.DistrictId, out var district) || district.SettlementId != item.SettlementId || item.Zone > 6 || item.DevelopmentState > 3
                 || !ValidVolume(item.MinX, item.MinY, item.MinZ, item.MaxX, item.MaxY, item.MaxZ, requireHorizontalArea: true)
                 || !Unit(item.DevelopmentSuitability) || !Unit(item.LandValue)) return false;
         }
@@ -158,9 +160,17 @@ public static class RegionalGenerationProtocolCodec
                 || item.Use > 6 || !ValidVolume(item.MinX, item.MinY, item.MinZ, item.MaxX, item.MaxY, item.MaxZ, requireHorizontalArea: true)
                 || item.Floors is <= 0 or > 256 || item.Capacity < 0 || item.HistoricalStage < 0) return false;
         }
+        var parcelById = message.Parcels.ToDictionary(static item => item.ParcelId);
+        var buildingById = message.Buildings.ToDictionary(static item => item.BuildingId);
+        var occupiedParcels = new HashSet<ulong>();
+        foreach (var building in message.Buildings)
+        {
+            if (!parcelById.TryGetValue(building.ParcelId, out var parcel) || parcel.BuildingId != building.BuildingId || !occupiedParcels.Add(building.ParcelId)
+                || !ContainsHorizontal(parcel.MinX, parcel.MinY, parcel.MaxX, parcel.MaxY, building.MinX, building.MinY, building.MaxX, building.MaxY)) return false;
+        }
         foreach (var parcel in message.Parcels)
         {
-            if (parcel.BuildingId != 0UL && !buildingIds.Contains(parcel.BuildingId)) return false;
+            if (parcel.BuildingId != 0UL && (!buildingById.TryGetValue(parcel.BuildingId, out var building) || building.ParcelId != parcel.ParcelId)) return false;
         }
 
         var poiIds = new HashSet<ulong>();
@@ -168,17 +178,36 @@ public static class RegionalGenerationProtocolCodec
         {
             if (item is null || item.PoiId == 0UL || !poiIds.Add(item.PoiId) || !settlementIds.Contains(item.SettlementId)
                 || item.Kind > 5 || !ValidPoint(item.X, item.Y, item.Z)
-                || (item.BuildingId != 0UL && !buildingIds.Contains(item.BuildingId))
+                || (item.BuildingId != 0UL && (!buildingById.TryGetValue(item.BuildingId, out var building) || !parcelById.TryGetValue(building.ParcelId, out var parcel) || parcel.SettlementId != item.SettlementId))
                 || (item.NameId != 0UL && !toponymIds.Contains(item.NameId))) return false;
         }
 
         var signIds = new HashSet<ulong>();
         foreach (var item in message.RoadSigns)
         {
-            if (item is null || item.RoadSignId == 0UL || !signIds.Add(item.RoadSignId) || item.Kind > 8
+            if (item is null || item.RoadSignId == 0UL || !signIds.Add(item.RoadSignId) || item.Kind > 9
                 || !ValidPoint(item.X, item.Y, item.Z) || !corridorIds.Contains(item.CorridorId)
                 || (item.DestinationSettlementId != 0UL && !settlementIds.Contains(item.DestinationSettlementId))
                 || !ValidText(item.Text, MaximumTextLength)) return false;
+        }
+        return true;
+    }
+
+    private static bool ContainsHorizontal(double outerMinX, double outerMinY, double outerMaxX, double outerMaxY, double innerMinX, double innerMinY, double innerMaxX, double innerMaxY) =>
+        innerMinX >= outerMinX && innerMaxX <= outerMaxX && innerMinY >= outerMinY && innerMaxY <= outerMaxY;
+
+    private static bool AcyclicParents(IEnumerable<(ulong Id, ulong ParentId)> nodes)
+    {
+        var parents = nodes.ToDictionary(static item => item.Id, static item => item.ParentId);
+        foreach (var start in parents.Keys)
+        {
+            var seen = new HashSet<ulong>();
+            var current = start;
+            while (parents.TryGetValue(current, out var parent) && parent != 0UL)
+            {
+                if (!seen.Add(current)) return false;
+                current = parent;
+            }
         }
         return true;
     }

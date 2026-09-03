@@ -111,6 +111,23 @@ test('railway layer accumulates continuation chunks for one revision', () => {
   layer.dispose();
 });
 
+test('railway decoder rejects duplicate stable IDs inside one chunk', () => {
+  const frame = createFixtureFrame();
+  const secondNodeIdOffset = PROTOCOL_HEADER_SIZE + 41 + 33;
+  new DataView(frame).setBigUint64(secondNodeIdOffset, 1n, true);
+  assert.throws(() => decodeRailwayFrame(frame), /duplicated|invalid/);
+});
+
+test('railway layer rejects duplicate IDs and dangling references across continuation chunks', () => {
+  const scene = new THREE.Scene();
+  const layer = new RailwayInfrastructureLayer(scene);
+  const snapshot = decodeRailwayFrame(createFixtureFrame()).message;
+  layer.apply({ ...snapshot, segments: [], stations: [], platforms: [] });
+  assert.throws(() => layer.apply({ ...snapshot, isFullSnapshot: false, nodes: [snapshot.nodes[0]], segments: [], stations: [], platforms: [] }), /duplicated/);
+  assert.throws(() => layer.apply({ ...snapshot, isFullSnapshot: false, nodes: [], segments: [{ ...snapshot.segments[0], id: 99n, startNodeId: 999n }], stations: [], platforms: [] }), /missing TrackNode/);
+  layer.dispose();
+});
+
 test('railway decoder rejects snapshots negotiated below 2.6', () => {
   const frame = createFixtureFrame();
   new DataView(frame).setUint16(6, 5, true);

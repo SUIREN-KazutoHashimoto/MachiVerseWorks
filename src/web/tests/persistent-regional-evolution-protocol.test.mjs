@@ -35,6 +35,12 @@ test('PersistentRegionalEvolution decoder accepts continuation chunks whose refe
   assert.equal(envelope.message.buildings[0].parcelId, 201n);
 });
 
+test('PersistentRegionalEvolution decoder rejects Int32 overflow', () => {
+  const payload = basePayload(100n, true);
+  payload.currentYear = 2_147_483_648;
+  assert.throws(() => decodePersistentRegionalEvolutionFrame(encodeSnapshot(payload, { major: 2, minor: 19 })), ProtocolDecodeFailure);
+});
+
 test('PersistentRegionalEvolution decoder rejects Protocol versions older than 2.19', () => {
   const frame = encodeSnapshot(basePayload(100n, true), { major: 2, minor: 18 });
   assert.throws(() => decodePersistentRegionalEvolutionFrame(frame), ProtocolDecodeFailure);
