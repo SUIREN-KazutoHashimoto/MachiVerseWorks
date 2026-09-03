@@ -134,6 +134,7 @@ function decodeVehicleState(
   assertStableId(message.laneId, 'Lane');
   const forwardLengthSquared = message.forwardX ** 2 + message.forwardY ** 2 + message.forwardZ ** 2;
   if (![message.x, message.y, message.z, message.forwardX, message.forwardY, message.forwardZ, message.speedMetersPerSecond, message.lengthMeters, message.widthMeters, message.heightMeters].every(Number.isFinite)
+    || !Number.isFinite(forwardLengthSquared)
     || forwardLengthSquared <= 1e-12
     || message.speedMetersPerSecond < 0
     || message.lengthMeters <= 0

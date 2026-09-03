@@ -70,10 +70,11 @@ function decodeSnapshot(view: DataView, offset: number, payloadLength: number): 
 
   const lines: TransitLine[] = [];
   const lineIds = new Set<bigint>();
+  const lineModes = new Map<bigint, TransitMode>();
   for (let index = 0; index < lineCount; index += 1) {
     const id = readUint64(); const mode = readByte() as TransitMode;
     if (id === 0n || lineIds.has(id) || (mode !== TransitMode.Bus && mode !== TransitMode.Railway)) throw new ProtocolDecodeFailure('Transit Line payload is invalid.');
-    lineIds.add(id); lines.push({ id, mode });
+    lineIds.add(id); lineModes.set(id, mode); lines.push({ id, mode });
   }
 
   const stops: TransitStop[] = [];
@@ -89,7 +90,10 @@ function decodeSnapshot(view: DataView, offset: number, payloadLength: number): 
   const patternIds = new Set<bigint>();
   for (let index = 0; index < patternCount; index += 1) {
     const id = readUint64(); const lineId = readUint64(); const railwayServiceId = nullableId(readUint64()); const count = readCount(PATTERN_STOP_LENGTH);
-    if (id === 0n || patternIds.has(id) || !lineIds.has(lineId) || count < 2) throw new ProtocolDecodeFailure('Transit Pattern payload is invalid.');
+    const lineMode = lineModes.get(lineId);
+    if (id === 0n || patternIds.has(id) || lineMode === undefined || count < 2
+      || (lineMode === TransitMode.Railway && railwayServiceId === null)
+      || (lineMode === TransitMode.Bus && railwayServiceId !== null)) throw new ProtocolDecodeFailure('Transit Pattern payload is invalid.');
     const patternStops: TransitPatternStop[] = [];
     for (let stopIndex = 0; stopIndex < count; stopIndex += 1) {
       const stopId = readUint64(); const travelTicksFromPrevious = readUint64(); const dwellTicks = readUint64();
