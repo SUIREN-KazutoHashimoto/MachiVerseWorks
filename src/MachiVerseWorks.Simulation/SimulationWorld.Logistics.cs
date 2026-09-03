@@ -146,6 +146,7 @@ public sealed partial class SimulationWorld
 
     private void StepLogistics(SimulationTime nextTime)
     {
+        PruneCompletedLogisticsHistory(nextTime.TickCount);
         while (_processedLogisticsCycle < _processedEconomicCycle)
         {
             ProcessLogisticsCycle(nextTime.TickCount);
@@ -269,8 +270,9 @@ public sealed partial class SimulationWorld
 
     private void AdvanceShipments(ulong tickCount)
     {
-        foreach (var shipment in _logisticsShipments.Where(static item => item.State != ShipmentState.Delivered).OrderBy(static item => item.Id.Value))
+        foreach (var shipment in _logisticsShipments.OrderBy(static item => item.Id.Value))
         {
+            if (shipment.State == ShipmentState.Delivered) continue;
             if (shipment.State == ShipmentState.Pickup)
             {
                 shipment.State = ShipmentState.Loading;
@@ -325,6 +327,26 @@ public sealed partial class SimulationWorld
                     if (!_activeLogisticsOrderKeys.Remove((order.DestinationEstablishmentId, order.CommodityId)))
                         throw new InvalidOperationException($"Completed Logistics Order {order.Id.Value} was missing from the active-order index.");
                 }
+            }
+        }
+    }
+
+    private void PruneCompletedLogisticsHistory(ulong tickCount)
+    {
+        var windowTicks = _persistentRegionalEvolutionOptions.TicksPerYear;
+        var minimumDeliveredTick = tickCount > windowTicks ? tickCount - windowTicks : 0UL;
+        var expired = _logisticsShipments
+            .Where(item => item.State == ShipmentState.Delivered && item.DeliveredTick is { } deliveredTick && deliveredTick < minimumDeliveredTick)
+            .OrderBy(static item => item.Id.Value)
+            .ToArray();
+        foreach (var shipment in expired)
+        {
+            _logisticsShipmentIndex.Remove(shipment.Id);
+            _logisticsShipments.Remove(shipment);
+            if (_logisticsOrderIndex.TryGetValue(shipment.OrderId, out var order) && order.State == LogisticsOrderState.Completed)
+            {
+                _logisticsOrderIndex.Remove(order.Id);
+                _logisticsOrders.Remove(order);
             }
         }
     }

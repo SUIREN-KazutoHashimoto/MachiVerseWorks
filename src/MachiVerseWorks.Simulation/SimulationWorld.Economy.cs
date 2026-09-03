@@ -9,6 +9,7 @@ public sealed partial class SimulationWorld
     private readonly List<EconomyJobState> _economyJobs = [];
     private readonly Dictionary<JobId, EconomyJobState> _economyJobIndex = [];
     private readonly Dictionary<PersonId, EconomyEmploymentState> _economyEmployments = [];
+    private readonly Dictionary<JobId, int> _economyFilledWorkerCounts = [];
     private readonly Dictionary<HouseholdId, EconomyHouseholdState> _economyHouseholds = [];
     private ulong _nextCompanyId = 1;
     private ulong _nextEstablishmentId = 1;
@@ -81,6 +82,7 @@ public sealed partial class SimulationWorld
         var state = new EconomyJobState(id, establishmentId, requiredWorkerCount, dailyWage);
         _economyJobIndex.Add(id, state);
         _economyJobs.Add(state);
+        _economyFilledWorkerCounts.Add(id, 0);
         return id;
     }
 
@@ -92,12 +94,21 @@ public sealed partial class SimulationWorld
             throw new ArgumentException($"Job {jobId.Value} does not exist.", nameof(jobId));
         if (_economyEmployments.ContainsKey(personId))
             throw new InvalidOperationException($"Person {personId.Value} already has an Employment.");
-        if (GetFilledWorkerCount(jobId) >= job.RequiredWorkerCount)
+        var filledWorkerCount = GetFilledWorkerCount(jobId);
+        if (filledWorkerCount >= job.RequiredWorkerCount)
             throw new InvalidOperationException($"Job {jobId.Value} has no vacant positions.");
         _economyEmployments.Add(personId, new EconomyEmploymentState(personId, jobId, Time.TickCount));
+        _economyFilledWorkerCounts[jobId] = checked(filledWorkerCount + 1);
     }
 
-    public bool EndEmployment(PersonId personId) => _economyEmployments.Remove(personId);
+    public bool EndEmployment(PersonId personId)
+    {
+        if (!_economyEmployments.Remove(personId, out var employment)) return false;
+        var filledWorkerCount = GetFilledWorkerCount(employment.JobId);
+        if (filledWorkerCount <= 0) throw new InvalidOperationException($"Job {employment.JobId.Value} employment count is inconsistent.");
+        _economyFilledWorkerCounts[employment.JobId] = filledWorkerCount - 1;
+        return true;
+    }
 
     public void SetHouseholdCashBalance(HouseholdId householdId, long cashBalance)
     {
@@ -355,7 +366,7 @@ public sealed partial class SimulationWorld
     private static TripEndpoint CreateEstablishmentLocation(EconomyEstablishmentState state) =>
         state.PoiId is { } poiId ? TripEndpoint.ForPoi(poiId) : TripEndpoint.ForBuilding(state.BuildingId!.Value);
 
-    private int GetFilledWorkerCount(JobId jobId) => _economyEmployments.Values.Count(item => item.JobId == jobId);
+    private int GetFilledWorkerCount(JobId jobId) => _economyFilledWorkerCounts.GetValueOrDefault(jobId);
 
     private bool ContainsEconomyBuildingReference(BuildingId id) => _economyEstablishments.Any(item => item.BuildingId == id);
     private bool ContainsEconomyPoiReference(PoiId id) => _economyEstablishments.Any(item => item.PoiId == id);
@@ -385,6 +396,7 @@ public sealed partial class SimulationWorld
         _economyJobs.Clear();
         _economyJobIndex.Clear();
         _economyEmployments.Clear();
+        _economyFilledWorkerCounts.Clear();
         _economyHouseholds.Clear();
         _nextCompanyId = 1;
         _nextEstablishmentId = 1;
@@ -419,9 +431,13 @@ public sealed partial class SimulationWorld
             var state = new EconomyJobState(item.Id, item.EstablishmentId, item.RequiredWorkerCount, item.DailyWage);
             _economyJobs.Add(state);
             _economyJobIndex.Add(state.Id, state);
+            _economyFilledWorkerCounts.Add(state.Id, 0);
         }
         foreach (var item in checkpoint.Employments)
+        {
             _economyEmployments.Add(item.PersonId, new EconomyEmploymentState(item.PersonId, item.JobId, item.StartedTick));
+            _economyFilledWorkerCounts[item.JobId] = checked(GetFilledWorkerCount(item.JobId) + 1);
+        }
         foreach (var item in checkpoint.Households)
             _economyHouseholds.Add(item.HouseholdId, new EconomyHouseholdState(item.HouseholdId)
             {

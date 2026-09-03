@@ -8,6 +8,7 @@ on:
       - 'src/**'
       - 'benchmarks/**'
       - 'scripts/run-phase9-regression-benchmark.sh'
+      - 'scripts/compare-benchmark-results.py'
       - 'Directory.Build.props'
       - 'Directory.Packages.props'
       - 'global.json'
@@ -19,6 +20,7 @@ on:
       - 'src/**'
       - 'benchmarks/**'
       - 'scripts/run-phase9-regression-benchmark.sh'
+      - 'scripts/compare-benchmark-results.py'
       - 'Directory.Build.props'
       - 'Directory.Packages.props'
       - 'global.json'
@@ -92,16 +94,44 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Checkout benchmark base
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .benchmark-base
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
       - name: Restore
         run: dotnet restore MachiVerseWorks.slnx
+      - name: Restore benchmark base
+        if: github.event_name == 'pull_request'
+        working-directory: .benchmark-base
+        run: dotnet restore MachiVerseWorks.slnx
+      - name: Run base benchmark
+        if: github.event_name == 'pull_request'
+        working-directory: .benchmark-base
+        env:
+          MACHIVERSE_BENCHMARK_ARTIFACTS: ${{ github.workspace }}/.artifacts/benchmarks/${{ matrix.id }}/base
+        run: dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-restore -- --filter "${{ matrix.filter }}" --job short
+      - name: Hide benchmark base project from BenchmarkDotNet discovery
+        if: github.event_name == 'pull_request'
+        run: >-
+          mv .benchmark-base/benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj
+          .benchmark-base/benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj.base
       - name: Run benchmark
         env:
-          MACHIVERSE_BENCHMARK_ARTIFACTS: ${{ github.workspace }}/.artifacts/benchmarks/${{ matrix.id }}
+          MACHIVERSE_BENCHMARK_ARTIFACTS: ${{ github.workspace }}/.artifacts/benchmarks/${{ matrix.id }}/head
         run: dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-restore -- --filter "${{ matrix.filter }}" --job short
+      - name: Compare benchmark regression
+        if: github.event_name == 'pull_request'
+        run: >-
+          python3 scripts/compare-benchmark-results.py
+          --base ".artifacts/benchmarks/${{ matrix.id }}/base"
+          --head ".artifacts/benchmarks/${{ matrix.id }}/head"
+          --report ".artifacts/benchmarks/${{ matrix.id }}/comparison.json"
       - name: Upload benchmark artifacts
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

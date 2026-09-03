@@ -139,7 +139,12 @@ internal sealed class SnapshotPublishService(
                 deliveryScheduler.ThrowIfFaulted();
                 var pending = CapturePendingDeliveries();
                 if (pending.Length == 0) continue;
-                try { var publishSnapshot = observationSource.CapturePublishSnapshot(); SchedulePublish(publishSnapshot, pending, stoppingToken); }
+                try
+                {
+                    var captureVolume = CalculateCaptureVolume(pending);
+                    var publishSnapshot = observationSource.CapturePublishSnapshot(captureVolume);
+                    SchedulePublish(publishSnapshot, pending, stoppingToken);
+                }
                 catch { ReleaseReservations(pending); throw; }
             }
         }
@@ -161,6 +166,22 @@ internal sealed class SnapshotPublishService(
         }
         return pending.ToArray();
     }
+
+    private static WorldVolume CalculateCaptureVolume(PendingSnapshotDelivery[] pending)
+    {
+        if (pending.Length == 0) throw new ArgumentException("At least one pending delivery is required.", nameof(pending));
+        var first = pending[0].Subscription.Volume;
+        var minX = first.MinX; var minY = first.MinY; var minZ = first.MinZ;
+        var maxX = first.MaxX; var maxY = first.MaxY; var maxZ = first.MaxZ;
+        for (var index = 1; index < pending.Length; index++)
+        {
+            var volume = pending[index].Subscription.Volume;
+            minX = Math.Min(minX, volume.MinX); minY = Math.Min(minY, volume.MinY); minZ = Math.Min(minZ, volume.MinZ);
+            maxX = Math.Max(maxX, volume.MaxX); maxY = Math.Max(maxY, volume.MaxY); maxZ = Math.Max(maxZ, volume.MaxZ);
+        }
+        return new WorldVolume(minX, minY, minZ, maxX, maxY, maxZ);
+    }
+
     private void SchedulePublish(SimulationPublishSnapshot publishSnapshot, PendingSnapshotDelivery[] pending, CancellationToken cancellationToken)
     {
         foreach (var delivery in pending) deliveryScheduler.StartReserved(delivery.Connection.Id, () => PublishConnectionAsync(delivery.Connection, delivery.Subscription, publishSnapshot, cancellationToken));

@@ -27,8 +27,13 @@ public sealed class LogisticsSimulationTests
             if (state == ShipmentState.Delivered) break;
         }
 
+        var finalSnapshot = world.CreateLogisticsSnapshot();
         Assert.IsTrue(observedUnloading);
-        Assert.AreEqual(ShipmentState.Delivered, world.CreateLogisticsSnapshot().Shipments.Single().State);
+        Assert.AreEqual(1UL, finalSnapshot.Statistics.DeliveredShipmentCount);
+        Assert.AreEqual(0, finalSnapshot.Statistics.OpenOrderCount);
+        Assert.AreEqual(1, finalSnapshot.Statistics.ShipmentCount);
+        Assert.AreEqual(ShipmentState.Delivered, finalSnapshot.Shipments.Single().State);
+        Assert.AreEqual(LogisticsOrderState.Completed, finalSnapshot.Orders.Single().State);
     }
 
     [TestMethod]

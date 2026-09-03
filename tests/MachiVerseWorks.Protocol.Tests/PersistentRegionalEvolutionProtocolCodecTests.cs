@@ -23,6 +23,9 @@ public sealed class PersistentRegionalEvolutionProtocolCodecTests
         Assert.AreEqual(message.Events[0], actual.Events[0]);
         Assert.AreEqual(message.CommutingFlows[0], actual.CommutingFlows[0]);
         Assert.IsTrue(actual.IsFullSnapshot);
+        Assert.AreEqual(0UL, actual.SnapshotId);
+        Assert.AreEqual(0, actual.ChunkIndex);
+        Assert.AreEqual(1, actual.ChunkCount);
     }
 
     [TestMethod]
@@ -53,11 +56,35 @@ public sealed class PersistentRegionalEvolutionProtocolCodecTests
         Assert.IsTrue(chunks[0].IsFullSnapshot);
         Assert.IsTrue(chunks.Skip(1).All(static chunk => !chunk.IsFullSnapshot));
         Assert.AreEqual(events.Length, chunks.Sum(static chunk => chunk.Events.Count));
-        foreach (var chunk in chunks)
+        var snapshotId = chunks[0].SnapshotId;
+        Assert.AreNotEqual(0UL, snapshotId);
+        for (var index = 0; index < chunks.Count; index++)
         {
+            var chunk = chunks[index];
+            Assert.AreEqual(snapshotId, chunk.SnapshotId);
+            Assert.AreEqual(index, chunk.ChunkIndex);
+            Assert.AreEqual(chunks.Count, chunk.ChunkCount);
             var frame = PersistentRegionalEvolutionProtocolCodec.Serialize(chunk, ProtocolVersion.Current);
             Assert.IsLessThanOrEqualTo((long)ProtocolFrameHeader.Size + ProtocolFrameHeader.MaxPayloadLength, frame.LongLength);
         }
+    }
+
+    [TestMethod]
+    public void InvalidMultiChunkMetadataCannotBeSerialized()
+    {
+        var invalid = CreateMessage() with { SnapshotId = 9, ChunkIndex = 1, ChunkCount = 2, IsFullSnapshot = true };
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            PersistentRegionalEvolutionProtocolCodec.Serialize(invalid, ProtocolVersion.Current));
+    }
+
+    [TestMethod]
+    public void BatchMetadataRequiresFullFirstChunkEvenWhenBatchHasOneChunk()
+    {
+        var invalid = CreateMessage() with { SnapshotId = 9, ChunkIndex = 0, ChunkCount = 1, IsFullSnapshot = false };
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            PersistentRegionalEvolutionProtocolCodec.Serialize(invalid, ProtocolVersion.Current));
     }
 
     private static PersistentRegionalEvolutionSnapshotMessage CreateMessage() => new(

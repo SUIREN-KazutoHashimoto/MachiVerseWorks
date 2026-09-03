@@ -3,17 +3,22 @@ namespace MachiVerseWorks.Simulation.Internal;
 internal sealed class RoadSpatialIndex
 {
     private const ulong MaximumIndexedSegmentCells = 4_096;
+    private const double CoarseCellScale = 64d;
     private readonly double cellSize;
+    private readonly double coarseCellSize;
     private readonly Dictionary<SpatialCell, HashSet<RoadNodeId>> nodesByCell = [];
     private readonly Dictionary<RoadNodeId, SpatialCell> cellByNode = [];
     private readonly Dictionary<SpatialCell, HashSet<RoadSegmentId>> segmentsByCell = [];
     private readonly Dictionary<RoadSegmentId, SpatialCell[]> cellsBySegment = [];
+    private readonly Dictionary<SpatialCell, HashSet<RoadSegmentId>> coarseSegmentsByCell = [];
+    private readonly Dictionary<RoadSegmentId, SpatialCell[]> coarseCellsBySegment = [];
     private readonly Dictionary<RoadSegmentId, WorldVolume> boundsBySegment = [];
-    private readonly HashSet<RoadSegmentId> largeSegments = [];
+    private readonly HashSet<RoadSegmentId> ultraLargeSegments = [];
 
     public RoadSpatialIndex(double cellSize)
     {
         this.cellSize = cellSize;
+        coarseCellSize = checked(cellSize * CoarseCellScale);
     }
 
     public void ValidatePosition(WorldPoint position) => _ = SpatialGrid.ToCell(position, cellSize);
@@ -49,26 +54,27 @@ internal sealed class RoadSpatialIndex
     {
         var bounds = CreateBounds(start, end);
         boundsBySegment.Add(id, bounds);
-        var minCell = SpatialGrid.ToCell(start, cellSize);
-        var maxCell = SpatialGrid.ToCell(end, cellSize);
-        var low = new SpatialCell(Math.Min(minCell.X, maxCell.X), Math.Min(minCell.Y, maxCell.Y), Math.Min(minCell.Z, maxCell.Z));
-        var high = new SpatialCell(Math.Max(minCell.X, maxCell.X), Math.Max(minCell.Y, maxCell.Y), Math.Max(minCell.Z, maxCell.Z));
+        var (low, high) = GetCellRange(bounds, cellSize);
         var count = CellCount(low, high);
-        if (count > MaximumIndexedSegmentCells)
+        if (count <= MaximumIndexedSegmentCells)
         {
-            largeSegments.Add(id);
-            cellsBySegment.Add(id, []);
+            var cells = RegisterCells(segmentsByCell, id, low, high, count);
+            cellsBySegment.Add(id, cells);
+            coarseCellsBySegment.Add(id, []);
             return;
         }
 
-        var cells = new SpatialCell[(int)count];
-        var offset = 0;
-        ForEachCell(low, high, cell =>
+        cellsBySegment.Add(id, []);
+        var (coarseLow, coarseHigh) = GetCellRange(bounds, coarseCellSize);
+        var coarseCount = CellCount(coarseLow, coarseHigh);
+        if (coarseCount <= MaximumIndexedSegmentCells)
         {
-            cells[offset++] = cell;
-            GetOrCreate(segmentsByCell, cell).Add(id);
-        });
-        cellsBySegment.Add(id, cells);
+            coarseCellsBySegment.Add(id, RegisterCells(coarseSegmentsByCell, id, coarseLow, coarseHigh, coarseCount));
+            return;
+        }
+
+        coarseCellsBySegment.Add(id, []);
+        ultraLargeSegments.Add(id);
     }
 
     public void UpdateSegment(RoadSegmentId id, WorldPoint start, WorldPoint end)
@@ -83,27 +89,57 @@ internal sealed class RoadSpatialIndex
         {
             foreach (var cell in cells) RemoveFromCell(segmentsByCell, cell, id);
         }
-        largeSegments.Remove(id);
+        if (coarseCellsBySegment.Remove(id, out var coarseCells))
+        {
+            foreach (var cell in coarseCells) RemoveFromCell(coarseSegmentsByCell, cell, id);
+        }
+        ultraLargeSegments.Remove(id);
         boundsBySegment.Remove(id);
     }
 
     public HashSet<RoadNodeId> QueryNodes(WorldVolume volume)
     {
         var result = new HashSet<RoadNodeId>();
-        var low = SpatialGrid.ToCell(new WorldPoint(volume.MinX, volume.MinY, volume.MinZ), cellSize);
-        var high = SpatialGrid.ToCell(new WorldPoint(volume.MaxX, volume.MaxY, volume.MaxZ), cellSize);
+        var (low, high) = GetCellRange(volume, cellSize);
         QueryCells(nodesByCell, low, high, result);
         return result;
     }
 
     public HashSet<RoadSegmentId> QuerySegments(WorldVolume volume)
     {
-        var candidates = new HashSet<RoadSegmentId>(largeSegments);
-        var low = SpatialGrid.ToCell(new WorldPoint(volume.MinX, volume.MinY, volume.MinZ), cellSize);
-        var high = SpatialGrid.ToCell(new WorldPoint(volume.MaxX, volume.MaxY, volume.MaxZ), cellSize);
+        var candidates = new HashSet<RoadSegmentId>(ultraLargeSegments);
+        var (low, high) = GetCellRange(volume, cellSize);
         QueryCells(segmentsByCell, low, high, candidates);
+        var (coarseLow, coarseHigh) = GetCellRange(volume, coarseCellSize);
+        QueryCells(coarseSegmentsByCell, coarseLow, coarseHigh, candidates);
         candidates.RemoveWhere(id => !boundsBySegment.TryGetValue(id, out var bounds) || !Intersects(bounds, volume));
         return candidates;
+    }
+
+    private static SpatialCell[] RegisterCells(
+        Dictionary<SpatialCell, HashSet<RoadSegmentId>> target,
+        RoadSegmentId id,
+        SpatialCell low,
+        SpatialCell high,
+        ulong count)
+    {
+        var cells = new SpatialCell[(int)count];
+        var offset = 0;
+        ForEachCell(low, high, cell =>
+        {
+            cells[offset++] = cell;
+            GetOrCreate(target, cell).Add(id);
+        });
+        return cells;
+    }
+
+    private static (SpatialCell Low, SpatialCell High) GetCellRange(WorldVolume bounds, double size)
+    {
+        var minCell = SpatialGrid.ToCell(new WorldPoint(bounds.MinX, bounds.MinY, bounds.MinZ), size);
+        var maxCell = SpatialGrid.ToCell(new WorldPoint(bounds.MaxX, bounds.MaxY, bounds.MaxZ), size);
+        return (
+            new SpatialCell(Math.Min(minCell.X, maxCell.X), Math.Min(minCell.Y, maxCell.Y), Math.Min(minCell.Z, maxCell.Z)),
+            new SpatialCell(Math.Max(minCell.X, maxCell.X), Math.Max(minCell.Y, maxCell.Y), Math.Max(minCell.Z, maxCell.Z)));
     }
 
     private static WorldVolume CreateBounds(WorldPoint start, WorldPoint end) => new(

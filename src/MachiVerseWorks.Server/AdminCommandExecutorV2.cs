@@ -230,9 +230,8 @@ internal sealed class AdminCommandExecutorV2(
         if (command.Arguments.Count < 2) return Syntax("road node|segment|lane|connection|access list|show|add|update|remove ...");
         var entity = command.Arguments[0].ToLowerInvariant();
         var action = command.Arguments[1].ToLowerInvariant();
-        var snapshot = simulation.Read(static w => w.CreateRoadNetworkSnapshot());
-        if (Eq(action, "list")) return RoadList(entity, snapshot);
-        if (Eq(action, "show")) return RoadShow(entity, snapshot, Id(Arg(command, 2, "id"), "id"));
+        if (Eq(action, "list")) return RoadList(entity, simulation.Read(static w => w.CreateRoadNetworkSnapshot()));
+        if (Eq(action, "show")) return RoadShow(entity, simulation.Read(static w => w.CreateRoadNetworkSnapshot()), Id(Arg(command, 2, "id"), "id"));
 
         if (entity == "node")
         {
@@ -307,17 +306,26 @@ internal sealed class AdminCommandExecutorV2(
     {
         if (command.Arguments.Count < 2) return Syntax("railway node|segment|connection|block|station|platform|access|depot list|show|add|update|remove ...");
         var entity = command.Arguments[0].ToLowerInvariant(); var action = command.Arguments[1].ToLowerInvariant();
-        var snapshot = simulation.Read(static w => w.CreateRailwayInfrastructureSnapshot());
-        if (action == "list") return RailwayList(entity, snapshot);
-        if (action == "show") return RailwayShow(entity, snapshot, Id(Arg(command, 2, "id"), "id"));
+        if (action == "list") return RailwayList(entity, simulation.Read(static w => w.CreateRailwayInfrastructureSnapshot()));
+        if (action == "show") return RailwayShow(entity, simulation.Read(static w => w.CreateRailwayInfrastructureSnapshot()), Id(Arg(command, 2, "id"), "id"));
         return RailwayMutate(command, entity, action);
     }
 
     private AdminCommandResult Formation(AdminCommand command)
     {
-        var action = Action(command, "formation"); var snapshot = simulation.Read(static w => w.CreateRailwayOperationsSnapshot());
-        if (action == "list") return ListResult(snapshot.Formations.Select(FormatFormation), "No formations.");
-        if (action == "show") { var id = Id(Arg(command, 1, "id"), "id"); var item = snapshot.Formations.FirstOrDefault(x => x.Id.Value == id); return item is null ? NotFound("Formation", id) : AdminCommandResult.Ok(FormatFormation(item)); }
+        var action = Action(command, "formation");
+        if (action == "list")
+        {
+            var snapshot = simulation.Read(static w => w.CreateRailwayOperationsSnapshot());
+            return ListResult(snapshot.Formations.Select(FormatFormation), "No formations.");
+        }
+        if (action == "show")
+        {
+            var snapshot = simulation.Read(static w => w.CreateRailwayOperationsSnapshot());
+            var id = Id(Arg(command, 1, "id"), "id");
+            var item = snapshot.Formations.FirstOrDefault(x => x.Id.Value == id);
+            return item is null ? NotFound("Formation", id) : AdminCommandResult.Ok(FormatFormation(item));
+        }
         if (action == "add")
         {
             var created = simulation.Mutate(w => w.CreateTrainFormation(Double(Arg(command, 1, "length"), "length"), Double(Arg(command, 2, "maxSpeed"), "maxSpeed"), Double(Arg(command, 3, "acceleration"), "acceleration"), Double(Arg(command, 4, "deceleration"), "deceleration"), PositiveInt(Arg(command, 5, "capacity"), "capacity")));
@@ -328,27 +336,57 @@ internal sealed class AdminCommandExecutorV2(
 
     private AdminCommandResult RailRoute(AdminCommand command)
     {
-        var action = Action(command, "railroute"); var snapshot = simulation.Read(static w => w.CreateRailwayOperationsSnapshot());
-        if (action == "list") return ListResult(snapshot.Routes.Select(FormatRailRoute), "No railway routes.");
-        if (action == "show") { var id = Id(Arg(command, 1, "id"), "id"); var item = snapshot.Routes.FirstOrDefault(x => x.Id.Value == id); return item is null ? NotFound("Railway route", id) : AdminCommandResult.Ok(FormatRailRoute(item)); }
+        var action = Action(command, "railroute");
+        if (action == "list")
+        {
+            var snapshot = simulation.Read(static w => w.CreateRailwayOperationsSnapshot());
+            return ListResult(snapshot.Routes.Select(FormatRailRoute), "No railway routes.");
+        }
+        if (action == "show")
+        {
+            var snapshot = simulation.Read(static w => w.CreateRailwayOperationsSnapshot());
+            var id = Id(Arg(command, 1, "id"), "id");
+            var item = snapshot.Routes.FirstOrDefault(x => x.Id.Value == id);
+            return item is null ? NotFound("Railway route", id) : AdminCommandResult.Ok(FormatRailRoute(item));
+        }
         if (action == "add") { var ids = CsvIds(Arg(command, 1, "trackSegmentIds")).Select(x => new TrackSegmentId(x)).ToArray(); var created = simulation.Mutate(w => w.CreateRailwayRoute(ids)); return AdminCommandResult.Ok($"Railway route {created.Value} created."); }
         return InvalidAction("railroute", action);
     }
 
     private AdminCommandResult Timetable(AdminCommand command)
     {
-        var action = Action(command, "timetable"); var snapshot = simulation.Read(static w => w.CreateRailwayOperationsSnapshot());
-        if (action == "list") return ListResult(snapshot.Timetables.Select(FormatTimetable), "No timetables.");
-        if (action == "show") { var id = Id(Arg(command, 1, "id"), "id"); var item = snapshot.Timetables.FirstOrDefault(x => x.Id.Value == id); return item is null ? NotFound("Timetable", id) : AdminCommandResult.Ok(FormatTimetable(item)); }
+        var action = Action(command, "timetable");
+        if (action == "list")
+        {
+            var snapshot = simulation.Read(static w => w.CreateRailwayOperationsSnapshot());
+            return ListResult(snapshot.Timetables.Select(FormatTimetable), "No timetables.");
+        }
+        if (action == "show")
+        {
+            var snapshot = simulation.Read(static w => w.CreateRailwayOperationsSnapshot());
+            var id = Id(Arg(command, 1, "id"), "id");
+            var item = snapshot.Timetables.FirstOrDefault(x => x.Id.Value == id);
+            return item is null ? NotFound("Timetable", id) : AdminCommandResult.Ok(FormatTimetable(item));
+        }
         if (action == "add") { var stops = ParseStops(Arg(command, 1, "stops")); var created = simulation.Mutate(w => w.CreateTimetable(stops)); return AdminCommandResult.Ok($"Timetable {created.Value} created."); }
         return InvalidAction("timetable", action);
     }
 
     private AdminCommandResult Service(AdminCommand command)
     {
-        var action = Action(command, "service"); var snapshot = simulation.Read(static w => w.CreateRailwayOperationsSnapshot());
-        if (action == "list") return ListResult(snapshot.Services.Select(FormatService), "No railway services.");
-        if (action == "show") { var id = Id(Arg(command, 1, "id"), "id"); var item = snapshot.Services.FirstOrDefault(x => x.Id.Value == id); return item is null ? NotFound("Railway service", id) : AdminCommandResult.Ok(FormatService(item)); }
+        var action = Action(command, "service");
+        if (action == "list")
+        {
+            var snapshot = simulation.Read(static w => w.CreateRailwayOperationsSnapshot());
+            return ListResult(snapshot.Services.Select(FormatService), "No railway services.");
+        }
+        if (action == "show")
+        {
+            var snapshot = simulation.Read(static w => w.CreateRailwayOperationsSnapshot());
+            var id = Id(Arg(command, 1, "id"), "id");
+            var item = snapshot.Services.FirstOrDefault(x => x.Id.Value == id);
+            return item is null ? NotFound("Railway service", id) : AdminCommandResult.Ok(FormatService(item));
+        }
         if (action == "add")
         {
             var start = command.Arguments.Count > 6 ? UInt64(Arg(command, 6, "startTick"), "startTick", allowZero: true) : 0UL;
@@ -360,9 +398,19 @@ internal sealed class AdminCommandExecutorV2(
 
     private AdminCommandResult Train(AdminCommand command)
     {
-        var action = Action(command, "train"); var snapshot = simulation.Read(static w => w.CreateRailwayOperationsSnapshot());
-        if (action == "list") return ListResult(snapshot.Trains.Select(FormatTrain), "No trains.");
-        if (action == "show") { var id = Id(Arg(command, 1, "id"), "id"); var item = snapshot.Trains.FirstOrDefault(x => x.Id.Value == id); return item is null ? NotFound("Train", id) : AdminCommandResult.Ok(FormatTrain(item)); }
+        var action = Action(command, "train");
+        if (action == "list")
+        {
+            var snapshot = simulation.Read(static w => w.CreateRailwayOperationsSnapshot());
+            return ListResult(snapshot.Trains.Select(FormatTrain), "No trains.");
+        }
+        if (action == "show")
+        {
+            var snapshot = simulation.Read(static w => w.CreateRailwayOperationsSnapshot());
+            var id = Id(Arg(command, 1, "id"), "id");
+            var item = snapshot.Trains.FirstOrDefault(x => x.Id.Value == id);
+            return item is null ? NotFound("Train", id) : AdminCommandResult.Ok(FormatTrain(item));
+        }
         if (action == "add") { var created = simulation.Mutate(w => w.CreateTrain(new RailwayServiceId(Id(Arg(command, 1, "service"), "service")))); return AdminCommandResult.Ok($"Train {created.Value} created."); }
         return InvalidAction("train", action);
     }

@@ -62,6 +62,13 @@ public static class PersistentRegionalEvolutionProtocolCodec
 
     private static bool IsValid(PersistentRegionalEvolutionSnapshotMessage message)
     {
+        if (message.ChunkCount <= 0 || message.ChunkIndex < 0 || message.ChunkIndex >= message.ChunkCount) return false;
+        var hasBatchMetadata = message.SnapshotId != 0 || message.ChunkIndex != 0 || message.ChunkCount != 1;
+        if (hasBatchMetadata)
+        {
+            if (message.SnapshotId == 0) return false;
+            if ((message.ChunkIndex == 0) != message.IsFullSnapshot) return false;
+        }
         if (message.CurrentYear < 0 || message.Settlements is null || message.Parcels is null || message.Buildings is null
             || message.ServiceCatchments is null || message.InfrastructureDemands is null || message.Relations is null
             || message.Events is null || message.CommutingFlows is null || message.FreightFlows is null) return false;

@@ -12,7 +12,12 @@ public sealed partial class SimulationWorld
     private readonly Dictionary<RadioLinkId, RadioLinkStateData> _radioLinkIndex = [];
     private readonly List<RadioPeer> _radioPeers = [];
     private readonly Dictionary<RadioPeerId, RadioPeer> _radioPeerIndex = [];
+    private readonly Dictionary<FrequencyBlockId, RadioLinkStateData[]> _legacyRadioLinksByBlock = [];
+    private readonly Dictionary<FrequencyBlockId, FrequencyBlockId[]> _overlappingFrequencyBlocks = [];
+    private readonly Dictionary<SpatialCell, RadioLinkStateData[]> _legacyConflictLinksByCell = [];
     private readonly IRadioPropagationSolver _radioPropagationSolver;
+    private bool _radioCandidateIndexesDirty = true;
+    private bool _radioPlanDirty = true;
     private ulong _nextRadioSiteId = 1;
     private ulong _nextSpectrumBandId = 1;
     private ulong _nextFrequencyBlockId = 1;
@@ -41,6 +46,7 @@ public sealed partial class SimulationWorld
         var state = new RadioSiteState(id, kind, position, antennaGainDb, antennaHeightMeters, isInService);
         _radioSites.Add(state);
         _radioSiteIndex.Add(id, state);
+        _radioPlanDirty = true;
         return id;
     }
 
@@ -65,6 +71,7 @@ public sealed partial class SimulationWorld
         _nextFrequencyBlockId++;
         _frequencyBlocks.Add(block);
         _frequencyBlockIndex.Add(block.Id, block);
+        MarkRadioCandidateIndexesDirty();
         return block.Id;
     }
 
@@ -86,6 +93,7 @@ public sealed partial class SimulationWorld
         var state = new RadioLinkStateData(id, fromSiteId, toSiteId, frequencyBlockId, linkBudget, utilization, isInService);
         _radioLinks.Add(state);
         _radioLinkIndex.Add(id, state);
+        MarkRadioCandidateIndexesDirty();
         try
         {
             RecalculateRadioPlan();
@@ -96,6 +104,7 @@ public sealed partial class SimulationWorld
         {
             _radioLinks.Remove(state);
             _radioLinkIndex.Remove(id);
+            MarkRadioCandidateIndexesDirty();
             throw;
         }
     }
@@ -127,7 +136,8 @@ public sealed partial class SimulationWorld
         if (!_radioSiteIndex.TryGetValue(id, out var site)) throw new ArgumentException($"Radio site {id.Value} does not exist.", nameof(id));
         var previous = site.IsInService;
         site.IsInService = isInService;
-        try { RecalculateRadioPlan(); } catch { site.IsInService = previous; throw; }
+        _radioPlanDirty = true;
+        RecalculateRadioPlan();
     }
 
     public void SetRadioLinkInService(RadioLinkId id, bool isInService)
@@ -135,7 +145,8 @@ public sealed partial class SimulationWorld
         if (!_radioLinkIndex.TryGetValue(id, out var link)) throw new ArgumentException($"Radio link {id.Value} does not exist.", nameof(id));
         var previous = link.IsInService;
         link.IsInService = isInService;
-        try { RecalculateRadioPlan(); } catch { link.IsInService = previous; throw; }
+        _radioPlanDirty = true;
+        RecalculateRadioPlan();
     }
 
     public void SetRadioLinkUtilization(RadioLinkId id, double utilization)
@@ -144,7 +155,8 @@ public sealed partial class SimulationWorld
         if (!double.IsFinite(utilization) || utilization < 0d || utilization > 1d) throw new ArgumentOutOfRangeException(nameof(utilization));
         var previous = link.Utilization;
         link.Utilization = utilization;
-        try { RecalculateRadioPlan(); } catch { link.Utilization = previous; throw; }
+        _radioPlanDirty = true;
+        RecalculateRadioPlan();
     }
 
     public bool TryGetRadioLinkSnapshot(RadioLinkId id, out RadioLinkSnapshot snapshot)
@@ -169,7 +181,7 @@ public sealed partial class SimulationWorld
         var conflicts = CreateSpectrumConflicts();
         var serviceAreas = CreateRadioServiceAreas();
         return new RadioSnapshot(
-            CreateRadioStatistics(conflicts),
+            CreateRadioStatistics(conflicts, serviceAreas.Length),
             _radioSites.OrderBy(static item => item.Id.Value).Select(CreateRadioSiteSnapshot).ToArray(),
             _spectrumBands.OrderBy(static item => item.Id.Value).ToArray(),
             _frequencyBlocks.OrderBy(static item => item.Id.Value).ToArray(),
@@ -184,23 +196,33 @@ public sealed partial class SimulationWorld
 
     public IReadOnlyList<SpectrumConflict> CreateSpectrumConflicts()
     {
+        EnsureRadioCandidateIndexes();
         var conflicts = new List<SpectrumConflict>();
-        var legacyLinks = _radioLinks
-            .Where(item => !_radioLinkEntityBindings.ContainsKey(item.Id) && IsRadioLinkOperational(item))
-            .OrderBy(static item => item.Id.Value)
-            .ToArray();
-        for (var leftIndex = 0; leftIndex < legacyLinks.Length; leftIndex++)
+        foreach (var left in _radioLinks.OrderBy(static item => item.Id.Value))
         {
-            var left = legacyLinks[leftIndex];
-            var leftBlock = _frequencyBlockIndex[left.FrequencyBlockId];
-            for (var rightIndex = leftIndex + 1; rightIndex < legacyLinks.Length; rightIndex++)
+            if (_radioLinkEntityBindings.ContainsKey(left.Id) || !IsRadioLinkOperational(left)) continue;
+            var leftPosition = _radioSiteIndex[left.FromSiteId].Position;
+            var center = SpatialGrid.ToCell(leftPosition, RadioDefaults.SpectrumConflictDistanceMeters);
+            for (var x = (long)center.X - 1; x <= (long)center.X + 1; x++)
             {
-                var right = legacyLinks[rightIndex];
-                var rightBlock = _frequencyBlockIndex[right.FrequencyBlockId];
-                if (!RadioValidation.FrequencyBlocksOverlap(leftBlock, rightBlock)) continue;
-                var distance = DistanceMeters(_radioSiteIndex[left.FromSiteId].Position, _radioSiteIndex[right.FromSiteId].Position);
-                if (distance > RadioDefaults.SpectrumConflictDistanceMeters) continue;
-                conflicts.Add(new SpectrumConflict(left.FrequencyBlockId, right.FrequencyBlockId, left.FromSiteId, right.FromSiteId, "frequencyReuseWithinConflictDistance"));
+                if (x < int.MinValue || x > int.MaxValue) continue;
+                for (var y = (long)center.Y - 1; y <= (long)center.Y + 1; y++)
+                {
+                    if (y < int.MinValue || y > int.MaxValue) continue;
+                    for (var z = (long)center.Z - 1; z <= (long)center.Z + 1; z++)
+                    {
+                        if (z < int.MinValue || z > int.MaxValue) continue;
+                        if (!_legacyConflictLinksByCell.TryGetValue(new SpatialCell((int)x, (int)y, (int)z), out var candidates)) continue;
+                        foreach (var right in candidates)
+                        {
+                            if (right.Id.Value <= left.Id.Value || _radioLinkEntityBindings.ContainsKey(right.Id) || !IsRadioLinkOperational(right)) continue;
+                            if (!RadioValidation.FrequencyBlocksOverlap(_frequencyBlockIndex[left.FrequencyBlockId], _frequencyBlockIndex[right.FrequencyBlockId])) continue;
+                            var distance = DistanceMeters(leftPosition, _radioSiteIndex[right.FromSiteId].Position);
+                            if (distance > RadioDefaults.SpectrumConflictDistanceMeters) continue;
+                            conflicts.Add(new SpectrumConflict(left.FrequencyBlockId, right.FrequencyBlockId, left.FromSiteId, right.FromSiteId, "frequencyReuseWithinConflictDistance"));
+                        }
+                    }
+                }
             }
         }
 
@@ -238,6 +260,7 @@ public sealed partial class SimulationWorld
 
     public void RecalculateRadioPlan()
     {
+        EnsureRadioCandidateIndexes();
         var updates = new List<(RadioLinkStateData Link, RadioPropagationResult Propagation, RadioLinkState State)>();
         foreach (var link in _radioLinks.OrderBy(static item => item.Id.Value))
         {
@@ -275,11 +298,20 @@ public sealed partial class SimulationWorld
             update.Link.Propagation = update.Propagation;
             update.Link.State = update.State;
         }
+        _radioPlanDirty = false;
     }
 
     private void StepRadio(SimulationTime nextTime)
     {
         _ = nextTime;
+        if (_radioPlanDirty)
+        {
+            RecalculateRadioPlan();
+            return;
+        }
+        // Radio also depends on Power, Optical, building obstruction and other domains that can
+        // change without going through a Radio mutation API, so every Simulation step refreshes
+        // the derived plan at most once even when Radio-local state itself was not marked dirty.
         RecalculateRadioPlan();
     }
 
@@ -287,30 +319,81 @@ public sealed partial class SimulationWorld
     {
         var combinedInterferenceDbm = -300d;
         var hasInterference = false;
-        var targetBlock = _frequencyBlockIndex[target.FrequencyBlockId];
-        foreach (var other in _radioLinks.OrderBy(static item => item.Id.Value))
+        if (!_overlappingFrequencyBlocks.TryGetValue(target.FrequencyBlockId, out var overlappingBlocks)) return -300d;
+        foreach (var blockId in overlappingBlocks)
         {
-            if (other.Id == target.Id || _radioLinkEntityBindings.ContainsKey(other.Id) || !IsRadioLinkOperational(other)) continue;
-            var otherBlock = _frequencyBlockIndex[other.FrequencyBlockId];
-            if (!RadioValidation.FrequencyBlocksOverlap(targetBlock, otherBlock)) continue;
-            var otherTransmitter = CreateRadioSiteSnapshot(_radioSiteIndex[other.FromSiteId]);
-            var obstruction = CalculateRadioBuildingObstruction(otherTransmitter.Position, targetReceiver.Position);
-            var interferenceRequest = new RadioPropagationRequest(
-                otherTransmitter,
-                targetReceiver,
-                otherBlock,
-                other.LinkBudget,
-                -300d,
-                RadioDefaults.ThermalNoiseFloorDbm,
-                obstruction.LossDb,
-                obstruction.IsLineOfSight);
-            var result = _radioPropagationSolver.Solve(interferenceRequest);
-            combinedInterferenceDbm = hasInterference
-                ? DeterministicRadioPropagationSolver.CombinePowersDbm(combinedInterferenceDbm, result.ReceivedPowerDbm)
-                : result.ReceivedPowerDbm;
-            hasInterference = true;
+            if (!_legacyRadioLinksByBlock.TryGetValue(blockId, out var candidates)) continue;
+            foreach (var other in candidates)
+            {
+                if (other.Id == target.Id || _radioLinkEntityBindings.ContainsKey(other.Id) || !IsRadioLinkOperational(other)) continue;
+                var otherBlock = _frequencyBlockIndex[other.FrequencyBlockId];
+                var otherTransmitter = CreateRadioSiteSnapshot(_radioSiteIndex[other.FromSiteId]);
+                var obstruction = CalculateRadioBuildingObstruction(otherTransmitter.Position, targetReceiver.Position);
+                var interferenceRequest = new RadioPropagationRequest(
+                    otherTransmitter,
+                    targetReceiver,
+                    otherBlock,
+                    other.LinkBudget,
+                    -300d,
+                    RadioDefaults.ThermalNoiseFloorDbm,
+                    obstruction.LossDb,
+                    obstruction.IsLineOfSight);
+                var result = _radioPropagationSolver.Solve(interferenceRequest);
+                combinedInterferenceDbm = hasInterference
+                    ? DeterministicRadioPropagationSolver.CombinePowersDbm(combinedInterferenceDbm, result.ReceivedPowerDbm)
+                    : result.ReceivedPowerDbm;
+                hasInterference = true;
+            }
         }
         return hasInterference ? combinedInterferenceDbm : -300d;
+    }
+
+    private void MarkRadioCandidateIndexesDirty()
+    {
+        _radioCandidateIndexesDirty = true;
+        _radioPlanDirty = true;
+    }
+
+    private void EnsureRadioCandidateIndexes()
+    {
+        if (!_radioCandidateIndexesDirty) return;
+        _legacyRadioLinksByBlock.Clear();
+        _overlappingFrequencyBlocks.Clear();
+        _legacyConflictLinksByCell.Clear();
+
+        var linksByBlock = new Dictionary<FrequencyBlockId, List<RadioLinkStateData>>();
+        var conflictByCell = new Dictionary<SpatialCell, List<RadioLinkStateData>>();
+        foreach (var link in _radioLinks.OrderBy(static item => item.Id.Value))
+        {
+            if (!linksByBlock.TryGetValue(link.FrequencyBlockId, out var blockLinks))
+            {
+                blockLinks = [];
+                linksByBlock.Add(link.FrequencyBlockId, blockLinks);
+            }
+            blockLinks.Add(link);
+
+            var position = _radioSiteIndex[link.FromSiteId].Position;
+            var cell = SpatialGrid.ToCell(position, RadioDefaults.SpectrumConflictDistanceMeters);
+            if (!conflictByCell.TryGetValue(cell, out var cellLinks))
+            {
+                cellLinks = [];
+                conflictByCell.Add(cell, cellLinks);
+            }
+            cellLinks.Add(link);
+        }
+        foreach (var pair in linksByBlock) _legacyRadioLinksByBlock.Add(pair.Key, pair.Value.ToArray());
+        foreach (var pair in conflictByCell) _legacyConflictLinksByCell.Add(pair.Key, pair.Value.ToArray());
+
+        foreach (var block in _frequencyBlocks.OrderBy(static item => item.Id.Value))
+        {
+            var overlaps = _frequencyBlocks
+                .Where(candidate => RadioValidation.FrequencyBlocksOverlap(block, candidate))
+                .OrderBy(static candidate => candidate.Id.Value)
+                .Select(static candidate => candidate.Id)
+                .ToArray();
+            _overlappingFrequencyBlocks.Add(block.Id, overlaps);
+        }
+        _radioCandidateIndexesDirty = false;
     }
 
     private RadioServiceArea[] CreateRadioServiceAreas() => _radioLinks
@@ -325,7 +408,7 @@ public sealed partial class SimulationWorld
             RadioDefaults.MinimumSinrDb))
         .ToArray();
 
-    private RadioStatistics CreateRadioStatistics(IReadOnlyList<SpectrumConflict> conflicts)
+    private RadioStatistics CreateRadioStatistics(IReadOnlyList<SpectrumConflict> conflicts, int serviceAreaCount)
     {
         var peakLinkUtilization = _radioLinks.Select(static item => item.Utilization).DefaultIfEmpty(0d).Max();
         var peakEmissionUtilization = _radioEmissions.Select(static item => item.Utilization).DefaultIfEmpty(0d).Max();
@@ -334,7 +417,7 @@ public sealed partial class SimulationWorld
             _spectrumBands.Count,
             _frequencyBlocks.Count,
             _radioLinks.Count,
-            CreateRadioServiceAreas().Length,
+            serviceAreaCount,
             conflicts.Count,
             _radioLinks.Count(static item => item.State == RadioLinkState.Healthy),
             _radioLinks.Count(static item => item.State is RadioLinkState.Interfered or RadioLinkState.Marginal),

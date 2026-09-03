@@ -159,6 +159,7 @@ public sealed partial class SimulationWorld
 
         foreach (var job in jobs)
         {
+            _economyFilledWorkerCounts.Remove(job.Id);
             _economyJobIndex.Remove(job.Id);
             _economyJobs.Remove(job);
         }

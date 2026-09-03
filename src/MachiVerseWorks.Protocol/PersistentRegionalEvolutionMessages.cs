@@ -90,7 +90,10 @@ public sealed record PersistentRegionalEvolutionSnapshotMessage(
     IReadOnlyList<ProtocolRegionalEvolutionEvent> Events,
     IReadOnlyList<ProtocolRegionalCommutingFlow> CommutingFlows,
     IReadOnlyList<ProtocolRegionalFreightFlow> FreightFlows,
-    bool IsFullSnapshot = true) : IProtocolMessage
+    bool IsFullSnapshot = true,
+    ulong SnapshotId = 0,
+    int ChunkIndex = 0,
+    int ChunkCount = 1) : IProtocolMessage
 {
     public MessageType Type => MessageType.PersistentRegionalEvolutionSnapshot;
 }

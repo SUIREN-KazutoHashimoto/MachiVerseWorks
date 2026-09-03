@@ -80,24 +80,31 @@ public sealed class RailwayOperationsTests
         var service = world.CreateRailwayService(formation, route, timetable, originDepot, destinationDepot, plannedStartTick: 1);
         var train = world.CreateTrain(service);
         var observedFallback = false;
+        var observedTrain = false;
 
         for (var tick = 0; tick < 2400; tick++)
         {
             world.Step();
             var snapshot = world.CreateRailwayOperationsSnapshot();
-            var trainState = snapshot.Trains.Single(item => item.Id == train);
-            if (trainState.AssignedPlatformId is { } assigned)
+            var trainState = snapshot.Trains.SingleOrDefault(item => item.Id == train);
+            if (trainState is not null)
             {
-                Assert.AreEqual(alternate, assigned, "A route-external preferred Platform must not block fallback to an eligible Platform.");
-                observedFallback = true;
+                observedTrain = true;
+                if (trainState.AssignedPlatformId is { } assigned)
+                {
+                    Assert.AreEqual(alternate, assigned, "A route-external preferred Platform must not block fallback to an eligible Platform.");
+                    observedFallback = true;
+                }
             }
-            if (snapshot.Services.Single(item => item.Id == service).State == RailwayServiceState.Completed) break;
+
+            if (!snapshot.Services.Any(item => item.Id == service) && !snapshot.Trains.Any(item => item.Id == train)) break;
         }
 
         var completed = world.CreateRailwayOperationsSnapshot();
+        Assert.IsTrue(observedTrain, "The train was never observed in active operations.");
         Assert.IsTrue(observedFallback, "The alternate Platform was never assigned.");
-        Assert.AreEqual(RailwayServiceState.Completed, completed.Services.Single(item => item.Id == service).State, Describe(completed));
-        Assert.AreEqual(TrainMovementState.Completed, completed.Trains.Single(item => item.Id == train).State);
+        Assert.IsFalse(completed.Services.Any(item => item.Id == service), Describe(completed));
+        Assert.IsFalse(completed.Trains.Any(item => item.Id == train), Describe(completed));
     }
 
     [TestMethod]
@@ -106,26 +113,26 @@ public sealed class RailwayOperationsTests
         var world = new SimulationWorld();
         RailwayOperationsFixtures.SeedDeterministic(world);
         var observedDelay = false;
+        var observedTrainIds = new HashSet<TrainId>();
 
         for (var tick = 0; tick < 2400; tick++)
         {
             world.Step();
             var snapshot = world.CreateRailwayOperationsSnapshot();
-            Assert.AreEqual(2, snapshot.Trains.Length);
-            var first = snapshot.Trains[0];
-            var second = snapshot.Trains[1];
-            if (first.CurrentBlockId is { } firstBlock && second.CurrentBlockId is { } secondBlock)
-                Assert.AreNotEqual(firstBlock, secondBlock, $"Block conflict at tick {world.Time.TickCount}.");
-            if (first.AssignedPlatformId is { } firstPlatform && second.AssignedPlatformId is { } secondPlatform)
-                Assert.AreNotEqual(firstPlatform, secondPlatform, $"Platform conflict at tick {world.Time.TickCount}.");
+            foreach (var train in snapshot.Trains) observedTrainIds.Add(train.Id);
+
+            foreach (var blockOwners in snapshot.Trains.Where(static train => train.CurrentBlockId is not null).GroupBy(static train => train.CurrentBlockId!.Value))
+                Assert.AreEqual(1, blockOwners.Count(), $"Block conflict at tick {world.Time.TickCount}.");
+            foreach (var platformOwners in snapshot.Trains.Where(static train => train.AssignedPlatformId is not null).GroupBy(static train => train.AssignedPlatformId!.Value))
+                Assert.AreEqual(1, platformOwners.Count(), $"Platform conflict at tick {world.Time.TickCount}.");
             if (snapshot.Services.Any(static service => service.DelayTicks > 0)) observedDelay = true;
         }
 
         var completed = world.CreateRailwayOperationsSnapshot();
+        Assert.AreEqual(2, observedTrainIds.Count, "Both seeded trains should have entered active operations.");
         Assert.IsTrue(observedDelay);
-        Assert.IsTrue(completed.Services.All(static service => service.State == RailwayServiceState.Completed), Describe(completed));
-        Assert.IsTrue(completed.Trains.All(static train => train.State == TrainMovementState.Completed));
-        Assert.IsTrue(completed.Trains.All(static train => train.CurrentDepotId is not null));
+        Assert.AreEqual(0, completed.Services.Length, Describe(completed));
+        Assert.AreEqual(0, completed.Trains.Length, Describe(completed));
     }
 
     [TestMethod]

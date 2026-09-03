@@ -143,7 +143,8 @@ public sealed partial class SimulationWorld
             _railwayOperations?.NextServiceId ?? 1UL, railwayOperations?.Services ?? Array.Empty<RailwayServiceSnapshot>(),
             _railwayOperations?.NextTrainId ?? 1UL, railwayOperations?.Trains ?? Array.Empty<TrainSnapshot>(),
             _multimodalTransit.CreateCheckpoint(Time.TickCount),
-            economy);
+            economy,
+            _agents.TotalCreatedCount);
     }
 
     public static SimulationWorld RestoreCheckpoint(SimulationCheckpoint checkpoint)
@@ -154,6 +155,7 @@ public sealed partial class SimulationWorld
         ArgumentNullException.ThrowIfNull(checkpoint.LaneConnections); ArgumentNullException.ThrowIfNull(checkpoint.RoadAccessPoints);
         if (checkpoint.ElapsedTicks < 0) throw new ArgumentOutOfRangeException(nameof(checkpoint), checkpoint.ElapsedTicks, "Simulation elapsed time cannot be negative.");
         if (checkpoint.NextAgentId == 0) throw new ArgumentOutOfRangeException(nameof(checkpoint), checkpoint.NextAgentId, "Next Agent ID must be greater than zero.");
+        ArgumentOutOfRangeException.ThrowIfNegative(checkpoint.TotalCreatedAgentCount);
         var seenAgentIds = new HashSet<ulong>(checkpoint.Agents.Count); var maximumAgentId = 0UL;
         foreach (var agent in checkpoint.Agents)
         {
@@ -195,7 +197,7 @@ public sealed partial class SimulationWorld
         try { _ = restoredTime.Advance(config.TickRate); }
         catch (OverflowException) { throw new ArgumentOutOfRangeException(nameof(checkpoint), "Simulation time must allow at least one additional tick."); }
         var world = new SimulationWorld(config) { Time = restoredTime, _random = new DeterministicRandom(checkpoint.RandomState) };
-        world._agents.Restore(checkpoint.Agents, checkpoint.NextAgentId, world._spatialIndex);
+        world._agents.Restore(checkpoint.Agents, checkpoint.NextAgentId, ResolveTotalCreatedAgentCount(checkpoint), world._spatialIndex);
         world.RestoreUrbanObjects(checkpoint);
         world._roads.Restore(checkpoint);
         world._railway.Restore(checkpoint);
@@ -228,6 +230,16 @@ public sealed partial class SimulationWorld
         world._multimodalTransit.Restore(checkpoint.MultimodalTransit);
         ValidateMultimodalTransitCheckpointReferences(checkpoint);
         return world;
+    }
+
+    private static int ResolveTotalCreatedAgentCount(SimulationCheckpoint checkpoint)
+    {
+        if (checkpoint.TotalCreatedAgentCount > 0) return Math.Max(checkpoint.TotalCreatedAgentCount, checkpoint.Agents.Count);
+        var activeCount = checkpoint.Agents.Count(static item => item.IsActive);
+        var issuedCount = checkpoint.NextAgentId - 1;
+        if (issuedCount <= int.MaxValue && checkpoint.Agents.Count == (int)issuedCount)
+            return checkpoint.Agents.Count;
+        return activeCount;
     }
 
     private double NextCoordinate(double minimum, double maximum) => minimum == maximum ? minimum : _random.NextDouble(minimum, maximum);

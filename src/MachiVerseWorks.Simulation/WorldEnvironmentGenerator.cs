@@ -3,6 +3,9 @@ namespace MachiVerseWorks.Simulation;
 public sealed class WorldEnvironmentGenerator
 {
     private const double MetersPerLatitudeDegree = 111_320d;
+    public const int MaximumSettlementCandidateCount = 1_024;
+    public const int MaximumGeographicFeatureCount = 1_024;
+    public const int MaximumSamplingGridCells = 16_384;
     private readonly WorldEnvironmentConfig _config;
 
     public WorldEnvironmentGenerator(WorldEnvironmentConfig config)
@@ -54,8 +57,11 @@ public sealed class WorldEnvironmentGenerator
     public IReadOnlyList<SettlementCandidateRegion> SelectSettlementCandidates(WorldVolume volume, int count)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(count);
+        if (count > MaximumSettlementCandidateCount)
+            throw new ArgumentOutOfRangeException(nameof(count), count, $"Settlement candidate count cannot exceed {MaximumSettlementCandidateCount}.");
         if (count == 0) return Array.Empty<SettlementCandidateRegion>();
-        var candidates = CreateSettlementCandidatePool(volume, Math.Max(count * 8, 64));
+        var targetCount = Math.Max(checked(count * 8), 64);
+        var candidates = CreateSettlementCandidatePool(volume, targetCount);
         var selected = new List<SettlementCandidateRegion>(Math.Min(count, candidates.Count));
 
         foreach (var group in candidates.GroupBy(static item => item.Environment).OrderBy(static group => group.Key))
@@ -79,9 +85,13 @@ public sealed class WorldEnvironmentGenerator
     public IReadOnlyList<GeographicFeature> DetectGeographicFeatures(WorldVolume volume, int maximumFeatures = 128)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumFeatures);
+        if (maximumFeatures > MaximumGeographicFeatureCount)
+            throw new ArgumentOutOfRangeException(nameof(maximumFeatures), maximumFeatures, $"Geographic feature count cannot exceed {MaximumGeographicFeatureCount}.");
         var width = Math.Max(volume.Width, _config.TerrainDetailScaleMeters);
         var depth = Math.Max(volume.Depth, _config.TerrainDetailScaleMeters);
-        var targetCells = Math.Max(2, (int)Math.Ceiling(Math.Sqrt(maximumFeatures * 2d)));
+        var targetCells = Math.Max(2, (int)Math.Ceiling(Math.Sqrt(checked(maximumFeatures * 2d))));
+        if (checked(targetCells * targetCells) > MaximumSamplingGridCells)
+            throw new ArgumentOutOfRangeException(nameof(maximumFeatures), maximumFeatures, $"Geographic feature query cannot exceed {MaximumSamplingGridCells} sampling cells.");
         var stepX = width / targetCells;
         var stepY = depth / targetCells;
         var features = new Dictionary<GeographicFeatureId, GeographicFeature>();
@@ -125,6 +135,8 @@ public sealed class WorldEnvironmentGenerator
     {
         var columns = Math.Max(2, (int)Math.Ceiling(Math.Sqrt(targetCount)));
         var rows = columns;
+        if (checked(columns * rows) > MaximumSamplingGridCells)
+            throw new ArgumentOutOfRangeException(nameof(targetCount), targetCount, $"Settlement candidate query cannot exceed {MaximumSamplingGridCells} sampling cells.");
         var width = Math.Max(volume.Width, _config.GlobalScaleMeters * 0.1d);
         var depth = Math.Max(volume.Depth, _config.GlobalScaleMeters * 0.1d);
         var candidates = new List<SettlementCandidateRegion>(columns * rows);
