@@ -37,7 +37,6 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
-
           protocol = Path('src/web/src/protocol.ts')
           text = protocol.read_text(encoding='utf-8')
           old = 'export const CURRENT_PROTOCOL_VERSION: ProtocolVersion = Object.freeze({ major: 2, minor: 19 });'
@@ -64,7 +63,7 @@ jobs:
           protocol_test = Path('src/web/tests/protocol.test.mjs')
           text = protocol_test.read_text(encoding='utf-8')
           text = text.replace('Hello frame matches current Protocol 2.4 header contract', 'Hello frame matches current Protocol 2.20 header contract')
-          text = text.replace('assert.equal(view.getUint16(6, true), 4);', 'assert.equal(view.getUint16(6, true), 20);')
+          text = text.replace('CURRENT_PROTOCOL_VERSION.minor, 4', 'CURRENT_PROTOCOL_VERSION.minor, 20')
           protocol_test.write_text(text, encoding='utf-8')
 
           radio_test = Path('src/web/tests/radio-protocol.test.mjs')
