@@ -24,204 +24,133 @@ jobs:
         run: |
           from pathlib import Path
 
-          def replace_once(path: str, old: str, new: str) -> None:
+          def replace_once(path, old, new):
               file = Path(path)
               text = file.read_text(encoding="utf-8")
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f"{path}: expected one match, found {count}")
+              if text.count(old) != 1:
+                  raise SystemExit(f"{path}: expected one match for {old!r}, found {text.count(old)}")
               file.write_text(text.replace(old, new, 1), encoding="utf-8")
 
+          def replace_region(path, start, end, replacement):
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              if text.count(start) != 1:
+                  raise SystemExit(f"{path}: expected one start marker, found {text.count(start)}")
+              begin = text.index(start)
+              finish = text.index(end, begin)
+              file.write_text(text[:begin] + replacement + text[finish:], encoding="utf-8")
+
           admin = "src/MachiVerseWorks.Server/AdminCommandExecutorV2.cs"
-          old_save = '''        if (Eq(action, "save"))
-          {
-              cancellationToken.ThrowIfCancellationRequested();
-              var detached = SimulationWorld.RestoreCheckpoint(simulation.CaptureCheckpoint());
-              cancellationToken.ThrowIfCancellationRequested();
-              var data = WorldSaveSerializer.Serialize(detached);
-              cancellationToken.ThrowIfCancellationRequested();
-              await File.WriteAllBytesAsync(path, data, cancellationToken);
-              return AdminCommandResult.Ok($"World saved to '{path}'.");
-          }'''
-          new_save = '''        if (Eq(action, "save") || Eq(action, "save-new"))
-          {
-              cancellationToken.ThrowIfCancellationRequested();
-              var detached = SimulationWorld.RestoreCheckpoint(simulation.CaptureCheckpoint());
-              cancellationToken.ThrowIfCancellationRequested();
-              var data = WorldSaveSerializer.Serialize(detached);
-              cancellationToken.ThrowIfCancellationRequested();
-              var temporaryPath = $"{path}.{Guid.NewGuid():N}.tmp";
-              try
-              {
-                  await File.WriteAllBytesAsync(temporaryPath, data, cancellationToken);
-                  cancellationToken.ThrowIfCancellationRequested();
-                  try
-                  {
-                      File.Move(temporaryPath, path, overwrite: Eq(action, "save"));
-                  }
-                  catch (IOException) when (Eq(action, "save-new") && File.Exists(path))
-                  {
-                      return new AdminCommandResult(AdminCommandResultCode.Conflict, $"World save '{path}' already exists.");
-                  }
-                  return AdminCommandResult.Ok($"World saved to '{path}'.");
-              }
-              finally
-              {
-                  try { File.Delete(temporaryPath); }
-                  catch (IOException) { }
-                  catch (UnauthorizedAccessException) { }
-              }
-          }'''
-          replace_once(admin, old_save, new_save)
+          save_lines = [
+              '        if (Eq(action, "save") || Eq(action, "save-new"))',
+              '        {',
+              '            cancellationToken.ThrowIfCancellationRequested();',
+              '            var detached = SimulationWorld.RestoreCheckpoint(simulation.CaptureCheckpoint());',
+              '            cancellationToken.ThrowIfCancellationRequested();',
+              '            var data = WorldSaveSerializer.Serialize(detached);',
+              '            cancellationToken.ThrowIfCancellationRequested();',
+              '            var temporaryPath = $"{path}.{Guid.NewGuid():N}.tmp";',
+              '            try',
+              '            {',
+              '                await File.WriteAllBytesAsync(temporaryPath, data, cancellationToken);',
+              '                cancellationToken.ThrowIfCancellationRequested();',
+              '                try',
+              '                {',
+              '                    File.Move(temporaryPath, path, overwrite: Eq(action, "save"));',
+              '                }',
+              '                catch (IOException) when (Eq(action, "save-new") && File.Exists(path))',
+              '                {',
+              '                    return new AdminCommandResult(AdminCommandResultCode.Conflict, $"World save \'{path}\' already exists.");',
+              '                }',
+              '                return AdminCommandResult.Ok($"World saved to \'{path}\'.");',
+              '            }',
+              '            finally',
+              '            {',
+              '                try { File.Delete(temporaryPath); }',
+              '                catch (IOException) { }',
+              '                catch (UnauthorizedAccessException) { }',
+              '            }',
+              '        }',
+              '',
+          ]
+          replace_region(admin, '        if (Eq(action, "save"))', '        if (Eq(action, "load"))', "\n".join(save_lines))
 
           remote = "src/MachiVerseWorks.Server/RemoteMcp.cs"
-          old_buffer = '''internal sealed class RemoteMcpLogBuffer(int capacity) : ILoggerProvider
-          {
-              private readonly ConcurrentQueue<RemoteMcpLogEntry> _entries = new();
-              private int _count;
+          buffer_lines = [
+              'internal sealed class RemoteMcpLogBuffer(int capacity)',
+              '{',
+              '    private readonly ConcurrentQueue<RemoteMcpLogEntry> _entries = new();',
+              '    private int _count;',
+              '',
+              '    public IReadOnlyList<RemoteMcpLogEntry> Query(int limit, string? contains)',
+              '    {',
+              '        var normalized = string.IsNullOrWhiteSpace(contains) ? null : contains.Trim();',
+              '        return _entries.Reverse()',
+              '            .Where(entry => normalized is null || entry.Category.Contains(normalized, StringComparison.OrdinalIgnoreCase) || entry.Message.Contains(normalized, StringComparison.OrdinalIgnoreCase))',
+              '            .Take(limit)',
+              '            .Reverse()',
+              '            .ToArray();',
+              '    }',
+              '',
+              '    public void AddSafe(RemoteMcpLogEntry entry)',
+              '    {',
+              '        ArgumentNullException.ThrowIfNull(entry);',
+              '        _entries.Enqueue(entry);',
+              '        var count = Interlocked.Increment(ref _count);',
+              '        while (count > capacity && _entries.TryDequeue(out _)) count = Interlocked.Decrement(ref _count);',
+              '    }',
+              '}',
+              '',
+          ]
+          replace_region(remote, 'internal sealed class RemoteMcpLogBuffer(int capacity) : ILoggerProvider', 'internal sealed record RemoteMcpResult', "\n".join(buffer_lines))
 
-              public ILogger CreateLogger(string categoryName) => new BufferLogger(this, categoryName);
-              public void Dispose() { }
-
-              public IReadOnlyList<RemoteMcpLogEntry> Query(int limit, string? contains)
-              {
-                  var normalized = string.IsNullOrWhiteSpace(contains) ? null : contains.Trim();
-                  return _entries.Reverse()
-                      .Where(entry => normalized is null || entry.Category.Contains(normalized, StringComparison.OrdinalIgnoreCase) || entry.Message.Contains(normalized, StringComparison.OrdinalIgnoreCase))
-                      .Take(limit)
-                      .Reverse()
-                      .ToArray();
-              }
-
-              private void Add(RemoteMcpLogEntry entry)
-              {
-                  _entries.Enqueue(entry);
-                  var count = Interlocked.Increment(ref _count);
-                  while (count > capacity && _entries.TryDequeue(out _)) count = Interlocked.Decrement(ref _count);
-              }
-
-              private sealed class BufferLogger(RemoteMcpLogBuffer owner, string category) : ILogger
-              {
-                  public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-                  public bool IsEnabled(LogLevel logLevel) => false;
-                  public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-                  {
-                      // General ILogger output is deliberately outside the MCP-visible diagnostics boundary.
-                      // Safe remote diagnostics must be explicitly projected instead of mirroring arbitrary state or exception text.
-                  }
-              }
-          }'''
-          new_buffer = '''internal sealed class RemoteMcpLogBuffer(int capacity)
-          {
-              private readonly ConcurrentQueue<RemoteMcpLogEntry> _entries = new();
-              private int _count;
-
-              public IReadOnlyList<RemoteMcpLogEntry> Query(int limit, string? contains)
-              {
-                  var normalized = string.IsNullOrWhiteSpace(contains) ? null : contains.Trim();
-                  return _entries.Reverse()
-                      .Where(entry => normalized is null || entry.Category.Contains(normalized, StringComparison.OrdinalIgnoreCase) || entry.Message.Contains(normalized, StringComparison.OrdinalIgnoreCase))
-                      .Take(limit)
-                      .Reverse()
-                      .ToArray();
-              }
-
-              public void AddSafe(RemoteMcpLogEntry entry)
-              {
-                  ArgumentNullException.ThrowIfNull(entry);
-                  _entries.Enqueue(entry);
-                  var count = Interlocked.Increment(ref _count);
-                  while (count > capacity && _entries.TryDequeue(out _)) count = Interlocked.Decrement(ref _count);
-              }
-          }'''
-          replace_once(remote, old_buffer, new_buffer)
-
-          old_helper = '''        var path = Path.Combine(options.SaveDirectory, slot + ".mvw");
-              var reservationCreated = false;
-              if (!overwrite)
-              {
-                  try
-                  {
-                      using var reservation = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-                      reservationCreated = true;
-                  }
-                  catch (IOException) when (File.Exists(path))
-                  {
-                      return RemoteMcpResult.Rejected("conflict", "The requested save slot already exists. Use simulation_save_overwrite with destructive scope and confirm=true to replace it.");
-                  }
-                  catch (UnauthorizedAccessException)
-                  {
-                      return RemoteMcpResult.Rejected("io_error", "The requested MCP save slot cannot be created or accessed.");
-                  }
-                  catch (IOException)
-                  {
-                      return RemoteMcpResult.Rejected("io_error", "The requested MCP save slot cannot be created or accessed.");
-                  }
-              }
-
-              try
-              {
-                  var result = await admin.ExecuteAsync($"world save {Quote(path)}", cancellationToken);
-                  if (result.Success) reservationCreated = false;
-                  return result;
-              }
-              finally
-              {
-                  if (reservationCreated)
-                  {
-                      try { File.Delete(path); }
-                      catch (IOException) { }
-                      catch (UnauthorizedAccessException) { }
-                  }
-              }'''
-          new_helper = '''        var path = Path.Combine(options.SaveDirectory, slot + ".mvw");
-              var action = overwrite ? "save" : "save-new";
-              return await admin.ExecuteAsync($"world {action} {Quote(path)}", cancellationToken);'''
-          replace_once(remote, old_helper, new_helper)
+          helper_lines = [
+              '        var path = Path.Combine(options.SaveDirectory, slot + ".mvw");',
+              '        var action = overwrite ? "save" : "save-new";',
+              '        return await admin.ExecuteAsync($"world {action} {Quote(path)}", cancellationToken);',
+              '    }',
+              '',
+          ]
+          replace_region(remote, '        var path = Path.Combine(options.SaveDirectory, slot + ".mvw");', '    [McpServerTool(Name = "entity_write",', "\n".join(helper_lines))
 
           tests = "tests/MachiVerseWorks.Server.Tests/RemoteMcpTests.cs"
-          replace_once(
-              tests,
-              '    public async Task LogQueryKeepsMessageJsonValidWhenResultIsBounded()',
-              '    public async Task LogQueryDoesNotExposeGeneralServerLoggerMessages()')
-          replace_once(
-              tests,
-              '        using var _ = JsonDocument.Parse(message);',
-              '        using var _ = JsonDocument.Parse(message);\n        Assert.IsFalse(message.Contains("entry-", StringComparison.Ordinal));')
+          replace_once(tests, '    public async Task LogQueryKeepsMessageJsonValidWhenResultIsBounded()', '    public async Task LogQueryDoesNotExposeGeneralServerLoggerMessages()')
+          replace_once(tests, '        using var _ = JsonDocument.Parse(message);', '        using var _ = JsonDocument.Parse(message);\n        Assert.IsFalse(message.Contains("entry-", StringComparison.Ordinal));')
 
-          marker = '''    [TestMethod]
-              public async Task SaveDirectoryFailureReturnsStableIoError()'''
-          save_test = '''    [TestMethod]
-              public async Task SaveOverwriteRequiresDestructiveScopeAndConfirmation()
-              {
-                  var saveDirectory = Path.Combine(Path.GetTempPath(), $"mvw-mcp-save-{Guid.NewGuid():N}");
-                  try
-                  {
-                      await using var host = await StartMcpHostAsync(new Dictionary<string, string?> { ["Server:Mcp:SaveDirectory"] = saveDirectory });
-                      await using var writeClient = await CreateMcpClientAsync(host, WriteToken);
-                      var firstSave = await writeClient.CallToolAsync("simulation_save", new Dictionary<string, object?> { ["slot"] = "test" }, cancellationToken: CancellationToken.None);
-                      Assert.IsFalse(firstSave.IsError is true);
-                      Assert.IsTrue(GetStructured(firstSave).GetProperty("success").GetBoolean());
-
-                      var duplicateSave = await writeClient.CallToolAsync("simulation_save", new Dictionary<string, object?> { ["slot"] = "test" }, cancellationToken: CancellationToken.None);
-                      AssertStructuredRejection(duplicateSave, "conflict");
-                      await AssertMcpProtocolFailureAsync(writeClient.CallToolAsync("simulation_save_overwrite", new Dictionary<string, object?> { ["slot"] = "test", ["confirm"] = true }, cancellationToken: CancellationToken.None));
-
-                      await using var destructiveClient = await CreateMcpClientAsync(host, DestructiveToken);
-                      var unconfirmed = await destructiveClient.CallToolAsync("simulation_save_overwrite", new Dictionary<string, object?> { ["slot"] = "test", ["confirm"] = false }, cancellationToken: CancellationToken.None);
-                      AssertStructuredRejection(unconfirmed, "confirmation_required");
-                      var confirmed = await destructiveClient.CallToolAsync("simulation_save_overwrite", new Dictionary<string, object?> { ["slot"] = "test", ["confirm"] = true }, cancellationToken: CancellationToken.None);
-                      Assert.IsFalse(confirmed.IsError is true);
-                      Assert.IsTrue(GetStructured(confirmed).GetProperty("success").GetBoolean());
-                  }
-                  finally
-                  {
-                      if (Directory.Exists(saveDirectory)) Directory.Delete(saveDirectory, recursive: true);
-                  }
-              }
-
-          ''' + marker
-          replace_once(tests, marker, save_test)
+          marker = '    [TestMethod]\n    public async Task SaveDirectoryFailureReturnsStableIoError()'
+          test_lines = [
+              '    [TestMethod]',
+              '    public async Task SaveOverwriteRequiresDestructiveScopeAndConfirmation()',
+              '    {',
+              '        var saveDirectory = Path.Combine(Path.GetTempPath(), $"mvw-mcp-save-{Guid.NewGuid():N}");',
+              '        try',
+              '        {',
+              '            await using var host = await StartMcpHostAsync(new Dictionary<string, string?> { ["Server:Mcp:SaveDirectory"] = saveDirectory });',
+              '            await using var writeClient = await CreateMcpClientAsync(host, WriteToken);',
+              '            var firstSave = await writeClient.CallToolAsync("simulation_save", new Dictionary<string, object?> { ["slot"] = "test" }, cancellationToken: CancellationToken.None);',
+              '            Assert.IsFalse(firstSave.IsError is true);',
+              '            Assert.IsTrue(GetStructured(firstSave).GetProperty("success").GetBoolean());',
+              '',
+              '            var duplicateSave = await writeClient.CallToolAsync("simulation_save", new Dictionary<string, object?> { ["slot"] = "test" }, cancellationToken: CancellationToken.None);',
+              '            AssertStructuredRejection(duplicateSave, "conflict");',
+              '            await AssertMcpProtocolFailureAsync(writeClient.CallToolAsync("simulation_save_overwrite", new Dictionary<string, object?> { ["slot"] = "test", ["confirm"] = true }, cancellationToken: CancellationToken.None));',
+              '',
+              '            await using var destructiveClient = await CreateMcpClientAsync(host, DestructiveToken);',
+              '            var unconfirmed = await destructiveClient.CallToolAsync("simulation_save_overwrite", new Dictionary<string, object?> { ["slot"] = "test", ["confirm"] = false }, cancellationToken: CancellationToken.None);',
+              '            AssertStructuredRejection(unconfirmed, "confirmation_required");',
+              '            var confirmed = await destructiveClient.CallToolAsync("simulation_save_overwrite", new Dictionary<string, object?> { ["slot"] = "test", ["confirm"] = true }, cancellationToken: CancellationToken.None);',
+              '            Assert.IsFalse(confirmed.IsError is true);',
+              '            Assert.IsTrue(GetStructured(confirmed).GetProperty("success").GetBoolean());',
+              '        }',
+              '        finally',
+              '        {',
+              '            if (Directory.Exists(saveDirectory)) Directory.Delete(saveDirectory, recursive: true);',
+              '        }',
+              '    }',
+              '',
+              marker,
+          ]
+          replace_once(tests, marker, "\n".join(test_lines))
 
       - name: Verify diff
         run: git diff --check && git diff --stat
