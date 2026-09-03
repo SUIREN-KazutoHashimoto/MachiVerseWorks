@@ -27,7 +27,7 @@ public static class PowerProtocolCodec
             + (message.Lines.Count * LinePayloadLength)
             + (message.Generators.Count * GeneratorPayloadLength)
             + (message.Loads.Count * LoadPayloadLength));
-        var frame = new byte[ProtocolFrameHeader.Size + payloadLength];
+        var frame = new byte[ProtocolFrameHeader.GetFrameLength(payloadLength)];
         ProtocolFrameHeader.Write(frame, new ProtocolFrameHeader(version, MessageType.PowerSnapshot, checked((uint)payloadLength)));
         var payload = frame.AsSpan(ProtocolFrameHeader.Size);
         WriteStatistics(payload, message.Statistics);
@@ -123,7 +123,9 @@ public static class PowerProtocolCodec
         var lines = new ProtocolPowerLine[lineCount];
         for (var index = 0; index < lines.Length; index++)
         {
-            var value = ReadLine(payload.Slice(offset, LinePayloadLength));
+            var raw = payload.Slice(offset, LinePayloadLength);
+            if (raw[32] > 1) { error = ProtocolDecodeError.InvalidPayload; return false; }
+            var value = ReadLine(raw);
             if (!IsValidLine(value)) { error = ProtocolDecodeError.InvalidPayload; return false; }
             lines[index] = value;
             offset += LinePayloadLength;

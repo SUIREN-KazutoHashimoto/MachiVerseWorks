@@ -221,12 +221,16 @@ public sealed class RemoteMcpTests
         for (var index = 0; index < 50; index++) LongLog(logger, index, payload, null);
 
         await using var readClient = await CreateMcpClientAsync(host, ReadToken);
+        var status = await readClient.CallToolAsync("server_status", new Dictionary<string, object?>(), cancellationToken: CancellationToken.None);
+        Assert.IsFalse(status.IsError is true);
         var result = await readClient.CallToolAsync("logs_query", new Dictionary<string, object?> { ["limit"] = 50 }, cancellationToken: CancellationToken.None);
         Assert.IsFalse(result.IsError is true);
         var structured = GetStructured(result);
         var message = structured.GetProperty("message").GetString();
         Assert.IsNotNull(message);
-        using var _ = JsonDocument.Parse(message);
+        using var document = JsonDocument.Parse(message);
+        Assert.IsTrue(document.RootElement.GetArrayLength() > 0);
+        Assert.IsTrue(message.Contains("MachiVerseWorks.Server.RemoteMcp.Admin", StringComparison.Ordinal));
         Assert.IsFalse(message.Contains("entry-", StringComparison.Ordinal));
     }
 

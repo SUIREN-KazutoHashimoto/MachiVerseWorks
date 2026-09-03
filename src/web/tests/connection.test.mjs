@@ -44,8 +44,8 @@ test('HelloAck rejects versions newer than the client supports', () => {
   );
 });
 
-test('reconnect delay applies equal jitter to capped exponential backoff', () => {
-  assert.equal(computeReconnectDelay(0, 1_000, 5_000, () => 0), 500);
+test('reconnect delay applies jitter without going below the configured minimum', () => {
+  assert.equal(computeReconnectDelay(0, 1_000, 5_000, () => 0), 1_000);
   assert.equal(computeReconnectDelay(0, 1_000, 5_000, () => 1), 1_000);
   assert.equal(computeReconnectDelay(2, 1_000, 5_000, () => 0), 2_000);
   assert.equal(computeReconnectDelay(2, 1_000, 5_000, () => 1), 4_000);

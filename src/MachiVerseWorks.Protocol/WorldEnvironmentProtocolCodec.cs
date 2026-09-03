@@ -112,6 +112,7 @@ public static class WorldEnvironmentProtocolCodec
             foreach (var point in feature.Geometry) if (!Finite(point.X) || !Finite(point.Y) || !Finite(point.Z)) return false;
         }
         foreach (var feature in message.Features) if (feature.ParentFeatureId != 0 && !featureIds.Contains(feature.ParentFeatureId)) return false;
+        if (!AcyclicParents(message.Features.Select(static item => (item.FeatureId, item.ParentFeatureId)))) return false;
 
         var toponymIds = new HashSet<ulong>();
         foreach (var toponym in message.Toponyms)
@@ -119,6 +120,37 @@ public static class WorldEnvironmentProtocolCodec
             if (toponym is null || toponym.ToponymId == 0 || toponym.ProvenanceKind > MaximumToponymProvenanceKind || !toponymIds.Add(toponym.ToponymId) || !featureIds.Contains(toponym.FeatureId) || !featureIds.Contains(toponym.SourceFeatureId) || string.IsNullOrWhiteSpace(toponym.Name) || toponym.Name.Length > MaximumTextLength || string.IsNullOrWhiteSpace(toponym.GeneratorKey) || toponym.GeneratorKey.Length > MaximumTextLength) return false;
         }
         foreach (var toponym in message.Toponyms) if (toponym.ParentToponymId != 0 && !toponymIds.Contains(toponym.ParentToponymId)) return false;
+        if (!AcyclicParents(message.Toponyms.Select(static item => (item.ToponymId, item.ParentToponymId)))) return false;
+        return true;
+    }
+
+    private static bool AcyclicParents(IEnumerable<(ulong Id, ulong ParentId)> nodes)
+    {
+        var parents = nodes.ToDictionary(static item => item.Id, static item => item.ParentId);
+        var states = new Dictionary<ulong, byte>(parents.Count);
+        var path = new List<ulong>();
+        foreach (var start in parents.Keys)
+        {
+            if (states.TryGetValue(start, out var startState) && startState == 2) continue;
+
+            path.Clear();
+            var current = start;
+            while (true)
+            {
+                if (states.TryGetValue(current, out var state))
+                {
+                    if (state == 1) return false;
+                    break;
+                }
+
+                states[current] = 1;
+                path.Add(current);
+                if (!parents.TryGetValue(current, out var parent) || parent == 0UL) break;
+                current = parent;
+            }
+
+            foreach (var id in path) states[id] = 2;
+        }
         return true;
     }
 

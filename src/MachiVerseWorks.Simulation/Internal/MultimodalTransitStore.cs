@@ -46,7 +46,8 @@ internal sealed class MultimodalTransitStore
     public TransitServicePatternId AddPattern(TransitLineId lineId, IReadOnlyList<TransitPatternStopSnapshot> patternStops, RailwayServiceId? railwayServiceId = null)
     {
         if (!lines.TryGetValue(lineId, out var line)) throw new ArgumentException($"Transit line {lineId.Value} does not exist.", nameof(lineId));
-        if (railwayServiceId is not null && line.Mode != TransitMode.Railway) throw new ArgumentException("Railway Service can only be linked to a Railway line.", nameof(railwayServiceId));
+        if (line.Mode == TransitMode.Railway && railwayServiceId is null) throw new ArgumentException("Railway transit patterns require a Railway Service.", nameof(railwayServiceId));
+        if (line.Mode != TransitMode.Railway && railwayServiceId is not null) throw new ArgumentException("Railway Service can only be linked to a Railway line.", nameof(railwayServiceId));
         ArgumentNullException.ThrowIfNull(patternStops);
         if (patternStops.Count < 2) throw new ArgumentException("A service pattern requires at least two stops.", nameof(patternStops));
         var copied = new TransitPatternStopSnapshot[patternStops.Count];

@@ -79,6 +79,30 @@ public static partial class WorldSaveSerializer
         return Deserialize(buffer.ToArray(), limits);
     }
 
+    public static Task<SimulationWorld> LoadAsync(Stream source, CancellationToken cancellationToken = default) =>
+        LoadAsync(source, WorldSaveLimits.Default, cancellationToken);
+
+    public static async Task<SimulationWorld> LoadAsync(Stream source, WorldSaveLimits limits, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(limits);
+        if (!source.CanRead) throw new ArgumentException("Source stream must be readable.", nameof(source));
+        if (source.CanSeek && source.Length - source.Position > limits.MaximumBytes)
+            throw new InvalidDataException($"Save Data exceeds the configured {limits.MaximumBytes}-byte input limit.");
+
+        using var buffer = new MemoryStream();
+        var readBuffer = new byte[Math.Min(StreamReadBufferSize, limits.MaximumBytes)];
+        while (true)
+        {
+            var read = await source.ReadAsync(readBuffer.AsMemory(0, readBuffer.Length), cancellationToken).ConfigureAwait(false);
+            if (read == 0) break;
+            if (buffer.Length > limits.MaximumBytes - read)
+                throw new InvalidDataException($"Save Data exceeds the configured {limits.MaximumBytes}-byte input limit.");
+            buffer.Write(readBuffer, 0, read);
+        }
+        return Deserialize(buffer.ToArray(), limits);
+    }
+
     private static BoundedSaveBuffer SerializeToBuffer(SimulationWorld world, WorldSaveLimits limits)
     {
         ArgumentNullException.ThrowIfNull(world);
@@ -413,7 +437,7 @@ public static partial class WorldSaveSerializer
     private static SimulationWorld RestoreDocument(SaveDataDocument document, WorldSaveLimits limits)
     {
         var format = Require(document.FormatVersion, "formatVersion");
-        if (format is not (SaveFormatVersion.BuildingPoi or SaveFormatVersion.RoadNetwork or SaveFormatVersion.Pedestrian or SaveFormatVersion.Vehicle or SaveFormatVersion.Population or SaveFormatVersion.RailwayInfrastructure or SaveFormatVersion.RailwayOperations or SaveFormatVersion.MultimodalTransit or SaveFormatVersion.Economy))
+        if (format is not (SaveFormatVersion.BuildingPoi or SaveFormatVersion.RoadNetwork or SaveFormatVersion.Pedestrian or SaveFormatVersion.Vehicle or SaveFormatVersion.Population or SaveFormatVersion.RailwayInfrastructure or SaveFormatVersion.RailwayOperations or SaveFormatVersion.MultimodalTransit or SaveFormatVersion.Economy or SaveFormatVersion.EconomyExtensions))
         {
             throw new InvalidDataException($"Unsupported Save format version {format}. Expected {SaveFormatVersion.Current} or a supported migratable version.");
         }

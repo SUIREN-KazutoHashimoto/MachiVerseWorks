@@ -346,7 +346,7 @@ internal sealed record RemoteMcpResult(bool Success, string Code, string Message
     public static RemoteMcpResult Rejected(string code, string message) => new(false, code, message);
 }
 
-internal sealed class RemoteMcpAdminGateway(AdminCommandQueue queue, RemoteMcpOptions options)
+internal sealed class RemoteMcpAdminGateway(AdminCommandQueue queue, RemoteMcpOptions options, RemoteMcpLogBuffer logs)
 {
     public async Task<RemoteMcpResult> ExecuteAsync(string commandText, CancellationToken cancellationToken)
     {
@@ -356,7 +356,14 @@ internal sealed class RemoteMcpAdminGateway(AdminCommandQueue queue, RemoteMcpOp
         if (!queue.TryWrite(new AdminCommandRequest(command, completion, cancellationToken)))
             return new RemoteMcpResult(false, "queue_full", "Administration command queue is full.");
         var result = await completion.Task.WaitAsync(cancellationToken);
-        return FromAdmin(result);
+        var remoteResult = FromAdmin(result);
+        logs.AddSafe(new RemoteMcpLogEntry(
+            DateTimeOffset.UtcNow,
+            remoteResult.Success ? "Information" : "Warning",
+            "MachiVerseWorks.Server.RemoteMcp.Admin",
+            1,
+            $"Administration request completed with code '{remoteResult.Code}'."));
+        return remoteResult;
     }
 
     private RemoteMcpResult FromAdmin(AdminCommandResult result) => new(

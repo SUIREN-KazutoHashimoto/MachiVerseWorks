@@ -29,7 +29,7 @@ internal sealed class PersistentRegionalEvolutionPublishService(
                 foreach (var connection in targets)
                     _ = deliveryCoordinator.TrySchedule(
                         connection,
-                        ObservationDeliveryLane.Snapshot,
+                        ObservationDeliveryLane.PersistentRegionalEvolution,
                         chunks,
                         stoppingToken);
             }

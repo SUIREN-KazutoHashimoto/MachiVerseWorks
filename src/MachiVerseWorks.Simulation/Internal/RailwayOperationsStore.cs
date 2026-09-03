@@ -114,23 +114,50 @@ internal sealed class RailwayOperationsStore
         if (!_timetables.TryGetValue(timetableId, out var timetable)) throw new ArgumentException("Timetable does not exist.", nameof(timetableId));
         if (!_depots.TryGetValue(originDepotId, out var originDepot)) throw new ArgumentException("Origin depot does not exist.", nameof(originDepotId));
         if (!_depots.TryGetValue(destinationDepotId, out var destinationDepot)) throw new ArgumentException("Destination depot does not exist.", nameof(destinationDepotId));
-        if (!ContainsTrack(originDepot.TrackSegmentIds, route.Steps[0].Segment.Id)) throw new ArgumentException("Route must begin on an origin depot track.", nameof(routeId));
-        if (!ContainsTrack(destinationDepot.TrackSegmentIds, route.Steps[^1].Segment.Id)) throw new ArgumentException("Route must end on a destination depot track.", nameof(routeId));
+        var stopRouteDistances = ValidateServiceDefinition(route, timetable, originDepot, destinationDepot, nameof(timetableId));
+
+        var id = new RailwayServiceId(AllocateId(ref _nextServiceId));
+        _services.Add(id, new ServiceState(id, formationId, routeId, timetableId, originDepotId, destinationDepotId, plannedStartTick, stopRouteDistances));
+        return id;
+    }
+
+    internal void ValidateServiceDefinition(
+        RailwayRouteSnapshot routeSnapshot,
+        TimetableSnapshot timetable,
+        DepotId originDepotId,
+        DepotId destinationDepotId)
+    {
+        if (!_depots.TryGetValue(originDepotId, out var originDepot)) throw new ArgumentException("Origin depot does not exist.", nameof(originDepotId));
+        if (!_depots.TryGetValue(destinationDepotId, out var destinationDepot)) throw new ArgumentException("Destination depot does not exist.", nameof(destinationDepotId));
+        var route = BuildRoute(routeSnapshot.Id, routeSnapshot.TrackSegmentIds);
+        _ = ValidateServiceDefinition(route, timetable, originDepot, destinationDepot, nameof(routeSnapshot));
+    }
+
+    internal double GetDerivedRouteLength(RailwayRouteSnapshot routeSnapshot) =>
+        BuildRoute(routeSnapshot.Id, routeSnapshot.TrackSegmentIds).LengthMeters;
+
+    private double[] ValidateServiceDefinition(
+        RouteState route,
+        TimetableSnapshot timetable,
+        DepotSnapshot originDepot,
+        DepotSnapshot destinationDepot,
+        string parameterName)
+    {
+        if (!ContainsTrack(originDepot.TrackSegmentIds, route.Steps[0].Segment.Id)) throw new ArgumentException("Route must begin on an origin depot track.", parameterName);
+        if (!ContainsTrack(destinationDepot.TrackSegmentIds, route.Steps[^1].Segment.Id)) throw new ArgumentException("Route must end on a destination depot track.", parameterName);
 
         var stopRouteDistances = new double[timetable.Stops.Count];
         double previousDistance = -1d;
         for (var index = 0; index < timetable.Stops.Count; index++)
         {
             var stop = timetable.Stops[index];
-            if (!TryFindStopDistance(route, stop, out var stopDistance)) throw new ArgumentException($"Stop station {stop.StationId.Value} has no platform on the route.", nameof(timetableId));
-            if (stopDistance <= previousDistance) throw new ArgumentException("Timetable stops must appear in route order.", nameof(timetableId));
+            if (!_stationPlatforms.ContainsKey(stop.StationId) || !TryFindStopDistance(route, stop, out var stopDistance))
+                throw new ArgumentException($"Stop station {stop.StationId.Value} has no platform on the route.", parameterName);
+            if (stopDistance <= previousDistance) throw new ArgumentException("Timetable stops must appear in route order.", parameterName);
             stopRouteDistances[index] = stopDistance;
             previousDistance = stopDistance;
         }
-
-        var id = new RailwayServiceId(AllocateId(ref _nextServiceId));
-        _services.Add(id, new ServiceState(id, formationId, routeId, timetableId, originDepotId, destinationDepotId, plannedStartTick, stopRouteDistances));
-        return id;
+        return stopRouteDistances;
     }
 
     public TrainId CreateTrain(RailwayServiceId serviceId)
@@ -204,11 +231,9 @@ internal sealed class RailwayOperationsStore
         {
             var timetable = _timetables[service.TimetableId];
             var route = _routes[service.RouteId];
-            var distances = new double[timetable.Stops.Count];
-            for (var index = 0; index < distances.Length; index++)
-            {
-                if (!TryFindStopDistance(route, timetable.Stops[index], out distances[index])) throw new InvalidOperationException("Saved timetable stop is not on its route.");
-            }
+            if (!_depots.TryGetValue(service.OriginDepotId, out var originDepot) || !_depots.TryGetValue(service.DestinationDepotId, out var destinationDepot))
+                throw new InvalidOperationException("Saved Railway Service references a missing Depot.");
+            var distances = ValidateServiceDefinition(route, timetable, originDepot, destinationDepot, nameof(services));
             _services.Add(service.Id, ServiceState.FromSnapshot(service, distances));
         }
         foreach (var snapshotItem in trains)

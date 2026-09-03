@@ -289,13 +289,17 @@ public sealed partial class SimulationWorld
                 || route.AllocatedGigabitsPerSecond < 0d
                 || route.AllocatedGigabitsPerSecond > demand.DemandGigabitsPerSecond + OpticalDefaults.BandwidthEpsilonGigabitsPerSecond)
                 throw new InvalidOperationException($"Optical routing solver returned invalid allocation for Demand {demand.Id.Value}.");
-            foreach (var cableId in route.RouteCableIds)
-            {
-                if (!_fiberCableIndex.ContainsKey(cableId))
-                    throw new InvalidOperationException($"Optical routing solver returned unknown FiberCable {cableId.Value}.");
-            }
-            if (route.BackhaulId is { } backhaulId && !_opticalBackhaulIndex.ContainsKey(backhaulId))
-                throw new InvalidOperationException($"Optical routing solver returned unknown Backhaul {backhaulId.Value}.");
+            if (!IsValidOpticalRouteTopology(
+                    demand.NodeId,
+                    route.BackhaulId,
+                    route.AllocatedGigabitsPerSecond,
+                    route.RouteCableIds,
+                    id => _opticalBackhaulIndex.TryGetValue(id, out var backhaul) ? backhaul.NodeId : null,
+                    id => _fiberCableIndex.TryGetValue(id, out var cable)
+                        ? new OpticalRouteCableValidation(cable.FromNodeId, cable.ToNodeId, cable.IsInService)
+                        : null,
+                    requireInService: true))
+                throw new InvalidOperationException($"Optical routing solver returned a disconnected or inconsistent route for Demand {demand.Id.Value}.");
 
             demand.AllocatedGigabitsPerSecond = Math.Min(demand.DemandGigabitsPerSecond, route.AllocatedGigabitsPerSecond);
             demand.BackhaulId = demand.AllocatedGigabitsPerSecond > OpticalDefaults.BandwidthEpsilonGigabitsPerSecond ? route.BackhaulId : null;
@@ -307,6 +311,38 @@ public sealed partial class SimulationWorld
         foreach (var demand in _opticalDemands)
             demand.QualityState = CalculateOpticalQuality(demand);
     }
+
+    private static bool IsValidOpticalRouteTopology(
+        OpticalNodeId demandNodeId,
+        OpticalBackhaulId? backhaulId,
+        double allocatedGigabitsPerSecond,
+        IReadOnlyList<FiberCableId>? routeCableIds,
+        Func<OpticalBackhaulId, OpticalNodeId?> resolveBackhaulNode,
+        Func<FiberCableId, OpticalRouteCableValidation?> resolveCable,
+        bool requireInService)
+    {
+        if (routeCableIds is null) return false;
+        if (allocatedGigabitsPerSecond <= OpticalDefaults.BandwidthEpsilonGigabitsPerSecond)
+            return backhaulId is null && routeCableIds.Count == 0;
+        if (backhaulId is not { } selectedBackhaul || resolveBackhaulNode(selectedBackhaul) is not { } cursor)
+            return false;
+
+        var seen = new HashSet<FiberCableId>();
+        foreach (var cableId in routeCableIds)
+        {
+            if (!seen.Add(cableId) || resolveCable(cableId) is not { } cable || (requireInService && !cable.IsInService))
+                return false;
+            if (cable.FromNodeId == cursor) cursor = cable.ToNodeId;
+            else if (cable.ToNodeId == cursor) cursor = cable.FromNodeId;
+            else return false;
+        }
+        return cursor == demandNodeId;
+    }
+
+    private readonly record struct OpticalRouteCableValidation(
+        OpticalNodeId FromNodeId,
+        OpticalNodeId ToNodeId,
+        bool IsInService);
 
     private OpticalQualityState CalculateOpticalQuality(OpticalDemandState demand)
     {

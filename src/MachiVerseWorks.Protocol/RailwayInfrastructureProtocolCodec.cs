@@ -20,6 +20,7 @@ public static class RailwayInfrastructureProtocolCodec
         if (!version.SupportsRailwayInfrastructure)
             throw new ArgumentOutOfRangeException(nameof(version), version, "Railway infrastructure snapshots require Protocol 2.6 or newer.");
         ValidateMessage(message);
+        RailwayInfrastructureProtocolValidator.ValidateIdentity(message);
 
         var payloadLength = checked(
             SnapshotHeaderLength
@@ -173,10 +174,11 @@ public static class RailwayInfrastructureProtocolCodec
             }
             if (!reader.IsComplete) throw new InvalidDataException();
             message = new RailwayInfrastructureSnapshotMessage(revision, full != 0, nodes, segments, connections, blocks, stations, platforms, accessPoints, depots);
+            RailwayInfrastructureProtocolValidator.ValidateIdentity(message);
             error = ProtocolDecodeError.None;
             return true;
         }
-        catch (Exception exception) when (exception is InvalidDataException or OverflowException or ArgumentOutOfRangeException)
+        catch (Exception exception) when (exception is InvalidDataException or OverflowException or ArgumentException)
         {
             error = ProtocolDecodeError.InvalidPayload;
             return false;

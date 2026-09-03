@@ -20,22 +20,16 @@ public static class RadioProtocolCodec
     private const int ConflictFixedLength = 34;
     private static readonly UTF8Encoding Utf8 = new(false, true);
 
+    public static int GetSerializedLength(RadioSnapshotMessage message, ProtocolVersion version) =>
+        checked(ProtocolFrameHeader.Size + GetRadioPayloadLength(message, version));
+
+    public static int GetSerializedLength(SpectrumSnapshotMessage message, ProtocolVersion version) =>
+        checked(ProtocolFrameHeader.Size + GetSpectrumPayloadLength(message, version));
+
     public static byte[] Serialize(RadioSnapshotMessage message, ProtocolVersion version)
     {
-        ArgumentNullException.ThrowIfNull(message);
-        if (!version.SupportsRadio) throw new ArgumentOutOfRangeException(nameof(version), version, "Radio messages require Protocol 2.16 or newer.");
-        ValidateRadio(message);
-        var payloadLength = checked(
-            RadioFixedLength
-            + message.Sites.Count * SiteLength
-            + message.Antennas.Count * AntennaLength
-            + message.Transmitters.Count * TransmitterLength
-            + message.Receivers.Count * ReceiverLength
-            + message.Emissions.Count * EmissionLength
-            + message.Links.Count * LinkLength
-            + message.ServiceAreas.Count * ServiceAreaLength);
-        if ((uint)payloadLength > ProtocolFrameHeader.MaxPayloadLength) throw new ArgumentOutOfRangeException(nameof(message), "Radio snapshot exceeds protocol payload limit.");
-        var frame = new byte[ProtocolFrameHeader.Size + payloadLength];
+        var payloadLength = GetRadioPayloadLength(message, version);
+        var frame = new byte[ProtocolFrameHeader.GetFrameLength(payloadLength)];
         ProtocolFrameHeader.Write(frame, new ProtocolFrameHeader(version, MessageType.RadioSnapshot, checked((uint)payloadLength)));
         var payload = frame.AsSpan(ProtocolFrameHeader.Size);
         WriteRadioStatistics(payload, message.Statistics);
@@ -59,15 +53,8 @@ public static class RadioProtocolCodec
 
     public static byte[] Serialize(SpectrumSnapshotMessage message, ProtocolVersion version)
     {
-        ArgumentNullException.ThrowIfNull(message);
-        if (!version.SupportsRadio) throw new ArgumentOutOfRangeException(nameof(version), version, "Spectrum messages require Protocol 2.16 or newer.");
-        ValidateSpectrum(message);
-        var payloadLength = SpectrumFixedLength;
-        foreach (var band in message.Bands) payloadLength = checked(payloadLength + BandFixedLength + Utf8.GetByteCount(band.Name));
-        payloadLength = checked(payloadLength + message.FrequencyBlocks.Count * FrequencyBlockLength);
-        foreach (var conflict in message.Conflicts) payloadLength = checked(payloadLength + ConflictFixedLength + Utf8.GetByteCount(conflict.Reason));
-        if ((uint)payloadLength > ProtocolFrameHeader.MaxPayloadLength) throw new ArgumentOutOfRangeException(nameof(message), "Spectrum snapshot exceeds protocol payload limit.");
-        var frame = new byte[ProtocolFrameHeader.Size + payloadLength];
+        var payloadLength = GetSpectrumPayloadLength(message, version);
+        var frame = new byte[ProtocolFrameHeader.GetFrameLength(payloadLength)];
         ProtocolFrameHeader.Write(frame, new ProtocolFrameHeader(version, MessageType.SpectrumSnapshot, checked((uint)payloadLength)));
         var payload = frame.AsSpan(ProtocolFrameHeader.Size);
         WriteUInt64(payload, message.TickCount);
@@ -126,17 +113,17 @@ public static class RadioProtocolCodec
 
         var offset = RadioFixedLength;
         var sites = new ProtocolRadioSite[siteCount];
-        for (var i = 0; i < sites.Length; i++) { sites[i] = ReadSite(payload.Slice(offset, SiteLength)); offset += SiteLength; }
+        for (var i = 0; i < sites.Length; i++) { var raw = payload.Slice(offset, SiteLength); if (raw[49] > 1) return Fail(out envelope, out error, ProtocolDecodeError.InvalidPayload); sites[i] = ReadSite(raw); offset += SiteLength; }
         var antennas = new ProtocolRadioAntenna[antennaCount];
-        for (var i = 0; i < antennas.Length; i++) { antennas[i] = ReadAntenna(payload.Slice(offset, AntennaLength)); offset += AntennaLength; }
+        for (var i = 0; i < antennas.Length; i++) { var raw = payload.Slice(offset, AntennaLength); if (raw[89] > 1) return Fail(out envelope, out error, ProtocolDecodeError.InvalidPayload); antennas[i] = ReadAntenna(raw); offset += AntennaLength; }
         var transmitters = new ProtocolRadioTransmitter[transmitterCount];
-        for (var i = 0; i < transmitters.Length; i++) { transmitters[i] = ReadTransmitter(payload.Slice(offset, TransmitterLength)); offset += TransmitterLength; }
+        for (var i = 0; i < transmitters.Length; i++) { var raw = payload.Slice(offset, TransmitterLength); if (raw[32] > 1 || raw[33] > 1) return Fail(out envelope, out error, ProtocolDecodeError.InvalidPayload); transmitters[i] = ReadTransmitter(raw); offset += TransmitterLength; }
         var receivers = new ProtocolRadioReceiver[receiverCount];
-        for (var i = 0; i < receivers.Length; i++) { receivers[i] = ReadReceiver(payload.Slice(offset, ReceiverLength)); offset += ReceiverLength; }
+        for (var i = 0; i < receivers.Length; i++) { var raw = payload.Slice(offset, ReceiverLength); if (raw[48] > 1 || raw[49] > 1) return Fail(out envelope, out error, ProtocolDecodeError.InvalidPayload); receivers[i] = ReadReceiver(raw); offset += ReceiverLength; }
         var emissions = new ProtocolRadioEmission[emissionCount];
-        for (var i = 0; i < emissions.Length; i++) { emissions[i] = ReadEmission(payload.Slice(offset, EmissionLength)); offset += EmissionLength; }
+        for (var i = 0; i < emissions.Length; i++) { var raw = payload.Slice(offset, EmissionLength); if (raw[56] > 1 || raw[57] > 1) return Fail(out envelope, out error, ProtocolDecodeError.InvalidPayload); emissions[i] = ReadEmission(raw); offset += EmissionLength; }
         var links = new ProtocolRadioLink[linkCount];
-        for (var i = 0; i < links.Length; i++) { links[i] = ReadLink(payload.Slice(offset, LinkLength)); offset += LinkLength; }
+        for (var i = 0; i < links.Length; i++) { var raw = payload.Slice(offset, LinkLength); if (raw[81] > 1) return Fail(out envelope, out error, ProtocolDecodeError.InvalidPayload); links[i] = ReadLink(raw); offset += LinkLength; }
         var areas = new ProtocolRadioServiceArea[areaCount];
         for (var i = 0; i < areas.Length; i++) { areas[i] = ReadServiceArea(payload.Slice(offset, ServiceAreaLength)); offset += ServiceAreaLength; }
         var message = new RadioSnapshotMessage(
@@ -179,6 +166,37 @@ public static class RadioProtocolCodec
         envelope = new ProtocolEnvelope(header.Version, message);
         error = ProtocolDecodeError.None;
         return true;
+    }
+
+    private static int GetRadioPayloadLength(RadioSnapshotMessage message, ProtocolVersion version)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        if (!version.SupportsRadio) throw new ArgumentOutOfRangeException(nameof(version), version, "Radio messages require Protocol 2.16 or newer.");
+        ValidateRadio(message);
+        var payloadLength = checked(
+            RadioFixedLength
+            + message.Sites.Count * SiteLength
+            + message.Antennas.Count * AntennaLength
+            + message.Transmitters.Count * TransmitterLength
+            + message.Receivers.Count * ReceiverLength
+            + message.Emissions.Count * EmissionLength
+            + message.Links.Count * LinkLength
+            + message.ServiceAreas.Count * ServiceAreaLength);
+        if ((uint)payloadLength > ProtocolFrameHeader.MaxPayloadLength) throw new ArgumentOutOfRangeException(nameof(message), "Radio snapshot exceeds protocol payload limit.");
+        return payloadLength;
+    }
+
+    private static int GetSpectrumPayloadLength(SpectrumSnapshotMessage message, ProtocolVersion version)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        if (!version.SupportsRadio) throw new ArgumentOutOfRangeException(nameof(version), version, "Spectrum messages require Protocol 2.16 or newer.");
+        ValidateSpectrum(message);
+        var payloadLength = SpectrumFixedLength;
+        foreach (var band in message.Bands) payloadLength = checked(payloadLength + BandFixedLength + Utf8.GetByteCount(band.Name));
+        payloadLength = checked(payloadLength + message.FrequencyBlocks.Count * FrequencyBlockLength);
+        foreach (var conflict in message.Conflicts) payloadLength = checked(payloadLength + ConflictFixedLength + Utf8.GetByteCount(conflict.Reason));
+        if ((uint)payloadLength > ProtocolFrameHeader.MaxPayloadLength) throw new ArgumentOutOfRangeException(nameof(message), "Spectrum snapshot exceeds protocol payload limit.");
+        return payloadLength;
     }
 
     private static void ValidateRadio(RadioSnapshotMessage message)
@@ -227,18 +245,20 @@ public static class RadioProtocolCodec
         {
             if (item.TransmitterId == 0 || !transmitterIds.Add(item.TransmitterId) || !siteIds.Contains(item.SiteId) || !antennaIds.Contains(item.AntennaId) || !Finite(item.MaximumTransmitPowerDbm)) return false;
         }
+        var receiverIds = new HashSet<ulong>();
         foreach (var item in message.Receivers)
         {
-            if (item.ReceiverId == 0 || !siteIds.Contains(item.SiteId) || !antennaIds.Contains(item.AntennaId) || !Positive(item.MinimumFrequencyMegahertz) || !Positive(item.MaximumFrequencyMegahertz) || item.MaximumFrequencyMegahertz <= item.MinimumFrequencyMegahertz || !Finite(item.SensitivityDbm) || item.SensitivityDbm >= 0d) return false;
+            if (item.ReceiverId == 0 || !receiverIds.Add(item.ReceiverId) || !siteIds.Contains(item.SiteId) || !antennaIds.Contains(item.AntennaId) || !Positive(item.MinimumFrequencyMegahertz) || !Positive(item.MaximumFrequencyMegahertz) || item.MaximumFrequencyMegahertz <= item.MinimumFrequencyMegahertz || !Finite(item.SensitivityDbm) || item.SensitivityDbm >= 0d) return false;
         }
         var emissionIds = new HashSet<ulong>();
         foreach (var item in message.Emissions)
         {
             if (item.EmissionId == 0 || !emissionIds.Add(item.EmissionId) || !transmitterIds.Contains(item.TransmitterId) || item.ChannelId == 0 || !Positive(item.CenterFrequencyMegahertz) || !Positive(item.BandwidthMegahertz) || !Finite(item.TransmitPowerDbm) || !NonNegative(item.Utilization) || item.Utilization > 1d + 1e-9) return false;
         }
+        var linkIds = new HashSet<ulong>();
         foreach (var item in message.Links)
         {
-            if (item.LinkId == 0 || item.FromSiteId == 0 || item.ToSiteId == 0 || item.FromSiteId == item.ToSiteId || !siteIds.Contains(item.FromSiteId) || !siteIds.Contains(item.ToSiteId) || item.FrequencyBlockId == 0 || !NonNegative(item.DistanceMeters) || !Finite(item.PathLossDb) || !Finite(item.ReceivedPowerDbm) || !Finite(item.InterferenceDbm) || !Finite(item.SinrDb) || !NonNegative(item.Utilization) || item.Utilization > 1d + 1e-9 || !Enum.IsDefined(item.State)) return false;
+            if (item.LinkId == 0 || !linkIds.Add(item.LinkId) || item.FromSiteId == 0 || item.ToSiteId == 0 || item.FromSiteId == item.ToSiteId || !siteIds.Contains(item.FromSiteId) || !siteIds.Contains(item.ToSiteId) || item.FrequencyBlockId == 0 || !NonNegative(item.DistanceMeters) || !Finite(item.PathLossDb) || !Finite(item.ReceivedPowerDbm) || !Finite(item.InterferenceDbm) || !Finite(item.SinrDb) || !NonNegative(item.Utilization) || item.Utilization > 1d + 1e-9 || !Enum.IsDefined(item.State)) return false;
         }
         foreach (var item in message.ServiceAreas) if (!siteIds.Contains(item.SiteId) || item.FrequencyBlockId == 0 || !NonNegative(item.RadiusMeters) || !Finite(item.MinimumSinrDb)) return false;
         return true;
@@ -246,9 +266,11 @@ public static class RadioProtocolCodec
 
     private static bool IsValidSpectrum(SpectrumSnapshotMessage message)
     {
-        foreach (var item in message.Bands) if (item.BandId == 0 || string.IsNullOrWhiteSpace(item.Name) || Utf8.GetByteCount(item.Name) > ushort.MaxValue || !Positive(item.MinimumFrequencyMegahertz) || !Positive(item.MaximumFrequencyMegahertz) || item.MaximumFrequencyMegahertz <= item.MinimumFrequencyMegahertz) return false;
-        foreach (var item in message.FrequencyBlocks) if (item.FrequencyBlockId == 0 || item.BandId == 0 || !Positive(item.CenterFrequencyMegahertz) || !Positive(item.BandwidthMegahertz)) return false;
-        foreach (var item in message.Conflicts) if (item.FirstBlockId == 0 || item.SecondBlockId == 0 || item.FirstSiteId == 0 || item.SecondSiteId == 0 || string.IsNullOrWhiteSpace(item.Reason) || Utf8.GetByteCount(item.Reason) > ushort.MaxValue) return false;
+        var bandIds = new HashSet<ulong>();
+        foreach (var item in message.Bands) if (item.BandId == 0 || !bandIds.Add(item.BandId) || string.IsNullOrWhiteSpace(item.Name) || Utf8.GetByteCount(item.Name) > ushort.MaxValue || !Positive(item.MinimumFrequencyMegahertz) || !Positive(item.MaximumFrequencyMegahertz) || item.MaximumFrequencyMegahertz <= item.MinimumFrequencyMegahertz) return false;
+        var blockIds = new HashSet<ulong>();
+        foreach (var item in message.FrequencyBlocks) if (item.FrequencyBlockId == 0 || !blockIds.Add(item.FrequencyBlockId) || !bandIds.Contains(item.BandId) || !Positive(item.CenterFrequencyMegahertz) || !Positive(item.BandwidthMegahertz)) return false;
+        foreach (var item in message.Conflicts) if (!blockIds.Contains(item.FirstBlockId) || !blockIds.Contains(item.SecondBlockId) || item.FirstSiteId == 0 || item.SecondSiteId == 0 || string.IsNullOrWhiteSpace(item.Reason) || Utf8.GetByteCount(item.Reason) > ushort.MaxValue) return false;
         return true;
     }
 

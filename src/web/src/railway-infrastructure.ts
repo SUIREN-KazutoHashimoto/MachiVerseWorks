@@ -184,6 +184,16 @@ function decodeSnapshot(view: DataView, offset: number, payloadLength: number): 
     depots.push({ id, ...bounds, trackSegmentIds });
   }
   if (cursor !== end) throw new ProtocolDecodeFailure('Railway infrastructure payload contains trailing bytes.');
+  assertUniqueIds(nodes.map((item) => item.id), 'TrackNode');
+  assertUniqueIds(segments.map((item) => item.id), 'TrackSegment');
+  assertUniqueIds(connections.map((item) => item.id), 'TrackConnection');
+  assertUniqueIds(blocks.map((item) => item.id), 'BlockSection');
+  assertUniqueIds(stations.map((item) => item.id), 'Station');
+  assertUniqueIds(platforms.map((item) => item.id), 'Platform');
+  assertUniqueIds(platformAccessPoints.map((item) => item.id), 'PlatformAccessPoint');
+  assertUniqueIds(depots.map((item) => item.id), 'Depot');
+  for (const block of blocks) assertUniqueIds(block.segmentIds, `BlockSection ${block.id.toString()} segment`);
+  for (const depot of depots) assertUniqueIds(depot.trackSegmentIds, `Depot ${depot.id.toString()} track segment`);
 
   return { type: RailwayMessageType.RailwayInfrastructureSnapshot, revision, isFullSnapshot: full === 1, nodes, segments, connections, blocks, stations, platforms, platformAccessPoints, depots };
 }
@@ -197,8 +207,12 @@ export class RailwayInfrastructureLayer {
   private readonly platforms = new THREE.LineSegments(new THREE.BufferGeometry(), this.platformMaterial);
   private readonly nodes = new Map<bigint, TrackNode>();
   private readonly segments = new Map<bigint, TrackSegment>();
+  private readonly connections = new Map<bigint, TrackConnection>();
+  private readonly blocks = new Map<bigint, BlockSection>();
   private readonly stationBounds = new Map<bigint, Station>();
   private readonly platformBounds = new Map<bigint, Platform>();
+  private readonly platformAccessPoints = new Map<bigint, PlatformAccessPoint>();
+  private readonly depots = new Map<bigint, Depot>();
   private revision: bigint | null = null;
 
   public constructor(private readonly scene: THREE.Scene) {
@@ -215,10 +229,33 @@ export class RailwayInfrastructureLayer {
       return;
     }
 
-    for (const item of snapshot.nodes) this.nodes.set(item.id, item);
-    for (const item of snapshot.segments) this.segments.set(item.id, item);
-    for (const item of snapshot.stations) this.stationBounds.set(item.id, item);
-    for (const item of snapshot.platforms) this.platformBounds.set(item.id, item);
+    for (const item of snapshot.nodes) this.addUnique(this.nodes, item.id, item, 'TrackNode');
+    for (const item of snapshot.segments) {
+      if (!this.nodes.has(item.startNodeId) || !this.nodes.has(item.endNodeId)) throw new ProtocolDecodeFailure(`TrackSegment ${item.id.toString()} references a missing TrackNode.`);
+      this.addUnique(this.segments, item.id, item, 'TrackSegment');
+    }
+    for (const item of snapshot.connections) {
+      const from = this.segments.get(item.fromSegmentId); const to = this.segments.get(item.toSegmentId);
+      if (from === undefined || to === undefined || !this.nodes.has(item.viaNodeId) || !isIncident(from, item.viaNodeId) || !isIncident(to, item.viaNodeId)) throw new ProtocolDecodeFailure(`TrackConnection ${item.id.toString()} contains dangling topology.`);
+      this.addUnique(this.connections, item.id, item, 'TrackConnection');
+    }
+    for (const item of snapshot.blocks) {
+      if (new Set(item.segmentIds).size !== item.segmentIds.length || item.segmentIds.some((id) => !this.segments.has(id))) throw new ProtocolDecodeFailure(`BlockSection ${item.id.toString()} contains invalid TrackSegment references.`);
+      this.addUnique(this.blocks, item.id, item, 'BlockSection');
+    }
+    for (const item of snapshot.stations) this.addUnique(this.stationBounds, item.id, item, 'Station');
+    for (const item of snapshot.platforms) {
+      if (!this.stationBounds.has(item.stationId) || !this.segments.has(item.trackSegmentId)) throw new ProtocolDecodeFailure(`Platform ${item.id.toString()} references a missing Station or TrackSegment.`);
+      this.addUnique(this.platformBounds, item.id, item, 'Platform');
+    }
+    for (const item of snapshot.platformAccessPoints) {
+      if (!this.platformBounds.has(item.platformId)) throw new ProtocolDecodeFailure(`PlatformAccessPoint ${item.id.toString()} references a missing Platform.`);
+      this.addUnique(this.platformAccessPoints, item.id, item, 'PlatformAccessPoint');
+    }
+    for (const item of snapshot.depots) {
+      if (new Set(item.trackSegmentIds).size !== item.trackSegmentIds.length || item.trackSegmentIds.some((id) => !this.segments.has(id))) throw new ProtocolDecodeFailure(`Depot ${item.id.toString()} contains invalid TrackSegment references.`);
+      this.addUnique(this.depots, item.id, item, 'Depot');
+    }
 
     const trackPositions: number[] = [];
     for (const segment of this.segments.values()) {
@@ -243,18 +280,29 @@ export class RailwayInfrastructureLayer {
     this.resetSnapshotState();
   }
 
+  private addUnique<T>(target: Map<bigint, T>, id: bigint, item: T, label: string): void {
+    if (target.has(id)) throw new ProtocolDecodeFailure(`${label} ID ${id.toString()} is duplicated across Railway Infrastructure chunks.`);
+    target.set(id, item);
+  }
+
   private resetSnapshotState(): void {
     this.revision = null;
     this.nodes.clear();
     this.segments.clear();
+    this.connections.clear();
+    this.blocks.clear();
     this.stationBounds.clear();
     this.platformBounds.clear();
+    this.platformAccessPoints.clear();
+    this.depots.clear();
   }
 }
 
 function readBounds(readDouble: () => number): RailwayBounds {
   return { minX: readDouble(), minY: readDouble(), minZ: readDouble(), maxX: readDouble(), maxY: readDouble(), maxZ: readDouble() };
 }
+function assertUniqueIds(ids: readonly bigint[], label: string): void { const set = new Set(ids); if (set.size !== ids.length || set.has(0n)) throw new ProtocolDecodeFailure(`${label} IDs are duplicated or invalid.`); }
+function isIncident(segment: TrackSegment, nodeId: bigint): boolean { return segment.startNodeId === nodeId || segment.endNodeId === nodeId; }
 function finite3(x: number, y: number, z: number): boolean { return Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z); }
 function validBounds(value: RailwayBounds): boolean { return finite3(value.minX, value.minY, value.minZ) && finite3(value.maxX, value.maxY, value.maxZ) && value.minX <= value.maxX && value.minY <= value.maxY && value.minZ <= value.maxZ; }
 function isTrackDirection(value: TrackDirection): boolean { return value >= TrackDirection.Bidirectional && value <= TrackDirection.EndToStart; }

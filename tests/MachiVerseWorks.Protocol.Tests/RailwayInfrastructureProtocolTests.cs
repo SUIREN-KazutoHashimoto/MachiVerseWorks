@@ -76,4 +76,26 @@ public sealed class RailwayInfrastructureProtocolTests
         Assert.IsFalse(success);
         Assert.AreEqual(ProtocolDecodeError.InvalidPayload, error);
     }
+
+    [TestMethod]
+    public void RailwayInfrastructureRejectsDuplicateStableIdsWithinAFrame()
+    {
+        var message = new RailwayInfrastructureSnapshotMessage(
+            1, true,
+            [new ProtocolTrackNode(1, 0, 0, 0, 0), new ProtocolTrackNode(1, 0, 1, 0, 0)],
+            [], [], [], [], [], [], []);
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => RailwayInfrastructureProtocolCodec.Serialize(message, ProtocolVersion.Current));
+    }
+
+    [TestMethod]
+    public void RailwayInfrastructureChunkerRejectsDanglingAggregateTopology()
+    {
+        var message = new RailwayInfrastructureSnapshotMessage(
+            1, true,
+            [new ProtocolTrackNode(1, 0, 0, 0, 0)],
+            [new ProtocolTrackSegment(10, 1, 999, ProtocolTrackDirection.Bidirectional, 1.067, 20, ProtocolTrackElectrification.None, ProtocolTrackUsage.Mainline)],
+            [], [], [], [], [], []);
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => RailwayInfrastructureProtocolChunker.Split(message));
+    }
+
 }

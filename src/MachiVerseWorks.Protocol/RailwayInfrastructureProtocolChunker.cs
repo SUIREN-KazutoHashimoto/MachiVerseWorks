@@ -23,6 +23,8 @@ public static class RailwayInfrastructureProtocolChunker
         ArgumentNullException.ThrowIfNull(message.Platforms);
         ArgumentNullException.ThrowIfNull(message.PlatformAccessPoints);
         ArgumentNullException.ThrowIfNull(message.Depots);
+        if (message.IsFullSnapshot) RailwayInfrastructureProtocolValidator.ValidateAggregate(message);
+        else RailwayInfrastructureProtocolValidator.ValidateIdentity(message);
 
         var chunks = new List<RailwayInfrastructureSnapshotMessage>();
         var builder = new ChunkBuilder(message.Revision, message.IsFullSnapshot);

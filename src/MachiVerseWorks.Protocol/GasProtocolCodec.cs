@@ -30,7 +30,7 @@ public static class GasProtocolCodec
             + (message.Pipelines.Count * PipelinePayloadLength)
             + (message.Facilities.Count * FacilityPayloadLength)
             + (message.ServicePoints.Count * ServicePointPayloadLength));
-        var frame = new byte[ProtocolFrameHeader.Size + payloadLength];
+        var frame = new byte[ProtocolFrameHeader.GetFrameLength(payloadLength)];
         ProtocolFrameHeader.Write(frame, new ProtocolFrameHeader(version, MessageType.GasSnapshot, checked((uint)payloadLength)));
         var payload = frame.AsSpan(ProtocolFrameHeader.Size);
         WriteStatistics(payload, message.Statistics);

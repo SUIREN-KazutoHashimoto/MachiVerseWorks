@@ -31,8 +31,8 @@ internal sealed class RadioPublishService(
                 try
                 {
                     messages = RadioMessageMapper.Create(snapshot);
-                    _ = RadioProtocolCodec.Serialize(messages.Radio, ProtocolVersion.Current);
-                    _ = RadioProtocolCodec.Serialize(messages.Spectrum, ProtocolVersion.Current);
+                    _ = RadioProtocolCodec.GetSerializedLength(messages.Radio, ProtocolVersion.Current);
+                    _ = RadioProtocolCodec.GetSerializedLength(messages.Spectrum, ProtocolVersion.Current);
                 }
                 catch (Exception exception) when (exception is ArgumentException or OverflowException)
                 {

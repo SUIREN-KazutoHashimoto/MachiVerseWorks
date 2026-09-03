@@ -15,7 +15,7 @@ import { SettlementStructureRenderer } from './settlement-structure-renderer.ts'
 import { isRetryableSubscriptionDetailCode } from './subscription-error-policy.ts';
 import { ClientUi } from './ui.ts';
 import { TrafficMessageType, type TrafficProtocolMessage } from './traffic-protocol.ts';
-import { ViewNavigationController, type ViewNavigationTarget } from './view-navigation.ts';
+import { ViewNavigationController, getCameraFocusAtSimulationAltitude, type ViewNavigationTarget } from './view-navigation.ts';
 import { WorldView } from './world-view.ts';
 import { ECONOMY_SNAPSHOT_MESSAGE_TYPE, type EconomyProtocolMessage, type EconomySnapshotMessage } from './economy-protocol.ts';
 import { LogisticsDebugOverlay } from './logistics-debug.ts';
@@ -164,7 +164,7 @@ export class Application {
       case TrafficMessageType.IntersectionControlSnapshot:
         this.observation.apply(message); return;
       case WORLD_ENVIRONMENT_SNAPSHOT_MESSAGE_TYPE:
-        this.observation.apply(message); this.initializeTerrainCamera(message); return;
+        this.observation.apply(message); this.initializeTerrainCamera(); return;
       case REGIONAL_GENERATION_SNAPSHOT_MESSAGE_TYPE:
       case PERSISTENT_REGIONAL_EVOLUTION_SNAPSHOT_MESSAGE_TYPE:
         this.observation.apply(message); return;
@@ -188,11 +188,11 @@ export class Application {
     }
   }
 
-  private initializeTerrainCamera(message: WorldEnvironmentSnapshotMessage): void {
+  private initializeTerrainCamera(): void {
     if (this.terrainCameraInitialized) return;
-    const centerX = (message.minX + message.maxX) * 0.5;
-    const centerY = (message.minY + message.maxY) * 0.5;
-    const elevation = this.observation.worldEnvironment.getNearestTerrainElevation(centerX, centerY);
+    const focus = getCameraFocusAtSimulationAltitude(this.view.camera, 0);
+    if (focus === undefined) return;
+    const elevation = this.observation.worldEnvironment.getNearestTerrainElevation(focus.x, focus.y);
     if (elevation === undefined || !this.navigation.rebaseFocusAltitude(0, elevation)) return;
     this.terrainCameraInitialized = true;
     this.lastSubscription = null;

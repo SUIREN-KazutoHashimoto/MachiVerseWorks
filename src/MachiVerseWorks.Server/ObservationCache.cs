@@ -72,7 +72,7 @@ internal sealed class ObservationCache
     private readonly CacheStore<SpatialObservationCacheKey> _spatial = new();
     private readonly CacheStore<StaticObservationCacheKey> _static = new();
     private readonly ConcurrentDictionary<EncodedObservationCacheKey, Lazy<byte[]>> _encoded = new();
-    private readonly ConcurrentQueue<(EncodedObservationCacheKey Key, Lazy<byte[]> Entry)> _encodedOrder = new();
+    private readonly ConcurrentQueue<(EncodedObservationCacheKey Key, WeakReference<Lazy<byte[]>> Entry)> _encodedOrder = new();
     private readonly HashSet<Lazy<byte[]>> _accountedEncodedEntries = [];
     private readonly object _revisionGate = new();
     private readonly object _encodedAccountingGate = new();
@@ -136,7 +136,7 @@ internal sealed class ObservationCache
             var frame = actual.Value;
             if (added && TryAccountEncodedEntry(key, actual, frame.LongLength))
             {
-                _encodedOrder.Enqueue((key, actual));
+                _encodedOrder.Enqueue((key, new WeakReference<Lazy<byte[]>>(actual)));
                 TrimEncoded();
             }
             return frame;
@@ -271,7 +271,7 @@ internal sealed class ObservationCache
         while ((_encoded.Count > _options.MaxEncodedEntries || Interlocked.Read(ref _encodedBytes) > _options.MaxEncodedBytes)
             && _encodedOrder.TryDequeue(out var oldest))
         {
-            if (!RemoveEncodedExact(oldest.Key, oldest.Entry)) continue;
+            if (!oldest.Entry.TryGetTarget(out var entry) || !RemoveEncodedExact(oldest.Key, entry)) continue;
             Interlocked.Increment(ref _evictions);
         }
     }
@@ -314,7 +314,7 @@ internal sealed class ObservationCache
     private sealed class CacheStore<TKey> where TKey : notnull
     {
         private readonly ConcurrentDictionary<TKey, Lazy<object>> _entries = new();
-        private readonly ConcurrentQueue<(TKey Key, Lazy<object> Entry)> _order = new();
+        private readonly ConcurrentQueue<(TKey Key, WeakReference<Lazy<object>> Entry)> _order = new();
 
         public int Count => _entries.Count;
 
@@ -322,7 +322,7 @@ internal sealed class ObservationCache
         {
             var actual = _entries.GetOrAdd(key, candidate);
             added = ReferenceEquals(actual, candidate);
-            if (added) _order.Enqueue((key, actual));
+            if (added) _order.Enqueue((key, new WeakReference<Lazy<object>>(actual)));
             return actual;
         }
 
@@ -331,7 +331,7 @@ internal sealed class ObservationCache
         public bool TryRemoveOldest()
         {
             while (_order.TryDequeue(out var oldest))
-                if (RemoveExact(_entries, oldest.Key, oldest.Entry)) return true;
+                if (oldest.Entry.TryGetTarget(out var entry) && RemoveExact(_entries, oldest.Key, entry)) return true;
             return false;
         }
 

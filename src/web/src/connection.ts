@@ -91,9 +91,9 @@ export class MachiVerseConnection {
 
 export function computeReconnectDelay(attempt: number, minimumDelayMs: number, maximumDelayMs: number, random: () => number = Math.random): number {
   const cappedDelay = Math.min(maximumDelayMs, minimumDelayMs * (2 ** Math.max(0, attempt)));
-  const halfDelay = cappedDelay / 2;
+  const lowerDelay = Math.max(minimumDelayMs, cappedDelay / 2);
   const sample = Math.min(1, Math.max(0, random()));
-  return halfDelay + (sample * halfDelay);
+  return lowerDelay + (sample * (cappedDelay - lowerDelay));
 }
 
 export function resolveNegotiatedProtocolVersion(frameVersion: ProtocolVersion, acknowledgedVersion: ProtocolVersion, supportedVersion: ProtocolVersion = WEB_CURRENT_PROTOCOL_VERSION): ProtocolVersion { if (!protocolVersionsEqual(frameVersion, acknowledgedVersion)) throw new ProtocolDecodeFailure('HelloAck frame version and payload version do not match.'); if (frameVersion.major !== supportedVersion.major || frameVersion.minor > supportedVersion.minor) throw new ProtocolDecodeFailure('Server selected an unsupported protocol version.'); return Object.freeze({ ...frameVersion }); }
