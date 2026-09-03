@@ -13,6 +13,10 @@ def replace_once(path_name: str, old: str, new: str) -> None:
 # Keep TypeScript noUnusedLocals clean after the new relationship validation.
 replace_once(
     "src/web/src/regional-generation-protocol.ts",
+    "const districtIds = uniquePositiveIds(districts.map((item) => item.districtId), 'District');",
+    "uniquePositiveIds(districts.map((item) => item.districtId), 'District');")
+replace_once(
+    "src/web/src/regional-generation-protocol.ts",
     "const parcelIds = uniquePositiveIds(parcels.map((item) => item.parcelId), 'Parcel');",
     "uniquePositiveIds(parcels.map((item) => item.parcelId), 'Parcel');")
 replace_once(
