@@ -32,6 +32,8 @@ Golden 更新時も、可能な限り同じ固定ブラウザー・フォント�
 
 `diagnostics/<name>.json` には既存 fixture の構造・描画 metric、canvas dimensions、device pixel ratio、使用した Browser version、Visual E2E の font family / package version を記録します。
 
+CDP command は1回あたり30秒で timeout し、DevTools WebSocket が `close` / `error` になった場合は保留中 command を即座に reject します。renderer target の異常終了時に GitHub Actions の matrix job timeout まで停止し続けないようにします。
+
 ## Golden Image の更新
 
 CI を通す目的だけで Golden Image を更新してはいけません。まず View の変更内容と CI の `actual` / `diff` Artifact を確認し、見た目の変更が意図したものかを判断します。
