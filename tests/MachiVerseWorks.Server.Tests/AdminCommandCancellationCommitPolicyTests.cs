@@ -24,6 +24,24 @@ public sealed class AdminCommandCancellationCommitPolicyTests
             "Request cancellation must not convert a successfully executed command into a canceled result after its commit point.");
     }
 
+    [TestMethod]
+    public void RemoteMcpAwaitsAuthoritativeCompletionInsteadOfRecancelingTheResponse()
+    {
+        var sourcePath = Path.Combine(FindRepositoryRoot(), "src", "MachiVerseWorks.Server", "RemoteMcp.cs");
+        var source = File.ReadAllText(sourcePath);
+        var gatewayStart = source.IndexOf("internal sealed class RemoteMcpAdminGateway", StringComparison.Ordinal);
+        var toolsStart = source.IndexOf("internal sealed class RemoteMcpTools", gatewayStart, StringComparison.Ordinal);
+        Assert.IsTrue(gatewayStart >= 0);
+        Assert.IsTrue(toolsStart > gatewayStart);
+
+        var gateway = source[gatewayStart..toolsStart];
+        StringAssert.Contains(gateway, "new AdminCommandRequest(command, completion, cancellationToken)");
+        StringAssert.Contains(gateway, "await completion.Task.ConfigureAwait(false)");
+        Assert.IsFalse(
+            gateway.Contains("completion.Task.WaitAsync(cancellationToken)", StringComparison.Ordinal),
+            "The MCP response must reflect the authoritative command completion once the request has been queued; cancellation is already propagated through AdminCommandRequest.");
+    }
+
     private static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
