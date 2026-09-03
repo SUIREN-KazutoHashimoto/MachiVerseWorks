@@ -11,6 +11,13 @@ internal readonly record struct RegionalGenerationObservation(
     RegionalGenerationSnapshot? Snapshot,
     ulong TickCount);
 
+internal sealed record EntityInspectionObservation(
+    PopulationPublishSnapshot Population,
+    IReadOnlyDictionary<ulong, VehicleSnapshot> Vehicles,
+    IReadOnlyDictionary<ulong, TrainSnapshot> Trains,
+    IReadOnlyDictionary<ulong, ulong> GeneratedBuildingIds,
+    PersistentRegionalEvolutionSnapshot? Regional);
+
 /// <summary>
 /// Detached, read-only boundary from the authoritative Simulation runtime into the Observation Gateway.
 /// Gateway services may consume this contract but must not retain or mutate SimulationWorld state.
@@ -35,8 +42,25 @@ internal interface IObservationSource
     OpticalSnapshot CaptureOpticalSnapshot();
     RadioSnapshot CaptureRadioSnapshot();
     VersionedObservation<WorldEnvironmentSnapshot> CaptureWorldEnvironmentSnapshot(WorldVolume volume);
+    RegionalGenerationObservation CaptureRegionalGenerationIdentity() => CaptureRegionalGenerationObservation() with { Snapshot = null };
     RegionalGenerationObservation CaptureRegionalGenerationObservation() => new(0, false, 0, null, 0);
     (PersistentRegionalEvolutionSnapshot Evolution, RegionalInteractionSnapshot Interactions)? CapturePersistentRegionalEvolutionSnapshot();
+    EntityInspectionObservation CaptureEntityInspectionObservation(
+        IReadOnlySet<ulong> inspectedPersonIds,
+        IReadOnlySet<ulong> inspectedVehicleIds,
+        IReadOnlySet<ulong> inspectedTrainIds,
+        IReadOnlySet<ulong> materializedBuildingIds,
+        EntityInspectionTarget? regionalTarget)
+    {
+        var population = CapturePopulationPublishSnapshot(inspectedPersonIds);
+        var regional = CapturePersistentRegionalEvolutionSnapshot()?.Evolution;
+        return new EntityInspectionObservation(
+            population,
+            CaptureVehicleSnapshots(inspectedVehicleIds),
+            CaptureTrainSnapshots(inspectedTrainIds),
+            CaptureGeneratedBuildingIds(materializedBuildingIds),
+            regional);
+    }
     bool PersonExists(ulong personId);
 }
 
@@ -123,23 +147,29 @@ internal sealed class SimulationObservationSource(SimulationRuntime simulation) 
         return new VersionedObservation<WorldEnvironmentSnapshot>(context.Generation, context.Revision, snapshot);
     }
 
-    public RegionalGenerationObservation CaptureRegionalGenerationObservation()
-    {
-        while (true)
+    public RegionalGenerationObservation CaptureRegionalGenerationIdentity() =>
+        simulation.Read(world =>
         {
-            var generation = simulation.ObservationGeneration;
-            var snapshot = simulation.Read<RegionalGenerationSnapshot?>(static world =>
-                world.TryCreateRegionalGenerationSnapshot(out var captured) ? captured : null);
-            var tickCount = simulation.TickCount;
-            if (generation != simulation.ObservationGeneration) continue;
+            var hasSnapshot = world.TryGetRegionalGenerationSourceTick(out var sourceTick);
             return new RegionalGenerationObservation(
-                generation,
+                simulation.ObservationGeneration,
+                hasSnapshot,
+                sourceTick,
+                null,
+                world.Time.TickCount);
+        });
+
+    public RegionalGenerationObservation CaptureRegionalGenerationObservation() =>
+        simulation.Read(world =>
+        {
+            var snapshot = world.TryCreateRegionalGenerationSnapshot(out var captured) ? captured : null;
+            return new RegionalGenerationObservation(
+                simulation.ObservationGeneration,
                 snapshot is not null,
                 snapshot?.TickCount ?? 0UL,
                 snapshot,
-                tickCount);
-        }
-    }
+                world.Time.TickCount);
+        });
 
     public (PersistentRegionalEvolutionSnapshot Evolution, RegionalInteractionSnapshot Interactions)? CapturePersistentRegionalEvolutionSnapshot() =>
         simulation.Read<(PersistentRegionalEvolutionSnapshot Evolution, RegionalInteractionSnapshot Interactions)?>(static world =>
@@ -147,6 +177,61 @@ internal sealed class SimulationObservationSource(SimulationRuntime simulation) 
             if (!world.TryCreatePersistentRegionalEvolutionSnapshot(out var evolution) || evolution is null) return null;
             return (evolution, world.CreateRegionalInteractionSnapshot());
         });
+
+    public EntityInspectionObservation CaptureEntityInspectionObservation(
+        IReadOnlySet<ulong> inspectedPersonIds,
+        IReadOnlySet<ulong> inspectedVehicleIds,
+        IReadOnlySet<ulong> inspectedTrainIds,
+        IReadOnlySet<ulong> materializedBuildingIds,
+        EntityInspectionTarget? regionalTarget)
+    {
+        ArgumentNullException.ThrowIfNull(inspectedPersonIds);
+        ArgumentNullException.ThrowIfNull(inspectedVehicleIds);
+        ArgumentNullException.ThrowIfNull(inspectedTrainIds);
+        ArgumentNullException.ThrowIfNull(materializedBuildingIds);
+
+        return simulation.Read(world =>
+        {
+            var generation = simulation.ObservationGeneration;
+            var revision = simulation.ObservationRevision;
+            var tickCount = world.Time.TickCount;
+            var persons = new Dictionary<ulong, PersonSnapshot>(inspectedPersonIds.Count);
+            foreach (var id in inspectedPersonIds)
+                if (world.TryGetPersonSnapshot(new PersonId(id), out var person)) persons.Add(id, person);
+            var population = new PopulationPublishSnapshot(
+                generation,
+                revision,
+                tickCount,
+                world.CreatePopulationStatistics(),
+                persons);
+
+            var vehicles = new Dictionary<ulong, VehicleSnapshot>(inspectedVehicleIds.Count);
+            foreach (var id in inspectedVehicleIds)
+                if (world.TryGetVehicleSnapshot(new VehicleId(id), out var vehicle)) vehicles.Add(id, vehicle);
+
+            var trains = new Dictionary<ulong, TrainSnapshot>(inspectedTrainIds.Count);
+            foreach (var id in inspectedTrainIds)
+                if (world.TryGetTrainSnapshot(new TrainId(id), out var train)) trains.Add(id, train);
+
+            var generatedBuildingIds = new Dictionary<ulong, ulong>(materializedBuildingIds.Count);
+            foreach (var id in materializedBuildingIds)
+                if (world.TryGetGeneratedBuildingId(new BuildingId(id), out var generatedId))
+                    generatedBuildingIds.Add(id, generatedId.Value);
+
+            PersistentRegionalEvolutionSnapshot? regional = regionalTarget switch
+            {
+                { EntityType: ProtocolEntityType.Settlement } target =>
+                    world.CreatePersistentRegionalEvolutionInspectionSnapshot(settlementId: new SettlementId(target.EntityId)),
+                { EntityType: ProtocolEntityType.Parcel } target =>
+                    world.CreatePersistentRegionalEvolutionInspectionSnapshot(parcelId: new ParcelId(target.EntityId)),
+                { EntityType: ProtocolEntityType.Building } target =>
+                    world.CreatePersistentRegionalEvolutionInspectionSnapshot(buildingId: new GeneratedBuildingId(target.EntityId)),
+                _ => null,
+            };
+
+            return new EntityInspectionObservation(population, vehicles, trains, generatedBuildingIds, regional);
+        });
+    }
 
     public bool PersonExists(ulong personId) =>
         personId != 0 && simulation.TryGetPersonSnapshot(new PersonId(personId), out _);
@@ -183,6 +268,7 @@ internal static class ObservationProtocolAdapter
             SpectrumSnapshotMessage spectrum => RadioProtocolCodec.Serialize(spectrum, version),
             WorldEnvironmentSnapshotMessage worldEnvironment => WorldEnvironmentProtocolCodec.Serialize(worldEnvironment, version),
             RegionalGenerationSnapshotMessage regionalGeneration => RegionalGenerationProtocolCodec.Serialize(regionalGeneration, version),
+            RegionalGenerationSnapshotChunkMessage regionalGenerationChunk => RegionalGenerationSnapshotChunkProtocolCodec.Serialize(regionalGenerationChunk, version),
             PersistentRegionalEvolutionSnapshotMessage regionalEvolution => PersistentRegionalEvolutionProtocolCodec.Serialize(regionalEvolution, version),
             InspectEntityMessage or ClearEntityInspectionMessage or EntityInspectionSnapshotMessage => EntityInspectionProtocolCodec.Serialize(message, version),
             InspectPersonMessage or PopulationStatisticsMessage or PersonDebugMessage => PopulationProtocolCodec.Serialize(message, version),

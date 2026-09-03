@@ -95,22 +95,29 @@ public sealed partial class SimulationWorld
             return;
         }
 
-        var removedCenter = Center(removedBuilding.Bounds);
-        var replacementBuilding = CreateBuildingSnapshot()
-            .Where(item => item.Id != binding.BuildingId)
-            .OrderBy(item => Distance2D(Center(item.Bounds), removedCenter))
-            .ThenBy(static item => item.Id.Value)
-            .FirstOrDefault();
-        if (replacementBuilding.Id.Value == 0)
-            throw new InvalidOperationException("A materialized regional Building cannot be demolished without a replacement endpoint for existing Population references.");
-        var replacement = TripEndpoint.ForBuilding(replacementBuilding.Id);
-
         var poiIds = CreatePoiSnapshot()
             .Where(item => item.BuildingId == binding.BuildingId)
             .OrderBy(static item => item.Id.Value)
             .Select(static item => item.Id)
             .ToArray();
         var poiIdSet = poiIds.ToHashSet();
+        var requiresPopulationReplacement = _population.ContainsBuildingReference(binding.BuildingId)
+            || poiIds.Any(_population.ContainsPoiReference);
+
+        TripEndpoint? replacement = null;
+        if (requiresPopulationReplacement)
+        {
+            var removedCenter = Center(removedBuilding.Bounds);
+            var replacementBuilding = CreateBuildingSnapshot()
+                .Where(item => item.Id != binding.BuildingId)
+                .OrderBy(item => Distance2D(Center(item.Bounds), removedCenter))
+                .ThenBy(static item => item.Id.Value)
+                .FirstOrDefault();
+            if (replacementBuilding.Id.Value == 0)
+                throw new InvalidOperationException("A materialized regional Building with existing Population references cannot be demolished without a replacement endpoint.");
+            replacement = TripEndpoint.ForBuilding(replacementBuilding.Id);
+        }
+
         var roadAccessPointIds = CreateRoadNetworkSnapshot().AccessPoints
             .Where(item => item.BuildingId == binding.BuildingId
                 || (item.PoiId is { } poiId && poiIdSet.Contains(poiId)))
@@ -122,9 +129,12 @@ public sealed partial class SimulationWorld
 
         RemovePersistentRegionalEconomicMaterialization(binding.BuildingId, poiIdSet);
 
-        foreach (var poiId in poiIds)
-            _population.ReplacePoiReferences(poiId, replacement);
-        _population.ReplaceBuildingReferences(binding.BuildingId, replacement);
+        if (replacement is { } replacementEndpoint)
+        {
+            foreach (var poiId in poiIds)
+                _population.ReplacePoiReferences(poiId, replacementEndpoint);
+            _population.ReplaceBuildingReferences(binding.BuildingId, replacementEndpoint);
+        }
 
         foreach (var poiId in poiIds)
             _ = RemovePoi(poiId);

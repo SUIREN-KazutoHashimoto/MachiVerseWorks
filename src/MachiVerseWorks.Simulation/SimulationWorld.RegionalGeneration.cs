@@ -2,6 +2,10 @@ namespace MachiVerseWorks.Simulation;
 
 public sealed partial class SimulationWorld
 {
+    private const int MaximumRegionalMaterializedPopulation = 1_000_000;
+    private const int MaximumRegionalMaterializedJobs = 1_000_000;
+    private const int MaximumRegionalToponymLength = 160;
+
     private RegionalGenerator? _regionalGenerator;
     private RegionalGenerationSnapshot? _regionalGeneration;
 
@@ -96,8 +100,7 @@ public sealed partial class SimulationWorld
             throw new ArgumentException("Regional generation seed does not match the authoritative world seed.", nameof(checkpoint));
         if (snapshot.Iterations < 0 || snapshot.Iterations > 32)
             throw new ArgumentOutOfRangeException(nameof(checkpoint), "Regional generation iteration count is invalid.");
-        if (snapshot.Volume.Width <= 0d || snapshot.Volume.Depth <= 0d)
-            throw new ArgumentOutOfRangeException(nameof(checkpoint), "Regional generation volume must be non-empty.");
+        ValidateRegionalVolume(snapshot.Volume, "Regional generation volume", nameof(checkpoint));
 
         ArgumentNullException.ThrowIfNull(snapshot.Settlements);
         ArgumentNullException.ThrowIfNull(snapshot.GrowthEvents);
@@ -127,7 +130,7 @@ public sealed partial class SimulationWorld
         var settlementIds = ValidateRegionalIds(snapshot.Settlements.Select(static item => item.Id.Value), "Settlement");
         var growthEventIds = ValidateRegionalIds(snapshot.GrowthEvents.Select(static item => item.Id.Value), "Historical growth event");
         var corridorIds = ValidateRegionalIds(snapshot.Corridors.Select(static item => item.Id.Value), "Regional corridor");
-        var districtIds = ValidateRegionalIds(snapshot.Districts.Select(static item => item.Id.Value), "District");
+        _ = ValidateRegionalIds(snapshot.Districts.Select(static item => item.Id.Value), "District");
         _ = ValidateRegionalIds(snapshot.Parcels.Select(static item => item.Id.Value), "Parcel");
         _ = ValidateRegionalIds(snapshot.Buildings.Select(static item => item.Id.Value), "Generated building");
         _ = ValidateRegionalIds(snapshot.Pois.Select(static item => item.Id.Value), "Generated POI");
@@ -141,7 +144,7 @@ public sealed partial class SimulationWorld
             ArgumentNullException.ThrowIfNull(toponym);
             ArgumentNullException.ThrowIfNull(toponym.Provenance);
             if (!Enum.IsDefined(toponym.Kind)) throw new ArgumentOutOfRangeException(nameof(checkpoint));
-            if (string.IsNullOrWhiteSpace(toponym.Name) || toponym.Name.Length > 160)
+            if (string.IsNullOrWhiteSpace(toponym.Name) || toponym.Name.Length > MaximumRegionalToponymLength)
                 throw new ArgumentException("Human toponym names must be non-empty and bounded.", nameof(checkpoint));
             if (string.IsNullOrWhiteSpace(toponym.Provenance.GeneratorKey) || toponym.Provenance.GeneratorKey.Length > 128)
                 throw new ArgumentException("Human toponym provenance generator keys must be non-empty and bounded.", nameof(checkpoint));
@@ -149,8 +152,9 @@ public sealed partial class SimulationWorld
                 throw new ArgumentException("Human toponym references a missing parent toponym.", nameof(checkpoint));
             if (toponym.Provenance.SourceNaturalToponym is { } natural)
             {
-                if (natural.Id.Value == 0UL || natural.FeatureId.Value == 0UL || string.IsNullOrWhiteSpace(natural.Name))
-                    throw new ArgumentException("Human toponym contains invalid natural-name provenance.", nameof(checkpoint));
+                if (natural.Id.Value == 0UL || natural.FeatureId.Value == 0UL
+                    || string.IsNullOrWhiteSpace(natural.Name) || natural.Name.Length > MaximumRegionalToponymLength)
+                    throw new ArgumentException("Human toponym contains invalid or overlong natural-name provenance.", nameof(checkpoint));
                 if (toponym.Provenance.SourceFeatureId is { } sourceFeatureId && sourceFeatureId != natural.FeatureId)
                     throw new ArgumentException("Human toponym natural-name provenance has mismatched feature references.", nameof(checkpoint));
             }
@@ -158,6 +162,8 @@ public sealed partial class SimulationWorld
 
         ValidateAcyclicParentGraph(snapshot.Toponyms.Select(static item => (item.Id, item.Provenance.ParentHumanToponymId)), "Human toponym", nameof(checkpoint));
 
+        long totalPopulation = 0;
+        long totalJobs = 0;
         foreach (var settlement in snapshot.Settlements)
         {
             ArgumentNullException.ThrowIfNull(settlement);
@@ -169,8 +175,14 @@ public sealed partial class SimulationWorld
                 throw new ArgumentOutOfRangeException(nameof(checkpoint));
             if (!toponymIds.Contains(settlement.NameId.Value))
                 throw new ArgumentException("Settlement references a missing human toponym.", nameof(checkpoint));
-            if (settlement.Population < 0 || settlement.Jobs < 0 || !double.IsFinite(settlement.InfluenceRadiusMeters) || settlement.InfluenceRadiusMeters <= 0d)
+            if (settlement.Population < 0 || settlement.Population > MaximumRegionalMaterializedPopulation
+                || settlement.Jobs < 0 || settlement.Jobs > MaximumRegionalMaterializedJobs
+                || !double.IsFinite(settlement.InfluenceRadiusMeters) || settlement.InfluenceRadiusMeters <= 0d)
                 throw new ArgumentOutOfRangeException(nameof(checkpoint));
+            totalPopulation += settlement.Population;
+            totalJobs += settlement.Jobs;
+            if (totalPopulation > MaximumRegionalMaterializedPopulation || totalJobs > MaximumRegionalMaterializedJobs)
+                throw new ArgumentException("Regional generation scalar population/jobs exceed the bounded materialization budget.", nameof(checkpoint));
             ValidateSuitability(settlement.Suitability, checkpoint);
         }
 
@@ -212,6 +224,7 @@ public sealed partial class SimulationWorld
             if (!settlementIds.Contains(district.SettlementId.Value) || !toponymIds.Contains(district.NameId.Value))
                 throw new ArgumentException("District references invalid settlement or name state.", nameof(checkpoint));
             if (!Enum.IsDefined(district.Kind)) throw new ArgumentOutOfRangeException(nameof(checkpoint));
+            ValidateRegionalVolume(district.Bounds, "District bounds", nameof(checkpoint));
             ValidateUnit(district.Accessibility, nameof(checkpoint));
         }
 
@@ -222,6 +235,7 @@ public sealed partial class SimulationWorld
                 throw new ArgumentException("Parcel references an invalid or cross-Settlement district.", nameof(checkpoint));
             if (!Enum.IsDefined(parcel.Zone) || !Enum.IsDefined(parcel.DevelopmentState))
                 throw new ArgumentOutOfRangeException(nameof(checkpoint));
+            ValidateRegionalVolume(parcel.Bounds, "Parcel bounds", nameof(checkpoint));
             ValidateUnit(parcel.DevelopmentSuitability, nameof(checkpoint));
             ValidateUnit(parcel.LandValue, nameof(checkpoint));
             if (parcel.BuildingId is { } parcelBuildingId
@@ -235,6 +249,7 @@ public sealed partial class SimulationWorld
             ArgumentNullException.ThrowIfNull(building);
             if (!parcelById.TryGetValue(building.ParcelId, out var parcel) || parcel.BuildingId != building.Id || !occupiedParcels.Add(building.ParcelId))
                 throw new ArgumentException("Generated building ownership is missing, duplicated, or not reciprocal.", nameof(checkpoint));
+            ValidateRegionalVolume(building.Bounds, "Generated building bounds", nameof(checkpoint));
             if (!ContainsHorizontal(parcel.Bounds, building.Bounds))
                 throw new ArgumentException("Generated building bounds must be contained by its Parcel.", nameof(checkpoint));
             if (!Enum.IsDefined(building.Use) || building.Floors <= 0 || building.Floors > 256 || building.Capacity < 0 || building.HistoricalStage < 0)
@@ -269,6 +284,14 @@ public sealed partial class SimulationWorld
         }
 
         ValidateQuality(snapshot.Quality, checkpoint);
+    }
+
+    private static void ValidateRegionalVolume(WorldVolume volume, string label, string parameterName)
+    {
+        if (!double.IsFinite(volume.MinX) || !double.IsFinite(volume.MinY) || !double.IsFinite(volume.MinZ)
+            || !double.IsFinite(volume.MaxX) || !double.IsFinite(volume.MaxY) || !double.IsFinite(volume.MaxZ)
+            || volume.MaxX <= volume.MinX || volume.MaxY <= volume.MinY || volume.MaxZ < volume.MinZ)
+            throw new ArgumentException($"{label} must be finite, ordered, and have positive horizontal area.", parameterName);
     }
 
     private static bool ContainsHorizontal(WorldVolume outer, WorldVolume inner) =>

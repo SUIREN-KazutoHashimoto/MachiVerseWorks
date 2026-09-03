@@ -15,6 +15,12 @@ public enum RegionalEvolutionEventKind : byte
     RegionalRelationFormed = 13, RegionalRelationEnded = 14
 }
 
+public static class PersistentRegionalEvolutionLimits
+{
+    public const int MaximumSettlementCount = 256;
+    public const int MaximumEventCount = 262_144;
+}
+
 public readonly record struct RegionalEvolutionEventId(ulong Value);
 public readonly record struct RegionalRelationId(ulong Value);
 
@@ -151,17 +157,20 @@ public static class PersistentRegionalEvolutionEngine
             var d = driverProvider?.Invoke(old) ?? RegionalEvolutionDrivers.Neutral;
             var balance = 0.28 * (d.JobPressure - 0.5) + 0.18 * (d.ServicePressure - 0.5) + 0.18 * (d.LogisticsPressure - 0.5)
                 + 0.24 * (d.Connectivity - 0.5) + 0.12 * (d.InfrastructureCapacity - 0.5);
-            var populationDelta = (int)Math.Round(old.Population * Math.Clamp(balance * 0.035, -0.025, 0.035));
-            var jobsDelta = (int)Math.Round(old.Jobs * Math.Clamp(balance * 0.045, -0.035, 0.045));
-            var population = Math.Max(0, old.Population + populationDelta);
-            var jobs = Math.Max(0, old.Jobs + jobsDelta);
+            var requestedPopulationDelta = (long)Math.Round(old.Population * Math.Clamp(balance * 0.035, -0.025, 0.035));
+            var requestedJobsDelta = (long)Math.Round(old.Jobs * Math.Clamp(balance * 0.045, -0.035, 0.045));
+            var population = (int)Math.Clamp((long)old.Population + requestedPopulationDelta, 0L, int.MaxValue);
+            var jobs = (int)Math.Clamp((long)old.Jobs + requestedJobsDelta, 0L, int.MaxValue);
+            var populationDelta = (long)population - old.Population;
+            var jobsDelta = (long)jobs - old.Jobs;
             var accessibility = Math.Clamp(old.Accessibility * 0.8 + d.Connectivity * 0.2, 0d, 1d);
             var service = Math.Clamp(old.ServiceIndex * 0.85 + d.ServicePressure * 0.15, 0d, 1d);
             var radius = Math.Clamp(250d + Math.Sqrt(Math.Max(1, population)) * 28d + jobs * 0.9d, 250d, 60_000d);
             var density = Density(population, radius);
             var scale = Classify(population, jobs, service, density, accessibility);
-            var trend = populationDelta > Math.Max(1, old.Population / 500) ? (old.Trend == SettlementTrend.Declining ? SettlementTrend.Recovering : SettlementTrend.Growing)
-                : populationDelta < -Math.Max(1, old.Population / 500) ? SettlementTrend.Declining : SettlementTrend.Stable;
+            var populationTrendThreshold = Math.Max(1L, old.Population / 500L);
+            var trend = populationDelta > populationTrendThreshold ? (old.Trend == SettlementTrend.Declining ? SettlementTrend.Recovering : SettlementTrend.Growing)
+                : populationDelta < -populationTrendThreshold ? SettlementTrend.Declining : SettlementTrend.Stable;
             var active = population >= 20 || jobs >= 10;
             if (!active) trend = SettlementTrend.Dormant;
             var next = old with { Population = population, Jobs = jobs, ServiceIndex = service, Accessibility = accessibility,
@@ -178,6 +187,10 @@ public static class PersistentRegionalEvolutionEngine
                     old.SettlementId,
                     null,
                     FormattableString.Invariant($"population {populationDelta:+#;-#;0}")));
+            }
+            if (jobsDelta != requestedJobsDelta && jobs == int.MaxValue)
+            {
+                // Saturation is intentional: domain values stay representable and the next year remains deterministic.
             }
             if (!active && old.IsActive) events.Add(new(new(nextEventId++), year, RegionalEvolutionEventKind.SettlementDormancy, old.SettlementId, null, "population and jobs fell below persistence threshold"));
             if (active && !old.IsActive) events.Add(new(new(nextEventId++), year, RegionalEvolutionEventKind.SettlementRecovery, old.SettlementId, null, "activity recovered"));
@@ -233,7 +246,10 @@ public static class PersistentRegionalEvolutionEngine
         var catchments = BuildServiceCatchments(settlements);
         var demands = BuildInfrastructureDemands(settlements);
         var relations = BuildRelations(settlements, year);
-        return new(year, tickCount, settlements.ToArray(), parcels.ToArray(), buildings.ToArray(), catchments, demands, relations, events.OrderBy(x => x.Id.Value).ToArray());
+        var orderedEvents = events.OrderBy(x => x.Id.Value).ToArray();
+        if (orderedEvents.Length > PersistentRegionalEvolutionLimits.MaximumEventCount)
+            orderedEvents = orderedEvents[^PersistentRegionalEvolutionLimits.MaximumEventCount..];
+        return new(year, tickCount, settlements.ToArray(), parcels.ToArray(), buildings.ToArray(), catchments, demands, relations, orderedEvents);
     }
 
     private static ServiceCatchment[] BuildServiceCatchments(IReadOnlyList<SettlementEvolutionState> settlements) =>

@@ -128,6 +128,8 @@ internal sealed class SnapshotPublishService(
     E2eMetrics metrics,
     ILogger<SnapshotPublishService> logger) : BackgroundService
 {
+    private readonly MultimodalTransitOversizeDeliveryGate _multimodalOversizeDeliveryGate = new();
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         ServerLog.SnapshotPublisherStarted(logger, options.SnapshotRate);
@@ -216,8 +218,18 @@ internal sealed class SnapshotPublishService(
                 railwayOperationsMessage = RailwayOperationsSnapshotMessagePlanner.Create(mappedRailwayOperations);
             }
             var multimodalTransitMessage = connection.NegotiatedVersion.SupportsMultimodalTransit && (publishSnapshot.MultimodalTransit.Lines.Length > 0 || publishSnapshot.MultimodalTransit.Vehicles.Length > 0)
-                ? MultimodalTransitMessageMapper.Create(publishSnapshot.MultimodalTransit, snapshot.TickCount)
+                ? connection.NegotiatedVersion.SupportsScalableMultimodalTransit
+                    ? MultimodalTransitMessageMapper.Create(publishSnapshot.MultimodalTransit, snapshot.TickCount, subscription.Volume)
+                    : MultimodalTransitMessageMapper.Create(publishSnapshot.MultimodalTransit, snapshot.TickCount)
                 : null;
+            if (connection.NegotiatedVersion.SupportsScalableMultimodalTransit
+                && !_multimodalOversizeDeliveryGate.ShouldSend(
+                    connection.Id,
+                    subscription.Revision,
+                    IsMultimodalOversize(multimodalTransitMessage)))
+            {
+                multimodalTransitMessage = null;
+            }
 
             IProtocolMessage? roadMessage = null; var roadStateHandled = false;
             if (staticPlan.SendRoadSnapshot)
@@ -255,7 +267,8 @@ internal sealed class SnapshotPublishService(
             }
             if (roadMessage is not null)
             {
-                var key = new EncodedObservationCacheKey($"road:{publishSnapshot.RoadNetwork.Revision}", connection.NegotiatedVersion, revision, volumeIdentity);
+                var roadRevision = new ObservationRevision(publishSnapshot.ObservationGeneration, publishSnapshot.RoadNetwork.Revision);
+                var key = new EncodedObservationCacheKey("road", connection.NegotiatedVersion, roadRevision, volumeIdentity, IsStatic: true);
                 var sent = await connection.SendCachedAsync(roadMessage, connection.NegotiatedVersion, key, cache, sendCancellation.Token);
                 bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs;
             }
@@ -274,7 +287,8 @@ internal sealed class SnapshotPublishService(
             }
             if (multimodalTransitMessage is not null)
             {
-                var key = new EncodedObservationCacheKey("multimodal-transit", connection.NegotiatedVersion, revision, "global");
+                var multimodalIdentity = connection.NegotiatedVersion.SupportsScalableMultimodalTransit ? volumeIdentity : "global";
+                var key = new EncodedObservationCacheKey("multimodal-transit", connection.NegotiatedVersion, revision, multimodalIdentity);
                 var sent = await connection.SendCachedAsync(multimodalTransitMessage, connection.NegotiatedVersion, key, cache, sendCancellation.Token);
                 bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs;
             }
@@ -295,8 +309,15 @@ internal sealed class SnapshotPublishService(
         catch (Exception exception) when (SnapshotDeliveryFailurePolicy.IsExpectedClientFailure(exception))
         {
             if (!cancellationToken.IsCancellationRequested) ServerLog.SnapshotDeliveryStopped(logger, connection.Id, exception);
+            _multimodalOversizeDeliveryGate.Remove(connection.Id);
             connection.Abort(); connections.Remove(connection.Id);
         }
         catch (Exception exception) { ServerLog.UnexpectedSnapshotDeliveryFailure(logger, connection.Id, exception); throw; }
     }
+
+    private static bool IsMultimodalOversize(IProtocolMessage? message) =>
+        message is ProtocolErrorMessage error
+        && error.Parameters.Any(parameter =>
+            parameter.Key == ProtocolErrorParameterKeys.DetailCode
+            && parameter.Value == MultimodalTransitMessageMapper.TooLargeDetailCode);
 }

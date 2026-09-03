@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Nodes;
 using MachiVerseWorks.Simulation;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -41,11 +42,12 @@ public sealed class WaterSewerSaveTests
     public void ExistingFormatElevenSaveWithoutWaterSewerRestoresEmptyUtilityState()
     {
         var world = new SimulationWorld(new SimulationConfig(tickRate: 1, seed: 2402));
-        var bytes = WorldSaveSerializer.Serialize(world);
-        var json = Encoding.UTF8.GetString(bytes);
-        json = json.Replace("      \"waterSewer\": null,\n", string.Empty, StringComparison.Ordinal);
+        var root = JsonNode.Parse(WorldSaveSerializer.Serialize(world))!.AsObject();
+        var economy = root["simulation"]!["economy"]!.AsObject();
+        Assert.IsTrue(economy.Remove("waterSewer"));
+        Assert.IsFalse(economy.ContainsKey("waterSewer"));
 
-        var restored = WorldSaveSerializer.Deserialize(Encoding.UTF8.GetBytes(json));
+        var restored = WorldSaveSerializer.Deserialize(Encoding.UTF8.GetBytes(root.ToJsonString()));
 
         Assert.AreEqual(0, restored.WaterNodeCount);
         Assert.AreEqual(0, restored.WaterPipeCount);

@@ -15,6 +15,7 @@ internal enum ObservationDeliveryLane
     Radio = 8,
     WorldEnvironment = 9,
     PersistentRegionalEvolution = 10,
+    RegionalGeneration = 11,
 }
 
 internal sealed class SnapshotDeliveryScheduler

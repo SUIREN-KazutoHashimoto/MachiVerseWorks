@@ -32,40 +32,54 @@ internal sealed class PopulationPublishService(
                     var inspectedIds = pending
                         .SelectMany(static item => EnumeratePersonIds(item))
                         .ToHashSet();
-                    var inspectedVehicleIds = pending
-                        .Where(static item => item.EntityInspection.Target is { EntityType: ProtocolEntityType.Vehicle })
-                        .Select(static item => item.EntityInspection.Target!.Value.EntityId)
-                        .ToHashSet();
-                    var inspectedTrainIds = pending
-                        .Where(static item => item.EntityInspection.Target is { EntityType: ProtocolEntityType.Train })
-                        .Select(static item => item.EntityInspection.Target!.Value.EntityId)
-                        .ToHashSet();
-                    var requiresRegional = pending.Any(static item => item.EntityInspection.Target is { EntityType: ProtocolEntityType.Settlement or ProtocolEntityType.Parcel or ProtocolEntityType.Building });
-
                     var snapshot = observationSource.CapturePopulationPublishSnapshot(inspectedIds);
-                    var materializedBuildingIds = pending
-                        .SelectMany(item => EnumerateMaterializedBuildingIds(item, snapshot))
-                        .ToHashSet();
-                    var generatedBuildingIds = observationSource.CaptureGeneratedBuildingIds(materializedBuildingIds);
-                    var vehicles = observationSource.CaptureVehicleSnapshots(inspectedVehicleIds);
-                    var trains = observationSource.CaptureTrainSnapshots(inspectedTrainIds);
-                    PersistentRegionalEvolutionSnapshotMessage? regional = null;
-                    if (requiresRegional && observationSource.CapturePersistentRegionalEvolutionSnapshot() is { } regionalSource)
-                        regional = PersistentRegionalEvolutionMessageMapper.ToProtocol(regionalSource.Evolution, regionalSource.Interactions);
-
                     var statistics = PopulationMessageMapper.Create(snapshot.Statistics);
+
                     foreach (var delivery in pending)
                     {
+                        EntityInspectionSnapshotMessage? entityMessage = null;
+                        if (delivery.EntityInspection.Target is { } target)
+                        {
+                            var personIds = target.EntityType == ProtocolEntityType.Person
+                                ? new HashSet<ulong> { target.EntityId }
+                                : [];
+                            var vehicleIds = target.EntityType == ProtocolEntityType.Vehicle
+                                ? new HashSet<ulong> { target.EntityId }
+                                : [];
+                            var trainIds = target.EntityType == ProtocolEntityType.Train
+                                ? new HashSet<ulong> { target.EntityId }
+                                : [];
+                            var observation = observationSource.CaptureEntityInspectionObservation(
+                                personIds,
+                                vehicleIds,
+                                trainIds,
+                                new HashSet<ulong>(),
+                                target.EntityType is ProtocolEntityType.Settlement or ProtocolEntityType.Parcel or ProtocolEntityType.Building
+                                    ? target
+                                    : null);
+                            PersistentRegionalEvolutionSnapshotMessage? regional = null;
+                            if (observation.Regional is { } regionalSource)
+                            {
+                                regional = PersistentRegionalEvolutionMessageMapper.ToProtocol(
+                                    regionalSource,
+                                    new RegionalInteractionSnapshot(regionalSource.TickCount, [], []));
+                            }
+                            entityMessage = EntityInspectionMessageMapper.Create(
+                                target,
+                                observation.Population,
+                                observation.Vehicles,
+                                observation.Trains,
+                                observation.GeneratedBuildingIds,
+                                regional);
+                        }
+
                         deliveryScheduler.StartReserved(
                             delivery.Connection.Id,
                             () => PublishConnectionAsync(
                                 delivery,
                                 snapshot,
                                 statistics,
-                                vehicles,
-                                trains,
-                                generatedBuildingIds,
-                                regional,
+                                entityMessage,
                                 stoppingToken));
                     }
                 }
@@ -112,10 +126,7 @@ internal sealed class PopulationPublishService(
         PendingPopulationDelivery delivery,
         PopulationPublishSnapshot snapshot,
         PopulationStatisticsMessage statistics,
-        IReadOnlyDictionary<ulong, VehicleSnapshot> vehicles,
-        IReadOnlyDictionary<ulong, TrainSnapshot> trains,
-        IReadOnlyDictionary<ulong, ulong> generatedBuildingIds,
-        PersistentRegionalEvolutionSnapshotMessage? regional,
+        EntityInspectionSnapshotMessage? entityMessage,
         CancellationToken cancellationToken)
     {
         var connection = delivery.Connection;
@@ -146,16 +157,10 @@ internal sealed class PopulationPublishService(
                     sendCancellation.Token);
             }
 
-            if (delivery.EntityInspection.Target is { } target
+            if (entityMessage is not null
+                && delivery.EntityInspection.Target is not null
                 && inspections.IsCurrent(connection.Id, delivery.EntityInspection))
             {
-                var entityMessage = EntityInspectionMessageMapper.Create(
-                    target,
-                    snapshot,
-                    vehicles,
-                    trains,
-                    generatedBuildingIds,
-                    regional);
                 _ = await connection.SendIfEntityInspectionCurrentAsync(
                     entityMessage,
                     connection.NegotiatedVersion,
@@ -175,21 +180,5 @@ internal sealed class PopulationPublishService(
     {
         if (delivery.Inspection.PersonId is { } legacyId) yield return legacyId;
         if (delivery.EntityInspection.Target is { EntityType: ProtocolEntityType.Person } target) yield return target.EntityId;
-    }
-
-    private static IEnumerable<ulong> EnumerateMaterializedBuildingIds(
-        PendingPopulationDelivery delivery,
-        PopulationPublishSnapshot snapshot)
-    {
-        if (delivery.EntityInspection.Target is not { EntityType: ProtocolEntityType.Person } target
-            || !snapshot.InspectedPersons.TryGetValue(target.EntityId, out var person))
-        {
-            yield break;
-        }
-
-        var debug = PopulationMessageMapper.Create(person);
-        if (debug.ResidenceBuildingId != 0) yield return debug.ResidenceBuildingId;
-        if (debug.CurrentBuildingId != 0) yield return debug.CurrentBuildingId;
-        if (debug.DestinationBuildingId != 0) yield return debug.DestinationBuildingId;
     }
 }

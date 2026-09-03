@@ -14,6 +14,7 @@ import { decodeOpticalFrame, isOpticalFrame, type OpticalProtocolMessage } from 
 import { decodeRadioFrame, isRadioFrame, type RadioProtocolMessage } from './radio-protocol.ts';
 import { decodePersistentRegionalEvolutionFrame, isPersistentRegionalEvolutionFrame, type PersistentRegionalEvolutionSnapshotMessage } from './persistent-regional-evolution-protocol.ts';
 import { decodeRegionalGenerationFrame, isRegionalGenerationFrame, type RegionalGenerationSnapshotMessage } from './regional-generation-protocol.ts';
+import { decodeRegionalGenerationChunkFrame, isRegionalGenerationChunkFrame, RegionalGenerationChunkAssembler } from './regional-generation-chunk-protocol.ts';
 import { decodeWorldEnvironmentFrame, isWorldEnvironmentFrame, type WorldEnvironmentSnapshotMessage } from './world-environment-protocol.ts';
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'handshaking' | 'connected' | 'reconnecting';
@@ -31,19 +32,20 @@ export interface ReconnectOptions { readonly minimumDelayMs: number; readonly ma
 
 export class MachiVerseConnection {
   private socket: WebSocket | null = null; private state: ConnectionState = 'disconnected'; private reconnectTimer: number | null = null; private reconnectAttempt = 0; private shouldReconnect = false; private negotiatedVersion: ProtocolVersion | null = null; private desiredSubscription: WorldVolume | null = null; private desiredPersonId: bigint | null = null;
+  private readonly regionalGenerationChunks = new RegionalGenerationChunkAssembler();
   public constructor(private readonly serverUrl: string, private readonly reconnectOptions: ReconnectOptions, private readonly callbacks: ConnectionCallbacks) {}
   public connect(): void { this.shouldReconnect = true; this.cancelReconnect(); this.openSocket(false); }
-  public disconnect(): void { this.shouldReconnect = false; this.cancelReconnect(); const socket = this.socket; this.socket = null; this.negotiatedVersion = null; if (socket !== null && socket.readyState < WebSocket.CLOSING) socket.close(1000, 'Client shutdown'); this.setState('disconnected'); }
+  public disconnect(): void { this.shouldReconnect = false; this.cancelReconnect(); const socket = this.socket; this.socket = null; this.negotiatedVersion = null; this.regionalGenerationChunks.reset(); if (socket !== null && socket.readyState < WebSocket.CLOSING) socket.close(1000, 'Client shutdown'); this.setState('disconnected'); }
   public setSubscription(volume: WorldVolume): void { this.desiredSubscription = { ...volume }; this.sendDesiredSubscription(); }
   public inspectPerson(personId: bigint): void { if (personId <= 0n) throw new RangeError('Person ID must be greater than zero.'); this.desiredPersonId = personId; this.sendDesiredInspection(); }
   public clearPersonInspection(): void { this.desiredPersonId = null; const socket = this.socket; const version = this.negotiatedVersion; if (this.state !== 'connected' || socket === null || socket.readyState !== WebSocket.OPEN || version === null || version.major !== 2 || version.minor < 9) return; socket.send(encodeClearPersonInspection(version)); }
 
   private openSocket(isReconnect: boolean): void {
-    const currentSocket = this.socket; if (currentSocket !== null && currentSocket.readyState < WebSocket.CLOSING) currentSocket.close(1000, 'Connection replaced'); this.setState(isReconnect ? 'reconnecting' : 'connecting'); const socket = new WebSocket(this.serverUrl); socket.binaryType = 'arraybuffer'; this.socket = socket;
+    const currentSocket = this.socket; if (currentSocket !== null && currentSocket.readyState < WebSocket.CLOSING) currentSocket.close(1000, 'Connection replaced'); this.regionalGenerationChunks.reset(); this.setState(isReconnect ? 'reconnecting' : 'connecting'); const socket = new WebSocket(this.serverUrl); socket.binaryType = 'arraybuffer'; this.socket = socket;
     socket.addEventListener('open', () => { if (this.socket !== socket) return; this.setState('handshaking'); socket.send(encodeHello(WEB_CURRENT_PROTOCOL_VERSION)); });
     socket.addEventListener('message', (event) => { void this.handleMessage(socket, event.data); });
     socket.addEventListener('error', () => { if (this.socket === socket) this.callbacks.onClientError(new Error('WebSocket transport error.')); });
-    socket.addEventListener('close', () => { if (this.socket !== socket) return; this.socket = null; this.negotiatedVersion = null; this.callbacks.onDisconnected(); if (this.shouldReconnect) this.scheduleReconnect(); else this.setState('disconnected'); });
+    socket.addEventListener('close', () => { if (this.socket !== socket) return; this.socket = null; this.negotiatedVersion = null; this.regionalGenerationChunks.reset(); this.callbacks.onDisconnected(); if (this.shouldReconnect) this.scheduleReconnect(); else this.setState('disconnected'); });
   }
 
   private async handleMessage(socket: WebSocket, data: unknown): Promise<void> {
@@ -55,6 +57,17 @@ export class MachiVerseConnection {
         if (envelope.message.type === MessageType.Error) { this.callbacks.onProtocolError(envelope.message); return; }
         if (envelope.message.type !== MessageType.HelloAck) throw new ProtocolDecodeFailure('Expected HelloAck as the first server message.');
         const negotiatedVersion = resolveNegotiatedProtocolVersion(envelope.version, envelope.message.protocolVersion); this.negotiatedVersion = negotiatedVersion; this.reconnectAttempt = 0; this.setState('connected'); this.callbacks.onHelloAck(negotiatedVersion, envelope.message.tickRate); this.sendDesiredSubscription(); this.sendDesiredInspection(); return;
+      }
+
+      if (isRegionalGenerationChunkFrame(buffer)) {
+        const envelope = decodeRegionalGenerationChunkFrame(buffer);
+        if (onFrameDecoded !== undefined) onFrameDecoded({ frameBytes: buffer.byteLength, decodeTimeMs: Math.max(0, performance.now() - decodeStartedAt) });
+        if (this.state !== 'connected') return;
+        const negotiatedVersion = this.negotiatedVersion;
+        if (negotiatedVersion === null || !protocolVersionsEqual(envelope.version, negotiatedVersion)) throw new ProtocolDecodeFailure('Server frame version changed after protocol negotiation.');
+        const snapshot = this.regionalGenerationChunks.apply(envelope);
+        if (snapshot !== null) this.callbacks.onMessage(snapshot);
+        return;
       }
 
       const persistentRegionalEvolutionFrame = isPersistentRegionalEvolutionFrame(buffer);

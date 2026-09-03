@@ -74,8 +74,9 @@ public static class RegionalGenerationProtocolCodec
         }
     }
 
-    private static void Validate(RegionalGenerationSnapshotMessage message)
+    public static void Validate(RegionalGenerationSnapshotMessage message)
     {
+        ArgumentNullException.ThrowIfNull(message);
         if (!IsValid(message))
             throw new ArgumentOutOfRangeException(nameof(message), "Regional generation snapshot contains invalid values or references.");
     }
