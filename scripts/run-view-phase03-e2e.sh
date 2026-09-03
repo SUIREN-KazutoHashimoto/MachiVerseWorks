@@ -3,11 +3,12 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACT_DIR="$ROOT_DIR/.artifacts/view-phase03-e2e"
+GOLDEN_FILE="$ROOT_DIR/src/web/tests/visual/golden/view-physical-world.png"
 WEB_PORT=5187
 SERVER_PORT=5094
 WEB_PID=""
 SERVER_PID=""
-mkdir -p "$ARTIFACT_DIR"; rm -f "$ARTIFACT_DIR"/*
+mkdir -p "$ARTIFACT_DIR"; rm -rf "$ARTIFACT_DIR"/*
 
 cleanup() {
   if [[ -n "$SERVER_PID" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then kill "$SERVER_PID" 2>/dev/null || true; wait "$SERVER_PID" 2>/dev/null || true; fi
@@ -53,6 +54,9 @@ URL="http://127.0.0.1:$WEB_PORT/tests/browser/view-phase03-e2e.html?server=ws%3A
 node "$ROOT_DIR/scripts/run-headless-browser-e2e.mjs" "$CHROME" "$URL" "$ARTIFACT_DIR/browser.html" "$ARTIFACT_DIR/chrome.log"
 grep -Fq 'data-status="passed"' "$ARTIFACT_DIR/browser.html" || { cat "$ARTIFACT_DIR/browser.html" >&2; cat "$ARTIFACT_DIR/server.log" >&2; exit 1; }
 
+node "$ROOT_DIR/scripts/run-headless-visual-e2e.mjs" "$CHROME" "$URL" "$ARTIFACT_DIR" "view-physical-world"
+bash "$ROOT_DIR/scripts/check-visual-regression.sh" "$ROOT_DIR" "$ARTIFACT_DIR" "view-physical-world" "$GOLDEN_FILE"
+
 extract_metric() {
   local name="$1"
   grep -o "data-${name}=\"[^\"]*\"" "$ARTIFACT_DIR/browser.html" | head -n 1 | cut -d'"' -f2
@@ -71,4 +75,4 @@ extract_metric() {
 } | tee "$ARTIFACT_DIR/rendering-baseline.txt"
 
 cat "$ARTIFACT_DIR/browser.html"
-echo "View Phase 3 Physical World Rendering E2E passed."
+echo "View Phase 3 Physical World Rendering E2E + visual regression passed."
