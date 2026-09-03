@@ -23,8 +23,8 @@ public sealed partial class SimulationWorld
         _roads = new RoadNetworkStore(Config.SpatialCellSize);
         _railway = new RailwayInfrastructureStore();
         _powerDispatchSolver = powerDispatchSolver ?? new CapacityPowerDispatchSolver();
-        _waterSupplySolver = waterSupplySolver ?? new CapacityWaterSupplySolver();
-        _sewerSolver = sewerSolver ?? new CapacitySewerSolver();
+        _waterSupplySolver = new ValidatingWaterSupplySolver(waterSupplySolver ?? new CapacityWaterSupplySolver());
+        _sewerSolver = new ValidatingSewerSolver(sewerSolver ?? new CapacitySewerSolver());
         _gasSupplySolver = new ValidatingGasSupplySolver(gasSupplySolver ?? new CapacityGasSupplySolver());
         _opticalRoutingSolver = opticalRoutingSolver ?? new CapacityOpticalRoutingSolver();
         _radioPropagationSolver = radioPropagationSolver ?? new DeterministicRadioPropagationSolver();
@@ -70,7 +70,7 @@ public sealed partial class SimulationWorld
         _agents.Step(Config.TickDurationSeconds, _spatialIndex);
         CapturePowerProductionBaselines();
         StepPower(nextTime);
-        StepWaterSewer(nextTime);
+        StepWaterSewerTransactional(nextTime);
         StepGas(nextTime);
         StepOptical(nextTime);
         StepRadio(nextTime);
