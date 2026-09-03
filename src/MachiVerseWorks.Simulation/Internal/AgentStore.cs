@@ -139,7 +139,7 @@ internal sealed class AgentStore
         ArgumentNullException.ThrowIfNull(agents);
         ArgumentNullException.ThrowIfNull(spatialIndex);
         if (_states.Count != 0 || _indexById.Count != 0 || ActiveCount != 0 || _totalCreatedCount != 0) throw new InvalidOperationException("Agent store must be empty before restore.");
-        if (totalCreatedCount < 0) throw new ArgumentOutOfRangeException(nameof(totalCreatedCount));
+        ArgumentOutOfRangeException.ThrowIfNegative(totalCreatedCount);
         for (var index = 0; index < agents.Count; index++)
         {
             var checkpoint = agents[index];
