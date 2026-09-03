@@ -213,9 +213,18 @@ public sealed partial class SimulationWorld
 
     private void ProcessEconomicCycle()
     {
-        ProduceGoods();
-        PayWages();
-        ProcessHouseholdConsumption();
+        var checkpoint = CreateEconomyCheckpoint();
+        try
+        {
+            ProduceGoods();
+            PayWages();
+            ProcessHouseholdConsumption();
+        }
+        catch
+        {
+            RestoreEconomy(checkpoint);
+            throw;
+        }
     }
 
     private void ProduceGoods()
@@ -233,7 +242,10 @@ public sealed partial class SimulationWorld
                 filledWorkers = checked(filledWorkers + GetFilledWorkerCount(job.Id));
             }
             var utilization = requiredWorkers == 0 ? 0d : Math.Min(1d, (double)filledWorkers / requiredWorkers);
-            company.ProducedUnits += company.DailyProductionCapacity * utilization;
+            var producedUnits = company.ProducedUnits + (company.DailyProductionCapacity * utilization);
+            if (!double.IsFinite(producedUnits) || producedUnits < 0d)
+                throw new OverflowException($"Company {company.Id.Value} production would exceed the finite numeric range.");
+            company.ProducedUnits = producedUnits;
         }
     }
 
@@ -516,9 +528,11 @@ public sealed partial class SimulationWorld
         public double ProducedUnits { get; set; }
     }
 
-    private sealed class EconomyEstablishmentState(EstablishmentId id, CompanyId companyId, BuildingId? buildingId, PoiId? poiId)
+    private sealed class EconomyEstablishmentState(CompanyId companyId, BuildingId? buildingId, PoiId? poiId)
     {
-        public EstablishmentId Id { get; } = id;
+        public EconomyEstablishmentState(EstablishmentId id, CompanyId companyId, BuildingId? buildingId, PoiId? poiId)
+            : this(companyId, buildingId, poiId) => Id = id;
+        public EstablishmentId Id { get; }
         public CompanyId CompanyId { get; } = companyId;
         public BuildingId? BuildingId { get; } = buildingId;
         public PoiId? PoiId { get; } = poiId;
