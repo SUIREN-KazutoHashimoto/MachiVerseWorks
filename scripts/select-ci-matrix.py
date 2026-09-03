@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Select E2E and benchmark CI cases from the changed file set.
 
-The selector intentionally falls back to the full suite whenever a change is
-cross-cutting or cannot be mapped confidently. This keeps CI optimization from
-weakening regression coverage for shared infrastructure changes.
+E2E falls back to the full suite for cross-cutting or unknown changes.
+PR benchmarks stay focused on affected code domains, while shared runtime or
+build changes fall back to the full benchmark suite. Workflow-only changes are
+validated by the benchmark smoke job instead of unrelated performance gates.
 """
 
 from __future__ import annotations
@@ -59,19 +60,33 @@ SCENARIO_CASES = [
     {"id": "population", "name": "population-1k-10k-100k", "args": "--population --warmup 10 --ticks 50"},
 ]
 
-CROSS_CUTTING_PREFIXES = (
+E2E_CROSS_CUTTING_PREFIXES = (
     "src/MachiVerseWorks.Persistence/",
     "src/MachiVerseWorks.Protocol/",
     "src/MachiVerseWorks.Server/",
 )
 
-CROSS_CUTTING_FILES = {
+E2E_CROSS_CUTTING_FILES = {
     "Directory.Build.props",
     "Directory.Packages.props",
     "MachiVerseWorks.slnx",
     "global.json",
     "scripts/prepare-e2e.sh",
     "scripts/select-ci-matrix.py",
+}
+
+BENCHMARK_CROSS_CUTTING_PREFIXES = (
+    "src/MachiVerseWorks.Persistence/",
+    "src/MachiVerseWorks.Protocol/",
+    "src/MachiVerseWorks.Server/",
+)
+
+BENCHMARK_CROSS_CUTTING_FILES = {
+    "Directory.Build.props",
+    "Directory.Packages.props",
+    "MachiVerseWorks.slnx",
+    "global.json",
+    "scripts/compare-benchmark-results.py",
 }
 
 
@@ -86,17 +101,20 @@ def changed_files(base: str | None, head: str | None, full: bool) -> list[str]:
     return [line.strip() for line in output.splitlines() if line.strip()]
 
 
-def is_cross_cutting(files: list[str]) -> bool:
+def is_e2e_cross_cutting(files: list[str]) -> bool:
     for path in files:
-        if path in CROSS_CUTTING_FILES or path.startswith(CROSS_CUTTING_PREFIXES):
+        if path in E2E_CROSS_CUTTING_FILES or path.startswith(E2E_CROSS_CUTTING_PREFIXES):
             return True
-        if path.startswith(".github/workflows/") and path in {
-            ".github/workflows/ci.yml",
-            ".github/workflows/e2e.yml",
-            ".github/workflows/benchmarks.yml",
-        }:
+        if path in {".github/workflows/ci.yml", ".github/workflows/e2e.yml"}:
             return True
     return False
+
+
+def is_benchmark_cross_cutting(files: list[str]) -> bool:
+    return any(
+        path in BENCHMARK_CROSS_CUTTING_FILES or path.startswith(BENCHMARK_CROSS_CUTTING_PREFIXES)
+        for path in files
+    )
 
 
 def contains_any(path: str, terms: tuple[str, ...]) -> bool:
@@ -104,8 +122,20 @@ def contains_any(path: str, terms: tuple[str, ...]) -> bool:
     return any(term in value for term in terms)
 
 
+def full_benchmark_selection(reason: str = "full") -> dict[str, object]:
+    return {
+        "benchmarkdotnet": {"include": BENCHMARKDOTNET_CASES},
+        "scenario": {"include": SCENARIO_CASES},
+        "run_benchmarkdotnet": True,
+        "run_scenario": True,
+        "run_snapshot_readmodel": True,
+        "run_regression": True,
+        "reason": reason,
+    }
+
+
 def select_e2e(files: list[str], full: bool) -> dict[str, object]:
-    if full or is_cross_cutting(files):
+    if full or is_e2e_cross_cutting(files):
         return {"matrix": {"include": E2E_CASES}, "reason": "full"}
 
     selected: set[str] = set()
@@ -173,16 +203,10 @@ def select_e2e(files: list[str], full: bool) -> dict[str, object]:
 
 
 def select_benchmarks(files: list[str], full: bool) -> dict[str, object]:
-    if full or is_cross_cutting(files):
-        return {
-            "benchmarkdotnet": {"include": BENCHMARKDOTNET_CASES},
-            "scenario": {"include": SCENARIO_CASES},
-            "run_benchmarkdotnet": True,
-            "run_scenario": True,
-            "run_snapshot_readmodel": True,
-            "run_regression": True,
-            "reason": "full",
-        }
+    if full:
+        return full_benchmark_selection()
+    if is_benchmark_cross_cutting(files):
+        return full_benchmark_selection("shared-full")
 
     benchmark_ids: set[str] = set()
     scenario_ids: set[str] = set()
@@ -191,8 +215,6 @@ def select_benchmarks(files: list[str], full: bool) -> dict[str, object]:
     uncertain = False
 
     for path in files:
-        lower = path.lower()
-
         if path.startswith("src/web/"):
             continue
 
@@ -214,8 +236,6 @@ def select_benchmarks(files: list[str], full: bool) -> dict[str, object]:
             }
             if name in direct:
                 benchmark_ids.update(direct[name])
-            elif name in {"program.cs", "machiverseworks.benchmarks.csproj"}:
-                uncertain = True
             else:
                 uncertain = True
             continue
@@ -252,7 +272,7 @@ def select_benchmarks(files: list[str], full: bool) -> dict[str, object]:
                 uncertain = True
             continue
 
-        if path in {"scripts/run-phase9-regression-benchmark.sh", "scripts/compare-benchmark-results.py"}:
+        if path == "scripts/run-phase9-regression-benchmark.sh":
             regression = True
             continue
 
@@ -260,7 +280,7 @@ def select_benchmarks(files: list[str], full: bool) -> dict[str, object]:
             uncertain = True
 
     if uncertain:
-        return select_benchmarks([], True)
+        return full_benchmark_selection("fallback-full")
 
     benchmark_cases = [case for case in BENCHMARKDOTNET_CASES if case["id"] in benchmark_ids]
     scenario_cases = [case for case in SCENARIO_CASES if case["id"] in scenario_ids]
@@ -271,7 +291,7 @@ def select_benchmarks(files: list[str], full: bool) -> dict[str, object]:
         "run_scenario": bool(scenario_cases),
         "run_snapshot_readmodel": snapshot,
         "run_regression": regression,
-        "reason": "affected",
+        "reason": "affected" if benchmark_cases or scenario_cases or snapshot or regression else "smoke-only",
     }
 
 
