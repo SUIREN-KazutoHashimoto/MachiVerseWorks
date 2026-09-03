@@ -60,6 +60,12 @@ try {
   await devToolsSocket.command('Page.enable');
   await devToolsSocket.command('Runtime.enable');
 
+  const browserVersion = await devToolsSocket.command('Browser.getVersion');
+  const expectedBrowserVersion = process.env.MVW_VISUAL_BROWSER_VERSION;
+  if (expectedBrowserVersion && !browserVersion.product?.endsWith(`/${expectedBrowserVersion}`)) {
+    throw new Error(`Visual browser version mismatch: expected ${expectedBrowserVersion}, actual ${browserVersion.product ?? 'unknown'}.`);
+  }
+
   const deadline = Date.now() + timeoutMs;
   let status = 'running';
   while (status === 'running') {
@@ -101,6 +107,8 @@ try {
       location: location.href,
     };
   })()`);
+  diagnostics.browser = browserVersion;
+  diagnostics.expectedBrowserVersion = expectedBrowserVersion ?? null;
   await writeFile(diagnosticsPath, `${JSON.stringify(diagnostics, null, 2)}\n`, 'utf8');
 
   if (status === 'passed') {
