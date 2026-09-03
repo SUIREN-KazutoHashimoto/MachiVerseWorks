@@ -41,7 +41,7 @@ type RuntimeVisualWindow = Window & {
 export function installRuntimeVisualTest(application: Application): void {
   const api: RuntimeVisualTestApi = Object.freeze({
     getDiagnostics: () => collectRuntimeObservation(application).diagnostics,
-    setCheckpoint: (checkpoint) => positionCheckpoint(application, checkpoint),
+    setCheckpoint: (checkpoint: RuntimeVisualCheckpoint) => positionCheckpoint(application, checkpoint),
   });
   (window as RuntimeVisualWindow).__MACHIVERSE_RUNTIME_VISUAL_TEST__ = api;
 }
