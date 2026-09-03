@@ -23,16 +23,21 @@ public sealed class RadioObservationPurityTests
             FadeMarginDb: 6d);
         var link = world.CreateRadioLink(source, destination, block, budget, utilization: 0.5d);
 
+        Assert.AreEqual(0, solver.SolveCount, "Radio mutation should defer the derived-plan refresh until Step.");
+        world.Step();
         Assert.IsTrue(world.TryGetRadioLinkSnapshot(link, out var before));
         var solveCountBeforeObservation = solver.SolveCount;
         Assert.IsTrue(solveCountBeforeObservation > 0);
 
+        _ = world.CreateRadioSnapshot();
         _ = world.CreateRadioSnapshot();
 
         Assert.AreEqual(solveCountBeforeObservation, solver.SolveCount);
         Assert.IsTrue(world.TryGetRadioLinkSnapshot(link, out var after));
         Assert.AreEqual(before, after);
 
+        world.SetRadioLinkUtilization(link, 0.75d);
+        Assert.AreEqual(solveCountBeforeObservation, solver.SolveCount, "Radio mutation should only mark the plan dirty.");
         world.Step();
 
         Assert.IsTrue(solver.SolveCount > solveCountBeforeObservation);
