@@ -84,9 +84,16 @@ export class MachiVerseConnection {
 
   private sendDesiredSubscription(): void { const socket = this.socket; const version = this.negotiatedVersion; const volume = this.desiredSubscription; if (this.state !== 'connected' || socket === null || socket.readyState !== WebSocket.OPEN || version === null || volume === null) return; socket.send(encodeSubscribeVolume(volume, version)); }
   private sendDesiredInspection(): void { const socket = this.socket; const version = this.negotiatedVersion; const personId = this.desiredPersonId; if (this.state !== 'connected' || socket === null || socket.readyState !== WebSocket.OPEN || version === null || version.major !== 2 || version.minor < 5 || personId === null) return; socket.send(encodeInspectPerson(personId, version)); }
-  private scheduleReconnect(): void { if (this.reconnectTimer !== null) return; const delay = Math.min(this.reconnectOptions.maximumDelayMs, this.reconnectOptions.minimumDelayMs * (2 ** this.reconnectAttempt)); this.reconnectAttempt += 1; this.setState('reconnecting'); this.reconnectTimer = window.setTimeout(() => { this.reconnectTimer = null; if (this.shouldReconnect) this.openSocket(true); }, delay); }
+  private scheduleReconnect(): void { if (this.reconnectTimer !== null) return; const delay = computeReconnectDelay(this.reconnectAttempt, this.reconnectOptions.minimumDelayMs, this.reconnectOptions.maximumDelayMs); this.reconnectAttempt += 1; this.setState('reconnecting'); this.reconnectTimer = window.setTimeout(() => { this.reconnectTimer = null; if (this.shouldReconnect) this.openSocket(true); }, delay); }
   private cancelReconnect(): void { if (this.reconnectTimer === null) return; window.clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
   private setState(state: ConnectionState): void { if (this.state === state) return; this.state = state; this.callbacks.onStateChanged(state); }
+}
+
+export function computeReconnectDelay(attempt: number, minimumDelayMs: number, maximumDelayMs: number, random: () => number = Math.random): number {
+  const cappedDelay = Math.min(maximumDelayMs, minimumDelayMs * (2 ** Math.max(0, attempt)));
+  const halfDelay = cappedDelay / 2;
+  const sample = Math.min(1, Math.max(0, random()));
+  return halfDelay + (sample * halfDelay);
 }
 
 export function resolveNegotiatedProtocolVersion(frameVersion: ProtocolVersion, acknowledgedVersion: ProtocolVersion, supportedVersion: ProtocolVersion = WEB_CURRENT_PROTOCOL_VERSION): ProtocolVersion { if (!protocolVersionsEqual(frameVersion, acknowledgedVersion)) throw new ProtocolDecodeFailure('HelloAck frame version and payload version do not match.'); if (frameVersion.major !== supportedVersion.major || frameVersion.minor > supportedVersion.minor) throw new ProtocolDecodeFailure('Server selected an unsupported protocol version.'); return Object.freeze({ ...frameVersion }); }
