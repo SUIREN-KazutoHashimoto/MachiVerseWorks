@@ -101,10 +101,9 @@ internal sealed class WebSocketSessionHandler(ClientConnectionRegistry connectio
 
         if (!connection.TryConsumeRequest(options.RequestRateLimitPerSecond, options.RequestRateLimitBurst))
         {
-            await SendErrorAsync(connection, ProtocolErrorCode.InvalidRequest,
+            return await RejectRecoverableAsync(connection,
                 [new ProtocolErrorParameter(ProtocolErrorParameterKeys.DetailCode, "rateLimited")],
-                connection.NegotiatedVersion, cancellationToken);
-            return true;
+                cancellationToken);
         }
 
         if (envelope.Message is not IObservationRequestMessage)
