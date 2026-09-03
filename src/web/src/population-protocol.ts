@@ -7,6 +7,8 @@ import {
 } from './protocol.ts';
 
 const POPULATION_STATISTICS_LENGTH = 56;
+const POPULATION_STATISTICS_WITH_TRANSIT_LENGTH = 60;
+const POPULATION_TRANSIT_COUNT_MINOR = 21;
 const PERSON_DEBUG_LENGTH = 100;
 const NULL_ENUM = 0xff;
 
@@ -29,6 +31,7 @@ export interface PopulationStatisticsMessage {
   readonly atActivityCount: number;
   readonly walkingCount: number;
   readonly drivingCount: number;
+  readonly transitCount: number;
   readonly homeCount: number;
   readonly workCount: number;
   readonly educationCount: number;
@@ -86,13 +89,22 @@ export function decodePopulationFrame(frame: ArrayBuffer): PopulationProtocolEnv
   if (version.major !== 2 || version.minor < 5) throw new ProtocolDecodeFailure('Population frames require Protocol 2.5 or newer.');
   const type = view.getUint16(8, true) as PopulationMessageType;
   const offset = PROTOCOL_HEADER_SIZE;
-  if (type === PopulationMessageType.PopulationStatistics) return { version, message: decodeStatistics(view, offset, payloadLength) };
+  if (type === PopulationMessageType.PopulationStatistics) return { version, message: decodeStatistics(view, offset, payloadLength, version) };
   if (type === PopulationMessageType.PersonDebug) return { version, message: decodePerson(view, offset, payloadLength) };
   throw new ProtocolDecodeFailure(`Unknown population message type: ${String(type)}.`);
 }
 
-function decodeStatistics(view: DataView, offset: number, payloadLength: number): PopulationStatisticsMessage {
-  assertPayloadLength(payloadLength, POPULATION_STATISTICS_LENGTH);
+function decodeStatistics(
+  view: DataView,
+  offset: number,
+  payloadLength: number,
+  version: ProtocolVersion,
+): PopulationStatisticsMessage {
+  const supportsTransitCount = version.major === 2 && version.minor >= POPULATION_TRANSIT_COUNT_MINOR;
+  assertPayloadLength(
+    payloadLength,
+    supportsTransitCount ? POPULATION_STATISTICS_WITH_TRANSIT_LENGTH : POPULATION_STATISTICS_LENGTH,
+  );
   return {
     type: PopulationMessageType.PopulationStatistics,
     householdCount: view.getUint32(offset, true),
@@ -100,6 +112,7 @@ function decodeStatistics(view: DataView, offset: number, payloadLength: number)
     atActivityCount: view.getUint32(offset + 8, true),
     walkingCount: view.getUint32(offset + 12, true),
     drivingCount: view.getUint32(offset + 16, true),
+    transitCount: supportsTransitCount ? view.getUint32(offset + 56, true) : 0,
     homeCount: view.getUint32(offset + 20, true),
     workCount: view.getUint32(offset + 24, true),
     educationCount: view.getUint32(offset + 28, true),

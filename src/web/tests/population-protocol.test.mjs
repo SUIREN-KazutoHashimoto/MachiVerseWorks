@@ -12,12 +12,12 @@ import {
   isPopulationFrame,
 } from '../src/population-protocol.ts';
 
-function createPopulationFrame(type, payloadLength) {
+function createPopulationFrame(type, payloadLength, minor = 5) {
   const frame = new ArrayBuffer(PROTOCOL_HEADER_SIZE + payloadLength);
   const view = new DataView(frame);
   view.setUint32(0, PROTOCOL_MAGIC, true);
   view.setUint16(4, 2, true);
-  view.setUint16(6, 5, true);
+  view.setUint16(6, minor, true);
   view.setUint16(8, type, true);
   view.setUint16(10, 0, true);
   view.setUint32(12, payloadLength, true);
@@ -33,7 +33,7 @@ test('InspectPerson encodes Protocol 2.5 request and rejects zero ID', () => {
   assert.throws(() => encodeInspectPerson(0n, WEB_POPULATION_PROTOCOL_VERSION), /greater than zero/);
 });
 
-test('PopulationStatistics decodes counts and tick', () => {
+test('PopulationStatistics decodes legacy counts and tick', () => {
   const { frame, view } = createPopulationFrame(PopulationMessageType.PopulationStatistics, 56);
   const offset = PROTOCOL_HEADER_SIZE;
   const counts = [25, 100, 70, 20, 10, 40, 30, 5, 8, 2, 10, 5];
@@ -48,6 +48,7 @@ test('PopulationStatistics decodes counts and tick', () => {
     atActivityCount: 70,
     walkingCount: 20,
     drivingCount: 10,
+    transitCount: 0,
     homeCount: 40,
     workCount: 30,
     educationCount: 5,
@@ -57,6 +58,25 @@ test('PopulationStatistics decodes counts and tick', () => {
     errandCount: 5,
     tickCount: 1234n,
   });
+});
+
+test('PopulationStatistics Protocol 2.21 decodes TransitCount', () => {
+  const { frame, view } = createPopulationFrame(PopulationMessageType.PopulationStatistics, 60, 21);
+  const offset = PROTOCOL_HEADER_SIZE;
+  view.setUint32(offset, 25, true);
+  view.setUint32(offset + 4, 100, true);
+  view.setUint32(offset + 16, 10, true);
+  view.setBigUint64(offset + 48, 1234n, true);
+  view.setUint32(offset + 56, 7, true);
+
+  const decoded = decodePopulationFrame(frame).message;
+  assert.equal(decoded.type, PopulationMessageType.PopulationStatistics);
+  assert.equal(decoded.drivingCount, 10);
+  assert.equal(decoded.transitCount, 7);
+  assert.equal(decoded.tickCount, 1234n);
+
+  const wrongLength = createPopulationFrame(PopulationMessageType.PopulationStatistics, 56, 21).frame;
+  assert.throws(() => decodePopulationFrame(wrongLength), /payload length/i);
 });
 
 test('PersonDebug decodes destination and active walking trip state', () => {

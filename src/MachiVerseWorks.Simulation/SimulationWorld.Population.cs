@@ -87,6 +87,7 @@ public sealed partial class SimulationWorld
         var atActivity = 0;
         var walking = 0;
         var driving = 0;
+        var transit = 0;
         var activityCounts = new int[7];
         for (var index = 0; index < _population.PersonCount; index++)
         {
@@ -96,6 +97,7 @@ public sealed partial class SimulationWorld
                 case PersonTravelState.AtActivity: atActivity++; break;
                 case PersonTravelState.Walking: walking++; break;
                 case PersonTravelState.Driving: driving++; break;
+                case PersonTravelState.Transit: transit++; break;
             }
             activityCounts[(int)person.CurrentActivity]++;
         }
@@ -112,7 +114,8 @@ public sealed partial class SimulationWorld
             activityCounts[(int)ActivityKind.Healthcare],
             activityCounts[(int)ActivityKind.Recreation],
             activityCounts[(int)ActivityKind.Errand],
-            Time.TickCount);
+            Time.TickCount,
+            transit);
     }
 
     private void PlanPopulationTrips(SimulationTime nextTime)

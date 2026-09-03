@@ -93,6 +93,8 @@ public sealed partial class SimulationWorld
 
     public bool RemoveLane(LaneId id)
     {
+        if (_multimodalTransit.ContainsLaneReference(id))
+            throw new InvalidOperationException($"Lane {id.Value} cannot be removed while a Multimodal Transit stop references it.");
         EnsureRoadTopologyMutable();
         var removed = _roads.RemoveLane(id);
         if (removed) InvalidateRouting();
@@ -133,6 +135,8 @@ public sealed partial class SimulationWorld
         ValidateAccessReferences(buildingId, poiId);
         if (_railway.ContainsRoadAccessPointReference(id) && (mode & RoadAccessMode.Foot) == 0)
             throw new InvalidOperationException($"Road access point {id.Value} must remain walkable while a Platform access point references it.");
+        if (ContainsLogisticsRoadAccessPointReference(id))
+            throw new InvalidOperationException($"Road access point {id.Value} cannot be updated while Logistics inventory or shipment state references it.");
         InvalidatePedestrianNetwork();
         return _roads.UpdateAccessPoint(id, segmentId, segmentOffset, buildingId, poiId, mode);
     }
@@ -141,6 +145,8 @@ public sealed partial class SimulationWorld
     {
         if (_railway.ContainsRoadAccessPointReference(id))
             throw new InvalidOperationException($"Road access point {id.Value} cannot be removed while a Platform access point references it.");
+        if (ContainsLogisticsRoadAccessPointReference(id))
+            throw new InvalidOperationException($"Road access point {id.Value} cannot be removed while Logistics inventory or shipment state references it.");
         InvalidatePedestrianNetwork();
         return _roads.RemoveAccessPoint(id);
     }
@@ -221,12 +227,26 @@ public sealed partial class SimulationWorld
 
         var lanes = new Dictionary<LaneId, SimulationLaneCheckpoint>();
         var laneOrders = new HashSet<(RoadSegmentId, LaneDirection, ushort)>();
+        var laneWidthsByDirection = new Dictionary<(RoadSegmentId SegmentId, LaneDirection Direction), double>();
         foreach (var lane in checkpoint.Lanes)
         {
             if (lane.Id.Value == 0 || !lanes.TryAdd(lane.Id, lane)) throw new ArgumentException($"Lane ID {lane.Id.Value} is zero or duplicated.", nameof(checkpoint));
             ValidateEnum(lane.Direction, nameof(checkpoint));
-            if (!segments.ContainsKey(lane.SegmentId) || !double.IsFinite(lane.WidthMeters) || lane.WidthMeters <= 0 || !double.IsFinite(lane.SpeedLimitMetersPerSecond) || lane.SpeedLimitMetersPerSecond <= 0) throw new ArgumentException($"Lane {lane.Id.Value} is invalid.", nameof(checkpoint));
+            if (!segments.ContainsKey(lane.SegmentId)
+                || !double.IsFinite(lane.WidthMeters)
+                || lane.WidthMeters <= 0d
+                || !double.IsFinite(lane.SpeedLimitMetersPerSecond)
+                || lane.SpeedLimitMetersPerSecond <= 0d)
+            {
+                throw new ArgumentException($"Lane {lane.Id.Value} is invalid.", nameof(checkpoint));
+            }
             if (!laneOrders.Add((lane.SegmentId, lane.Direction, lane.Order))) throw new ArgumentException("Lane order is duplicated within a segment and direction.", nameof(checkpoint));
+
+            var key = (lane.SegmentId, lane.Direction);
+            var previousWidth = laneWidthsByDirection.GetValueOrDefault(key);
+            if (lane.WidthMeters > double.MaxValue - previousWidth)
+                throw new ArgumentException($"Lane widths for Road segment {lane.SegmentId.Value} direction {lane.Direction} overflow the representable roadway width.", nameof(checkpoint));
+            laneWidthsByDirection[key] = previousWidth + lane.WidthMeters;
         }
 
         var connectionIds = new HashSet<LaneConnectionId>();

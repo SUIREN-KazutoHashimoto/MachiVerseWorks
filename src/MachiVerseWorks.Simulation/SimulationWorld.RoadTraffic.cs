@@ -41,6 +41,10 @@ public sealed partial class SimulationWorld
     {
         if (_population.ContainsVehicleReference(id))
             throw new InvalidOperationException($"Vehicle {id.Value} cannot be removed while an active Population trip references it.");
+        if (ContainsLogisticsVehicleReference(id))
+            throw new InvalidOperationException($"Vehicle {id.Value} cannot be removed while a Logistics shipment references it.");
+        if (_multimodalTransit.ContainsRoadVehicleReference(id))
+            throw new InvalidOperationException($"Vehicle {id.Value} cannot be removed while a Multimodal Transit vehicle references it.");
         return RemoveVehicleCore(id);
     }
 

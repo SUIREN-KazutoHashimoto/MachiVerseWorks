@@ -4,7 +4,7 @@ ServerとWeb Clientのbinary wire contractを管理します。Application `VERS
 
 ## Current contract
 
-現在のProtocolは **2.20** です。
+現在のProtocolは **2.21** です。
 
 - 2.0: 16-byte little-endian frame header、1 MiB payload上限、3D `SubscribeVolume`、Agent
 - 2.1: `RoadNetworkSnapshot`
@@ -27,6 +27,7 @@ ServerとWeb Clientのbinary wire contractを管理します。Application `VERS
 - 2.18: Regional Generation observation
 - 2.19: Persistent Regional Evolution observation
 - 2.20: Entity Inspection request / response
+- 2.21: `PopulationStatistics` に Transit count を追加
 
 同一majorではClientがServer current以下のminorを要求できます。negotiated minorより新しいmessageは送信しません。Protocol 1.x / `SubscribeArea` / 2D wire contractは現行経路にありません。
 
