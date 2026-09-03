@@ -49,6 +49,12 @@ jobs:
           --configuration Release --no-restore --
           --filter '*RegionalGenerationBenchmarks*' --job short
 
+      - name: Hide benchmark base project from BenchmarkDotNet discovery
+        if: github.event_name == 'pull_request'
+        run: >-
+          mv .benchmark-base/benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj
+          .benchmark-base/benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj.base
+
       - name: Run Regional Generation benchmark
         env:
           MACHIVERSE_BENCHMARK_ARTIFACTS: ${{ github.workspace }}/.artifacts/benchmarks/regional-generation/head
