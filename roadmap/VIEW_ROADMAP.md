@@ -35,7 +35,7 @@
 | 5 | Infrastructure & Dynamic Entity Fidelity | 各Simulation domain source / Gateway delivery contract | ⏳ 実装待ち |
 | 6 | Large World Rendering & Rendering LOD | Simulation Phase 29〜31 source / Gateway Phase 2〜3 | ⏳ Simulation / Gateway依存待ち |
 | 7 | Object Selection & Inspector | Gateway Phase 4 Current / Relations | ⏳ Gateway依存待ち |
-| 8 | Temporal Observation | Simulation semantic history / schedule + Gateway Phase 4 | ⏳ Simulation / Gateway依存待ち |
+| 8 | Temporal Observation | Simulation semantic history / schedule + Gateway Phase 4 | ⏳ Gateway依存待ち |
 | 9 | Historical World View | Simulation Phase 35 + Gateway Phase 5 | ⏳ Simulation / Gateway依存待ち |
 | 10 | Localization | stable observation / error contract | ⏳ 待機 |
 | 11 | Production Visual & Audio Presentation | available authoritative presentation source | ⏳ View基盤待ち |
@@ -182,6 +182,7 @@ Viewを完全read-onlyなPresentation clientとして固定し、Gatewayから�
 - ✅ **V4-005** — 高密度中心市街地、低密度郊外、農村、Village / Hamlet、遠隔集落のvisual representationを同じread model契約から成立させる
 - ✅ **V4-006** — Simulation Phase 31の複数Settlementが連続市街地化・分離・成長・衰退してもView側で単一都市へ固定集約しないことをE2E確認する
 - ✅ **V4-007** — Settlement / Structure rendering baselineを記録する
+- ✅ **V4-008** — FHD Golden Imageを固定Browser / SwiftShader環境で比較するVisual Regression E2Eを整備し、構造・数値assertionと組み合わせて描画回帰を検出する
 
 Phase 4 closeoutでは、checked-in rendering baselineに加えて、実ServerからPhase 30 `RegionalGenerationSnapshot`とPhase 31 `PersistentRegionalEvolutionSnapshot`を受信するBrowser E2Eでstable ID joinとThree.js描画を検証する。
 
