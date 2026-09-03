@@ -32,6 +32,7 @@ socket.addEventListener('message', async (event) => {
     if (!isWorldEnvironmentFrame(frame)) return;
     const snapshot = decodeWorldEnvironmentFrame(frame).message;
     environment.replace(snapshot);
+    const visualCameraSpan = positionVisualCamera(snapshot);
     view.render(entities, performance.now(), null, null, null, null, environment);
 
     const physicalRoot = view.scene.getObjectByName('physical-world');
@@ -57,12 +58,43 @@ socket.addEventListener('message', async (event) => {
     result.dataset.waterSamples = String(metrics.physicalWorld.waterSamples);
     result.dataset.featureSegments = String(metrics.physicalWorld.geographicFeatureSegments);
     result.dataset.toponymLabels = String(metrics.physicalWorld.naturalToponymLabels);
+    result.dataset.visualCameraSpan = visualCameraSpan.toFixed(3);
     result.textContent = `View Phase 3 E2E passed: frame=${result.dataset.frameTimeMs}ms, draws=${result.dataset.drawCalls}, geometryBytes=${result.dataset.geometryBytes}, triangles=${result.dataset.terrainTriangles}, water=${result.dataset.waterSamples}, features=${result.dataset.featureSegments}, labels=${result.dataset.toponymLabels}`;
   } catch (error) {
     fail(error);
   }
 });
 socket.addEventListener('error', () => fail(new Error('WebSocket transport failed.')));
+
+function positionVisualCamera(snapshot) {
+  const samples = snapshot.terrainSamples;
+  if (samples.length === 0) throw new Error('Physical World visual fixture contains no terrain samples.');
+
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let minZ = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  let maxZ = Number.NEGATIVE_INFINITY;
+  for (const sample of samples) {
+    minX = Math.min(minX, sample.x);
+    minY = Math.min(minY, sample.y);
+    minZ = Math.min(minZ, sample.z);
+    maxX = Math.max(maxX, sample.x);
+    maxY = Math.max(maxY, sample.y);
+    maxZ = Math.max(maxZ, sample.z);
+  }
+
+  const centerX = (minX + maxX) * 0.5;
+  const centerY = (minY + maxY) * 0.5;
+  const centerZ = (minZ + maxZ) * 0.5;
+  const span = Math.max(maxX - minX, maxY - minY, 1);
+  view.camera.position.set(centerX + span * 0.55, maxZ + span * 0.8, centerY + span * 0.85);
+  view.camera.lookAt(centerX, centerZ, centerY);
+  view.camera.far = Math.max(view.camera.far, span * 5);
+  view.camera.updateProjectionMatrix();
+  return span;
+}
 
 function fail(error) {
   clearTimeout(timeout);
