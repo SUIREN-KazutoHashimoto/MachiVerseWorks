@@ -11,8 +11,54 @@ permissions:
   contents: write
 
 jobs:
-  smoke:
+  apply-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - run: echo worker-2-runner-ok
+      - name: Checkout assigned branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: fix/all-open-issues-worker-2
+          fetch-depth: 0
+      - name: Apply batch 1 fixes
+        run: python .github/scripts/worker2_batch1.py
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Restore build and test .NET
+        shell: bash
+        run: |
+          set -euo pipefail
+          target=MachiVerseWorks.slnx
+          [[ -f "$target" ]] || target=MachiVerseWorks.sln
+          dotnet restore "$target"
+          dotnet build "$target" --configuration Release --no-restore
+          dotnet test "$target" --configuration Release --no-build
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version-file: src/web/.node-version
+          cache: npm
+          cache-dependency-path: src/web/package-lock.json
+      - name: Test Web
+        working-directory: src/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run lint --if-present
+          npm run typecheck --if-present
+          npm test --if-present
+          npm run build
+      - name: Commit batch 1
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src
+          git diff --cached --quiet && exit 1
+          git commit -m "fix: resolve worker 2 issue batch 1 (#186-#230)"
+          git push origin HEAD:fix/all-open-issues-worker-2
