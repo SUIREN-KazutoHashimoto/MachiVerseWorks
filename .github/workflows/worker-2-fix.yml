@@ -60,6 +60,18 @@ jobs:
               if old not in text:
                   raise SystemExit(f'{name}: current format assertion marker missing')
               path.write_text(text.replace(old, new), encoding='utf-8')
+
+          protocol_test = Path('src/web/tests/protocol.test.mjs')
+          text = protocol_test.read_text(encoding='utf-8')
+          text = text.replace('Hello frame matches current Protocol 2.4 header contract', 'Hello frame matches current Protocol 2.20 header contract')
+          text = text.replace('assert.equal(view.getUint16(6, true), 4);', 'assert.equal(view.getUint16(6, true), 20);')
+          protocol_test.write_text(text, encoding='utf-8')
+
+          radio_test = Path('src/web/tests/radio-protocol.test.mjs')
+          text = radio_test.read_text(encoding='utf-8')
+          text = text.replace('web negotiates current protocol 2.19 while retaining radio support', 'web negotiates current protocol 2.20 while retaining radio support')
+          text = text.replace('assert.deepEqual(WEB_CURRENT_PROTOCOL_VERSION, { major: 2, minor: 19 });', 'assert.deepEqual(WEB_CURRENT_PROTOCOL_VERSION, { major: 2, minor: 20 });')
+          radio_test.write_text(text, encoding='utf-8')
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
