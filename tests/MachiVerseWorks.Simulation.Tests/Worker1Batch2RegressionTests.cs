@@ -10,12 +10,12 @@ public sealed class Worker1Batch2RegressionTests
     {
         var world = new SimulationWorld(powerDispatchSolver: new ThrowingPowerSolver());
 
-        Assert.ThrowsException<InvalidOperationException>(() => world.Step());
+        AssertThrows<InvalidOperationException>(() => world.Step());
 
         Assert.IsTrue(world.IsFaulted);
         Assert.AreEqual(0UL, world.Time.TickCount);
-        Assert.ThrowsException<InvalidOperationException>(() => world.Step());
-        Assert.ThrowsException<InvalidOperationException>(() => world.CreateCheckpoint());
+        AssertThrows<InvalidOperationException>(() => world.Step());
+        AssertThrows<InvalidOperationException>(() => world.CreateCheckpoint());
     }
 
     [TestMethod]
@@ -55,7 +55,7 @@ public sealed class Worker1Batch2RegressionTests
 
         Assert.IsFalse(world.IsFaulted);
         Assert.IsNotNull(solver.LastRequest);
-        Assert.IsTrue(double.IsFinite(solver.LastRequest.Loads.Single().DemandMegawatts));
+        Assert.IsTrue(double.IsFinite(solver.LastRequest!.Loads.Single().DemandMegawatts));
         Assert.IsTrue(world.TryGetPowerLoadSnapshot(loadId, out var load));
         Assert.AreEqual(double.MaxValue, load.DemandMegawatts);
         Assert.AreEqual(double.MaxValue, world.CreatePowerStatistics().GenerationCapacityMegawatts);
@@ -88,7 +88,7 @@ public sealed class Worker1Batch2RegressionTests
         var world = CreateBusWorld(firstDwellTicks: 1, plannedStartTick: ulong.MaxValue, out var tripId, out _);
         var before = world.CreateCheckpoint().MultimodalTransit!.NextVehicleId;
 
-        Assert.ThrowsException<OverflowException>(() => world.CreateBusTransitVehicle(tripId));
+        AssertThrows<OverflowException>(() => world.CreateBusTransitVehicle(tripId));
 
         Assert.AreEqual(before, world.CreateCheckpoint().MultimodalTransit!.NextVehicleId);
     }
@@ -99,7 +99,7 @@ public sealed class Worker1Batch2RegressionTests
         var world = CreateJourneyWorld(out var request);
         var before = world.CreateCheckpoint().MultimodalTransit!.NextJourneyId;
 
-        Assert.ThrowsException<OverflowException>(() => world.PlanMultimodalJourney(request, ulong.MaxValue));
+        AssertThrows<OverflowException>(() => world.PlanMultimodalJourney(request, ulong.MaxValue));
 
         Assert.AreEqual(before, world.CreateCheckpoint().MultimodalTransit!.NextJourneyId);
     }
@@ -114,7 +114,7 @@ public sealed class Worker1Batch2RegressionTests
         var lane = world.CreateLane(segment, LaneDirection.Forward, 0);
         world.CreateBusStop(lane, new WorldPoint(1, 0, 0));
 
-        Assert.ThrowsException<InvalidOperationException>(() => world.RemoveLane(lane));
+        AssertThrows<InvalidOperationException>(() => world.RemoveLane(lane));
         Assert.IsTrue(world.TryGetLaneSnapshot(lane, out _));
     }
 
@@ -127,7 +127,7 @@ public sealed class Worker1Batch2RegressionTests
         var bus = world.CreateMultimodalTransitSnapshot().Vehicles.Single(item => item.Id == busId);
         Assert.IsNotNull(bus.RoadVehicleId);
 
-        Assert.ThrowsException<InvalidOperationException>(() => world.RemoveVehicle(bus.RoadVehicleId!.Value));
+        AssertThrows<InvalidOperationException>(() => world.RemoveVehicle(bus.RoadVehicleId!.Value));
 
         for (var index = 0; index < 200 && world.CreateMultimodalTransitSnapshot().Vehicles.Single(item => item.Id == busId).State != TransitVehicleMovementState.Completed; index++)
             world.Step();
@@ -202,6 +202,26 @@ public sealed class Worker1Batch2RegressionTests
         world.CreateRoadAccessPoint(segment, 0.95d, buildingId: destination, mode: RoadAccessMode.Foot | RoadAccessMode.Motor);
         request = new TripRequest(new TripRequestId(99), TripEndpoint.ForBuilding(origin), TripEndpoint.ForBuilding(destination));
         return world;
+    }
+
+    private static void AssertThrows<TException>(Action action)
+        where TException : Exception
+    {
+        try
+        {
+            action();
+        }
+        catch (TException)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            Assert.Fail($"Expected {typeof(TException).Name}, but {exception.GetType().Name} was thrown.");
+            return;
+        }
+
+        Assert.Fail($"Expected {typeof(TException).Name} to be thrown.");
     }
 
     private sealed class ThrowingPowerSolver : IPowerDispatchSolver
