@@ -292,7 +292,14 @@ public sealed partial class SimulationWorld
     private void StepRadio(SimulationTime nextTime)
     {
         _ = nextTime;
-        if (!_radioPlanDirty) return;
+        if (_radioPlanDirty)
+        {
+            RecalculateRadioPlan();
+            return;
+        }
+        // Radio also depends on Power, Optical, building obstruction and other domains that can
+        // change without going through a Radio mutation API, so every Simulation step refreshes
+        // the derived plan at most once even when Radio-local state itself was not marked dirty.
         RecalculateRadioPlan();
     }
 
