@@ -220,9 +220,11 @@ public sealed partial class SimulationWorld
     private static int ResolveTotalCreatedAgentCount(SimulationCheckpoint checkpoint)
     {
         if (checkpoint.TotalCreatedAgentCount > 0) return Math.Max(checkpoint.TotalCreatedAgentCount, checkpoint.Agents.Count);
+        var activeCount = checkpoint.Agents.Count(static item => item.IsActive);
         var issuedCount = checkpoint.NextAgentId - 1;
-        if (issuedCount <= int.MaxValue) return Math.Max((int)issuedCount, checkpoint.Agents.Count);
-        return checkpoint.Agents.Count;
+        if (issuedCount <= int.MaxValue && checkpoint.Agents.Count == (int)issuedCount)
+            return checkpoint.Agents.Count;
+        return activeCount;
     }
 
     private double NextCoordinate(double minimum, double maximum) => minimum == maximum ? minimum : _random.NextDouble(minimum, maximum);
