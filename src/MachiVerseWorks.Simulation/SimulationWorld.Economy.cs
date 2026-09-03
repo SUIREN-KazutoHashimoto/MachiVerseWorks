@@ -224,18 +224,9 @@ public sealed partial class SimulationWorld
 
     private void ProcessEconomicCycle()
     {
-        var checkpoint = CreateEconomyCheckpoint();
-        try
-        {
-            ProduceGoods();
-            PayWages();
-            ProcessHouseholdConsumption();
-        }
-        catch
-        {
-            RestoreEconomy(checkpoint);
-            throw;
-        }
+        ProduceGoods();
+        PayWages();
+        ProcessHouseholdConsumption();
     }
 
     private void ProduceGoods()
@@ -273,10 +264,15 @@ public sealed partial class SimulationWorld
             var payment = Math.Min(company.CashBalance, job.DailyWage);
             if (payment <= 0) continue;
             var household = EnsureHouseholdEconomyState(person.HouseholdId);
-            company.CashBalance = checked(company.CashBalance - payment);
-            company.Expense = checked(company.Expense + payment);
-            household.CashBalance = checked(household.CashBalance + payment);
-            household.Income = checked(household.Income + payment);
+            var companyCashBalance = checked(company.CashBalance - payment);
+            var companyExpense = checked(company.Expense + payment);
+            var householdCashBalance = checked(household.CashBalance + payment);
+            var householdIncome = checked(household.Income + payment);
+
+            company.CashBalance = companyCashBalance;
+            company.Expense = companyExpense;
+            household.CashBalance = householdCashBalance;
+            household.Income = householdIncome;
         }
     }
 
@@ -291,10 +287,15 @@ public sealed partial class SimulationWorld
         {
             var spending = Math.Min(household.CashBalance, EconomyDefaults.DailyHouseholdConsumption);
             if (spending <= 0) continue;
-            household.CashBalance = checked(household.CashBalance - spending);
-            household.Spending = checked(household.Spending + spending);
-            company.CashBalance = checked(company.CashBalance + spending);
-            company.Revenue = checked(company.Revenue + spending);
+            var householdCashBalance = checked(household.CashBalance - spending);
+            var householdSpending = checked(household.Spending + spending);
+            var companyCashBalance = checked(company.CashBalance + spending);
+            var companyRevenue = checked(company.Revenue + spending);
+
+            household.CashBalance = householdCashBalance;
+            household.Spending = householdSpending;
+            company.CashBalance = companyCashBalance;
+            company.Revenue = companyRevenue;
         }
     }
 
