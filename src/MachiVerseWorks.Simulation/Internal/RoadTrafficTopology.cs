@@ -166,8 +166,11 @@ internal sealed class RoadTrafficTopology
             foreach (var lane in group)
             {
                 var magnitude = innerEdge + lane.WidthMeters * 0.5d;
+                var nextInnerEdge = innerEdge + lane.WidthMeters;
+                if (!double.IsFinite(magnitude) || !double.IsFinite(nextInnerEdge))
+                    throw new InvalidOperationException($"Lane {lane.Id.Value} produces a non-finite Road Traffic center offset.");
                 result.Add(lane.Id, lane.Direction == LaneDirection.Forward ? magnitude : -magnitude);
-                innerEdge += lane.WidthMeters;
+                innerEdge = nextInnerEdge;
             }
         }
         return result;

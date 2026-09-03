@@ -44,6 +44,18 @@ public sealed partial class SimulationWorld
                 $"Building {id.Value} cannot be removed while one or more Households, Persons, or daily activities reference it.");
         }
 
+        if (ContainsEconomyBuildingReference(id))
+        {
+            throw new InvalidOperationException(
+                $"Building {id.Value} cannot be removed while one or more Economy establishments reference it.");
+        }
+
+        if (ContainsInfrastructureBuildingReference(id))
+        {
+            throw new InvalidOperationException(
+                $"Building {id.Value} cannot be removed while one or more utility, Optical, or Radio objects reference it.");
+        }
+
         return _buildings.Remove(id);
     }
 
@@ -104,6 +116,12 @@ public sealed partial class SimulationWorld
         {
             throw new InvalidOperationException(
                 $"POI {id.Value} cannot be removed while one or more Households, Persons, or daily activities reference it.");
+        }
+
+        if (ContainsEconomyPoiReference(id))
+        {
+            throw new InvalidOperationException(
+                $"POI {id.Value} cannot be removed while one or more Economy establishments reference it.");
         }
 
         return _pois.Remove(id);
