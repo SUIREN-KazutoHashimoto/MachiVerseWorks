@@ -83,7 +83,7 @@ public sealed partial class SimulationWorld
             StepRadio(nextTime);
             StepEconomy(nextTime);
             ApplyPowerOperationalConstraints();
-            StepLogistics(nextTime);
+            StepLogisticsOptimized(nextTime);
             StepPersistentRegionalEvolution(nextTime);
             PlanPopulationAndEconomyTrips(nextTime);
             StepVehicles(Config.TickDurationSeconds, nextTime.TickCount);
