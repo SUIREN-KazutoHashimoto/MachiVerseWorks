@@ -119,12 +119,78 @@ public sealed partial class SimulationWorld
     private bool MutateRailwayCheckpoint(Func<SimulationCheckpoint, (SimulationCheckpoint Checkpoint, bool Changed)> mutation)
     {
         EnsureRailwayInfrastructureMutable();
-        var current = CreateCheckpoint();
+        var current = CreateRailwayAdministrationCheckpoint();
         var result = mutation(current);
         if (!result.Changed) return false;
-        _ = RestoreCheckpoint(result.Checkpoint);
-        _railway.Restore(result.Checkpoint);
+
+        var candidate = result.Checkpoint with
+        {
+            RoadAccessPoints = CaptureRailwayReferencedRoadAccessPoints(result.Checkpoint.PlatformAccessPoints ?? []),
+        };
+        ValidateRailwayCheckpoint(candidate, Config.SpatialCellSize);
+        _railway.Restore(candidate);
         return true;
+    }
+
+    private SimulationCheckpoint CreateRailwayAdministrationCheckpoint()
+    {
+        var platformAccessPoints = _railway.CreatePlatformAccessPointCheckpoint();
+        return new SimulationCheckpoint(
+            Config.TickRate,
+            Config.Seed,
+            Config.SpatialCellSize,
+            Time.TickCount,
+            Time.Elapsed.Ticks,
+            _random.State,
+            1,
+            Array.Empty<SimulationAgentCheckpoint>(),
+            1,
+            Array.Empty<SimulationBuildingCheckpoint>(),
+            1,
+            Array.Empty<SimulationPoiCheckpoint>(),
+            1,
+            Array.Empty<SimulationRoadNodeCheckpoint>(),
+            1,
+            Array.Empty<SimulationRoadSegmentCheckpoint>(),
+            1,
+            Array.Empty<SimulationLaneCheckpoint>(),
+            1,
+            Array.Empty<SimulationLaneConnectionCheckpoint>(),
+            1,
+            CaptureRailwayReferencedRoadAccessPoints(platformAccessPoints),
+            NextTrackNodeId: _railway.NextNodeId,
+            TrackNodes: _railway.CreateNodeCheckpoint(),
+            NextTrackSegmentId: _railway.NextSegmentId,
+            TrackSegments: _railway.CreateSegmentCheckpoint(),
+            NextTrackConnectionId: _railway.NextConnectionId,
+            TrackConnections: _railway.CreateConnectionCheckpoint(),
+            NextBlockSectionId: _railway.NextBlockId,
+            BlockSections: _railway.CreateBlockCheckpoint(),
+            NextStationId: _railway.NextStationId,
+            Stations: _railway.CreateStationCheckpoint(),
+            NextPlatformId: _railway.NextPlatformId,
+            Platforms: _railway.CreatePlatformCheckpoint(),
+            NextPlatformAccessPointId: _railway.NextPlatformAccessPointId,
+            PlatformAccessPoints: platformAccessPoints,
+            NextDepotId: _railway.NextDepotId,
+            Depots: _railway.CreateDepotCheckpoint());
+    }
+
+    private SimulationRoadAccessPointCheckpoint[] CaptureRailwayReferencedRoadAccessPoints(IReadOnlyList<SimulationPlatformAccessPointCheckpoint> platformAccessPoints)
+    {
+        var result = new List<SimulationRoadAccessPointCheckpoint>();
+        foreach (var id in platformAccessPoints.Select(static item => item.RoadAccessPointId).Distinct().OrderBy(static item => item.Value))
+        {
+            if (!_roads.TryGetAccessPoint(id, out var accessPoint)) continue;
+            result.Add(new SimulationRoadAccessPointCheckpoint(
+                accessPoint.Id,
+                accessPoint.SegmentId,
+                accessPoint.SegmentOffset,
+                accessPoint.BuildingId,
+                accessPoint.PoiId,
+                accessPoint.Mode));
+        }
+        return result.ToArray();
     }
 
     private bool RemoveRailwayItem<T, TId>(TId id, Func<T, TId> idSelector, Func<SimulationCheckpoint, IReadOnlyList<T>> selector, Func<SimulationCheckpoint, IReadOnlyList<T>, SimulationCheckpoint> assign)
