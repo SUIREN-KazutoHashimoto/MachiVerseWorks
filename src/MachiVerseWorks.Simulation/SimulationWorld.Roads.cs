@@ -227,12 +227,27 @@ public sealed partial class SimulationWorld
 
         var lanes = new Dictionary<LaneId, SimulationLaneCheckpoint>();
         var laneOrders = new HashSet<(RoadSegmentId, LaneDirection, ushort)>();
+        var laneWidthsByDirection = new Dictionary<(RoadSegmentId SegmentId, LaneDirection Direction), double>();
         foreach (var lane in checkpoint.Lanes)
         {
             if (lane.Id.Value == 0 || !lanes.TryAdd(lane.Id, lane)) throw new ArgumentException($"Lane ID {lane.Id.Value} is zero or duplicated.", nameof(checkpoint));
             ValidateEnum(lane.Direction, nameof(checkpoint));
-            if (!segments.ContainsKey(lane.SegmentId) || !double.IsFinite(lane.WidthMeters) || lane.WidthMeters <= 0 || !double.IsFinite(lane.SpeedLimitMetersPerSecond) || lane.SpeedLimitMetersPerSecond <= 0) throw new ArgumentException($"Lane {lane.Id.Value} is invalid.", nameof(checkpoint));
+            if (!segments.ContainsKey(lane.SegmentId)
+                || !double.IsFinite(lane.WidthMeters)
+                || lane.WidthMeters <= 0d
+                || lane.WidthMeters > RoadNetworkStore.MaximumLaneWidthMeters
+                || !double.IsFinite(lane.SpeedLimitMetersPerSecond)
+                || lane.SpeedLimitMetersPerSecond <= 0d)
+            {
+                throw new ArgumentException($"Lane {lane.Id.Value} is invalid.", nameof(checkpoint));
+            }
             if (!laneOrders.Add((lane.SegmentId, lane.Direction, lane.Order))) throw new ArgumentException("Lane order is duplicated within a segment and direction.", nameof(checkpoint));
+
+            var key = (lane.SegmentId, lane.Direction);
+            var totalWidth = laneWidthsByDirection.GetValueOrDefault(key) + lane.WidthMeters;
+            if (!double.IsFinite(totalWidth) || totalWidth > RoadNetworkStore.MaximumDirectionalRoadwayWidthMeters)
+                throw new ArgumentException($"Lane widths for Road segment {lane.SegmentId.Value} direction {lane.Direction} exceed the supported roadway width.", nameof(checkpoint));
+            laneWidthsByDirection[key] = totalWidth;
         }
 
         var connectionIds = new HashSet<LaneConnectionId>();
