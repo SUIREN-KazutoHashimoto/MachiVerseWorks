@@ -44,7 +44,9 @@ jobs:
           fi
 
       - name: Apply review fixes
-        run: python3 scripts/worker3-review-patch.py
+        run: |
+          python3 scripts/worker3-review-patch.py
+          sed -i 's/private static IReadOnlyList<WaterSewerServicePointSnapshot> SelectServicePointCandidates/private static List<WaterSewerServicePointSnapshot> SelectServicePointCandidates/' src/MachiVerseWorks.Server/WaterSewerMessageMapper.cs
 
       - name: Finalize merge commit
         shell: bash
