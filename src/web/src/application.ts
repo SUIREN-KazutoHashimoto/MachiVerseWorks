@@ -111,7 +111,7 @@ export class Application {
   public start(): void { if (this.disposed) throw new Error('Application is disposed.'); this.connection.connect(); this.animationFrame = window.requestAnimationFrame(this.animate); }
   public dispose(): void {
     if (this.disposed) return;
-    this.disposed = true; window.cancelAnimationFrame(this.animationFrame); window.removeEventListener('resize', this.handleResize); this.connection.disconnect(); this.navigation.dispose(); this.audio.dispose(); this.regionalGeneration.dispose(); this.railway.dispose(); this.railwayOperations.dispose(); this.logisticsDebug.dispose(); this.powerDebug.dispose(); this.waterSewerDebug.dispose(); this.gasDebug.dispose(); this.opticalDebug.dispose(); this.radioDebug.dispose(); this.view.dispose(); this.ui.dispose();
+    this.disposed = true; window.cancelAnimationFrame(this.animationFrame); window.removeEventListener('resize', this.handleResize); this.connection.disconnect(); this.navigation.dispose(); this.audio.dispose(); this.regionalGeneration.dispose(); this.railway.dispose(); this.railwayOperations.dispose(); this.logisticsDebug.dispose(); this.powerDebug.dispose(); this.waterSewerDebug.dispose(); this.gasDebug.dispose(); this.opticalDebug.dispose(); this.radioDebug.dispose(); this.view.dispose(); this.view.renderer.domElement.remove(); this.ui.dispose();
   }
   private readonly handleResize = (): void => { this.view.resize(); };
 
