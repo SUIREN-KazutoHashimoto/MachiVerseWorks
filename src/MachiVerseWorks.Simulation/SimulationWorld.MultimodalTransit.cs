@@ -283,8 +283,8 @@ public sealed partial class SimulationWorld
                 {
                     var route = FindRoadRoute(new RouteRequest(from.Position, to.Position, RoutingCostMetric.EstimatedTravelTime));
                     var estimatedArrivalTick = checked(tickCount + pattern.Stops[vehicle.StopIndex + 1].TravelTicksFromPrevious);
-                    var roadVehicleId = CreateVehicle(route, new VehicleDimensions(12d, 2.55d, 3.2d), new VehiclePerformance(22.2222222222d, 1.2d, 3d, 2.5d, 2d));
-                    vehicle.RoadVehicleId = roadVehicleId;
+                    var spawnedRoadVehicleId = CreateVehicle(route, new VehicleDimensions(12d, 2.55d, 3.2d), new VehiclePerformance(22.2222222222d, 1.2d, 3d, 2.5d, 2d));
+                    vehicle.RoadVehicleId = spawnedRoadVehicleId;
                     vehicle.State = TransitVehicleMovementState.EnRouteToStop;
                     vehicle.EstimatedArrivalTick = estimatedArrivalTick;
                 }
