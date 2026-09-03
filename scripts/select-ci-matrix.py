@@ -3,8 +3,9 @@
 
 E2E falls back to the full suite for cross-cutting or unknown changes.
 PR benchmarks stay focused on affected code domains, while shared runtime or
-build changes fall back to the full benchmark suite. Workflow-only changes are
-validated by the benchmark smoke job instead of unrelated performance gates.
+build changes fall back to the full benchmark suite. Workflow-only and
+standalone-benchmark-only changes are validated by their dedicated workflow plus
+the central smoke job instead of unrelated central performance gates.
 """
 
 from __future__ import annotations
@@ -87,6 +88,17 @@ BENCHMARK_CROSS_CUTTING_FILES = {
     "MachiVerseWorks.slnx",
     "global.json",
     "scripts/compare-benchmark-results.py",
+    "src/MachiVerseWorks.Simulation/Geometry.cs",
+}
+
+DEDICATED_BENCHMARK_FILES = {
+    "gatewaydeliverybenchmarks.cs",
+    "observationcachebenchmarks.cs",
+    "observationcachebenchmarkrunner.cs",
+    "opticalbenchmarks.cs",
+    "radiobenchmarks.cs",
+    "regionalgenerationbenchmarks.cs",
+    "worldenvironmentbenchmarks.cs",
 }
 
 
@@ -147,11 +159,24 @@ def select_e2e(files: list[str], full: bool) -> dict[str, object]:
             selected.add(script_map[path])
             continue
 
+        # Browser E2E source/HTML is not covered by npm test. Mapping every current
+        # and future browser fixture is brittle, so changes there deliberately run
+        # the complete E2E matrix.
+        if path.startswith("src/web/tests/browser/"):
+            uncertain = True
+            continue
+
         if path.startswith("src/web/"):
             selected.update({"core-poc", "view-physical-world", "view-settlement-structure", "view-settlement-structure-live"})
             continue
 
         if path.startswith("src/MachiVerseWorks.Simulation/"):
+            # Building identity/bounds feed multiple infrastructure domains. Treat
+            # them as cross-domain rather than suppressing the safe full fallback.
+            if contains_any(path, ("building",)):
+                uncertain = True
+                continue
+
             matched = False
             mappings = [
                 (("roadnetwork", "road-network", "routing"), {"road-network", "road-traffic", "signal-traffic"}),
@@ -162,14 +187,14 @@ def select_e2e(files: list[str], full: bool) -> dict[str, object]:
                 (("railway", "rail"), {"railway", "railway-operations", "multimodal-transit"}),
                 (("multimodal", "transit"), {"multimodal-transit"}),
                 (("economy", "employment"), {"economy"}),
-                (("logistics", "freight", "inventory"), {"logistics"}),
-                (("power",), {"power"}),
+                (("logistics", "freight", "inventory"), {"logistics", "gas"}),
+                (("power",), {"power", "optical", "radio-spectrum"}),
                 (("water", "sewer"), {"water-sewer"}),
                 (("gas",), {"gas"}),
-                (("optical",), {"optical"}),
+                (("optical",), {"optical", "radio-spectrum"}),
                 (("radio", "spectrum"), {"radio-spectrum"}),
                 (("worldenvironment", "environment", "weather", "climate"), {"world-environment"}),
-                (("regional", "settlement", "building", "toponym"), {"view-physical-world", "view-settlement-structure", "view-settlement-structure-live"}),
+                (("regional", "settlement", "toponym"), {"view-physical-world", "view-settlement-structure", "view-settlement-structure-live"}),
             ]
             for terms, ids in mappings:
                 if contains_any(path, terms):
@@ -236,6 +261,11 @@ def select_benchmarks(files: list[str], full: bool) -> dict[str, object]:
             }
             if name in direct:
                 benchmark_ids.update(direct[name])
+            elif name in DEDICATED_BENCHMARK_FILES:
+                # A dedicated workflow owns these benchmark classes. Keep the
+                # central benchmark workflow at smoke-only rather than running an
+                # unrelated full matrix.
+                continue
             else:
                 uncertain = True
             continue
@@ -251,11 +281,16 @@ def select_benchmarks(files: list[str], full: bool) -> dict[str, object]:
                 (("pedestrian",), {"pedestrian"}, set()),
                 (("railway", "rail"), {"railway-infrastructure", "railway-operations", "multimodal-transit"}, set()),
                 (("multimodal", "transit"), {"multimodal-transit"}, set()),
-                (("logistics", "freight", "inventory"), {"logistics"}, set()),
+                (("logistics", "freight", "inventory"), {"logistics", "gas"}, set()),
                 (("power",), {"power"}, set()),
                 (("water", "sewer"), {"water-sewer"}, set()),
                 (("gas",), {"gas"}, set()),
                 (("regional", "settlement", "toponym"), {"persistent-regional-evolution"}, set()),
+                # These domains have dedicated benchmark workflows. Marking them
+                # as understood prevents an unrelated central full fallback.
+                (("optical",), set(), set()),
+                (("radio", "spectrum"), set(), set()),
+                (("worldenvironment", "environment", "weather", "climate"), set(), set()),
             ]
             for terms, bench, scenario in mappings:
                 if contains_any(path, terms):
@@ -264,9 +299,6 @@ def select_benchmarks(files: list[str], full: bool) -> dict[str, object]:
                     matched = True
             if contains_any(path, ("snapshot", "readmodel", "publishedreadmodel")):
                 snapshot = True
-                matched = True
-            if contains_any(path, ("geometry", "position", "coordinate")):
-                regression = True
                 matched = True
             if not matched:
                 uncertain = True
