@@ -20,6 +20,16 @@ jobs:
         with:
           ref: fix/all-open-issues-worker-2
           fetch-depth: 0
+      - name: Align batch 3 patch targets
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('.github/scripts/worker2_batch3.py')
+          text = path.read_text(encoding='utf-8')
+          marker = 'x.fromSiteId===0n||x.toSiteId===0n||'
+          if text.count(marker) < 2:
+              raise SystemExit('Expected the Radio link patch target and replacement markers')
+          path.write_text(text.replace(marker, '', 1), encoding='utf-8')
       - name: Apply batch 3 fixes
         run: python .github/scripts/worker2_batch3.py
       - name: Align batch 3 fixtures
