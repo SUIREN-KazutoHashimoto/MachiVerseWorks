@@ -141,10 +141,12 @@ internal sealed class ObservationDeliveryCoordinator(
         try
         {
             await Task.Yield();
-            using var sendCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            sendCancellation.CancelAfter(options.ObservationDeliveryTimeout);
             foreach (var message in messages)
+            {
+                using var sendCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                sendCancellation.CancelAfter(options.ObservationDeliveryTimeout);
                 _ = await connection.SendAsync(message, connection.NegotiatedVersion, sendCancellation.Token);
+            }
         }
         catch (Exception exception) when (SnapshotDeliveryFailurePolicy.IsExpectedClientFailure(exception))
         {
@@ -187,10 +189,10 @@ internal sealed class ObservationDeliveryCoordinator(
         try
         {
             await Task.Yield();
-            using var sendCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            sendCancellation.CancelAfter(options.ObservationDeliveryTimeout);
             for (var index = 0; index < messages.Count; index++)
             {
+                using var sendCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                sendCancellation.CancelAfter(options.ObservationDeliveryTimeout);
                 _ = await connection.SendCachedAsync(
                     messages[index],
                     connection.NegotiatedVersion,
