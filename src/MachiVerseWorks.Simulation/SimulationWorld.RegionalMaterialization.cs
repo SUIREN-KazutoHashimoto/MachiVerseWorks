@@ -40,6 +40,7 @@ public sealed partial class SimulationWorld
         RegionalGenerationOptions? options,
         out RegionalMaterializationSummary materialization)
     {
+        EnsureRegionalMaterializationTargetIsEmpty();
         var snapshot = GenerateRegionalGeneration(volume, options);
         materialization = MaterializeRegionalGeneration();
         return snapshot;
