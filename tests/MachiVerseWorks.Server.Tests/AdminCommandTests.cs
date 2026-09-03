@@ -1,3 +1,4 @@
+using System.Reflection;
 using MachiVerseWorks.Simulation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -88,6 +89,40 @@ public sealed class AdminCommandTests
 
         var after = runtime.CapturePublishSnapshot().RoadNetwork.Revision;
         Assert.IsTrue(after > before);
+    }
+
+    [TestMethod]
+    public async Task AtomicWorldSavePreservesExistingUnixMode()
+    {
+        if (OperatingSystem.IsWindows()) return;
+
+        var directory = Path.Combine(Path.GetTempPath(), $"machiverse-admin-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "world.json");
+        try
+        {
+            await File.WriteAllBytesAsync(path, new byte[] { 1, 2, 3 });
+            var expectedMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+            File.SetUnixFileMode(path, expectedMode);
+
+            var method = typeof(AdminCommandExecutorV2).GetMethod(
+                "WriteWorldSaveAtomicallyAsync",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.IsNotNull(method);
+            var replacement = new byte[] { 4, 5, 6, 7 };
+            var task = (Task?)method!.Invoke(
+                null,
+                new object?[] { path, new ReadOnlyMemory<byte>(replacement), CancellationToken.None });
+            Assert.IsNotNull(task);
+            await task!;
+
+            Assert.AreEqual(expectedMode, File.GetUnixFileMode(path));
+            CollectionAssert.AreEqual(replacement, await File.ReadAllBytesAsync(path));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     private static AdminCommandRequest Request(AdminCommand command) => new(command, new TaskCompletionSource<AdminCommandResult>(TaskCreationOptions.RunContinuationsAsynchronously));

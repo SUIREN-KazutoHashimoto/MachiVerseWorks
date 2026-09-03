@@ -199,15 +199,29 @@ public static class RegionalGenerationProtocolCodec
     private static bool AcyclicParents(IEnumerable<(ulong Id, ulong ParentId)> nodes)
     {
         var parents = nodes.ToDictionary(static item => item.Id, static item => item.ParentId);
+        var states = new Dictionary<ulong, byte>(parents.Count);
+        var path = new List<ulong>();
         foreach (var start in parents.Keys)
         {
-            var seen = new HashSet<ulong>();
+            if (states.TryGetValue(start, out var startState) && startState == 2) continue;
+
+            path.Clear();
             var current = start;
-            while (parents.TryGetValue(current, out var parent) && parent != 0UL)
+            while (true)
             {
-                if (!seen.Add(current)) return false;
+                if (states.TryGetValue(current, out var state))
+                {
+                    if (state == 1) return false;
+                    break;
+                }
+
+                states[current] = 1;
+                path.Add(current);
+                if (!parents.TryGetValue(current, out var parent) || parent == 0UL) break;
                 current = parent;
             }
+
+            foreach (var id in path) states[id] = 2;
         }
         return true;
     }
