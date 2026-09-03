@@ -99,6 +99,18 @@ public static partial class WorldSaveSerializer
                 if (totals.TimetableStopCount > limits.MaximumTimetableStopTotalCount)
                     throw new InvalidDataException($"Save Data total RailwayOperations Timetable stop count exceeds the configured {limits.MaximumTimetableStopTotalCount}-entry limit before deserialization.");
             }
+            else if (kind == NestedArrayKind.TransitPatternStops)
+            {
+                totals.TransitPatternStopCount++;
+                if (totals.TransitPatternStopCount > limits.MaximumLaneConnectionCount)
+                    throw new InvalidDataException($"Save Data total Transit Pattern stop count exceeds the configured {limits.MaximumLaneConnectionCount}-entry limit before deserialization.");
+            }
+            else if (kind == NestedArrayKind.JourneyLegs)
+            {
+                totals.JourneyLegCount++;
+                if (totals.JourneyLegCount > limits.MaximumLaneConnectionCount)
+                    throw new InvalidDataException($"Save Data total Journey leg count exceeds the configured {limits.MaximumLaneConnectionCount}-entry limit before deserialization.");
+            }
 
             if (reader.TokenType == JsonTokenType.StartObject)
                 ScanNestedObject(ref reader, elementContext, limits, ref totals);
@@ -117,6 +129,7 @@ public static partial class WorldSaveSerializer
             if (reader.ValueTextEquals("blockSections")) return NestedSaveProperty.BlockSections;
             if (reader.ValueTextEquals("depots")) return NestedSaveProperty.Depots;
             if (reader.ValueTextEquals("railwayOperations")) return NestedSaveProperty.RailwayOperations;
+            if (reader.ValueTextEquals("multimodalTransit")) return NestedSaveProperty.MultimodalTransit;
             if (reader.ValueTextEquals("economy")) return NestedSaveProperty.Economy;
         }
         else if (context == NestedSaveContext.Vehicle && reader.ValueTextEquals("routeSteps")) return NestedSaveProperty.RouteSteps;
@@ -134,6 +147,13 @@ public static partial class WorldSaveSerializer
         }
         else if (context == NestedSaveContext.RailwayRoute && reader.ValueTextEquals("trackSegmentIds")) return NestedSaveProperty.TrackSegmentIds;
         else if (context == NestedSaveContext.Timetable && reader.ValueTextEquals("stops")) return NestedSaveProperty.Stops;
+        else if (context == NestedSaveContext.MultimodalTransit)
+        {
+            if (reader.ValueTextEquals("patterns")) return NestedSaveProperty.TransitPatterns;
+            if (reader.ValueTextEquals("journeys")) return NestedSaveProperty.TransitJourneys;
+        }
+        else if (context == NestedSaveContext.TransitPattern && reader.ValueTextEquals("stops")) return NestedSaveProperty.TransitPatternStops;
+        else if (context == NestedSaveContext.TransitJourney && reader.ValueTextEquals("legs")) return NestedSaveProperty.JourneyLegs;
         else if (context == NestedSaveContext.Economy)
         {
             if (reader.ValueTextEquals("companies")) return NestedSaveProperty.Companies;
@@ -235,6 +255,7 @@ public static partial class WorldSaveSerializer
         {
             (NestedSaveContext.Root, NestedSaveProperty.Simulation) => NestedSaveContext.Simulation,
             (NestedSaveContext.Simulation, NestedSaveProperty.RailwayOperations) => NestedSaveContext.RailwayOperations,
+            (NestedSaveContext.Simulation, NestedSaveProperty.MultimodalTransit) => NestedSaveContext.MultimodalTransit,
             (NestedSaveContext.Simulation, NestedSaveProperty.Economy) => NestedSaveContext.Economy,
             (NestedSaveContext.Economy, NestedSaveProperty.Logistics) => NestedSaveContext.Logistics,
             (NestedSaveContext.Economy, NestedSaveProperty.Power) => NestedSaveContext.Power,
@@ -257,6 +278,8 @@ public static partial class WorldSaveSerializer
             (NestedSaveContext.Simulation, NestedSaveProperty.Depots) => NestedSaveContext.Depot,
             (NestedSaveContext.RailwayOperations, NestedSaveProperty.Routes) => NestedSaveContext.RailwayRoute,
             (NestedSaveContext.RailwayOperations, NestedSaveProperty.Timetables) => NestedSaveContext.Timetable,
+            (NestedSaveContext.MultimodalTransit, NestedSaveProperty.TransitPatterns) => NestedSaveContext.TransitPattern,
+            (NestedSaveContext.MultimodalTransit, NestedSaveProperty.TransitJourneys) => NestedSaveContext.TransitJourney,
             (NestedSaveContext.WorldEnvironment, NestedSaveProperty.Features) => NestedSaveContext.GeographicFeature,
             (NestedSaveContext.RegionalGenerationSnapshot, NestedSaveProperty.RegionalCorridors) => NestedSaveContext.RegionalCorridor,
             _ => NestedSaveContext.Other,
@@ -272,6 +295,8 @@ public static partial class WorldSaveSerializer
             (NestedSaveContext.Depot, NestedSaveProperty.TrackSegmentIds) => new(limits.MaximumDepotTrackSegmentCount, "simulation.depots[].trackSegmentIds", NestedArrayKind.None),
             (NestedSaveContext.RailwayRoute, NestedSaveProperty.TrackSegmentIds) => new(limits.MaximumRailwayRouteSegmentCount, "simulation.railwayOperations.routes[].trackSegmentIds", NestedArrayKind.None),
             (NestedSaveContext.Timetable, NestedSaveProperty.Stops) => new(limits.MaximumTimetableStopCount, "simulation.railwayOperations.timetables[].stops", NestedArrayKind.TimetableStops),
+            (NestedSaveContext.TransitPattern, NestedSaveProperty.TransitPatternStops) => new(limits.MaximumLaneConnectionCount, "simulation.multimodalTransit.patterns[].stops", NestedArrayKind.TransitPatternStops),
+            (NestedSaveContext.TransitJourney, NestedSaveProperty.JourneyLegs) => new(limits.MaximumLaneConnectionCount, "simulation.multimodalTransit.journeys[].legs", NestedArrayKind.JourneyLegs),
             (NestedSaveContext.Economy, NestedSaveProperty.Companies) => new(limits.MaximumBuildingCount, "simulation.economy.companies", NestedArrayKind.None),
             (NestedSaveContext.Economy, NestedSaveProperty.Establishments) => new(limits.MaximumBuildingCount, "simulation.economy.establishments", NestedArrayKind.None),
             (NestedSaveContext.Economy, NestedSaveProperty.Jobs) => new(limits.MaximumPersonCount, "simulation.economy.jobs", NestedArrayKind.None),
@@ -337,13 +362,13 @@ public static partial class WorldSaveSerializer
 
     private enum NestedSaveContext : byte
     {
-        Other, Root, Simulation, Vehicle, Person, BlockSection, Depot, RailwayOperations, RailwayRoute, Timetable, Economy, Logistics, Power, WaterSewer, Gas, Optical, Radio, WorldEnvironment, GeographicFeature,
+        Other, Root, Simulation, Vehicle, Person, BlockSection, Depot, RailwayOperations, RailwayRoute, Timetable, MultimodalTransit, TransitPattern, TransitJourney, Economy, Logistics, Power, WaterSewer, Gas, Optical, Radio, WorldEnvironment, GeographicFeature,
         RegionalGeneration, RegionalGenerationSnapshot, RegionalCorridor,
     }
 
     private enum NestedSaveProperty : byte
     {
-        Other, Simulation, Vehicles, Persons, BlockSections, Depots, RailwayOperations, RouteSteps, Schedule, Needs, SegmentIds, TrackSegmentIds, Routes, Timetables, Stops,
+        Other, Simulation, Vehicles, Persons, BlockSections, Depots, RailwayOperations, MultimodalTransit, TransitPatterns, TransitJourneys, TransitPatternStops, JourneyLegs, RouteSteps, Schedule, Needs, SegmentIds, TrackSegmentIds, Routes, Timetables, Stops,
         Economy, Companies, Establishments, Jobs, Employments, EconomyHouseholds, Logistics, Commodities, Inventories, Orders, Shipments, Power, PowerNodes, PowerLines, Generators, PowerLoads,
         WaterSewer, WaterNodes, WaterPipes, SewerNodes, SewerPipes, WaterSources, Reservoirs, Pumps, TreatmentPlants, ServicePoints,
         Gas, GasNodes, GasPipelines, GasSources, GasImportTerminals, GasStorages, GasServicePoints,
@@ -353,7 +378,7 @@ public static partial class WorldSaveSerializer
         RegionalGeneration, Snapshot, RegionalSettlements, RegionalGrowthEvents, RegionalCorridors, RegionalDistricts, RegionalParcels, RegionalBuildings, RegionalPois, RegionalToponyms, RegionalRoadSigns, RegionalCorridorGeometry,
     }
 
-    private enum NestedArrayKind : byte { None, TimetableStops }
+    private enum NestedArrayKind : byte { None, TimetableStops, TransitPatternStops, JourneyLegs }
     private readonly record struct NestedArrayRule(int MaximumCount, string? Path, NestedArrayKind Kind);
-    private struct NestedSaveScanTotals { public int TimetableStopCount; }
+    private struct NestedSaveScanTotals { public int TimetableStopCount; public int TransitPatternStopCount; public int JourneyLegCount; }
 }

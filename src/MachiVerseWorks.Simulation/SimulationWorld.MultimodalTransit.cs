@@ -482,6 +482,7 @@ public sealed partial class SimulationWorld
         foreach (var passenger in transit.Passengers)
         {
             if (!journeyById.TryGetValue(passenger.JourneyId, out var journey)) throw new ArgumentException($"Passenger {passenger.Id.Value} references a missing Journey.", nameof(checkpoint));
+            if (passenger.TripRequestId != journey.TripRequestId) throw new ArgumentException($"Passenger {passenger.Id.Value} belongs to a different TripRequest than its Journey.", nameof(checkpoint));
             if (passenger.LegIndex < 0 || passenger.LegIndex >= journey.Legs.Count) throw new ArgumentException($"Passenger {passenger.Id.Value} has an invalid Journey leg index.", nameof(checkpoint));
             if (!Enum.IsDefined(passenger.State)) throw new ArgumentException($"Passenger {passenger.Id.Value} has an invalid state.", nameof(checkpoint));
         }

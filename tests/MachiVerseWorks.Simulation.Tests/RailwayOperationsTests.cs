@@ -143,6 +143,23 @@ public sealed class RailwayOperationsTests
     }
 
     [TestMethod]
+    public void CheckpointRejectsForgedRouteLengthAndServiceTrainCompletionMismatch()
+    {
+        var world = new SimulationWorld();
+        RailwayOperationsFixtures.SeedDeterministic(world);
+        var checkpoint = world.CreateCheckpoint();
+        var routes = checkpoint.RailwayRoutes!.ToArray();
+        routes[0] = routes[0] with { LengthMeters = routes[0].LengthMeters * 10d };
+        Assert.ThrowsExactly<ArgumentException>(() => SimulationWorld.RestoreCheckpoint(checkpoint with { RailwayRoutes = routes }));
+
+        for (var tick = 0; tick < 3000 && world.CreateRailwayOperationsSnapshot().Services.Any(static service => service.State != RailwayServiceState.Completed); tick++) world.Step();
+        checkpoint = world.CreateCheckpoint();
+        var services = checkpoint.RailwayServices!.ToArray();
+        services[0] = services[0] with { State = RailwayServiceState.Active };
+        Assert.ThrowsExactly<ArgumentException>(() => SimulationWorld.RestoreCheckpoint(checkpoint with { RailwayServices = services }));
+    }
+
+    [TestMethod]
     public void CheckpointRestoreContinuesWithIdenticalOperationState()
     {
         var original = new SimulationWorld(new SimulationConfig(seed: 0x18UL));

@@ -190,6 +190,24 @@ public sealed class MultimodalTransitTests
     }
 
     [TestMethod]
+    public void CheckpointRejectsPassengerWhoseTripRequestDiffersFromJourney()
+    {
+        var world = CreateRoadWorld(withEndpoints: true);
+        var lane = world.CreateRoadNetworkSnapshot().Lanes.Single().Id;
+        var first = world.CreateBusStop(lane, new WorldPoint(20, 0, 0));
+        var second = world.CreateBusStop(lane, new WorldPoint(80, 0, 0));
+        var line = world.CreateTransitLine(TransitMode.Bus);
+        world.CreateTransitServicePattern(line, [new(first, 0, 1), new(second, 10, 1)]);
+        var request = new TripRequest(new TripRequestId(100), TripEndpoint.ForBuilding(new BuildingId(1)), TripEndpoint.ForBuilding(new BuildingId(2)));
+        var journey = world.PlanMultimodalJourney(request);
+        world.CreatePassenger(request.Id, journey);
+        var checkpoint = world.CreateCheckpoint();
+        var transit = checkpoint.MultimodalTransit!;
+        var passengers = transit.Passengers.Select(item => item with { TripRequestId = new TripRequestId(101) }).ToArray();
+        Assert.ThrowsExactly<ArgumentException>(() => SimulationWorld.RestoreCheckpoint(checkpoint with { MultimodalTransit = transit with { Passengers = passengers } }));
+    }
+
+    [TestMethod]
     public void DeterministicFixtureContainsWalkRailwayWalkBusAndTaxi()
     {
         var world = new SimulationWorld(new SimulationConfig(tickRate: 30, seed: 19_014, spatialCellSize: 64d));

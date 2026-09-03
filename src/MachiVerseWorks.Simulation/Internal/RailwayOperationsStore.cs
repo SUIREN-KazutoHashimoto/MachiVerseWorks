@@ -133,6 +133,9 @@ internal sealed class RailwayOperationsStore
         _ = ValidateServiceDefinition(route, timetable, originDepot, destinationDepot, nameof(routeSnapshot));
     }
 
+    internal double GetDerivedRouteLength(RailwayRouteSnapshot routeSnapshot) =>
+        BuildRoute(routeSnapshot.Id, routeSnapshot.TrackSegmentIds).LengthMeters;
+
     private double[] ValidateServiceDefinition(
         RouteState route,
         TimetableSnapshot timetable,

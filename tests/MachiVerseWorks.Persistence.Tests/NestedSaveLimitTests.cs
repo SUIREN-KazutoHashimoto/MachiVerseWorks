@@ -134,6 +134,18 @@ public sealed class NestedSaveLimitTests
     }
 
     [TestMethod]
+    public void MultimodalPatternStopsAndJourneyLegsAreRejectedBeforeMaterialization()
+    {
+        var limits = new WorldSaveLimits(maximumBytes: 100_000, maximumLaneConnectionCount: 1);
+        AssertNestedBoundary(
+            CreateSimulationJson("\"multimodalTransit\":{\"patterns\":[{\"stops\":[{}]}]}"),
+            CreateSimulationJson("\"multimodalTransit\":{\"patterns\":[{\"stops\":[{},{}]}]}"), limits, "simulation.multimodalTransit.patterns[].stops");
+        AssertNestedBoundary(
+            CreateSimulationJson("\"multimodalTransit\":{\"journeys\":[{\"legs\":[{}]}]}"),
+            CreateSimulationJson("\"multimodalTransit\":{\"journeys\":[{\"legs\":[{},{}]}]}"), limits, "simulation.multimodalTransit.journeys[].legs");
+    }
+
+    [TestMethod]
     public void SerializeAppliesVehicleAndPersonNestedLimitsBeforeDtoProjection()
     {
         var vehicleWorld = CreateTwoStepVehicleWorld();

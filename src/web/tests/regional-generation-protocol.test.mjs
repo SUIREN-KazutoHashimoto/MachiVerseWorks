@@ -34,7 +34,7 @@ test('RegionalGeneration rejects versions older than Protocol 2.18', () => {
 
 test('RegionalGeneration rejects broken stable ID relationships', () => {
   const broken = createSnapshotJson().replace(`"districtId":${DISTRICT_ID.toString()},"minX"`, '"districtId":999,"minX"');
-  assert.throws(() => decodeRegionalGenerationFrame(createFrame(broken)), /Parcel stable reference/);
+  assert.throws(() => decodeRegionalGenerationFrame(createFrame(broken)), /Parcel hierarchy/);
 });
 
 function createFrame(json, version = { major: 2, minor: 18 }) {

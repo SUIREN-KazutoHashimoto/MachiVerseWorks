@@ -227,18 +227,20 @@ public static class RadioProtocolCodec
         {
             if (item.TransmitterId == 0 || !transmitterIds.Add(item.TransmitterId) || !siteIds.Contains(item.SiteId) || !antennaIds.Contains(item.AntennaId) || !Finite(item.MaximumTransmitPowerDbm)) return false;
         }
+        var receiverIds = new HashSet<ulong>();
         foreach (var item in message.Receivers)
         {
-            if (item.ReceiverId == 0 || !siteIds.Contains(item.SiteId) || !antennaIds.Contains(item.AntennaId) || !Positive(item.MinimumFrequencyMegahertz) || !Positive(item.MaximumFrequencyMegahertz) || item.MaximumFrequencyMegahertz <= item.MinimumFrequencyMegahertz || !Finite(item.SensitivityDbm) || item.SensitivityDbm >= 0d) return false;
+            if (item.ReceiverId == 0 || !receiverIds.Add(item.ReceiverId) || !siteIds.Contains(item.SiteId) || !antennaIds.Contains(item.AntennaId) || !Positive(item.MinimumFrequencyMegahertz) || !Positive(item.MaximumFrequencyMegahertz) || item.MaximumFrequencyMegahertz <= item.MinimumFrequencyMegahertz || !Finite(item.SensitivityDbm) || item.SensitivityDbm >= 0d) return false;
         }
         var emissionIds = new HashSet<ulong>();
         foreach (var item in message.Emissions)
         {
             if (item.EmissionId == 0 || !emissionIds.Add(item.EmissionId) || !transmitterIds.Contains(item.TransmitterId) || item.ChannelId == 0 || !Positive(item.CenterFrequencyMegahertz) || !Positive(item.BandwidthMegahertz) || !Finite(item.TransmitPowerDbm) || !NonNegative(item.Utilization) || item.Utilization > 1d + 1e-9) return false;
         }
+        var linkIds = new HashSet<ulong>();
         foreach (var item in message.Links)
         {
-            if (item.LinkId == 0 || item.FromSiteId == 0 || item.ToSiteId == 0 || item.FromSiteId == item.ToSiteId || !siteIds.Contains(item.FromSiteId) || !siteIds.Contains(item.ToSiteId) || item.FrequencyBlockId == 0 || !NonNegative(item.DistanceMeters) || !Finite(item.PathLossDb) || !Finite(item.ReceivedPowerDbm) || !Finite(item.InterferenceDbm) || !Finite(item.SinrDb) || !NonNegative(item.Utilization) || item.Utilization > 1d + 1e-9 || !Enum.IsDefined(item.State)) return false;
+            if (item.LinkId == 0 || !linkIds.Add(item.LinkId) || item.FromSiteId == 0 || item.ToSiteId == 0 || item.FromSiteId == item.ToSiteId || !siteIds.Contains(item.FromSiteId) || !siteIds.Contains(item.ToSiteId) || item.FrequencyBlockId == 0 || !NonNegative(item.DistanceMeters) || !Finite(item.PathLossDb) || !Finite(item.ReceivedPowerDbm) || !Finite(item.InterferenceDbm) || !Finite(item.SinrDb) || !NonNegative(item.Utilization) || item.Utilization > 1d + 1e-9 || !Enum.IsDefined(item.State)) return false;
         }
         foreach (var item in message.ServiceAreas) if (!siteIds.Contains(item.SiteId) || item.FrequencyBlockId == 0 || !NonNegative(item.RadiusMeters) || !Finite(item.MinimumSinrDb)) return false;
         return true;
@@ -246,9 +248,11 @@ public static class RadioProtocolCodec
 
     private static bool IsValidSpectrum(SpectrumSnapshotMessage message)
     {
-        foreach (var item in message.Bands) if (item.BandId == 0 || string.IsNullOrWhiteSpace(item.Name) || Utf8.GetByteCount(item.Name) > ushort.MaxValue || !Positive(item.MinimumFrequencyMegahertz) || !Positive(item.MaximumFrequencyMegahertz) || item.MaximumFrequencyMegahertz <= item.MinimumFrequencyMegahertz) return false;
-        foreach (var item in message.FrequencyBlocks) if (item.FrequencyBlockId == 0 || item.BandId == 0 || !Positive(item.CenterFrequencyMegahertz) || !Positive(item.BandwidthMegahertz)) return false;
-        foreach (var item in message.Conflicts) if (item.FirstBlockId == 0 || item.SecondBlockId == 0 || item.FirstSiteId == 0 || item.SecondSiteId == 0 || string.IsNullOrWhiteSpace(item.Reason) || Utf8.GetByteCount(item.Reason) > ushort.MaxValue) return false;
+        var bandIds = new HashSet<ulong>();
+        foreach (var item in message.Bands) if (item.BandId == 0 || !bandIds.Add(item.BandId) || string.IsNullOrWhiteSpace(item.Name) || Utf8.GetByteCount(item.Name) > ushort.MaxValue || !Positive(item.MinimumFrequencyMegahertz) || !Positive(item.MaximumFrequencyMegahertz) || item.MaximumFrequencyMegahertz <= item.MinimumFrequencyMegahertz) return false;
+        var blockIds = new HashSet<ulong>();
+        foreach (var item in message.FrequencyBlocks) if (item.FrequencyBlockId == 0 || !blockIds.Add(item.FrequencyBlockId) || !bandIds.Contains(item.BandId) || !Positive(item.CenterFrequencyMegahertz) || !Positive(item.BandwidthMegahertz)) return false;
+        foreach (var item in message.Conflicts) if (!blockIds.Contains(item.FirstBlockId) || !blockIds.Contains(item.SecondBlockId) || item.FirstSiteId == 0 || item.SecondSiteId == 0 || string.IsNullOrWhiteSpace(item.Reason) || Utf8.GetByteCount(item.Reason) > ushort.MaxValue) return false;
         return true;
     }
 

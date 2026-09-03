@@ -112,6 +112,7 @@ public static class WorldEnvironmentProtocolCodec
             foreach (var point in feature.Geometry) if (!Finite(point.X) || !Finite(point.Y) || !Finite(point.Z)) return false;
         }
         foreach (var feature in message.Features) if (feature.ParentFeatureId != 0 && !featureIds.Contains(feature.ParentFeatureId)) return false;
+        if (!AcyclicParents(message.Features.Select(static item => (item.FeatureId, item.ParentFeatureId)))) return false;
 
         var toponymIds = new HashSet<ulong>();
         foreach (var toponym in message.Toponyms)
@@ -119,6 +120,23 @@ public static class WorldEnvironmentProtocolCodec
             if (toponym is null || toponym.ToponymId == 0 || toponym.ProvenanceKind > MaximumToponymProvenanceKind || !toponymIds.Add(toponym.ToponymId) || !featureIds.Contains(toponym.FeatureId) || !featureIds.Contains(toponym.SourceFeatureId) || string.IsNullOrWhiteSpace(toponym.Name) || toponym.Name.Length > MaximumTextLength || string.IsNullOrWhiteSpace(toponym.GeneratorKey) || toponym.GeneratorKey.Length > MaximumTextLength) return false;
         }
         foreach (var toponym in message.Toponyms) if (toponym.ParentToponymId != 0 && !toponymIds.Contains(toponym.ParentToponymId)) return false;
+        if (!AcyclicParents(message.Toponyms.Select(static item => (item.ToponymId, item.ParentToponymId)))) return false;
+        return true;
+    }
+
+    private static bool AcyclicParents(IEnumerable<(ulong Id, ulong ParentId)> nodes)
+    {
+        var parents = nodes.ToDictionary(static item => item.Id, static item => item.ParentId);
+        foreach (var start in parents.Keys)
+        {
+            var seen = new HashSet<ulong>();
+            var current = start;
+            while (parents.TryGetValue(current, out var parent) && parent != 0UL)
+            {
+                if (!seen.Add(current)) return false;
+                current = parent;
+            }
+        }
         return true;
     }
 

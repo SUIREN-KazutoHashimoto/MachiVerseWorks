@@ -128,9 +128,12 @@ public sealed partial class SimulationWorld
         var growthEventIds = ValidateRegionalIds(snapshot.GrowthEvents.Select(static item => item.Id.Value), "Historical growth event");
         var corridorIds = ValidateRegionalIds(snapshot.Corridors.Select(static item => item.Id.Value), "Regional corridor");
         var districtIds = ValidateRegionalIds(snapshot.Districts.Select(static item => item.Id.Value), "District");
-        var parcelIds = ValidateRegionalIds(snapshot.Parcels.Select(static item => item.Id.Value), "Parcel");
-        var buildingIds = ValidateRegionalIds(snapshot.Buildings.Select(static item => item.Id.Value), "Generated building");
+        _ = ValidateRegionalIds(snapshot.Parcels.Select(static item => item.Id.Value), "Parcel");
+        _ = ValidateRegionalIds(snapshot.Buildings.Select(static item => item.Id.Value), "Generated building");
         _ = ValidateRegionalIds(snapshot.Pois.Select(static item => item.Id.Value), "Generated POI");
+        var districtById = snapshot.Districts.ToDictionary(static item => item.Id);
+        var parcelById = snapshot.Parcels.ToDictionary(static item => item.Id);
+        var buildingById = snapshot.Buildings.ToDictionary(static item => item.Id);
         _ = ValidateRegionalIds(snapshot.RoadSigns.Select(static item => item.Id.Value), "Road sign");
 
         foreach (var toponym in snapshot.Toponyms)
@@ -152,6 +155,8 @@ public sealed partial class SimulationWorld
                     throw new ArgumentException("Human toponym natural-name provenance has mismatched feature references.", nameof(checkpoint));
             }
         }
+
+        ValidateAcyclicParentGraph(snapshot.Toponyms.Select(static item => (item.Id, item.Provenance.ParentHumanToponymId)), "Human toponym", nameof(checkpoint));
 
         foreach (var settlement in snapshot.Settlements)
         {
@@ -213,21 +218,25 @@ public sealed partial class SimulationWorld
         foreach (var parcel in snapshot.Parcels)
         {
             ArgumentNullException.ThrowIfNull(parcel);
-            if (!settlementIds.Contains(parcel.SettlementId.Value) || !districtIds.Contains(parcel.DistrictId.Value))
-                throw new ArgumentException("Parcel references invalid settlement or district state.", nameof(checkpoint));
+            if (!settlementIds.Contains(parcel.SettlementId.Value) || !districtById.TryGetValue(parcel.DistrictId, out var district) || district.SettlementId != parcel.SettlementId)
+                throw new ArgumentException("Parcel references an invalid or cross-Settlement district.", nameof(checkpoint));
             if (!Enum.IsDefined(parcel.Zone) || !Enum.IsDefined(parcel.DevelopmentState))
                 throw new ArgumentOutOfRangeException(nameof(checkpoint));
             ValidateUnit(parcel.DevelopmentSuitability, nameof(checkpoint));
             ValidateUnit(parcel.LandValue, nameof(checkpoint));
-            if (parcel.BuildingId is { } parcelBuildingId && !buildingIds.Contains(parcelBuildingId.Value))
-                throw new ArgumentException("Parcel references a missing generated building.", nameof(checkpoint));
+            if (parcel.BuildingId is { } parcelBuildingId
+                && (!buildingById.TryGetValue(parcelBuildingId, out var building) || building.ParcelId != parcel.Id))
+                throw new ArgumentException("Parcel and generated building references are not reciprocal.", nameof(checkpoint));
         }
 
+        var occupiedParcels = new HashSet<ParcelId>();
         foreach (var building in snapshot.Buildings)
         {
             ArgumentNullException.ThrowIfNull(building);
-            if (!parcelIds.Contains(building.ParcelId.Value))
-                throw new ArgumentException("Generated building references a missing parcel.", nameof(checkpoint));
+            if (!parcelById.TryGetValue(building.ParcelId, out var parcel) || parcel.BuildingId != building.Id || !occupiedParcels.Add(building.ParcelId))
+                throw new ArgumentException("Generated building ownership is missing, duplicated, or not reciprocal.", nameof(checkpoint));
+            if (!ContainsHorizontal(parcel.Bounds, building.Bounds))
+                throw new ArgumentException("Generated building bounds must be contained by its Parcel.", nameof(checkpoint));
             if (!Enum.IsDefined(building.Use) || building.Floors <= 0 || building.Floors > 256 || building.Capacity < 0 || building.HistoricalStage < 0)
                 throw new ArgumentOutOfRangeException(nameof(checkpoint));
         }
@@ -238,8 +247,11 @@ public sealed partial class SimulationWorld
             if (!settlementIds.Contains(poi.SettlementId.Value) || !Enum.IsDefined(poi.Kind))
                 throw new ArgumentException("Generated POI references invalid settlement state.", nameof(checkpoint));
             ValidatePoint(poi.Position);
-            if (poi.BuildingId is { } poiBuildingId && !buildingIds.Contains(poiBuildingId.Value))
-                throw new ArgumentException("Generated POI references a missing building.", nameof(checkpoint));
+            if (poi.BuildingId is { } poiBuildingId)
+            {
+                if (!buildingById.TryGetValue(poiBuildingId, out var building) || !parcelById.TryGetValue(building.ParcelId, out var parcel) || parcel.SettlementId != poi.SettlementId)
+                    throw new ArgumentException("Generated POI references a Building in a different Settlement hierarchy.", nameof(checkpoint));
+            }
             if (poi.NameId is { } poiNameId && !toponymIds.Contains(poiNameId.Value))
                 throw new ArgumentException("Generated POI references a missing name.", nameof(checkpoint));
         }
@@ -258,6 +270,9 @@ public sealed partial class SimulationWorld
 
         ValidateQuality(snapshot.Quality, checkpoint);
     }
+
+    private static bool ContainsHorizontal(WorldVolume outer, WorldVolume inner) =>
+        inner.MinX >= outer.MinX && inner.MaxX <= outer.MaxX && inner.MinY >= outer.MinY && inner.MaxY <= outer.MaxY;
 
     private static HashSet<ulong> ValidateRegionalIds(IEnumerable<ulong> ids, string name)
     {

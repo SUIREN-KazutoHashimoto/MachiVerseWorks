@@ -57,6 +57,10 @@ public sealed partial class SimulationWorld
                 if (!segmentIds.Contains(segmentId) || !localSegments.Add(segmentId))
                     throw new ArgumentException($"Railway route {route.Id.Value} references a missing or repeated TrackSegment {segmentId.Value}.", nameof(checkpoint));
             }
+            var derivedLength = serviceDefinitionValidator.GetDerivedRouteLength(route);
+            var lengthTolerance = Math.Max(1e-7, derivedLength * 1e-9);
+            if (Math.Abs(route.LengthMeters - derivedLength) > lengthTolerance)
+                throw new ArgumentException($"Railway route {route.Id.Value} length does not match its Track topology.", nameof(checkpoint));
         }
 
         var timetableById = new Dictionary<TimetableId, TimetableSnapshot>();
@@ -135,14 +139,35 @@ public sealed partial class SimulationWorld
 
         foreach (var service in services)
         {
-            if (service.TrainId is { } trainId)
+            if (service.TrainId is not { } trainId)
             {
-                if (!trainById.TryGetValue(trainId, out var train) || train.ServiceId != service.Id)
-                    throw new ArgumentException($"Railway service {service.Id.Value} references a missing or mismatched Train.", nameof(checkpoint));
+                if (service.State != RailwayServiceState.Planned || trains.Any(train => train.ServiceId == service.Id))
+                    throw new ArgumentException($"Railway service {service.Id.Value} has invalid Train lifecycle state.", nameof(checkpoint));
+                continue;
             }
-            else if (trains.Any(train => train.ServiceId == service.Id))
+            if (!trainById.TryGetValue(trainId, out var train) || train.ServiceId != service.Id)
+                throw new ArgumentException($"Railway service {service.Id.Value} references a missing or mismatched Train.", nameof(checkpoint));
+            var timetable = timetableById[service.TimetableId];
+            if ((service.State == RailwayServiceState.Completed) != (train.State == TrainMovementState.Completed))
+                throw new ArgumentException($"Railway service {service.Id.Value} and Train {train.Id.Value} disagree about completion.", nameof(checkpoint));
+            if (train.State == TrainMovementState.Dwelling && train.CurrentPlatformId is null)
+                throw new ArgumentException($"Dwelling Train {train.Id.Value} must occupy a Platform.", nameof(checkpoint));
+            switch (service.State)
             {
-                throw new ArgumentException($"Railway service {service.Id.Value} is missing its reverse Train reference.", nameof(checkpoint));
+                case RailwayServiceState.Planned:
+                    if (train.State is not (TrainMovementState.InDepot or TrainMovementState.WaitingForBlock)
+                        || train.RouteDistanceMeters > 1e-7 || train.SpeedMetersPerSecond > 1e-9
+                        || train.CurrentDepotId != service.OriginDepotId || service.NextStopIndex != 0)
+                        throw new ArgumentException($"Planned Railway service {service.Id.Value} has inconsistent Train state.", nameof(checkpoint));
+                    break;
+                case RailwayServiceState.Active:
+                    if (train.State is TrainMovementState.InDepot or TrainMovementState.Completed || train.CurrentDepotId is not null)
+                        throw new ArgumentException($"Active Railway service {service.Id.Value} has inconsistent Train state.", nameof(checkpoint));
+                    break;
+                case RailwayServiceState.Completed:
+                    if (train.CurrentDepotId != service.DestinationDepotId || service.NextStopIndex != timetable.Stops.Count)
+                        throw new ArgumentException($"Completed Railway service {service.Id.Value} is not finalized at its destination.", nameof(checkpoint));
+                    break;
             }
         }
     }

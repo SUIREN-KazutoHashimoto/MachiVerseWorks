@@ -278,6 +278,7 @@ function normalizeAndValidateSnapshot(raw: WireRegionalGenerationSnapshot): Regi
   const toponyms = Object.freeze(raw.toponyms.map(normalizeToponym));
   const toponymIds = uniquePositiveIds(toponyms.map((item) => item.toponymId), 'Toponym');
   for (const item of toponyms) if (item.parentHumanToponymId !== 0n && !toponymIds.has(item.parentHumanToponymId)) throw new ProtocolDecodeFailure('RegionalGeneration Toponym parent reference is invalid.');
+  assertAcyclicParents(toponyms.map((item) => [item.toponymId, item.parentHumanToponymId] as const), 'RegionalGeneration Toponym');
 
   const settlements = Object.freeze(raw.settlements.map(normalizeSettlement));
   const settlementIds = uniquePositiveIds(settlements.map((item) => item.settlementId), 'Settlement');
@@ -295,18 +296,31 @@ function normalizeAndValidateSnapshot(raw: WireRegionalGenerationSnapshot): Regi
   }
 
   const districts = Object.freeze(raw.districts.map(normalizeDistrict));
-  const districtIds = uniquePositiveIds(districts.map((item) => item.districtId), 'District');
+  uniquePositiveIds(districts.map((item) => item.districtId), 'District');
   for (const item of districts) {
     if (!settlementIds.has(item.settlementId)) throw new ProtocolDecodeFailure('RegionalGeneration District settlement reference is invalid.');
     if (!toponymIds.has(item.nameId)) throw new ProtocolDecodeFailure('RegionalGeneration District name reference is invalid.');
   }
 
+  const districtById = new Map(districts.map((item) => [item.districtId, item] as const));
   const parcels = Object.freeze(raw.parcels.map(normalizeParcel));
   const parcelIds = uniquePositiveIds(parcels.map((item) => item.parcelId), 'Parcel');
-  for (const item of parcels) if (!settlementIds.has(item.settlementId) || !districtIds.has(item.districtId)) throw new ProtocolDecodeFailure('RegionalGeneration Parcel stable reference is invalid.');
+  for (const item of parcels) {
+    const district = districtById.get(item.districtId);
+    if (!settlementIds.has(item.settlementId) || district === undefined || district.settlementId !== item.settlementId) throw new ProtocolDecodeFailure('RegionalGeneration Parcel hierarchy is invalid.');
+  }
 
   const buildings = Object.freeze(raw.buildings.map(normalizeBuilding));
   const buildingIds = uniquePositiveIds(buildings.map((item) => item.buildingId), 'Building');
+  const parcelById = new Map(parcels.map((item) => [item.parcelId, item] as const));
+  const buildingById = new Map(buildings.map((item) => [item.buildingId, item] as const));
+  const occupiedParcels = new Set<bigint>();
+  for (const building of buildings) {
+    const parcel = parcelById.get(building.parcelId);
+    if (parcel === undefined || parcel.buildingId !== building.buildingId || occupiedParcels.has(building.parcelId) || !containsHorizontal(parcel, building)) throw new ProtocolDecodeFailure('RegionalGeneration Building ownership or containment is invalid.');
+    occupiedParcels.add(building.parcelId);
+  }
+  for (const parcel of parcels) if (parcel.buildingId !== 0n && buildingById.get(parcel.buildingId)?.parcelId !== parcel.parcelId) throw new ProtocolDecodeFailure('RegionalGeneration Parcel/Building reciprocal reference is invalid.');
   for (const item of buildings) if (!parcelIds.has(item.parcelId)) throw new ProtocolDecodeFailure('RegionalGeneration Building parcel reference is invalid.');
   for (const item of parcels) if (item.buildingId !== 0n && !buildingIds.has(item.buildingId)) throw new ProtocolDecodeFailure('RegionalGeneration Parcel building reference is invalid.');
 
@@ -314,7 +328,10 @@ function normalizeAndValidateSnapshot(raw: WireRegionalGenerationSnapshot): Regi
   uniquePositiveIds(pois.map((item) => item.poiId), 'POI');
   for (const item of pois) {
     if (!settlementIds.has(item.settlementId)) throw new ProtocolDecodeFailure('RegionalGeneration POI settlement reference is invalid.');
-    if (item.buildingId !== 0n && !buildingIds.has(item.buildingId)) throw new ProtocolDecodeFailure('RegionalGeneration POI building reference is invalid.');
+    if (item.buildingId !== 0n) {
+      const building = buildingById.get(item.buildingId); const parcel = building === undefined ? undefined : parcelById.get(building.parcelId);
+      if (building === undefined || parcel === undefined || parcel.settlementId !== item.settlementId) throw new ProtocolDecodeFailure('RegionalGeneration POI building hierarchy is invalid.');
+    }
     if (item.nameId !== 0n && !toponymIds.has(item.nameId)) throw new ProtocolDecodeFailure('RegionalGeneration POI name reference is invalid.');
   }
 
@@ -334,6 +351,22 @@ function normalizeAndValidateSnapshot(raw: WireRegionalGenerationSnapshot): Regi
     minX: raw.minX, minY: raw.minY, minZ: raw.minZ, maxX: raw.maxX, maxY: raw.maxY, maxZ: raw.maxZ,
     settlements, growthEvents, corridors, districts, parcels, buildings, pois, toponyms, roadSigns, quality,
   });
+}
+
+function assertAcyclicParents(nodes: readonly (readonly [bigint, bigint])[], name: string): void {
+  const parents = new Map(nodes);
+  for (const start of parents.keys()) {
+    const seen = new Set<bigint>(); let current = start;
+    while (true) {
+      const parent = parents.get(current); if (parent === undefined || parent === 0n) break;
+      if (seen.has(current)) throw new ProtocolDecodeFailure(`${name} parent graph contains a cycle.`);
+      seen.add(current); current = parent;
+    }
+  }
+}
+
+function containsHorizontal(outer: { readonly minX:number; readonly minY:number; readonly maxX:number; readonly maxY:number }, inner: { readonly minX:number; readonly minY:number; readonly maxX:number; readonly maxY:number }): boolean {
+  return inner.minX >= outer.minX && inner.maxX <= outer.maxX && inner.minY >= outer.minY && inner.maxY <= outer.maxY;
 }
 
 function normalizeSettlement(raw: WireSettlement): SettlementObservation {
