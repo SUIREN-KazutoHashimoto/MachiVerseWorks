@@ -215,8 +215,9 @@ public sealed partial class SimulationWorld
         {
             var establishment = _economyEstablishments[establishmentIndex];
             if (!requiredWorkersByEstablishment.TryGetValue(establishment.Id, out var workers)) continue;
-            jobsByBuilding.TryGetValue(establishment.BuildingId, out var total);
-            jobsByBuilding[establishment.BuildingId] = checked(total + workers);
+            if (establishment.BuildingId is not { } buildingId) continue;
+            jobsByBuilding.TryGetValue(buildingId, out var total);
+            jobsByBuilding[buildingId] = checked(total + workers);
         }
 
         foreach (var building in CreateBuildingSnapshot().OrderBy(static item => item.Id.Value))
