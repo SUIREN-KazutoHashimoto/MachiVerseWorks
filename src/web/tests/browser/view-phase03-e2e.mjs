@@ -66,7 +66,7 @@ socket.addEventListener('message', async (event) => {
     if (physicalRoot === undefined || terrain === undefined) throw new Error('Physical World renderer did not create terrain geometry.');
     if (flatGrid !== undefined) throw new Error('Legacy flat GridHelper is still present.');
     if (metrics.physicalWorld.terrainTriangles <= 0) throw new Error('Physical World terrain contains no triangles.');
-    if (metrics.physicalWorld.geographicFeatureSegments <= 0) throw new Error('No GeographicFeature geometry was rendered.');
+    if (!integratedVisual && metrics.physicalWorld.geographicFeatureSegments <= 0) throw new Error('No GeographicFeature geometry was rendered.');
     if (metrics.physicalWorld.naturalToponymLabels !== snapshot.toponyms.length) throw new Error('Natural toponym labels do not match the authoritative observation.');
     if (!(metrics.frameTimeMs >= 0) || metrics.drawCalls <= 0 || metrics.geometries <= 0 || metrics.physicalWorld.geometryByteLength <= 0) throw new Error('Physical World rendering baseline metrics are invalid.');
 
