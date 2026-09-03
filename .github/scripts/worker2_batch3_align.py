@@ -61,4 +61,10 @@ replace_once(
         var checkpoint = world.CreateCheckpoint();
 ''')
 
+# The stronger #297/#302 hierarchy validation now rejects the broken Parcel earlier.
+replace_once(
+    "src/web/tests/regional-generation-protocol.test.mjs",
+    "/Parcel stable reference/",
+    "/Parcel hierarchy/")
+
 print("Batch 3 alignment applied")
