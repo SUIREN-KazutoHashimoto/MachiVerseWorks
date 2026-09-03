@@ -35,7 +35,13 @@ wait_http() {
   return 1
 }
 
-CHROME="$(find_chrome)"
+if [[ -n "${MVW_VISUAL_BROWSER:-}" ]]; then
+  CHROME="$MVW_VISUAL_BROWSER"
+  [[ -x "$CHROME" ]] || { echo "MVW_VISUAL_BROWSER is not executable: $CHROME" >&2; exit 1; }
+else
+  CHROME="$(find_chrome)"
+fi
+
 if [[ "${MVW_E2E_PREPARED:-0}" != "1" ]]; then
   dotnet restore "$ROOT_DIR/MachiVerseWorks.slnx" 2>&1 | tee "$ARTIFACT_DIR/dotnet-restore.log"
   dotnet build "$ROOT_DIR/MachiVerseWorks.slnx" --configuration Release --no-restore 2>&1 | tee "$ARTIFACT_DIR/dotnet-build.log"
