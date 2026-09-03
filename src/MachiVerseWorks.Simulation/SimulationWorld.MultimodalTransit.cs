@@ -282,9 +282,11 @@ public sealed partial class SimulationWorld
                 try
                 {
                     var route = FindRoadRoute(new RouteRequest(from.Position, to.Position, RoutingCostMetric.EstimatedTravelTime));
-                    vehicle.RoadVehicleId = CreateVehicle(route, new VehicleDimensions(12d, 2.55d, 3.2d), new VehiclePerformance(22.2222222222d, 1.2d, 3d, 2.5d, 2d));
+                    var estimatedArrivalTick = checked(tickCount + pattern.Stops[vehicle.StopIndex + 1].TravelTicksFromPrevious);
+                    var roadVehicleId = CreateVehicle(route, new VehicleDimensions(12d, 2.55d, 3.2d), new VehiclePerformance(22.2222222222d, 1.2d, 3d, 2.5d, 2d));
+                    vehicle.RoadVehicleId = roadVehicleId;
                     vehicle.State = TransitVehicleMovementState.EnRouteToStop;
-                    vehicle.EstimatedArrivalTick = checked(tickCount + pattern.Stops[vehicle.StopIndex + 1].TravelTicksFromPrevious);
+                    vehicle.EstimatedArrivalTick = estimatedArrivalTick;
                 }
                 catch (InvalidOperationException) { }
             }
@@ -333,9 +335,11 @@ public sealed partial class SimulationWorld
         try
         {
             var route = FindRoadRoute(new RouteRequest(origin, destination, RoutingCostMetric.EstimatedTravelTime));
-            vehicle.RoadVehicleId = CreateVehicle(route);
+            var estimatedArrivalTick = checked(Time.TickCount + SecondsToTicks(route.EstimatedTravelTimeSeconds));
+            var roadVehicleId = CreateVehicle(route);
+            vehicle.RoadVehicleId = roadVehicleId;
             vehicle.State = state;
-            vehicle.EstimatedArrivalTick = checked(Time.TickCount + SecondsToTicks(route.EstimatedTravelTimeSeconds));
+            vehicle.EstimatedArrivalTick = estimatedArrivalTick;
         }
         catch (InvalidOperationException)
         {

@@ -361,10 +361,12 @@ internal sealed class RailwayOperationsStore
     private static void ArriveAtStop(TrainState train, ServiceState service, TimetableStopSnapshot stop, ulong tickCount)
     {
         var arrivalDelay = tickCount > stop.PlannedArrivalTick ? tickCount - stop.PlannedArrivalTick : 0;
-        if (arrivalDelay > service.DelayTicks) service.DelayTicks = arrivalDelay;
-        var delayedPlannedDeparture = checked(stop.PlannedDepartureTick + service.DelayTicks);
+        var nextDelayTicks = Math.Max(service.DelayTicks, arrivalDelay);
+        var delayedPlannedDeparture = checked(stop.PlannedDepartureTick + nextDelayTicks);
         var minimumDwellDeparture = checked(tickCount + stop.MinimumDwellTicks);
-        train.DwellDepartureTick = Math.Max(delayedPlannedDeparture, minimumDwellDeparture);
+        var dwellDepartureTick = Math.Max(delayedPlannedDeparture, minimumDwellDeparture);
+        service.DelayTicks = nextDelayTicks;
+        train.DwellDepartureTick = dwellDepartureTick;
         train.CurrentPlatformId = train.AssignedPlatformId;
         train.SpeedMetersPerSecond = 0d;
         train.State = TrainMovementState.Dwelling;

@@ -120,13 +120,13 @@ public sealed partial class SimulationWorld
         var delayed = 0;
         var inventoryUnits = 0d;
         var inTransitUnits = 0d;
-        foreach (var inventory in _logisticsInventories.Values) inventoryUnits += inventory.Quantity;
+        foreach (var inventory in _logisticsInventories.Values) inventoryUnits = SimulationNumeric.SaturatingAddNonNegative(inventoryUnits, inventory.Quantity);
         foreach (var shipment in _logisticsShipments)
         {
             if (shipment.State is ShipmentState.Pickup or ShipmentState.Loading or ShipmentState.InTransit or ShipmentState.Unloading)
             {
                 inTransit++;
-                inTransitUnits += shipment.Quantity;
+                inTransitUnits = SimulationNumeric.SaturatingAddNonNegative(inTransitUnits, shipment.Quantity);
                 if (shipment.PlannedDeliveryTick != 0 && Time.TickCount > shipment.PlannedDeliveryTick) delayed++;
             }
         }

@@ -33,7 +33,10 @@ internal sealed class LaneOccupancyIndex
         return true;
     }
 
-    public bool TryGetLeader(LaneId laneId, double progressMeters, out OccupancyNeighbor leader)
+    public bool TryGetLeader(LaneId laneId, double progressMeters, out OccupancyNeighbor leader) =>
+        TryGetLeader(laneId, progressMeters, default, out leader);
+
+    public bool TryGetLeader(LaneId laneId, double progressMeters, VehicleId excludedId, out OccupancyNeighbor leader)
     {
         if (!entriesByLane.TryGetValue(laneId, out var set) || set.Count == 0) { leader = default; return false; }
         var view = set.GetViewBetween(
@@ -41,6 +44,7 @@ internal sealed class LaneOccupancyIndex
             new Entry(double.PositiveInfinity, new VehicleId(ulong.MaxValue), double.MaxValue, double.MaxValue));
         foreach (var entry in view)
         {
+            if (entry.Id == excludedId) continue;
             leader = new OccupancyNeighbor(entry.Id, entry.ProgressMeters, entry.LengthMeters, entry.SpeedMetersPerSecond);
             return true;
         }

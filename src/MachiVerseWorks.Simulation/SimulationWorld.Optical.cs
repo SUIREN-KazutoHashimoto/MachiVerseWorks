@@ -250,64 +250,61 @@ public sealed partial class SimulationWorld
 
     private void ApplyOpticalRoutingResult(OpticalRoutingResult result)
     {
+        ArgumentNullException.ThrowIfNull(result.Demands);
+        ArgumentNullException.ThrowIfNull(result.FiberCables);
+        ArgumentNullException.ThrowIfNull(result.Backhauls);
         var routes = new Dictionary<OpticalDemandId, OpticalDemandRouteResult>();
         foreach (var route in result.Demands)
         {
-            if (!routes.TryAdd(route.DemandId, route))
-                throw new InvalidOperationException($"Optical routing solver returned duplicate Demand {route.DemandId.Value}.");
+            if (!_opticalDemandIndex.ContainsKey(route.DemandId) || !routes.TryAdd(route.DemandId, route))
+                throw new InvalidOperationException("Optical routing solver returned an unknown or duplicate Demand.");
+            if (route.RouteCableIds is null) throw new InvalidOperationException("Optical routing solver returned a null route.");
         }
         var cableLoads = new Dictionary<FiberCableId, double>();
         foreach (var load in result.FiberCables)
         {
-            if (!cableLoads.TryAdd(load.FiberCableId, load.LoadGigabitsPerSecond))
-                throw new InvalidOperationException($"Optical routing solver returned duplicate FiberCable {load.FiberCableId.Value}.");
+            if (!_fiberCableIndex.TryGetValue(load.FiberCableId, out var cable) || !cableLoads.TryAdd(load.FiberCableId, load.LoadGigabitsPerSecond))
+                throw new InvalidOperationException("Optical routing solver returned an unknown or duplicate FiberCable.");
+            if (!double.IsFinite(load.LoadGigabitsPerSecond) || load.LoadGigabitsPerSecond < 0d || load.LoadGigabitsPerSecond > cable.CapacityGigabitsPerSecond + OpticalDefaults.BandwidthEpsilonGigabitsPerSecond)
+                throw new InvalidOperationException($"Optical routing solver returned invalid load for FiberCable {load.FiberCableId.Value}.");
         }
         var backhaulLoads = new Dictionary<OpticalBackhaulId, double>();
         foreach (var load in result.Backhauls)
         {
-            if (!backhaulLoads.TryAdd(load.BackhaulId, load.AllocatedGigabitsPerSecond))
-                throw new InvalidOperationException($"Optical routing solver returned duplicate Backhaul {load.BackhaulId.Value}.");
+            if (!_opticalBackhaulIndex.TryGetValue(load.BackhaulId, out var backhaul) || !backhaulLoads.TryAdd(load.BackhaulId, load.AllocatedGigabitsPerSecond))
+                throw new InvalidOperationException("Optical routing solver returned an unknown or duplicate Backhaul.");
+            if (!double.IsFinite(load.AllocatedGigabitsPerSecond) || load.AllocatedGigabitsPerSecond < 0d || load.AllocatedGigabitsPerSecond > backhaul.CapacityGigabitsPerSecond + OpticalDefaults.BandwidthEpsilonGigabitsPerSecond)
+                throw new InvalidOperationException($"Optical routing solver returned invalid load for Backhaul {load.BackhaulId.Value}.");
+        }
+        foreach (var demand in _opticalDemands)
+        {
+            if (!routes.TryGetValue(demand.Id, out var route)) continue;
+            if (!double.IsFinite(route.AllocatedGigabitsPerSecond) || route.AllocatedGigabitsPerSecond < 0d || route.AllocatedGigabitsPerSecond > demand.DemandGigabitsPerSecond + OpticalDefaults.BandwidthEpsilonGigabitsPerSecond)
+                throw new InvalidOperationException($"Optical routing solver returned invalid allocation for Demand {demand.Id.Value}.");
+            foreach (var cableId in route.RouteCableIds)
+                if (!_fiberCableIndex.ContainsKey(cableId)) throw new InvalidOperationException($"Optical routing solver returned unknown FiberCable {cableId.Value}.");
+            if (route.BackhaulId is { } backhaulId && !_opticalBackhaulIndex.ContainsKey(backhaulId))
+                throw new InvalidOperationException($"Optical routing solver returned unknown Backhaul {backhaulId.Value}.");
         }
 
         foreach (var cable in _fiberCables)
         {
             var load = cableLoads.GetValueOrDefault(cable.Id);
-            if (!double.IsFinite(load) || load < 0d || load > cable.CapacityGigabitsPerSecond + OpticalDefaults.BandwidthEpsilonGigabitsPerSecond)
-                throw new InvalidOperationException($"Optical routing solver returned invalid load for FiberCable {cable.Id.Value}.");
             cable.LoadGigabitsPerSecond = cable.IsInService ? Math.Min(cable.CapacityGigabitsPerSecond, load) : 0d;
         }
         foreach (var backhaul in _opticalBackhauls)
         {
             var load = backhaulLoads.GetValueOrDefault(backhaul.Id);
-            if (!double.IsFinite(load) || load < 0d || load > backhaul.CapacityGigabitsPerSecond + OpticalDefaults.BandwidthEpsilonGigabitsPerSecond)
-                throw new InvalidOperationException($"Optical routing solver returned invalid load for Backhaul {backhaul.Id.Value}.");
             backhaul.AllocatedGigabitsPerSecond = backhaul.IsInService ? Math.Min(backhaul.CapacityGigabitsPerSecond, load) : 0d;
         }
         foreach (var demand in _opticalDemands)
         {
-            if (!routes.TryGetValue(demand.Id, out var route))
-                route = new OpticalDemandRouteResult(demand.Id, null, 0d, Array.Empty<FiberCableId>());
-            if (!double.IsFinite(route.AllocatedGigabitsPerSecond)
-                || route.AllocatedGigabitsPerSecond < 0d
-                || route.AllocatedGigabitsPerSecond > demand.DemandGigabitsPerSecond + OpticalDefaults.BandwidthEpsilonGigabitsPerSecond)
-                throw new InvalidOperationException($"Optical routing solver returned invalid allocation for Demand {demand.Id.Value}.");
-            foreach (var cableId in route.RouteCableIds)
-            {
-                if (!_fiberCableIndex.ContainsKey(cableId))
-                    throw new InvalidOperationException($"Optical routing solver returned unknown FiberCable {cableId.Value}.");
-            }
-            if (route.BackhaulId is { } backhaulId && !_opticalBackhaulIndex.ContainsKey(backhaulId))
-                throw new InvalidOperationException($"Optical routing solver returned unknown Backhaul {backhaulId.Value}.");
-
+            if (!routes.TryGetValue(demand.Id, out var route)) route = new OpticalDemandRouteResult(demand.Id, null, 0d, Array.Empty<FiberCableId>());
             demand.AllocatedGigabitsPerSecond = Math.Min(demand.DemandGigabitsPerSecond, route.AllocatedGigabitsPerSecond);
             demand.BackhaulId = demand.AllocatedGigabitsPerSecond > OpticalDefaults.BandwidthEpsilonGigabitsPerSecond ? route.BackhaulId : null;
-            demand.RouteCableIds = demand.AllocatedGigabitsPerSecond > OpticalDefaults.BandwidthEpsilonGigabitsPerSecond
-                ? route.RouteCableIds.ToArray()
-                : Array.Empty<FiberCableId>();
+            demand.RouteCableIds = demand.AllocatedGigabitsPerSecond > OpticalDefaults.BandwidthEpsilonGigabitsPerSecond ? route.RouteCableIds.ToArray() : Array.Empty<FiberCableId>();
         }
-
-        foreach (var demand in _opticalDemands)
-            demand.QualityState = CalculateOpticalQuality(demand);
+        foreach (var demand in _opticalDemands) demand.QualityState = CalculateOpticalQuality(demand);
     }
 
     private OpticalQualityState CalculateOpticalQuality(OpticalDemandState demand)

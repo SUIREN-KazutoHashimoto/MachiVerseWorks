@@ -188,32 +188,44 @@ public sealed partial class SimulationWorld
             .OrderBy(static item => item.Id.Value)
             .Select(load => (Load: load, Demand: CalculatePowerDemand(load, nextTime)))
             .ToArray();
-        foreach (var item in calculatedDemands) item.Load.DemandMegawatts = item.Demand;
-
+        var demandByLoad = calculatedDemands.ToDictionary(static item => item.Load.Id, static item => item.Demand);
         var request = new PowerDispatchRequest(
             _powerNodes.OrderBy(static item => item.Id.Value).Select(static item => new PowerDispatchNode(item.Id)).ToArray(),
             _powerLines.OrderBy(static item => item.Id.Value).Select(static item => new PowerDispatchLine(item.Id, item.FromNodeId, item.ToNodeId, item.CapacityMegawatts, item.IsInService)).ToArray(),
             _powerGenerators.OrderBy(static item => item.Id.Value).Select(static item => new PowerDispatchGenerator(
-                item.Id,
-                item.NodeId,
-                item.OperatingState == GeneratorOperatingState.Online ? item.CapacityMegawatts : 0d)).ToArray(),
-            _powerLoads.OrderBy(static item => item.Id.Value).Select(static item => new PowerDispatchLoad(item.Id, item.NodeId, item.DemandMegawatts)).ToArray());
+                item.Id, item.NodeId, item.OperatingState == GeneratorOperatingState.Online ? item.CapacityMegawatts : 0d)).ToArray(),
+            _powerLoads.OrderBy(static item => item.Id.Value).Select(item => new PowerDispatchLoad(item.Id, item.NodeId, demandByLoad[item.Id])).ToArray());
         var result = _powerDispatchSolver.Solve(request) ?? throw new InvalidOperationException("Power dispatch solver returned no result.");
+        ArgumentNullException.ThrowIfNull(result.Generators);
+        ArgumentNullException.ThrowIfNull(result.Loads);
 
-        var generatorOutputs = result.Generators.ToDictionary(static item => item.GeneratorId, static item => item.OutputMegawatts);
-        var servedLoads = result.Loads.ToDictionary(static item => item.LoadId, static item => item.ServedMegawatts);
+        var generatorOutputs = new Dictionary<GeneratorId, double>();
+        foreach (var dispatch in result.Generators)
+        {
+            if (!_powerGeneratorIndex.TryGetValue(dispatch.GeneratorId, out var generator) || !generatorOutputs.TryAdd(dispatch.GeneratorId, dispatch.OutputMegawatts))
+                throw new InvalidOperationException("Power dispatch solver returned an unknown or duplicate Generator.");
+            if (!double.IsFinite(dispatch.OutputMegawatts) || dispatch.OutputMegawatts < 0d || dispatch.OutputMegawatts > generator.CapacityMegawatts + PowerDefaults.SupplyEpsilonMegawatts)
+                throw new InvalidOperationException($"Power dispatch solver returned invalid output for Generator {dispatch.GeneratorId.Value}.");
+        }
+        var servedLoads = new Dictionary<PowerLoadId, double>();
+        foreach (var dispatch in result.Loads)
+        {
+            if (!_powerLoadIndex.TryGetValue(dispatch.LoadId, out var load) || !servedLoads.TryAdd(dispatch.LoadId, dispatch.ServedMegawatts))
+                throw new InvalidOperationException("Power dispatch solver returned an unknown or duplicate Load.");
+            var demand = demandByLoad[load.Id];
+            if (!double.IsFinite(dispatch.ServedMegawatts) || dispatch.ServedMegawatts < 0d || dispatch.ServedMegawatts > demand + PowerDefaults.SupplyEpsilonMegawatts)
+                throw new InvalidOperationException($"Power dispatch solver returned invalid served demand for Load {dispatch.LoadId.Value}.");
+        }
+
+        foreach (var item in calculatedDemands) item.Load.DemandMegawatts = item.Demand;
         foreach (var generator in _powerGenerators)
         {
             var output = generatorOutputs.GetValueOrDefault(generator.Id);
-            if (!double.IsFinite(output) || output < 0d || output > generator.CapacityMegawatts + PowerDefaults.SupplyEpsilonMegawatts)
-                throw new InvalidOperationException($"Power dispatch solver returned invalid output for Generator {generator.Id.Value}.");
             generator.OutputMegawatts = generator.OperatingState == GeneratorOperatingState.Online ? Math.Min(generator.CapacityMegawatts, output) : 0d;
         }
         foreach (var load in _powerLoads)
         {
             var served = servedLoads.GetValueOrDefault(load.Id);
-            if (!double.IsFinite(served) || served < 0d || served > load.DemandMegawatts + PowerDefaults.SupplyEpsilonMegawatts)
-                throw new InvalidOperationException($"Power dispatch solver returned invalid served demand for Load {load.Id.Value}.");
             load.ServedMegawatts = Math.Min(load.DemandMegawatts, served);
             load.UnservedMegawatts = Math.Max(0d, load.DemandMegawatts - load.ServedMegawatts);
             load.SupplyState = load.UnservedMegawatts <= PowerDefaults.SupplyEpsilonMegawatts

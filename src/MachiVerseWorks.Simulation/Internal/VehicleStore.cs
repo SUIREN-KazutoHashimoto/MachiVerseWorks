@@ -98,10 +98,15 @@ internal sealed class VehicleStore
         intersectionControl.PrepareTick(tickCount, intents);
         if (vehicles.Count == 0) return;
 
-        foreach (var id in orderedIds)
+        var updateOrder = orderedIds
+            .Where(id => vehicles[id].State != VehicleMovementState.Arrived)
+            .OrderBy(id => vehicles[id].CurrentStep.LaneId.Value)
+            .ThenByDescending(id => topology.GetLaneTravelProgress(vehicles[id].CurrentStep.LaneId, vehicles[id].SegmentOffset))
+            .ThenBy(static id => id.Value)
+            .ToArray();
+        foreach (var id in updateOrder)
         {
             var vehicle = vehicles[id];
-            if (vehicle.State == VehicleMovementState.Arrived) continue;
             if (!occupancy.Remove(id)) throw new InvalidOperationException($"Vehicle {id.Value} was missing from Lane occupancy before update.");
             StepVehicle(vehicle, deltaSeconds, topology, occupancy, intersectionControl);
             ValidateState(vehicle, topology);
@@ -227,7 +232,7 @@ internal sealed class VehicleStore
         var targetSpeed = Math.Min(vehicle.Performance.MaximumSpeedMetersPerSecond, lane.Snapshot.SpeedLimitMetersPerSecond);
         var laneProgress = topology.GetLaneTravelProgress(vehicle.CurrentStep.LaneId, vehicle.SegmentOffset);
         var maximumAdvance = double.PositiveInfinity;
-        if (occupancyIndex.TryGetLeader(vehicle.CurrentStep.LaneId, laneProgress, out var leader))
+        if (occupancyIndex.TryGetLeader(vehicle.CurrentStep.LaneId, laneProgress, vehicle.Id, out var leader))
         {
             var bumperGap = leader.ProgressMeters - laneProgress - (leader.LengthMeters + vehicle.Dimensions.LengthMeters) * 0.5d;
             var freeGap = Math.Max(0d, bumperGap - vehicle.Performance.MinimumGapMeters);
