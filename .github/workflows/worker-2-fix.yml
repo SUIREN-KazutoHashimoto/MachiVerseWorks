@@ -28,10 +28,8 @@ jobs:
           from pathlib import Path
           path = Path('src/MachiVerseWorks.Simulation/SimulationWorld.RailwayOperations.Validation.cs')
           text = path.read_text(encoding='utf-8')
-          old = '''                || !routeById.ContainsKey(service.RouteId)
-                || !timetableById.TryGetValue(service.TimetableId, out var timetable)'''
-          new = '''                || !routeById.TryGetValue(service.RouteId, out var route)
-                || !timetableById.TryGetValue(service.TimetableId, out var timetable)'''
+          old = '|| !routeById.ContainsKey(service.RouteId)'
+          new = '|| !routeById.TryGetValue(service.RouteId, out var route)'
           if text.count(old) != 1:
               raise SystemExit('Railway service route lookup marker mismatch')
           text = text.replace(old, new, 1)
