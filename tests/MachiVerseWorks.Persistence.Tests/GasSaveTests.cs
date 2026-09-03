@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Nodes;
 using MachiVerseWorks.Simulation;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -30,9 +31,12 @@ public sealed class GasSaveTests
     public void ExistingFormatElevenSaveWithoutGasRestoresEmptyGasState()
     {
         var world = new SimulationWorld(new SimulationConfig(tickRate: 1, seed: 2502));
-        var json = Encoding.UTF8.GetString(WorldSaveSerializer.Serialize(world));
-        json = json.Replace(",\n      \"gas\": null", string.Empty, StringComparison.Ordinal);
-        var restored = WorldSaveSerializer.Deserialize(Encoding.UTF8.GetBytes(json));
+        var root = JsonNode.Parse(WorldSaveSerializer.Serialize(world))!.AsObject();
+        var economy = root["simulation"]!["economy"]!.AsObject();
+        Assert.IsTrue(economy.Remove("gas"));
+        Assert.IsFalse(economy.ContainsKey("gas"));
+
+        var restored = WorldSaveSerializer.Deserialize(Encoding.UTF8.GetBytes(root.ToJsonString()));
         Assert.AreEqual(0, restored.GasNodeCount); Assert.AreEqual(0, restored.GasPipelineCount); Assert.AreEqual(0, restored.GasServicePointCount);
     }
 
