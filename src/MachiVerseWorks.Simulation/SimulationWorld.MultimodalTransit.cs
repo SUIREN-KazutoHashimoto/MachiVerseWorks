@@ -102,9 +102,7 @@ public sealed partial class SimulationWorld
             throw new InvalidOperationException("Journey destination has no walkable Road access point.");
 
         var stops = _multimodalTransit.GetStops();
-        var patterns = _multimodalTransit.GetPatterns();
-        var lines = _multimodalTransit.GetLines().ToDictionary(static item => item.Id);
-        if (stops.Length == 0 || patterns.Length == 0)
+        if (stops.Length == 0 || _multimodalTransit.GetPatterns().Length == 0)
         {
             var walkTicks = SecondsToTicks(Distance(origin, destination) / DefaultWalkingSpeedMetersPerSecond);
             return _multimodalTransit.AddJourney(request.Id, startsAt, [new JourneyLegSnapshot(TransitMode.Walk, request.Origin, request.Destination, null, null, null, null, walkTicks)]);
@@ -127,36 +125,31 @@ public sealed partial class SimulationWorld
         {
             if (priority.Cost != best[currentIndex]) continue;
             var current = stops[currentIndex];
-            for (var patternIndex = 0; patternIndex < patterns.Length; patternIndex++)
+
+            foreach (var edge in _multimodalTransit.GetOutgoingPatternEdges(current.Id))
             {
-                var pattern = patterns[patternIndex];
-                for (var patternStopIndex = 0; patternStopIndex < pattern.Stops.Count - 1; patternStopIndex++)
+                var nextIndex = stopIndex[edge.ToStopId];
+                var candidate = checked(best[currentIndex] + edge.DurationTicks);
+                if (candidate < best[nextIndex])
                 {
-                    if (pattern.Stops[patternStopIndex].StopId != current.Id) continue;
-                    var nextPatternStop = pattern.Stops[patternStopIndex + 1];
-                    var nextIndex = stopIndex[nextPatternStop.StopId];
-                    var edgeTicks = checked(nextPatternStop.TravelTicksFromPrevious + pattern.Stops[patternStopIndex].DwellTicks);
-                    var candidate = checked(best[currentIndex] + edgeTicks);
-                    if (candidate < best[nextIndex])
-                    {
-                        best[nextIndex] = candidate;
-                        previous[nextIndex] = new JourneyEdge(current.Id, stops[nextIndex].Id, lines[pattern.LineId].Mode, pattern.LineId, pattern.RailwayServiceId, edgeTicks, 0);
-                        frontier.Enqueue(nextIndex, (candidate, stops[nextIndex].Id.Value));
-                    }
+                    best[nextIndex] = candidate;
+                    previous[nextIndex] = new JourneyEdge(current.Id, edge.ToStopId, edge.Mode, edge.LineId, edge.RailwayServiceId, edge.DurationTicks, 0);
+                    frontier.Enqueue(nextIndex, (candidate, edge.ToStopId.Value));
                 }
             }
-            for (var transferIndex = 0; transferIndex < stops.Length; transferIndex++)
+
+            foreach (var transferStop in _multimodalTransit.GetTransferCandidates(current.Position, DefaultTransferRadiusMeters))
             {
-                if (transferIndex == currentIndex) continue;
-                var meters = Distance(current.Position, stops[transferIndex].Position);
-                if (meters > DefaultTransferRadiusMeters) continue;
+                if (transferStop.Id == current.Id) continue;
+                var transferIndex = stopIndex[transferStop.Id];
+                var meters = Distance(current.Position, transferStop.Position);
                 var transferTicks = SecondsToTicks(meters / DefaultWalkingSpeedMetersPerSecond);
                 var candidate = checked(best[currentIndex] + transferTicks);
                 if (candidate < best[transferIndex])
                 {
                     best[transferIndex] = candidate;
-                    previous[transferIndex] = new JourneyEdge(current.Id, stops[transferIndex].Id, TransitMode.Walk, null, null, transferTicks, 0);
-                    frontier.Enqueue(transferIndex, (candidate, stops[transferIndex].Id.Value));
+                    previous[transferIndex] = new JourneyEdge(current.Id, transferStop.Id, TransitMode.Walk, null, null, transferTicks, 0);
+                    frontier.Enqueue(transferIndex, (candidate, transferStop.Id.Value));
                 }
             }
         }
