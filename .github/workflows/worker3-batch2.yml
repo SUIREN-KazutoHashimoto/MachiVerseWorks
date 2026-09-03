@@ -65,7 +65,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          git reset -- .github/workflows/worker3-batch2.yml scripts/worker3-batch2.py scripts/worker3-batch2-fixer.py
+          git reset -- .github/workflows/worker3-batch2.yml .github/workflows/ci.yml .github/workflows/e2e.yml .github/workflows/dependency-review.yml scripts/worker3-batch2.py scripts/worker3-batch2-fixer.py
           git diff --cached --check
           git commit -m 'fix: resolve worker-3 issues 246-304 batch 2'
           git push origin HEAD:fix/all-open-issues-worker-3
