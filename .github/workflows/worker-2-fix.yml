@@ -30,8 +30,8 @@ jobs:
           old = 'number_integer_count != 5'
           if text.count(old) != 1:
               raise SystemExit('Persistent Int32 guard marker mismatch')
-          text = text.replace(old, 'number_integer_count != 6', 1)
-          text = text.replace('expected 5 Number.isInteger Int32 uses', 'expected 6 Number.isInteger Int32 uses', 1)
+          text = text.replace(old, 'number_integer_count != 7', 1)
+          text = text.replace('expected 5 Number.isInteger Int32 uses', 'expected 7 Number.isInteger Int32 uses', 1)
           path.write_text(text, encoding='utf-8')
       - name: Apply final batch fixes
         run: python .github/scripts/worker2_batch4.py
