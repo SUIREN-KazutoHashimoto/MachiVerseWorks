@@ -94,8 +94,19 @@ public sealed partial class SimulationWorld
         _radioLinks.Add(state);
         _radioLinkIndex.Add(id, state);
         MarkRadioCandidateIndexesDirty();
-        RecalculateRadioPlan();
-        return id;
+        try
+        {
+            RecalculateRadioPlan();
+            _nextRadioLinkId++;
+            return id;
+        }
+        catch
+        {
+            _radioLinks.Remove(state);
+            _radioLinkIndex.Remove(id);
+            MarkRadioCandidateIndexesDirty();
+            throw;
+        }
     }
 
     public RadioPeerId CreateRadioPeer(
