@@ -113,21 +113,19 @@ public sealed partial class SimulationWorld
         if (!TryResolveRoadAccessPosition(request.Destination, RoadAccessMode.Foot, out var destination))
             throw new InvalidOperationException("Journey destination has no walkable Road access point.");
 
-        var stops = _multimodalTransit.GetStops();
-        if (stops.Length == 0 || _multimodalTransit.PatternCount == 0)
+        var stops = _multimodalTransit.GetOrderedStops();
+        var stopCount = stops.Count;
+        if (stopCount == 0 || _multimodalTransit.PatternCount == 0)
         {
             var walkTicks = SecondsToTicks(Distance(origin, destination) / DefaultWalkingSpeedMetersPerSecond);
             return _multimodalTransit.AddJourney(request.Id, startsAt, [new JourneyLegSnapshot(TransitMode.Walk, request.Origin, request.Destination, null, null, null, null, walkTicks)]);
         }
 
-        var stopIndex = new Dictionary<TransitStopId, int>(stops.Length);
-        for (var index = 0; index < stops.Length; index++) stopIndex.Add(stops[index].Id, index);
-        var best = new ulong[stops.Length];
-        var previous = new JourneyEdge?[stops.Length];
+        var best = new ulong[stopCount];
+        var previous = new JourneyEdge?[stopCount];
         Array.Fill(best, ulong.MaxValue);
         var frontier = new PriorityQueue<int, (ulong Cost, ulong StopId)>();
-        var transferCandidateIds = new TransitStopId[stops.Length];
-        for (var index = 0; index < stops.Length; index++)
+        for (var index = 0; index < stopCount; index++)
         {
             var accessTicks = SecondsToTicks(Distance(origin, stops[index].Position) / DefaultWalkingSpeedMetersPerSecond);
             best[index] = accessTicks;
@@ -143,41 +141,36 @@ public sealed partial class SimulationWorld
             for (var edgeIndex = 0; edgeIndex < outgoingEdges.Count; edgeIndex++)
             {
                 var edge = outgoingEdges[edgeIndex];
-                var nextIndex = stopIndex[edge.ToStopId];
+                var nextIndex = edge.ToStopOrdinal;
                 var candidate = checked(best[currentIndex] + edge.DurationTicks);
                 if (candidate < best[nextIndex])
                 {
                     best[nextIndex] = candidate;
-                    previous[nextIndex] = new JourneyEdge(current.Id, edge.ToStopId, edge.Mode, edge.LineId, edge.RailwayServiceId, edge.DurationTicks, 0);
+                    previous[nextIndex] = new JourneyEdge(currentIndex, current.Id, edge.ToStopId, edge.Mode, edge.LineId, edge.RailwayServiceId, edge.DurationTicks, 0);
                     frontier.Enqueue(nextIndex, (candidate, edge.ToStopId.Value));
                 }
             }
 
-            var transferCandidateCount = _multimodalTransit.CopyTransferCandidateIds(
-                current.Position,
-                DefaultTransferRadiusMeters,
-                transferCandidateIds);
-            for (var transferCandidateIndex = 0; transferCandidateIndex < transferCandidateCount; transferCandidateIndex++)
+            var transferNeighbors = _multimodalTransit.GetTransferNeighbors(current.Id);
+            for (var neighborIndex = 0; neighborIndex < transferNeighbors.Count; neighborIndex++)
             {
-                var transferStopId = transferCandidateIds[transferCandidateIndex];
-                if (transferStopId == current.Id) continue;
-                var transferIndex = stopIndex[transferStopId];
-                var transferStop = stops[transferIndex];
-                var meters = Distance(current.Position, transferStop.Position);
-                var transferTicks = SecondsToTicks(meters / DefaultWalkingSpeedMetersPerSecond);
+                var neighbor = transferNeighbors[neighborIndex];
+                var transferIndex = neighbor.StopOrdinal;
+                if (transferIndex == currentIndex) continue;
+                var transferTicks = SecondsToTicks(neighbor.DistanceMeters / DefaultWalkingSpeedMetersPerSecond);
                 var candidate = checked(best[currentIndex] + transferTicks);
                 if (candidate < best[transferIndex])
                 {
                     best[transferIndex] = candidate;
-                    previous[transferIndex] = new JourneyEdge(current.Id, transferStop.Id, TransitMode.Walk, null, null, transferTicks, 0);
-                    frontier.Enqueue(transferIndex, (candidate, transferStop.Id.Value));
+                    previous[transferIndex] = new JourneyEdge(currentIndex, current.Id, neighbor.StopId, TransitMode.Walk, null, null, transferTicks, 0);
+                    frontier.Enqueue(transferIndex, (candidate, neighbor.StopId.Value));
                 }
             }
         }
 
         var destinationIndex = -1;
         var destinationCost = ulong.MaxValue;
-        for (var index = 0; index < stops.Length; index++)
+        for (var index = 0; index < stopCount; index++)
         {
             if (previous[index] is null) continue;
             var egress = SecondsToTicks(Distance(stops[index].Position, destination) / DefaultWalkingSpeedMetersPerSecond);
@@ -199,7 +192,7 @@ public sealed partial class SimulationWorld
         while (previous[cursor] is { } edge)
         {
             reversed.Add(edge);
-            cursor = stopIndex[edge.FromStopId];
+            cursor = edge.FromStopOrdinal;
         }
         reversed.Reverse();
         var legs = new List<JourneyLegSnapshot>(reversed.Count + 2);
@@ -544,6 +537,7 @@ public sealed partial class SimulationWorld
     }
 
     private readonly record struct JourneyEdge(
+        int FromStopOrdinal,
         TransitStopId FromStopId,
         TransitStopId ToStopId,
         TransitMode Mode,
