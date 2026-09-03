@@ -243,9 +243,9 @@ public sealed partial class SimulationWorld
             if (supplier is null) continue;
             if (!_logisticsInventories.TryGetValue((order.DestinationEstablishmentId, order.CommodityId), out var destination)) continue;
 
-            supplier.Quantity -= order.Quantity;
             EnsureLogisticsIdCapacity(_nextShipmentId, "Shipment");
-            var shipmentId = new ShipmentId(_nextShipmentId++);
+            var loadingCompleteTick = checked(tickCount + LogisticsDefaults.LoadingTicks);
+            var shipmentId = new ShipmentId(_nextShipmentId);
             var shipment = new LogisticsShipmentStateData(
                 shipmentId,
                 order.Id,
@@ -256,7 +256,10 @@ public sealed partial class SimulationWorld
                 supplier.RoadAccessPointId,
                 destination.RoadAccessPointId,
                 tickCount,
-                checked(tickCount + LogisticsDefaults.LoadingTicks));
+                loadingCompleteTick);
+
+            supplier.Quantity -= order.Quantity;
+            _nextShipmentId++;
             _logisticsShipments.Add(shipment);
             _logisticsShipmentIndex.Add(shipmentId, shipment);
             order.State = LogisticsOrderState.Allocated;
@@ -277,15 +280,25 @@ public sealed partial class SimulationWorld
             if (shipment.State == ShipmentState.Loading && tickCount >= shipment.LoadingCompleteTick)
             {
                 if (!TryCreateFreightRoute(shipment.PickupAccessPointId, shipment.DeliveryAccessPointId, out var route)) continue;
-                shipment.VehicleId = CreateVehicle(
-                    route,
-                    LogisticsDefaults.FreightVehicleDimensions,
-                    LogisticsDefaults.FreightVehiclePerformance,
-                    initialSpeedMetersPerSecond: 0d);
+                var travelTicks = Math.Max(1UL, checked((ulong)Math.Ceiling(route.EstimatedTravelTimeSeconds * Config.TickRate)));
+                var plannedDeliveryTick = checked(tickCount + travelTicks + LogisticsDefaults.UnloadingTicks);
+                VehicleId vehicleId;
+                try
+                {
+                    vehicleId = CreateVehicle(
+                        route,
+                        LogisticsDefaults.FreightVehicleDimensions,
+                        LogisticsDefaults.FreightVehiclePerformance,
+                        initialSpeedMetersPerSecond: 0d);
+                }
+                catch (InvalidOperationException)
+                {
+                    continue;
+                }
+                shipment.VehicleId = vehicleId;
                 shipment.State = ShipmentState.InTransit;
                 shipment.DispatchedTick = tickCount;
-                var travelTicks = Math.Max(1UL, checked((ulong)Math.Ceiling(route.EstimatedTravelTimeSeconds * Config.TickRate)));
-                shipment.PlannedDeliveryTick = checked(tickCount + travelTicks + LogisticsDefaults.UnloadingTicks);
+                shipment.PlannedDeliveryTick = plannedDeliveryTick;
                 continue;
             }
 
