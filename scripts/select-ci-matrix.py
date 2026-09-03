@@ -3,9 +3,10 @@
 
 E2E falls back to the full suite for cross-cutting or unknown changes.
 PR benchmarks stay focused on affected code domains, while shared runtime or
-build changes fall back to the full benchmark suite. Workflow-only and
-standalone-benchmark-only changes are validated by their dedicated workflow plus
-the central smoke job instead of unrelated central performance gates.
+build changes fall back to the full benchmark suite. Standalone-benchmark-only
+changes are validated by their dedicated workflow plus the central smoke job.
+Changes to the central benchmark workflow or this selector validate the full
+central benchmark matrix.
 """
 
 from __future__ import annotations
@@ -83,11 +84,13 @@ BENCHMARK_CROSS_CUTTING_PREFIXES = (
 )
 
 BENCHMARK_CROSS_CUTTING_FILES = {
+    ".github/workflows/benchmarks.yml",
     "Directory.Build.props",
     "Directory.Packages.props",
     "MachiVerseWorks.slnx",
     "global.json",
     "scripts/compare-benchmark-results.py",
+    "scripts/select-ci-matrix.py",
     "src/MachiVerseWorks.Simulation/Geometry.cs",
 }
 
@@ -179,7 +182,7 @@ def select_e2e(files: list[str], full: bool) -> dict[str, object]:
 
             matched = False
             mappings = [
-                (("roadnetwork", "road-network", "routing"), {"road-network", "road-traffic", "signal-traffic"}),
+                (("roadnetwork", "road-network", "routing"), {"road-network", "road-traffic", "signal-traffic", "gas"}),
                 (("roadtraffic", "traffic", "vehicle"), {"road-traffic", "signal-traffic"}),
                 (("intersection", "signal"), {"signal-traffic", "road-traffic"}),
                 (("population",), {"population", "pedestrian", "economy"}),
@@ -193,7 +196,7 @@ def select_e2e(files: list[str], full: bool) -> dict[str, object]:
                 (("gas",), {"gas"}),
                 (("optical",), {"optical", "radio-spectrum"}),
                 (("radio", "spectrum"), {"radio-spectrum"}),
-                (("worldenvironment", "environment", "weather", "climate"), {"world-environment"}),
+                (("worldenvironment", "environment", "weather", "climate"), {"world-environment", "view-physical-world"}),
                 (("regional", "settlement", "toponym"), {"view-physical-world", "view-settlement-structure", "view-settlement-structure-live"}),
             ]
             for terms, ids in mappings:
@@ -274,7 +277,7 @@ def select_benchmarks(files: list[str], full: bool) -> dict[str, object]:
             matched = False
             mappings = [
                 (("roadnetwork", "road-network"), {"road-network", "routing"}, set()),
-                (("routing",), {"routing"}, set()),
+                (("routing",), {"routing", "gas"}, set()),
                 (("intersection", "signal"), {"intersection-control"}, set()),
                 (("roadtraffic", "traffic", "vehicle"), set(), {"road-traffic"}),
                 (("population",), set(), {"population"}),
