@@ -28,7 +28,7 @@ public static class RegionalGenerationSnapshotChunker
         ulong snapshotId)
     {
         ArgumentNullException.ThrowIfNull(message);
-        if (snapshotId == 0) throw new ArgumentOutOfRangeException(nameof(snapshotId));
+        ArgumentOutOfRangeException.ThrowIfZero(snapshotId);
         RegionalGenerationProtocolCodec.Validate(message);
         var payload = JsonSerializer.SerializeToUtf8Bytes(message, SerializerOptions);
         if (payload.Length > MaximumAggregatePayloadBytes)
