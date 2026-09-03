@@ -114,7 +114,7 @@ public sealed partial class SimulationWorld
             throw new InvalidOperationException("Journey destination has no walkable Road access point.");
 
         var stops = _multimodalTransit.GetStops();
-        if (stops.Length == 0 || _multimodalTransit.GetPatterns().Length == 0)
+        if (stops.Length == 0 || _multimodalTransit.PatternCount == 0)
         {
             var walkTicks = SecondsToTicks(Distance(origin, destination) / DefaultWalkingSpeedMetersPerSecond);
             return _multimodalTransit.AddJourney(request.Id, startsAt, [new JourneyLegSnapshot(TransitMode.Walk, request.Origin, request.Destination, null, null, null, null, walkTicks)]);
@@ -126,6 +126,11 @@ public sealed partial class SimulationWorld
         var previous = new JourneyEdge?[stops.Length];
         Array.Fill(best, ulong.MaxValue);
         var frontier = new PriorityQueue<int, (ulong Cost, ulong StopId)>();
+        Span<TransitStopId> transferCandidateIds;
+        if (stops.Length <= 256)
+            transferCandidateIds = stackalloc TransitStopId[stops.Length];
+        else
+            transferCandidateIds = new TransitStopId[stops.Length];
         for (var index = 0; index < stops.Length; index++)
         {
             var accessTicks = SecondsToTicks(Distance(origin, stops[index].Position) / DefaultWalkingSpeedMetersPerSecond);
@@ -138,8 +143,10 @@ public sealed partial class SimulationWorld
             if (priority.Cost != best[currentIndex]) continue;
             var current = stops[currentIndex];
 
-            foreach (var edge in _multimodalTransit.GetOutgoingPatternEdges(current.Id))
+            var outgoingEdges = _multimodalTransit.GetOutgoingPatternEdges(current.Id);
+            for (var edgeIndex = 0; edgeIndex < outgoingEdges.Count; edgeIndex++)
             {
+                var edge = outgoingEdges[edgeIndex];
                 var nextIndex = stopIndex[edge.ToStopId];
                 var candidate = checked(best[currentIndex] + edge.DurationTicks);
                 if (candidate < best[nextIndex])
@@ -150,10 +157,16 @@ public sealed partial class SimulationWorld
                 }
             }
 
-            foreach (var transferStop in _multimodalTransit.GetTransferCandidates(current.Position, DefaultTransferRadiusMeters))
+            var transferCandidateCount = _multimodalTransit.CopyTransferCandidateIds(
+                current.Position,
+                DefaultTransferRadiusMeters,
+                transferCandidateIds);
+            for (var transferCandidateIndex = 0; transferCandidateIndex < transferCandidateCount; transferCandidateIndex++)
             {
-                if (transferStop.Id == current.Id) continue;
-                var transferIndex = stopIndex[transferStop.Id];
+                var transferStopId = transferCandidateIds[transferCandidateIndex];
+                if (transferStopId == current.Id) continue;
+                var transferIndex = stopIndex[transferStopId];
+                var transferStop = stops[transferIndex];
                 var meters = Distance(current.Position, transferStop.Position);
                 var transferTicks = SecondsToTicks(meters / DefaultWalkingSpeedMetersPerSecond);
                 var candidate = checked(best[currentIndex] + transferTicks);
