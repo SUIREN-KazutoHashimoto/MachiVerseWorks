@@ -22,13 +22,22 @@ public sealed class LogisticsSimulationTests
         for (var tick = 0; tick < 100; tick++)
         {
             world.Step();
-            var state = world.CreateLogisticsSnapshot().Shipments.Single().State;
-            if (state == ShipmentState.Unloading) observedUnloading = true;
-            if (state == ShipmentState.Delivered) break;
+            var snapshot = world.CreateLogisticsSnapshot();
+            if (snapshot.Shipments.Count == 0)
+            {
+                if (snapshot.Statistics.DeliveredShipmentCount > 0) break;
+                continue;
+            }
+
+            if (snapshot.Shipments.Single().State == ShipmentState.Unloading) observedUnloading = true;
         }
 
+        var finalSnapshot = world.CreateLogisticsSnapshot();
         Assert.IsTrue(observedUnloading);
-        Assert.AreEqual(ShipmentState.Delivered, world.CreateLogisticsSnapshot().Shipments.Single().State);
+        Assert.AreEqual(1UL, finalSnapshot.Statistics.DeliveredShipmentCount);
+        Assert.AreEqual(0, finalSnapshot.Statistics.OpenOrderCount);
+        Assert.AreEqual(0, finalSnapshot.Statistics.ShipmentCount);
+        Assert.AreEqual(0, finalSnapshot.Shipments.Count);
     }
 
     [TestMethod]
@@ -78,11 +87,8 @@ public sealed class LogisticsSimulationTests
         var statistics = world.CreateLogisticsStatistics();
         Assert.AreEqual(1UL, statistics.DeliveredShipmentCount);
         Assert.AreEqual(0, statistics.OpenOrderCount);
-        Assert.AreEqual(1, statistics.ShipmentCount);
-        var shipment = world.CreateLogisticsSnapshot().Shipments.Single();
-        Assert.AreEqual(ShipmentState.Delivered, shipment.State);
-        Assert.IsNotNull(shipment.VehicleId);
-        Assert.IsFalse(world.TryGetVehicleSnapshot(shipment.VehicleId.Value, out _));
+        Assert.AreEqual(0, statistics.ShipmentCount);
+        Assert.AreEqual(0, world.CreateLogisticsSnapshot().Shipments.Count);
         Assert.AreEqual(0, world.VehicleCount);
     }
 
