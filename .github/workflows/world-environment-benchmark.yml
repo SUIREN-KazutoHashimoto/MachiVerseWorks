@@ -6,6 +6,7 @@ on:
     paths:
       - 'src/MachiVerseWorks.Simulation/WorldEnvironment*.cs'
       - 'src/MachiVerseWorks.Simulation/TerrainModel.cs'
+      - 'src/MachiVerseWorks.Simulation/Geometry.cs'
       - 'src/MachiVerseWorks.Simulation/SimulationWorld.Environment*.cs'
       - 'src/MachiVerseWorks.Simulation/SimulationWorld.cs'
       - 'src/MachiVerseWorks.Simulation/SimulationNumeric.cs'
@@ -17,6 +18,7 @@ on:
     paths:
       - 'src/MachiVerseWorks.Simulation/WorldEnvironment*.cs'
       - 'src/MachiVerseWorks.Simulation/TerrainModel.cs'
+      - 'src/MachiVerseWorks.Simulation/Geometry.cs'
       - 'src/MachiVerseWorks.Simulation/SimulationWorld.Environment*.cs'
       - 'src/MachiVerseWorks.Simulation/SimulationWorld.cs'
       - 'src/MachiVerseWorks.Simulation/SimulationNumeric.cs'
