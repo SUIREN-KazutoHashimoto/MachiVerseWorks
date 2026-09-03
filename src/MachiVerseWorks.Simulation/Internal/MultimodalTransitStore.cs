@@ -231,7 +231,7 @@ internal sealed class MultimodalTransitStore
     public IReadOnlyList<TransitPatternEdge> GetOutgoingPatternEdges(TransitStopId stopId) =>
         outgoingPatternEdges.TryGetValue(stopId, out var edges) ? edges : Array.Empty<TransitPatternEdge>();
 
-    public int CopyTransferCandidateIds(WorldPoint position, double radiusMeters, Span<TransitStopId> destination)
+    public int CopyTransferCandidateIds(WorldPoint position, double radiusMeters, scoped Span<TransitStopId> destination)
     {
         if (!double.IsFinite(radiusMeters) || radiusMeters < 0d) throw new ArgumentOutOfRangeException(nameof(radiusMeters));
         if (radiusMeters == 0d) return 0;
