@@ -75,11 +75,13 @@ socket.addEventListener('message', async (event) => {
       const buildingMesh = view.scene.getObjectByName('regional-buildings');
       if (agentMesh === undefined || buildingMesh === undefined) throw new Error('Integrated visual fixture did not create Agent and Building presentation.');
       if (settlementRenderer?.metrics.buildings !== 1) throw new Error('Integrated visual fixture did not render exactly one Building.');
+      if (settlementRenderer.metrics.labels !== 0) throw new Error('Integrated visual fixture must not obscure geometry with Toponym labels.');
       if (entities.size !== integratedFixture.agents.length) throw new Error('Integrated visual fixture Agent count changed unexpectedly.');
       for (const agent of integratedFixture.agents) {
         const groundingDelta = Math.abs(agent.z - agent.groundZ);
         if (groundingDelta > 0.000_001) throw new Error(`Agent ${agent.agentId.toString()} is not grounded: ${String(groundingDelta)}m.`);
       }
+      if (Math.abs(integratedFixture.buildingBaseZ - integratedFixture.focus.z) > 0.000_001) throw new Error('Integrated visual fixture Building base is not grounded on the reference terrain sample.');
     }
 
     clearTimeout(timeout);
@@ -113,6 +115,8 @@ socket.addEventListener('message', async (event) => {
           groundingDeltaMeters: Math.abs(agent.z - agent.groundZ),
         })) ?? [],
         buildingCount: settlementRenderer?.metrics.buildings ?? 0,
+        buildingBaseZ: integratedFixture?.buildingBaseZ ?? null,
+        buildingGroundingDeltaMeters: integratedFixture === null ? null : Math.abs(integratedFixture.buildingBaseZ - integratedFixture.focus.z),
         terrainTriangles: metrics.physicalWorld.terrainTriangles,
       }),
     });
@@ -156,30 +160,31 @@ function positionIntegratedVisualCamera(checkpoint, fixture) {
   const focus = fixture.focus;
   const camera = view.camera;
   if (checkpoint === 'world-overview') {
-    camera.position.set(focus.x + 1_500, focus.z + 1_300, focus.y + 1_800);
+    camera.position.set(focus.x + 900, focus.z + 650, focus.y + 1_000);
     camera.lookAt(focus.x, focus.z + 20, focus.y);
     camera.far = Math.max(camera.far, 10_000);
     camera.updateProjectionMatrix();
-    return 2_500;
+    return 1_500;
   }
   if (checkpoint === 'terrain-closeup') {
-    camera.position.set(focus.x + 650, focus.z + 420, focus.y + 650);
-    camera.lookAt(focus.x, focus.z, focus.y);
+    camera.position.set(focus.x + 430, focus.z + 260, focus.y + 500);
+    camera.lookAt(focus.x, focus.z + 4, focus.y);
     camera.updateProjectionMatrix();
-    return 900;
+    return 760;
   }
   if (checkpoint === 'city-center') {
-    camera.position.set(focus.x + 260, focus.z + 190, focus.y + 300);
-    camera.lookAt(focus.x, focus.z + 25, focus.y);
+    camera.position.set(focus.x + 180, focus.z + 120, focus.y + 220);
+    camera.lookAt(focus.x, focus.z + 30, focus.y);
     camera.updateProjectionMatrix();
-    return 420;
+    return 320;
   }
   if (checkpoint === 'agent-grounding') {
-    const agent = fixture.agents[0];
-    camera.position.set(agent.x + 28, agent.z + 18, agent.y + 34);
+    const agent = fixture.agents[1];
+    if (agent === undefined) throw new Error('Integrated visual fixture requires a second grounded Agent for the close-up checkpoint.');
+    camera.position.set(agent.x + 22, agent.z + 13, agent.y + 28);
     camera.lookAt(agent.x, agent.z + 2.5, agent.y);
     camera.updateProjectionMatrix();
-    return 48;
+    return 40;
   }
   throw new Error(`Unknown integrated visual checkpoint: ${checkpoint}`);
 }
@@ -224,12 +229,12 @@ function createIntegratedFixture(snapshot) {
     maxY: focus.y + 500,
     maxZ: baseZ + 120,
     settlements: Object.freeze([
-      settlement(101n, focus.x, focus.y, baseZ, 3, 0, 800, 1001n, 8_000, 4_200),
+      settlement(101n, focus.x, focus.y, baseZ, 3, 0, 800, 0n, 8_000, 4_200),
     ]),
     growthEvents: Object.freeze([]),
     corridors: Object.freeze([]),
     districts: Object.freeze([
-      { districtId: 201n, settlementId: 101n, kind: 1, minX: focus.x - 220, minY: focus.y - 220, minZ: baseZ, maxX: focus.x + 220, maxY: focus.y + 220, maxZ: baseZ + 2, nameId: 1002n, accessibility: 1 },
+      { districtId: 201n, settlementId: 101n, kind: 1, minX: focus.x - 220, minY: focus.y - 220, minZ: baseZ, maxX: focus.x + 220, maxY: focus.y + 220, maxZ: baseZ + 2, nameId: 0n, accessibility: 1 },
     ]),
     parcels: Object.freeze([
       { parcelId: 301n, settlementId: 101n, districtId: 201n, minX: focus.x - halfParcel, minY: focus.y - halfParcel, minZ: baseZ, maxX: focus.x + halfParcel, maxY: focus.y + halfParcel, maxZ: baseZ + 1, zone: 1, developmentState: 2, developmentSuitability: 1, landValue: 1, buildingId: 401n },
@@ -238,13 +243,9 @@ function createIntegratedFixture(snapshot) {
       { buildingId: 401n, parcelId: 301n, use: 1, minX: focus.x - halfBuilding, minY: focus.y - halfBuilding, minZ: baseZ, maxX: focus.x + halfBuilding, maxY: focus.y + halfBuilding, maxZ: baseZ + 72, floors: 18, capacity: 360, historicalStage: 2 },
     ]),
     pois: Object.freeze([
-      { poiId: 501n, settlementId: 101n, kind: 1, x: focus.x, y: focus.y, z: baseZ + 72, buildingId: 401n, nameId: 1003n },
+      { poiId: 501n, settlementId: 101n, kind: 1, x: focus.x, y: focus.y, z: baseZ + 72, buildingId: 401n, nameId: 0n },
     ]),
-    toponyms: Object.freeze([
-      toponym(1001n, 0, 'Visual Test City', 0n),
-      toponym(1002n, 1, 'Grounding District', 1001n),
-      toponym(1003n, 5, 'Reference Tower', 1002n),
-    ]),
+    toponyms: Object.freeze([]),
     roadSigns: Object.freeze([]),
     quality: Object.freeze({
       terrainAdaptation: 1,
@@ -260,7 +261,7 @@ function createIntegratedFixture(snapshot) {
     }),
   });
 
-  return Object.freeze({ focus, agents, regionalGeneration: regionalGenerationSnapshot });
+  return Object.freeze({ focus, agents, buildingBaseZ: baseZ, regionalGeneration: regionalGenerationSnapshot });
 }
 
 function uniqueTerrainSamples(samples) {
@@ -304,19 +305,6 @@ function settlement(settlementId, x, y, z, role, environmentKind, influenceRadiu
     jobs,
     influenceRadiusMeters,
     nameId,
-  });
-}
-
-function toponym(toponymId, kind, name, parentHumanToponymId) {
-  return Object.freeze({
-    toponymId,
-    kind,
-    name,
-    sourceNaturalToponymId: 0n,
-    sourceNaturalName: '',
-    sourceFeatureId: 0n,
-    parentHumanToponymId,
-    generatorKey: 'view-phase03-integrated-visual-e2e',
   });
 }
 
