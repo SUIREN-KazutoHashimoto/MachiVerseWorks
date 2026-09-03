@@ -33,7 +33,13 @@ wait_http() {
   return 1
 }
 
-CHROME="$(find_chrome)"
+if [[ -n "${MVW_VISUAL_BROWSER:-}" ]]; then
+  CHROME="$MVW_VISUAL_BROWSER"
+  [[ -x "$CHROME" ]] || { echo "MVW_VISUAL_BROWSER is not executable: $CHROME" >&2; exit 1; }
+else
+  CHROME="$(find_chrome)"
+fi
+
 if [[ "${MVW_E2E_PREPARED:-0}" != "1" ]]; then
   npm --prefix "$ROOT_DIR/src/web" ci
   npm --prefix "$ROOT_DIR/src/web" run lint
@@ -52,7 +58,8 @@ node "$ROOT_DIR/scripts/run-headless-browser-e2e.mjs" "$CHROME" "$BASELINE_URL" 
 grep -Fq 'data-status="passed"' "$ARTIFACT_DIR/browser.html" || { cat "$ARTIFACT_DIR/browser.html" >&2; cat "$ARTIFACT_DIR/chrome.log" >&2; exit 1; }
 
 node "$ROOT_DIR/scripts/run-headless-visual-e2e.mjs" "$CHROME" "$BASELINE_URL" "$ARTIFACT_DIR" "view-settlement-structure"
-bash "$ROOT_DIR/scripts/check-visual-regression.sh" "$ROOT_DIR" "$ARTIFACT_DIR" "view-settlement-structure" "$GOLDEN_FILE"
+MVW_VISUAL_MAX_CHANGED_RATIO="${MVW_VISUAL_MAX_CHANGED_RATIO:-0.0001}" \
+  bash "$ROOT_DIR/scripts/check-visual-regression.sh" "$ROOT_DIR" "$ARTIFACT_DIR" "view-settlement-structure" "$GOLDEN_FILE"
 
 node "$ROOT_DIR/scripts/run-headless-browser-e2e.mjs" "$CHROME" "$EVOLUTION_URL" "$ARTIFACT_DIR/evolution-browser.html" "$ARTIFACT_DIR/evolution-chrome.log"
 grep -Fq 'data-status="passed"' "$ARTIFACT_DIR/evolution-browser.html" || { cat "$ARTIFACT_DIR/evolution-browser.html" >&2; cat "$ARTIFACT_DIR/evolution-chrome.log" >&2; exit 1; }
