@@ -1,0 +1,240 @@
+name: Worker 3 localized patch
+
+on:
+  push:
+    branches:
+      - fix/all-open-issues-worker-3
+    paths:
+      - '.github/workflows/worker3-localized-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: fix/all-open-issues-worker-3
+
+      - name: Apply localized fixes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected exactly one match, found {count}")
+              file.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          replace_once(
+              "src/MachiVerseWorks.Server/AdminCommandExecutorV2.cs",
+              '''            await foreach (var request in queue.ReadAllAsync(stoppingToken))
+              {
+                  try
+                  {
+                      request.Completion.TrySetResult(await ExecuteCoreAsync(request.Command, stoppingToken));
+                  }
+                  catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                  {
+                      request.Completion.TrySetCanceled(stoppingToken);
+                  }
+                  catch (Exception exception)
+                  {
+                      CommandFailed(logger, request.Command.RawText, exception);
+                      request.Completion.TrySetResult(MapException(exception));
+                  }
+              }''',
+              '''            await foreach (var request in queue.ReadAllAsync(stoppingToken))
+              {
+                  using var executionCancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, request.CancellationToken);
+                  try
+                  {
+                      request.CancellationToken.ThrowIfCancellationRequested();
+                      var result = await ExecuteCoreAsync(request.Command, executionCancellation.Token);
+                      request.CancellationToken.ThrowIfCancellationRequested();
+                      request.Completion.TrySetResult(result);
+                  }
+                  catch (OperationCanceledException) when (request.CancellationToken.IsCancellationRequested)
+                  {
+                      request.Completion.TrySetCanceled(request.CancellationToken);
+                  }
+                  catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                  {
+                      request.Completion.TrySetCanceled(stoppingToken);
+                  }
+                  catch (Exception exception)
+                  {
+                      CommandFailed(logger, request.Command.RawText, exception);
+                      request.Completion.TrySetResult(MapException(exception));
+                  }
+              }''')
+
+          replace_once(
+              "src/MachiVerseWorks.Server/AdminCommandExecutorV2.cs",
+              '''        if (Eq(action, "save"))
+              {
+                  var detached = SimulationWorld.RestoreCheckpoint(simulation.CaptureCheckpoint());
+                  var data = WorldSaveSerializer.Serialize(detached);
+                  await File.WriteAllBytesAsync(path, data, cancellationToken);
+                  return AdminCommandResult.Ok($"World saved to '{path}'.");
+              }
+              if (Eq(action, "load"))
+              {
+                  var world = WorldSaveSerializer.Deserialize(await File.ReadAllBytesAsync(path, cancellationToken));
+                  simulation.ReplaceWorld(world);
+                  return AdminCommandResult.Ok($"World loaded from '{path}'.");
+              }''',
+              '''        if (Eq(action, "save"))
+              {
+                  cancellationToken.ThrowIfCancellationRequested();
+                  var detached = SimulationWorld.RestoreCheckpoint(simulation.CaptureCheckpoint());
+                  cancellationToken.ThrowIfCancellationRequested();
+                  var data = WorldSaveSerializer.Serialize(detached);
+                  cancellationToken.ThrowIfCancellationRequested();
+                  await File.WriteAllBytesAsync(path, data, cancellationToken);
+                  return AdminCommandResult.Ok($"World saved to '{path}'.");
+              }
+              if (Eq(action, "load"))
+              {
+                  var data = await File.ReadAllBytesAsync(path, cancellationToken);
+                  cancellationToken.ThrowIfCancellationRequested();
+                  var world = WorldSaveSerializer.Deserialize(data);
+                  cancellationToken.ThrowIfCancellationRequested();
+                  simulation.ReplaceWorld(world);
+                  foreach (var connection in connections.CreateSnapshot())
+                  {
+                      connection.Abort();
+                      connections.Remove(connection.Id);
+                  }
+                  return AdminCommandResult.Ok($"World loaded from '{path}'.");
+              }''')
+
+          replace_once(
+              "src/MachiVerseWorks.Server/RemoteMcp.cs",
+              '''    [McpServerTool(Name = "simulation_save", ReadOnly = false, Destructive = false, UseStructuredContent = true), Authorize(Policy = RemoteMcpPolicies.Write), Description("Save the authoritative world into the configured MCP save directory. Arbitrary file paths are not accepted.")]
+              public static Task<RemoteMcpResult> SimulationSave(RemoteMcpAdminGateway admin, RemoteMcpOptions options, [Description("Save slot name using letters, digits, dot, underscore, or hyphen.")] string slot, CancellationToken cancellationToken)
+              {
+                  if (!IsSafeSlot(slot)) return Task.FromResult(RemoteMcpResult.Rejected("invalid_argument", "slot must be 1-64 characters and contain only letters, digits, dot, underscore, or hyphen."));
+                  try
+                  {
+                      Directory.CreateDirectory(options.SaveDirectory);
+                  }
+                  catch (UnauthorizedAccessException)
+                  {
+                      return Task.FromResult(RemoteMcpResult.Rejected("io_error", "The configured MCP save directory cannot be created or accessed."));
+                  }
+                  catch (IOException)
+                  {
+                      return Task.FromResult(RemoteMcpResult.Rejected("io_error", "The configured MCP save directory cannot be created or accessed."));
+                  }
+                  var path = Path.Combine(options.SaveDirectory, slot + ".mvw");
+                  return admin.ExecuteAsync($"world save {Quote(path)}", cancellationToken);
+              }''',
+              '''    [McpServerTool(Name = "simulation_save", ReadOnly = false, Destructive = false, UseStructuredContent = true), Authorize(Policy = RemoteMcpPolicies.Write), Description("Create a new authoritative-world save slot in the configured MCP save directory. Existing slots are never overwritten.")]
+              public static Task<RemoteMcpResult> SimulationSave(RemoteMcpAdminGateway admin, RemoteMcpOptions options, [Description("Save slot name using letters, digits, dot, underscore, or hyphen.")] string slot, CancellationToken cancellationToken) =>
+                  SaveToSlotAsync(admin, options, slot, overwrite: false, cancellationToken);
+
+              [McpServerTool(Name = "simulation_save_overwrite", ReadOnly = false, Destructive = true, UseStructuredContent = true), Authorize(Policy = RemoteMcpPolicies.Destructive), Description("Save the authoritative world while allowing an existing MCP save slot to be overwritten. Requires destructive scope and explicit confirmation.")]
+              public static Task<RemoteMcpResult> SimulationSaveOverwrite(RemoteMcpAdminGateway admin, RemoteMcpOptions options, [Description("Save slot name using letters, digits, dot, underscore, or hyphen.")] string slot, [Description("Must be true to confirm overwriting an existing save slot.")] bool confirm, CancellationToken cancellationToken)
+              {
+                  if (!confirm) return Task.FromResult(RemoteMcpResult.Rejected("confirmation_required", "Set confirm=true to overwrite a save slot."));
+                  return SaveToSlotAsync(admin, options, slot, overwrite: true, cancellationToken);
+              }
+
+              private static async Task<RemoteMcpResult> SaveToSlotAsync(RemoteMcpAdminGateway admin, RemoteMcpOptions options, string slot, bool overwrite, CancellationToken cancellationToken)
+              {
+                  if (!IsSafeSlot(slot)) return RemoteMcpResult.Rejected("invalid_argument", "slot must be 1-64 characters and contain only letters, digits, dot, underscore, or hyphen.");
+                  try
+                  {
+                      Directory.CreateDirectory(options.SaveDirectory);
+                  }
+                  catch (UnauthorizedAccessException)
+                  {
+                      return RemoteMcpResult.Rejected("io_error", "The configured MCP save directory cannot be created or accessed.");
+                  }
+                  catch (IOException)
+                  {
+                      return RemoteMcpResult.Rejected("io_error", "The configured MCP save directory cannot be created or accessed.");
+                  }
+
+                  var path = Path.Combine(options.SaveDirectory, slot + ".mvw");
+                  var reservationCreated = false;
+                  if (!overwrite)
+                  {
+                      try
+                      {
+                          using var reservation = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+                          reservationCreated = true;
+                      }
+                      catch (IOException) when (File.Exists(path))
+                      {
+                          return RemoteMcpResult.Rejected("conflict", "The requested save slot already exists. Use simulation_save_overwrite with destructive scope and confirm=true to replace it.");
+                      }
+                      catch (UnauthorizedAccessException)
+                      {
+                          return RemoteMcpResult.Rejected("io_error", "The requested MCP save slot cannot be created or accessed.");
+                      }
+                      catch (IOException)
+                      {
+                          return RemoteMcpResult.Rejected("io_error", "The requested MCP save slot cannot be created or accessed.");
+                      }
+                  }
+
+                  try
+                  {
+                      var result = await admin.ExecuteAsync($"world save {Quote(path)}", cancellationToken);
+                      if (result.Success) reservationCreated = false;
+                      return result;
+                  }
+                  finally
+                  {
+                      if (reservationCreated)
+                      {
+                          try { File.Delete(path); }
+                          catch (IOException) { }
+                          catch (UnauthorizedAccessException) { }
+                      }
+                  }
+              }''')
+
+          replace_once(
+              "src/MachiVerseWorks.Server/RemoteMcp.cs",
+              '''        public bool IsEnabled(LogLevel logLevel) => logLevel != LogLevel.None;
+              public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+              {
+                  if (!IsEnabled(logLevel)) return;
+                  var message = formatter(state, exception);
+                  if (exception is not null) message = $"{message} | {exception.GetType().Name}: {exception.Message}";
+                  owner.Add(new RemoteMcpLogEntry(DateTimeOffset.UtcNow, logLevel.ToString(), category, eventId.Id, message));
+              }''',
+              '''        public bool IsEnabled(LogLevel logLevel) => false;
+              public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+              {
+                  // General ILogger output is deliberately outside the MCP-visible diagnostics boundary.
+                  // Safe remote diagnostics must be explicitly projected instead of mirroring arbitrary state or exception text.
+              }''')
+
+          replace_once(
+              "src/web/src/world-view.ts",
+              '''    this.renderer.dispose();
+            }''',
+              '''    this.renderer.dispose();
+                this.renderer.domElement.remove();
+            }''')
+
+      - name: Verify diff
+        run: git diff --check && git diff --stat
+
+      - name: Commit fixes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/MachiVerseWorks.Server/AdminCommandExecutorV2.cs src/MachiVerseWorks.Server/RemoteMcp.cs src/web/src/world-view.ts
+          git commit -m 'fix: apply cancellation save and world lifecycle fixes (#185 #209 #232 #245)'
+          git push origin HEAD:fix/all-open-issues-worker-3
