@@ -27,6 +27,7 @@ on:
       - 'MachiVerseWorks.slnx'
       - 'global.json'
       - '.github/workflows/e2e.yml'
+  workflow_call:
   workflow_dispatch:
 
 permissions:
