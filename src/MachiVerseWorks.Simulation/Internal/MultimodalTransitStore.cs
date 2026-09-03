@@ -2,6 +2,8 @@ namespace MachiVerseWorks.Simulation.Internal;
 
 internal sealed class MultimodalTransitStore
 {
+    private const double TransferSpatialCellSizeMeters = 300d;
+
     private readonly Dictionary<TransitStopId, TransitStopSnapshot> stops = [];
     private readonly Dictionary<TransitLineId, TransitLineSnapshot> lines = [];
     private readonly Dictionary<TransitServicePatternId, TransitServicePatternSnapshot> patterns = [];
@@ -10,6 +12,10 @@ internal sealed class MultimodalTransitStore
     private readonly Dictionary<TaxiRequestId, TaxiRequestStateData> taxiRequests = [];
     private readonly Dictionary<JourneyId, JourneySnapshot> journeys = [];
     private readonly Dictionary<PassengerId, PassengerStateData> passengers = [];
+    private readonly Dictionary<TripRequestId, TaxiRequestId> taxiRequestByTrip = [];
+    private readonly Dictionary<TripRequestId, PassengerId> passengerByTrip = [];
+    private readonly Dictionary<TransitStopId, List<TransitPatternEdge>> outgoingPatternEdges = [];
+    private readonly Dictionary<SpatialCell, List<TransitStopId>> stopSpatialIndex = [];
     private ulong nextStopId = 1, nextLineId = 1, nextPatternId = 1, nextTripId = 1, nextVehicleId = 1, nextTaxiRequestId = 1, nextJourneyId = 1, nextPassengerId = 1;
 
     public ulong NextStopId => nextStopId;
@@ -30,7 +36,9 @@ internal sealed class MultimodalTransitStore
     {
         EnsureCapacity(nextStopId, "Transit stop");
         var id = new TransitStopId(nextStopId++);
-        stops.Add(id, new TransitStopSnapshot(id, kind, position, laneId, stationId, platformId));
+        var stop = new TransitStopSnapshot(id, kind, position, laneId, stationId, platformId);
+        stops.Add(id, stop);
+        IndexStop(stop);
         return id;
     }
 
@@ -62,7 +70,9 @@ internal sealed class MultimodalTransitStore
         }
         EnsureCapacity(nextPatternId, "Transit service pattern");
         var id = new TransitServicePatternId(nextPatternId++);
-        patterns.Add(id, new TransitServicePatternSnapshot(id, lineId, Array.AsReadOnly(copied), railwayServiceId));
+        var pattern = new TransitServicePatternSnapshot(id, lineId, Array.AsReadOnly(copied), railwayServiceId);
+        patterns.Add(id, pattern);
+        IndexPattern(pattern, line.Mode);
         return id;
     }
 
@@ -105,9 +115,12 @@ internal sealed class MultimodalTransitStore
     public TaxiRequestId AddTaxiRequest(TripRequestId tripRequestId, WorldPoint pickup, WorldPoint dropOff, ulong requestedTick)
     {
         if (tripRequestId.Value == 0) throw new ArgumentOutOfRangeException(nameof(tripRequestId));
+        if (taxiRequestByTrip.ContainsKey(tripRequestId) || passengerByTrip.ContainsKey(tripRequestId))
+            throw new InvalidOperationException($"Trip Request {tripRequestId.Value} already has active multimodal state.");
         EnsureCapacity(nextTaxiRequestId, "Taxi request");
         var id = new TaxiRequestId(nextTaxiRequestId++);
         taxiRequests.Add(id, new TaxiRequestStateData(id, tripRequestId, pickup, dropOff, requestedTick));
+        taxiRequestByTrip.Add(tripRequestId, id);
         return id;
     }
 
@@ -132,9 +145,12 @@ internal sealed class MultimodalTransitStore
     public PassengerId AddPassenger(TripRequestId tripRequestId, JourneyId journeyId, ulong tickCount)
     {
         if (!journeys.TryGetValue(journeyId, out var journey) || journey.TripRequestId != tripRequestId) throw new ArgumentException("Passenger Journey does not match the Trip Request.", nameof(journeyId));
+        if (passengerByTrip.ContainsKey(tripRequestId) || taxiRequestByTrip.ContainsKey(tripRequestId))
+            throw new InvalidOperationException($"Trip Request {tripRequestId.Value} already has active multimodal state.");
         EnsureCapacity(nextPassengerId, "Passenger");
         var id = new PassengerId(nextPassengerId++);
         passengers.Add(id, new PassengerStateData(id, tripRequestId, journeyId, tickCount));
+        passengerByTrip.Add(tripRequestId, id);
         return id;
     }
 
@@ -146,15 +162,80 @@ internal sealed class MultimodalTransitStore
     public bool RemoveJourney(JourneyId id) => journeys.Remove(id);
     public bool TryGetVehicle(TransitVehicleId id, out TransitVehicleState state) => vehicles.TryGetValue(id, out state!);
     public bool TryGetTaxiRequest(TaxiRequestId id, out TaxiRequestStateData state) => taxiRequests.TryGetValue(id, out state!);
+
     public bool TryGetPassengerForTrip(TripRequestId id, out PassengerStateData state)
     {
-        state = passengers.Values.FirstOrDefault(item => item.TripRequestId == id)!;
-        return state is not null;
+        if (passengerByTrip.TryGetValue(id, out var passengerId) && passengers.TryGetValue(passengerId, out state!)) return true;
+        state = null!;
+        return false;
     }
+
     public bool TryGetTaxiRequestForTrip(TripRequestId id, out TaxiRequestStateData state)
     {
-        state = taxiRequests.Values.FirstOrDefault(item => item.TripRequestId == id)!;
-        return state is not null;
+        if (taxiRequestByTrip.TryGetValue(id, out var requestId) && taxiRequests.TryGetValue(requestId, out state!)) return true;
+        state = null!;
+        return false;
+    }
+
+    public bool RetireCompletedTrip(TripRequestId id)
+    {
+        if (passengerByTrip.TryGetValue(id, out var passengerId) && passengers.TryGetValue(passengerId, out var passenger))
+        {
+            if (passenger.State != PassengerState.Arrived) return false;
+            passengerByTrip.Remove(id);
+            passengers.Remove(passengerId);
+            journeys.Remove(passenger.JourneyId);
+            return true;
+        }
+
+        if (taxiRequestByTrip.TryGetValue(id, out var taxiRequestId) && taxiRequests.TryGetValue(taxiRequestId, out var request))
+        {
+            if (request.State != TaxiRequestState.Completed) return false;
+            if (request.AssignedVehicleId is { } vehicleId
+                && vehicles.TryGetValue(vehicleId, out var vehicle)
+                && vehicle.ActiveTaxiRequestId == request.Id)
+            {
+                vehicle.ActiveTaxiRequestId = null;
+            }
+            taxiRequestByTrip.Remove(id);
+            taxiRequests.Remove(taxiRequestId);
+            return true;
+        }
+
+        return false;
+    }
+
+    public TransitPatternEdge[] GetOutgoingPatternEdges(TransitStopId stopId) => outgoingPatternEdges.TryGetValue(stopId, out var edges)
+        ? edges.OrderBy(static item => item.PatternId.Value).ThenBy(static item => item.PatternStopIndex).ToArray()
+        : [];
+
+    public TransitStopSnapshot[] GetTransferCandidates(WorldPoint position, double radiusMeters)
+    {
+        if (!double.IsFinite(radiusMeters) || radiusMeters < 0d) throw new ArgumentOutOfRangeException(nameof(radiusMeters));
+        if (radiusMeters == 0d) return [];
+        var center = SpatialGrid.ToCell(position, TransferSpatialCellSizeMeters);
+        var cellRadius = checked((int)Math.Ceiling(radiusMeters / TransferSpatialCellSizeMeters));
+        var ids = new HashSet<TransitStopId>();
+        for (var x = (long)center.X - cellRadius; x <= (long)center.X + cellRadius; x++)
+        {
+            if (x < int.MinValue || x > int.MaxValue) continue;
+            for (var y = (long)center.Y - cellRadius; y <= (long)center.Y + cellRadius; y++)
+            {
+                if (y < int.MinValue || y > int.MaxValue) continue;
+                for (var z = (long)center.Z - cellRadius; z <= (long)center.Z + cellRadius; z++)
+                {
+                    if (z < int.MinValue || z > int.MaxValue) continue;
+                    if (!stopSpatialIndex.TryGetValue(new SpatialCell((int)x, (int)y, (int)z), out var cellStops)) continue;
+                    foreach (var id in cellStops) ids.Add(id);
+                }
+            }
+        }
+
+        var radiusSquared = radiusMeters * radiusMeters;
+        return ids.Select(id => stops[id])
+            .Where(stop => DistanceSquared(position, stop.Position) <= radiusSquared)
+            .OrderBy(static stop => stop.Id.Value)
+            .ToArray();
     }
 
     public TransitStopSnapshot[] GetStops() => stops.Values.OrderBy(static item => item.Id.Value).ToArray();
@@ -242,6 +323,7 @@ internal sealed class MultimodalTransitStore
     public void Restore(MultimodalTransitCheckpoint? checkpoint)
     {
         stops.Clear(); lines.Clear(); patterns.Clear(); trips.Clear(); vehicles.Clear(); taxiRequests.Clear(); journeys.Clear(); passengers.Clear();
+        taxiRequestByTrip.Clear(); passengerByTrip.Clear(); outgoingPatternEdges.Clear(); stopSpatialIndex.Clear();
         if (checkpoint is null) { nextStopId = nextLineId = nextPatternId = nextTripId = nextVehicleId = nextTaxiRequestId = nextJourneyId = nextPassengerId = 1; return; }
         ValidateNextId(checkpoint.NextStopId, checkpoint.Stops.Select(static x => x.Id.Value), "Transit stop");
         ValidateNextId(checkpoint.NextLineId, checkpoint.Lines.Select(static x => x.Id.Value), "Transit line");
@@ -251,9 +333,14 @@ internal sealed class MultimodalTransitStore
         ValidateNextId(checkpoint.NextTaxiRequestId, checkpoint.TaxiRequests.Select(static x => x.Id.Value), "Taxi request");
         ValidateNextId(checkpoint.NextJourneyId, checkpoint.Journeys.Select(static x => x.Id.Value), "Journey");
         ValidateNextId(checkpoint.NextPassengerId, checkpoint.Passengers.Select(static x => x.Id.Value), "Passenger");
-        foreach (var item in checkpoint.Stops) stops.Add(item.Id, item);
+        foreach (var item in checkpoint.Stops) { stops.Add(item.Id, item); IndexStop(item); }
         foreach (var item in checkpoint.Lines) lines.Add(item.Id, item);
-        foreach (var item in checkpoint.Patterns) patterns.Add(item.Id, new TransitServicePatternSnapshot(item.Id, item.LineId, Array.AsReadOnly(item.Stops.ToArray()), item.RailwayServiceId));
+        foreach (var item in checkpoint.Patterns)
+        {
+            var pattern = new TransitServicePatternSnapshot(item.Id, item.LineId, Array.AsReadOnly(item.Stops.ToArray()), item.RailwayServiceId);
+            patterns.Add(item.Id, pattern);
+            IndexPattern(pattern, lines[item.LineId].Mode);
+        }
         foreach (var item in checkpoint.Trips) trips.Add(item.Id, item);
         foreach (var item in checkpoint.Vehicles)
         {
@@ -264,11 +351,58 @@ internal sealed class MultimodalTransitStore
         {
             var state = new TaxiRequestStateData(item.Id, item.TripRequestId, item.Pickup, item.DropOff, item.RequestedTick) { State = item.State, AssignedVehicleId = item.AssignedVehicleId, PickupTick = item.PickupTick, CompletedTick = item.CompletedTick };
             taxiRequests.Add(item.Id, state);
+            if (!taxiRequestByTrip.TryAdd(item.TripRequestId, item.Id)) throw new ArgumentException($"Trip Request {item.TripRequestId.Value} has duplicate Taxi requests.", nameof(checkpoint));
             if (item.AssignedVehicleId is { } vehicleId && item.State is (TaxiRequestState.Assigned or TaxiRequestState.PickingUp or TaxiRequestState.Riding) && vehicles.TryGetValue(vehicleId, out var vehicle)) vehicle.ActiveTaxiRequestId = item.Id;
         }
         foreach (var item in checkpoint.Journeys) journeys.Add(item.Id, new JourneySnapshot(item.Id, item.TripRequestId, item.DepartureTick, item.EstimatedArrivalTick, Array.AsReadOnly(item.Legs.ToArray())));
-        foreach (var item in checkpoint.Passengers) passengers.Add(item.Id, new PassengerStateData(item.Id, item.TripRequestId, item.JourneyId, item.StateEnteredTick) { LegIndex = item.LegIndex, State = item.State });
+        foreach (var item in checkpoint.Passengers)
+        {
+            passengers.Add(item.Id, new PassengerStateData(item.Id, item.TripRequestId, item.JourneyId, item.StateEnteredTick) { LegIndex = item.LegIndex, State = item.State });
+            if (!passengerByTrip.TryAdd(item.TripRequestId, item.Id) || taxiRequestByTrip.ContainsKey(item.TripRequestId))
+                throw new ArgumentException($"Trip Request {item.TripRequestId.Value} has duplicate active multimodal records.", nameof(checkpoint));
+        }
         nextStopId = checkpoint.NextStopId; nextLineId = checkpoint.NextLineId; nextPatternId = checkpoint.NextPatternId; nextTripId = checkpoint.NextTripId; nextVehicleId = checkpoint.NextVehicleId; nextTaxiRequestId = checkpoint.NextTaxiRequestId; nextJourneyId = checkpoint.NextJourneyId; nextPassengerId = checkpoint.NextPassengerId;
+    }
+
+    private void IndexStop(TransitStopSnapshot stop)
+    {
+        var cell = SpatialGrid.ToCell(stop.Position, TransferSpatialCellSizeMeters);
+        if (!stopSpatialIndex.TryGetValue(cell, out var cellStops))
+        {
+            cellStops = [];
+            stopSpatialIndex.Add(cell, cellStops);
+        }
+        cellStops.Add(stop.Id);
+    }
+
+    private void IndexPattern(TransitServicePatternSnapshot pattern, TransitMode mode)
+    {
+        for (var index = 0; index < pattern.Stops.Count - 1; index++)
+        {
+            var current = pattern.Stops[index];
+            var next = pattern.Stops[index + 1];
+            if (!outgoingPatternEdges.TryGetValue(current.StopId, out var edges))
+            {
+                edges = [];
+                outgoingPatternEdges.Add(current.StopId, edges);
+            }
+            edges.Add(new TransitPatternEdge(
+                pattern.Id,
+                index,
+                next.StopId,
+                mode,
+                pattern.LineId,
+                pattern.RailwayServiceId,
+                checked(next.TravelTicksFromPrevious + current.DwellTicks)));
+        }
+    }
+
+    private static double DistanceSquared(WorldPoint left, WorldPoint right)
+    {
+        var dx = left.X - right.X;
+        var dy = left.Y - right.Y;
+        var dz = left.Z - right.Z;
+        return (dx * dx) + (dy * dy) + (dz * dz);
     }
 
     private static void ValidateNextId(ulong nextId, IEnumerable<ulong> ids, string name)
@@ -279,6 +413,15 @@ internal sealed class MultimodalTransitStore
     }
     private static void EnsureCapacity(ulong nextId, string name) { if (nextId == ulong.MaxValue) throw new OverflowException($"{name} ID capacity has been exhausted."); }
 }
+
+internal readonly record struct TransitPatternEdge(
+    TransitServicePatternId PatternId,
+    int PatternStopIndex,
+    TransitStopId ToStopId,
+    TransitMode Mode,
+    TransitLineId LineId,
+    RailwayServiceId? RailwayServiceId,
+    ulong DurationTicks);
 
 internal sealed class TransitVehicleState(TransitVehicleId id, TransitVehicleKind kind, TransitTripId? tripId, WorldPoint position)
 {
