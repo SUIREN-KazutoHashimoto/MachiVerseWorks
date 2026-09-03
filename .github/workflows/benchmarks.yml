@@ -9,6 +9,7 @@ on:
       - 'benchmarks/**'
       - 'scripts/run-phase9-regression-benchmark.sh'
       - 'scripts/compare-benchmark-results.py'
+      - 'scripts/select-ci-matrix.py'
       - 'Directory.Build.props'
       - 'Directory.Packages.props'
       - 'global.json'
@@ -21,6 +22,7 @@ on:
       - 'benchmarks/**'
       - 'scripts/run-phase9-regression-benchmark.sh'
       - 'scripts/compare-benchmark-results.py'
+      - 'scripts/select-ci-matrix.py'
       - 'Directory.Build.props'
       - 'Directory.Packages.props'
       - 'global.json'
@@ -35,62 +37,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  select:
+    name: select affected benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      selection: ${{ steps.select.outputs.selection }}
+    steps:
+      - name: Checkout with history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Select benchmark scope
+        id: select
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            selection="$(python scripts/select-ci-matrix.py benchmarks --base "$BASE_SHA" --head "$HEAD_SHA")"
+          else
+            selection="$(python scripts/select-ci-matrix.py benchmarks --full)"
+          fi
+          echo "selection=$selection" >> "$GITHUB_OUTPUT"
+          echo "Selection reason: $(jq -r '.reason' <<< "$selection")"
+          echo "BenchmarkDotNet: $(jq -r '[.benchmarkdotnet.include[].name] | join(", ")' <<< "$selection")"
+          echo "Scenario: $(jq -r '[.scenario.include[].name] | join(", ")' <<< "$selection")"
+
   benchmarkdotnet:
     name: ${{ matrix.name }}
+    needs: select
+    if: ${{ fromJSON(needs.select.outputs.selection).run_benchmarkdotnet }}
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.timeout }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - id: road-network
-            name: road-network-10k-100k
-            filter: '*RoadNetworkBenchmarks*'
-            timeout: 20
-          - id: routing
-            name: routing-small-medium-large
-            filter: '*RoutingBenchmarks*'
-            timeout: 30
-          - id: intersection-control
-            name: queued-intersections
-            filter: '*IntersectionControlBenchmarks*'
-            timeout: 30
-          - id: pedestrian
-            name: pedestrians-1k-10k
-            filter: '*PedestrianBenchmarks*'
-            timeout: 20
-          - id: railway-infrastructure
-            name: railway-10k-100k
-            filter: '*RailwayInfrastructureBenchmarks*'
-            timeout: 20
-          - id: railway-operations
-            name: railway-operations-100-1000
-            filter: '*RailwayOperationsBenchmarks*'
-            timeout: 20
-          - id: multimodal-transit
-            name: journey-transfer-dispatch
-            filter: '*MultimodalTransitBenchmarks*'
-            timeout: 20
-          - id: logistics
-            name: logistics-inventory-100-1000
-            filter: '*LogisticsBenchmarks*'
-            timeout: 20
-          - id: power
-            name: power-loads-1k-5k
-            filter: '*PowerBenchmarks*'
-            timeout: 20
-          - id: water-sewer
-            name: water-sewer-loads-1k-5k
-            filter: '*WaterSewerBenchmarks*'
-            timeout: 20
-          - id: gas
-            name: gas-loads-1k-5k
-            filter: '*GasBenchmarks*'
-            timeout: 20
-          - id: persistent-regional-evolution
-            name: persistent-regional-evolution-world-scale
-            filter: '*PersistentRegionalEvolutionBenchmarks*'
-            timeout: 30
+      matrix: ${{ fromJSON(needs.select.outputs.selection).benchmarkdotnet }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -104,6 +89,13 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
+      - name: Cache NuGet packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
       - name: Restore
         run: dotnet restore MachiVerseWorks.slnx
       - name: Restore benchmark base
@@ -143,18 +135,13 @@ jobs:
 
   scenario:
     name: ${{ matrix.name }}
+    needs: select
+    if: ${{ fromJSON(needs.select.outputs.selection).run_scenario }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - id: road-traffic
-            name: vehicles-1k-10k-100k
-            args: --road-traffic --warmup 5 --ticks 20
-          - id: population
-            name: population-1k-10k-100k
-            args: --population --warmup 10 --ticks 50
+      matrix: ${{ fromJSON(needs.select.outputs.selection).scenario }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -162,6 +149,13 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
+      - name: Cache NuGet packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
       - name: Restore
         run: dotnet restore MachiVerseWorks.slnx
       - name: Run scenario benchmark
@@ -182,6 +176,7 @@ jobs:
 
   smoke:
     name: benchmarkdotnet-smoke
+    needs: select
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -192,6 +187,13 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
+      - name: Cache NuGet packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
       - name: Restore
         run: dotnet restore MachiVerseWorks.slnx
       - name: Build benchmarks
@@ -220,7 +222,8 @@ jobs:
 
   snapshot-readmodel:
     name: snapshot-readmodel
-    if: github.event_name != 'push'
+    needs: select
+    if: ${{ fromJSON(needs.select.outputs.selection).run_snapshot_readmodel }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -230,6 +233,13 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
+      - name: Cache NuGet packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
       - name: Restore
         run: dotnet restore MachiVerseWorks.slnx
       - name: Build benchmark project
@@ -256,7 +266,8 @@ jobs:
 
   regression:
     name: phase9-2d-to-3d-regression
-    if: github.event_name != 'push'
+    needs: select
+    if: ${{ fromJSON(needs.select.outputs.selection).run_regression }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -268,6 +279,13 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
+      - name: Cache NuGet packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
       - name: Run regression benchmark
         env:
           MACHIVERSE_PHASE9_REGRESSION_ARTIFACTS: ${{ github.workspace }}/.artifacts/benchmarks/phase9-regression
@@ -280,30 +298,3 @@ jobs:
           path: .artifacts/benchmarks/phase9-regression
           if-no-files-found: error
           retention-days: 14
-
-  legacy-tick:
-    name: legacy-tick
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Setup .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
-        with:
-          global-json-file: global.json
-      - name: Show environment
-        shell: bash
-        run: |
-          set -euo pipefail
-          uname -a
-          lscpu
-          free -h
-          dotnet --info
-      - name: Restore
-        run: dotnet restore MachiVerseWorks.slnx
-      - name: Build benchmark
-        run: dotnet build benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-restore
-      - name: Run tick benchmark
-        run: dotnet run --project benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj --configuration Release --no-build -- --warmup 60 --ticks 200
