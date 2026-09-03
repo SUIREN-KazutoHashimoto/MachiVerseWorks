@@ -30,6 +30,19 @@ public static class PersistentRegionalEvolutionProtocolChunker
         foreach (var item in message.CommutingFlows) builder.AddCommutingFlow(item, chunks);
         foreach (var item in message.FreightFlows) builder.AddFreightFlow(item, chunks);
         builder.Flush(chunks, allowEmpty: true);
+
+        var snapshotId = message.SnapshotId != 0
+            ? message.SnapshotId
+            : message.TickCount != 0 ? message.TickCount : 1UL;
+        for (var index = 0; index < chunks.Count; index++)
+        {
+            chunks[index] = chunks[index] with
+            {
+                SnapshotId = snapshotId,
+                ChunkIndex = index,
+                ChunkCount = chunks.Count,
+            };
+        }
         return chunks;
     }
 
