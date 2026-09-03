@@ -266,7 +266,8 @@ public sealed partial class SimulationWorld
 
     private void AdvanceShipments(ulong tickCount)
     {
-        foreach (var shipment in _logisticsShipments.Where(static item => item.State != ShipmentState.Delivered).OrderBy(static item => item.Id.Value))
+        List<(ShipmentId ShipmentId, LogisticsOrderId OrderId)>? completed = null;
+        foreach (var shipment in _logisticsShipments.OrderBy(static item => item.Id.Value))
         {
             if (shipment.State == ShipmentState.Pickup)
             {
@@ -312,7 +313,18 @@ public sealed partial class SimulationWorld
                     if (!_activeLogisticsOrderKeys.Remove((order.DestinationEstablishmentId, order.CommodityId)))
                         throw new InvalidOperationException($"Completed Logistics Order {order.Id.Value} was missing from the active-order index.");
                 }
+                completed ??= [];
+                completed.Add((shipment.Id, shipment.OrderId));
             }
+        }
+
+        if (completed is null) return;
+        foreach (var (shipmentId, orderId) in completed)
+        {
+            if (_logisticsShipmentIndex.Remove(shipmentId, out var completedShipment))
+                _logisticsShipments.Remove(completedShipment);
+            if (_logisticsOrderIndex.Remove(orderId, out var completedOrder))
+                _logisticsOrders.Remove(completedOrder);
         }
     }
 
@@ -430,6 +442,7 @@ public sealed partial class SimulationWorld
         }
         foreach (var item in checkpoint.Orders)
         {
+            if (item.State == LogisticsOrderState.Completed) continue;
             var state = new LogisticsOrderStateData(item.Id, item.DestinationEstablishmentId, item.CommodityId, item.Quantity, item.CreatedTick)
             {
                 State = item.State,
@@ -437,12 +450,12 @@ public sealed partial class SimulationWorld
             };
             _logisticsOrders.Add(state);
             _logisticsOrderIndex.Add(state.Id, state);
-            if (state.State != LogisticsOrderState.Completed
-                && !_activeLogisticsOrderKeys.Add((state.DestinationEstablishmentId, state.CommodityId)))
+            if (!_activeLogisticsOrderKeys.Add((state.DestinationEstablishmentId, state.CommodityId)))
                 throw new InvalidOperationException("Restored Logistics state contains duplicate active Orders for one destination inventory.");
         }
         foreach (var item in checkpoint.Shipments)
         {
+            if (item.State == ShipmentState.Delivered) continue;
             var state = new LogisticsShipmentStateData(item.Id, item.OrderId, item.SourceEstablishmentId, item.DestinationEstablishmentId,
                 item.CommodityId, item.Quantity, item.PickupAccessPointId, item.DeliveryAccessPointId, item.CreatedTick, item.LoadingCompleteTick)
             {
