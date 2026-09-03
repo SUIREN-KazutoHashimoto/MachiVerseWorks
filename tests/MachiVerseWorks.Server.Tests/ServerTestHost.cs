@@ -147,11 +147,13 @@ internal sealed class ServerTestHost : IAsyncDisposable
         return envelope;
     }
 
-    public static async Task HandshakeAsync(ClientWebSocket socket)
+    public static async Task<HelloAckMessage> HandshakeAsync(ClientWebSocket socket, ProtocolVersion? version = null)
     {
-        await SendAsync(socket, new HelloMessage(), ProtocolVersion.Current);
+        var requestedVersion = version ?? ProtocolVersion.Current;
+        await SendAsync(socket, new HelloMessage(), requestedVersion);
         var envelope = await ReceiveAsync(socket, TimeSpan.FromSeconds(3));
-        if (envelope.Message is not HelloAckMessage) throw new InvalidOperationException("Server did not return HelloAck.");
+        if (envelope.Message is not HelloAckMessage helloAck) throw new InvalidOperationException("Server did not return HelloAck.");
+        return helloAck;
     }
 
     public async Task StopAsync()
