@@ -1,0 +1,37 @@
+name: Worker1 Parent Merge
+
+on:
+  push:
+    branches:
+      - fix/all-open-issues-worker-1
+    paths:
+      - .github/workflows/worker1-parent-merge.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Inspect merge conflicts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin fix/all-open-issues
+          git config user.name "Worker1 merge helper"
+          git config user.email "noreply@github.com"
+          git merge --no-commit --no-ff origin/fix/all-open-issues || true
+          echo "CONFLICT_FILES_BEGIN"
+          git diff --name-only --diff-filter=U
+          echo "CONFLICT_FILES_END"
+          for file in $(git diff --name-only --diff-filter=U); do
+            echo "===== $file ====="
+            git diff -- "$file" | sed -n '1,260p'
+          done
+          git merge --abort || true
