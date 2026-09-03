@@ -19,7 +19,7 @@ public sealed class WorldEnvironmentObservationContractTests
             annualPrecipitationMillimeters: 950d);
         var world = new SimulationWorld(new SimulationConfig(worldEnvironment: config));
         var volume = new WorldVolume(-500_000d, -500_000d, -10_000d, 500_000d, 500_000d, 10_000d);
-        var feature = world.GetGeographicFeatures(volume, 64).First();
+        var feature = world.GetGeographicFeatures(volume, 64)[0];
         var before = world.CreateCheckpoint();
 
         var first = world.CreateNaturalToponym(feature);
