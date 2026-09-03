@@ -48,6 +48,46 @@ test('PersistentRegionalEvolutionStore rejects continuation without the matching
   assert.throws(() => store.apply(wrongTick), ProtocolDecodeFailure);
 });
 
+test('PersistentRegionalEvolutionStore publishes a metadata batch only after its final chunk', () => {
+  const store = new PersistentRegionalEvolutionStore();
+  const first = fullChunk();
+  Object.assign(first, { snapshotId: 900n, chunkIndex: 0, chunkCount: 2 });
+  const second = continuationChunk();
+  Object.assign(second, { snapshotId: 900n, chunkIndex: 1, chunkCount: 2 });
+
+  store.apply(first);
+  assert.equal(store.snapshot, null);
+  assert.equal(store.revision, 0);
+  assert.equal(store.getSettlement(101n), undefined);
+
+  store.apply(second);
+  assert.equal(store.revision, 1);
+  assert.equal(store.snapshot?.snapshotId, 900n);
+  assert.equal(store.snapshot?.settlements.length, 2);
+  assert.equal(store.getSettlementForBuilding(301n)?.settlementId, 101n);
+  assert.deepEqual(store.getRelationsForSettlement(102n).map((item) => item.relationId), [401n]);
+});
+
+test('PersistentRegionalEvolutionStore discards an out-of-order batch without exposing partial state', () => {
+  const store = new PersistentRegionalEvolutionStore();
+  store.apply(fullChunk(24, 50n));
+  const committed = store.snapshot;
+  const revision = store.revision;
+
+  const first = fullChunk(25, 100n);
+  Object.assign(first, { snapshotId: 901n, chunkIndex: 0, chunkCount: 3 });
+  const skipped = continuationChunk();
+  Object.assign(skipped, { snapshotId: 901n, chunkIndex: 2, chunkCount: 3 });
+
+  store.apply(first);
+  assert.equal(store.snapshot, committed);
+  assert.equal(store.revision, revision);
+  assert.throws(() => store.apply(skipped), ProtocolDecodeFailure);
+  assert.equal(store.snapshot, committed);
+  assert.equal(store.revision, revision);
+  assert.equal(store.getSettlement(102n), undefined);
+});
+
 function fullChunk(currentYear = 25, tickCount = 100n) {
   return {
     type: PERSISTENT_REGIONAL_EVOLUTION_SNAPSHOT_MESSAGE_TYPE,
