@@ -39,6 +39,7 @@ try {
     '--force-color-profile=srgb',
     '--force-device-scale-factor=1',
     '--lang=en-US',
+    '--hide-scrollbars',
     '--enable-unsafe-swiftshader',
     '--use-angle=swiftshader',
     '--window-size=1920,1080',
@@ -120,7 +121,7 @@ try {
   const screenshot = await devToolsSocket.command('Page.captureScreenshot', {
     format: 'png',
     fromSurface: true,
-    captureBeyondViewport: false,
+    captureBeyondViewport: true,
     clip,
   });
   await writeFile(screenshotPath, Buffer.from(screenshot.data, 'base64'));
