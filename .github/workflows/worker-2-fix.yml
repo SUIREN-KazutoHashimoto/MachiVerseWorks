@@ -6,8 +6,7 @@ on:
       - fix/all-open-issues-worker-2
     paths:
       - .github/workflows/worker-2-fix.yml
-      - .github/scripts/worker2_batch3.py
-      - .github/scripts/worker2_batch3_align.py
+      - .github/scripts/worker2_batch4.py
 
 permissions:
   contents: write
@@ -22,30 +21,20 @@ jobs:
         with:
           ref: fix/all-open-issues-worker-2
           fetch-depth: 0
-      - name: Align batch 3 patch targets
+      - name: Align batch 4 script guards
         shell: python
         run: |
           from pathlib import Path
-          path = Path('.github/scripts/worker2_batch3.py')
+          path = Path('.github/scripts/worker2_batch4.py')
           text = path.read_text(encoding='utf-8')
-          marker = 'x.fromSiteId===0n||x.toSiteId===0n||'
-          if text.count(marker) < 2:
-              raise SystemExit('Expected the Radio link patch target and replacement markers')
-          text = text.replace(marker, '', 1)
-          old_order = 'x.linkId===0n||x.fromSiteId===x.toSiteId||!siteIds.has(x.fromSiteId)||!siteIds.has(x.toSiteId)||'
-          current_order = 'x.linkId===0n||!siteIds.has(x.fromSiteId)||!siteIds.has(x.toSiteId)||x.fromSiteId===x.toSiteId||'
-          if text.count(old_order) != 1:
-              raise SystemExit('Expected one outdated Radio link validation ordering')
-          text = text.replace(old_order, current_order, 1)
-          old_error = 'raise SystemExit(f"{path_name}: expected exactly one patch target, found {count}")'
-          new_error = 'raise SystemExit(f"{path_name}: expected exactly one patch target, found {count}; target={old[:240]!r}")'
-          if text.count(old_error) != 1:
-              raise SystemExit('Expected replace_once diagnostic marker')
-          path.write_text(text.replace(old_error, new_error, 1), encoding='utf-8')
-      - name: Apply batch 3 fixes
-        run: python .github/scripts/worker2_batch3.py
-      - name: Align batch 3 fixtures
-        run: python .github/scripts/worker2_batch3_align.py
+          old = 'number_integer_count != 5'
+          if text.count(old) != 1:
+              raise SystemExit('Persistent Int32 guard marker mismatch')
+          text = text.replace(old, 'number_integer_count != 6', 1)
+          text = text.replace('expected 5 Number.isInteger Int32 uses', 'expected 6 Number.isInteger Int32 uses', 1)
+          path.write_text(text, encoding='utf-8')
+      - name: Apply final batch fixes
+        run: python .github/scripts/worker2_batch4.py
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
@@ -75,7 +64,7 @@ jobs:
           npm run typecheck --if-present
           npm test --if-present
           npm run build
-      - name: Commit batch 3
+      - name: Commit final batch
         shell: bash
         run: |
           set -euo pipefail
@@ -84,5 +73,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src tests
           git diff --cached --quiet && exit 1
-          git commit -m "fix: resolve worker 2 issue batch 3 (#284-#303)"
+          git commit -m "fix: resolve worker 2 final issue batch (#311 #320 #324 #338 #340)"
           git push origin HEAD:fix/all-open-issues-worker-2
