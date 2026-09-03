@@ -3,6 +3,7 @@ namespace MachiVerseWorks.Simulation.Internal;
 internal sealed class MultimodalTransitStore
 {
     private const double TransferSpatialCellSizeMeters = 300d;
+    private const int DirectTransferScanStopThreshold = 64;
 
     private readonly Dictionary<TransitStopId, TransitStopSnapshot> stops = [];
     private readonly Dictionary<TransitLineId, TransitLineSnapshot> lines = [];
@@ -235,26 +236,39 @@ internal sealed class MultimodalTransitStore
     {
         if (!double.IsFinite(radiusMeters) || radiusMeters < 0d) throw new ArgumentOutOfRangeException(nameof(radiusMeters));
         if (radiusMeters == 0d) return 0;
-        var center = SpatialGrid.ToCell(position, TransferSpatialCellSizeMeters);
-        var cellRadius = checked((int)Math.Ceiling(radiusMeters / TransferSpatialCellSizeMeters));
         var radiusSquared = radiusMeters * radiusMeters;
         var count = 0;
-        for (var x = (long)center.X - cellRadius; x <= (long)center.X + cellRadius; x++)
+
+        if (stops.Count <= DirectTransferScanStopThreshold)
         {
-            if (x < int.MinValue || x > int.MaxValue) continue;
-            for (var y = (long)center.Y - cellRadius; y <= (long)center.Y + cellRadius; y++)
+            foreach (var stop in stops.Values)
             {
-                if (y < int.MinValue || y > int.MaxValue) continue;
-                for (var z = (long)center.Z - cellRadius; z <= (long)center.Z + cellRadius; z++)
+                if (DistanceSquared(position, stop.Position) > radiusSquared) continue;
+                if (count >= destination.Length) throw new ArgumentException("Transfer candidate destination buffer is too small.", nameof(destination));
+                destination[count++] = stop.Id;
+            }
+        }
+        else
+        {
+            var center = SpatialGrid.ToCell(position, TransferSpatialCellSizeMeters);
+            var cellRadius = checked((int)Math.Ceiling(radiusMeters / TransferSpatialCellSizeMeters));
+            for (var x = (long)center.X - cellRadius; x <= (long)center.X + cellRadius; x++)
+            {
+                if (x < int.MinValue || x > int.MaxValue) continue;
+                for (var y = (long)center.Y - cellRadius; y <= (long)center.Y + cellRadius; y++)
                 {
-                    if (z < int.MinValue || z > int.MaxValue) continue;
-                    if (!stopSpatialIndex.TryGetValue(new SpatialCell((int)x, (int)y, (int)z), out var cellStops)) continue;
-                    for (var stopIndex = 0; stopIndex < cellStops.Count; stopIndex++)
+                    if (y < int.MinValue || y > int.MaxValue) continue;
+                    for (var z = (long)center.Z - cellRadius; z <= (long)center.Z + cellRadius; z++)
                     {
-                        var id = cellStops[stopIndex];
-                        if (DistanceSquared(position, stops[id].Position) > radiusSquared) continue;
-                        if (count >= destination.Length) throw new ArgumentException("Transfer candidate destination buffer is too small.", nameof(destination));
-                        destination[count++] = id;
+                        if (z < int.MinValue || z > int.MaxValue) continue;
+                        if (!stopSpatialIndex.TryGetValue(new SpatialCell((int)x, (int)y, (int)z), out var cellStops)) continue;
+                        for (var stopIndex = 0; stopIndex < cellStops.Count; stopIndex++)
+                        {
+                            var id = cellStops[stopIndex];
+                            if (DistanceSquared(position, stops[id].Position) > radiusSquared) continue;
+                            if (count >= destination.Length) throw new ArgumentException("Transfer candidate destination buffer is too small.", nameof(destination));
+                            destination[count++] = id;
+                        }
                     }
                 }
             }
