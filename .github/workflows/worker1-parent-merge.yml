@@ -27,7 +27,6 @@ jobs:
           git config user.name "Worker1 merge helper"
           git config user.email "noreply@github.com"
           git merge --no-commit --no-ff origin/fix/all-open-issues || true
-
           conflicts="$(git diff --name-only --diff-filter=U)"
           expected="src/MachiVerseWorks.Simulation/SimulationWorld.Optical.cs"
           if [ "$conflicts" != "$expected" ]; then
@@ -35,82 +34,14 @@ jobs:
             printf '%s\n' "$conflicts"
             exit 1
           fi
-
           git checkout --ours -- "$expected"
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path('src/MachiVerseWorks.Simulation/SimulationWorld.Optical.cs')
-          text = path.read_text()
-          old = '''            foreach (var cableId in route.RouteCableIds)
-              if (!_fiberCableIndex.ContainsKey(cableId)) throw new InvalidOperationException($"Optical routing solver returned unknown FiberCable {cableId.Value}.");
-            if (route.BackhaulId is { } backhaulId && !_opticalBackhaulIndex.ContainsKey(backhaulId))
-                throw new InvalidOperationException($"Optical routing solver returned unknown Backhaul {backhaulId.Value}.");
-'''
-          new = '''            if (!IsValidOpticalRouteTopology(
-                    demand.NodeId,
-                    route.BackhaulId,
-                    route.AllocatedGigabitsPerSecond,
-                    route.RouteCableIds,
-                    id => _opticalBackhaulIndex.TryGetValue(id, out var backhaul) ? backhaul.NodeId : null,
-                    id => _fiberCableIndex.TryGetValue(id, out var cable)
-                        ? new OpticalRouteCableValidation(cable.FromNodeId, cable.ToNodeId, cable.IsInService)
-                        : null,
-                    requireInService: true))
-                throw new InvalidOperationException($"Optical routing solver returned a disconnected or inconsistent route for Demand {demand.Id.Value}.");
-'''
-          if old not in text:
-              raise SystemExit('Optical validation block not found')
-          text = text.replace(old, new, 1)
-
-          marker = '''    private OpticalQualityState CalculateOpticalQuality(OpticalDemandState demand)
-'''
-          helper = '''    private static bool IsValidOpticalRouteTopology(
-        OpticalNodeId demandNodeId,
-        OpticalBackhaulId? backhaulId,
-        double allocatedGigabitsPerSecond,
-        IReadOnlyList<FiberCableId>? routeCableIds,
-        Func<OpticalBackhaulId, OpticalNodeId?> resolveBackhaulNode,
-        Func<FiberCableId, OpticalRouteCableValidation?> resolveCable,
-        bool requireInService)
-    {
-        if (routeCableIds is null) return false;
-        if (allocatedGigabitsPerSecond <= OpticalDefaults.BandwidthEpsilonGigabitsPerSecond)
-            return backhaulId is null && routeCableIds.Count == 0;
-        if (backhaulId is not { } selectedBackhaul || resolveBackhaulNode(selectedBackhaul) is not { } cursor)
-            return false;
-
-        var seen = new HashSet<FiberCableId>();
-        foreach (var cableId in routeCableIds)
-        {
-            if (!seen.Add(cableId) || resolveCable(cableId) is not { } cable || (requireInService && !cable.IsInService))
-                return false;
-            if (cable.FromNodeId == cursor) cursor = cable.ToNodeId;
-            else if (cable.ToNodeId == cursor) cursor = cable.FromNodeId;
-            else return false;
-        }
-        return cursor == demandNodeId;
-    }
-
-    private readonly record struct OpticalRouteCableValidation(
-        OpticalNodeId FromNodeId,
-        OpticalNodeId ToNodeId,
-        bool IsInService);
-
-'''
-          if marker not in text:
-              raise SystemExit('Optical helper insertion point not found')
-          text = text.replace(marker, helper + marker, 1)
-          path.write_text(text)
-          PY
-
+          echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgpwYXRoID0gUGF0aCgic3JjL01hY2hpVmVyc2VXb3Jrcy5TaW11bGF0aW9uL1NpbXVsYXRpb25Xb3JsZC5PcHRpY2FsLmNzIikKdGV4dCA9IHBhdGgucmVhZF90ZXh0KCkKb2xkID0gIiIiICAgICAgICAgICAgZm9yZWFjaCAodmFyIGNhYmxlSWQgaW4gcm91dGUuUm91dGVDYWJsZUlkcykKICAgICAgICAgICAgICAgIGlmICghX2ZpYmVyQ2FibGVJbmRleC5Db250YWluc0tleShjYWJsZUlkKSkgdGhyb3cgbmV3IEludmFsaWRPcGVyYXRpb25FeGNlcHRpb24oJCJPcHRpY2FsIHJvdXRpbmcgc29sdmVyIHJldHVybmVkIHVua25vd24gRmliZXJDYWJsZSB7Y2FibGVJZC5WYWx1ZX0uIik7CiAgICAgICAgICAgIGlmIChyb3V0ZS5CYWNraGF1bElkIGlzIHsgfSBiYWNraGF1bElkICYmICFfb3B0aWNhbEJhY2toYXVsSW5kZXguQ29udGFpbnNLZXkoYmFja2hhdWxJZCkpCiAgICAgICAgICAgICAgICB0aHJvdyBuZXcgSW52YWxpZE9wZXJhdGlvbkV4Y2VwdGlvbigkIk9wdGljYWwgcm91dGluZyBzb2x2ZXIgcmV0dXJuZWQgdW5rbm93biBCYWNraGF1bCB7YmFja2hhdWxJZC5WYWx1ZX0uIik7CiIiIgpuZXcgPSAiIiIgICAgICAgICAgICBpZiAoIUlzVmFsaWRPcHRpY2FsUm91dGVUb3BvbG9neSgKICAgICAgICAgICAgICAgICAgICBkZW1hbmQuTm9kZUlkLAogICAgICAgICAgICAgICAgICAgIHJvdXRlLkJhY2toYXVsSWQsCiAgICAgICAgICAgICAgICAgICAgcm91dGUuQWxsb2NhdGVkR2lnYWJpdHNQZXJTZWNvbmQsCiAgICAgICAgICAgICAgICAgICAgcm91dGUuUm91dGVDYWJsZUlkcywKICAgICAgICAgICAgICAgICAgICBpZCA9PiBfb3B0aWNhbEJhY2toYXVsSW5kZXguVHJ5R2V0VmFsdWUoaWQsIG91dCB2YXIgYmFja2hhdWwpID8gYmFja2hhdWwuTm9kZUlkIDogbnVsbCwKICAgICAgICAgICAgICAgICAgICBpZCA9PiBfZmliZXJDYWJsZUluZGV4LlRyeUdldFZhbHVlKGlkLCBvdXQgdmFyIGNhYmxlKQogICAgICAgICAgICAgICAgICAgICAgICA/IG5ldyBPcHRpY2FsUm91dGVDYWJsZVZhbGlkYXRpb24oY2FibGUuRnJvbU5vZGVJZCwgY2FibGUuVG9Ob2RlSWQsIGNhYmxlLklzSW5TZXJ2aWNlKQogICAgICAgICAgICAgICAgICAgICAgICA6IG51bGwsCiAgICAgICAgICAgICAgICAgICAgcmVxdWlyZUluU2VydmljZTogdHJ1ZSkpCiAgICAgICAgICAgICAgICB0aHJvdyBuZXcgSW52YWxpZE9wZXJhdGlvbkV4Y2VwdGlvbigkIk9wdGljYWwgcm91dGluZyBzb2x2ZXIgcmV0dXJuZWQgYSBkaXNjb25uZWN0ZWQgb3IgaW5jb25zaXN0ZW50IHJvdXRlIGZvciBEZW1hbmQge2RlbWFuZC5JZC5WYWx1ZX0uIik7CiIiIgppZiBvbGQgbm90IGluIHRleHQ6CiAgICByYWlzZSBTeXN0ZW1FeGl0KCJPcHRpY2FsIHZhbGlkYXRpb24gYmxvY2sgbm90IGZvdW5kIikKdGV4dCA9IHRleHQucmVwbGFjZShvbGQsIG5ldywgMSkKbWFya2VyID0gIiAgICBwcml2YXRlIE9wdGljYWxRdWFsaXR5U3RhdGUgQ2FsY3VsYXRlT3B0aWNhbFF1YWxpdHkoT3B0aWNhbERlbWFuZFN0YXRlIGRlbWFuZClcbiIKaGVscGVyID0gIiIiICAgIHByaXZhdGUgc3RhdGljIGJvb2wgSXNWYWxpZE9wdGljYWxSb3V0ZVRvcG9sb2d5KAogICAgICAgIE9wdGljYWxOb2RlSWQgZGVtYW5kTm9kZUlkLAogICAgICAgIE9wdGljYWxCYWNraGF1bElkPyBiYWNraGF1bElkLAogICAgICAgIGRvdWJsZSBhbGxvY2F0ZWRHaWdhYml0c1BlclNlY29uZCwKICAgICAgICBJUmVhZE9ubHlMaXN0PEZpYmVyQ2FibGVJZD4/IHJvdXRlQ2FibGVJZHMsCiAgICAgICAgRnVuYzxPcHRpY2FsQmFja2hhdWxJZCwgT3B0aWNhbE5vZGVJZD8+IHJlc29sdmVCYWNraGF1bE5vZGUsCiAgICAgICAgRnVuYzxGaWJlckNhYmxlSWQsIE9wdGljYWxSb3V0ZUNhYmxlVmFsaWRhdGlvbj8+IHJlc29sdmVDYWJsZSwKICAgICAgICBib29sIHJlcXVpcmVJblNlcnZpY2UpCiAgICB7CiAgICAgICAgaWYgKHJvdXRlQ2FibGVJZHMgaXMgbnVsbCkgcmV0dXJuIGZhbHNlOwogICAgICAgIGlmIChhbGxvY2F0ZWRHaWdhYml0c1BlclNlY29uZCA8PSBPcHRpY2FsRGVmYXVsdHMuQmFuZHdpZHRoRXBzaWxvbkdpZ2FiaXRzUGVyU2Vjb25kKQogICAgICAgICAgICByZXR1cm4gYmFja2hhdWxJZCBpcyBudWxsICYmIHJvdXRlQ2FibGVJZHMuQ291bnQgPT0gMDsKICAgICAgICBpZiAoYmFja2hhdWxJZCBpcyBub3QgeyB9IHNlbGVjdGVkQmFja2hhdWwgfHwgcmVzb2x2ZUJhY2toYXVsTm9kZShzZWxlY3RlZEJhY2toYXVsKSBpcyBub3QgeyB9IGN1cnNvcikKICAgICAgICAgICAgcmV0dXJuIGZhbHNlOwoKICAgICAgICB2YXIgc2VlbiA9IG5ldyBIYXNoU2V0PEZpYmVyQ2FibGVJZD4oKTsKICAgICAgICBmb3JlYWNoICh2YXIgY2FibGVJZCBpbiByb3V0ZUNhYmxlSWRzKQogICAgICAgIHsKICAgICAgICAgICAgaWYgKCFzZWVuLkFkZChjYWJsZUlkKSB8fCByZXNvbHZlQ2FibGUoY2FibGVJZCkgaXMgbm90IHsgfSBjYWJsZSB8fCAocmVxdWlyZUluU2VydmljZSAmJiAhY2FibGUuSXNJblNlcnZpY2UpKQogICAgICAgICAgICAgICAgcmV0dXJuIGZhbHNlOwogICAgICAgICAgICBpZiAoY2FibGUuRnJvbU5vZGVJZCA9PSBjdXJzb3IpIGN1cnNvciA9IGNhYmxlLlRvTm9kZUlkOwogICAgICAgICAgICBlbHNlIGlmIChjYWJsZS5Ub05vZGVJZCA9PSBjdXJzb3IpIGN1cnNvciA9IGNhYmxlLkZyb21Ob2RlSWQ7CiAgICAgICAgICAgIGVsc2UgcmV0dXJuIGZhbHNlOwogICAgICAgIH0KICAgICAgICByZXR1cm4gY3Vyc29yID09IGRlbWFuZE5vZGVJZDsKICAgIH0KCiAgICBwcml2YXRlIHJlYWRvbmx5IHJlY29yZCBzdHJ1Y3QgT3B0aWNhbFJvdXRlQ2FibGVWYWxpZGF0aW9uKAogICAgICAgIE9wdGljYWxOb2RlSWQgRnJvbU5vZGVJZCwKICAgICAgICBPcHRpY2FsTm9kZUlkIFRvTm9kZUlkLAogICAgICAgIGJvb2wgSXNJblNlcnZpY2UpOwoKIiIiCmlmIG1hcmtlciBub3QgaW4gdGV4dDoKICAgIHJhaXNlIFN5c3RlbUV4aXQoIk9wdGljYWwgaGVscGVyIGluc2VydGlvbiBwb2ludCBub3QgZm91bmQiKQp0ZXh0ID0gdGV4dC5yZXBsYWNlKG1hcmtlciwgaGVscGVyICsgbWFya2VyLCAxKQpwYXRoLndyaXRlX3RleHQodGV4dCkK' | base64 -d | python3
           git add "$expected"
           if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
             echo "Unresolved conflicts remain"
             git diff --name-only --diff-filter=U
             exit 1
           fi
-
           git status --short
           git commit -m "merge: sync fix/all-open-issues into worker1"
           git push origin HEAD:fix/all-open-issues-worker-1
