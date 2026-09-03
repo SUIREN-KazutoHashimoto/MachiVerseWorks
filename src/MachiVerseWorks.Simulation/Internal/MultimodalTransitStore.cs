@@ -3,8 +3,10 @@ namespace MachiVerseWorks.Simulation.Internal;
 internal sealed class MultimodalTransitStore
 {
     private const double TransferSpatialCellSizeMeters = 300d;
+    private const int DirectTransferScanStopThreshold = 64;
 
     private readonly Dictionary<TransitStopId, TransitStopSnapshot> stops = [];
+    private readonly List<TransitStopSnapshot> orderedStops = [];
     private readonly Dictionary<TransitLineId, TransitLineSnapshot> lines = [];
     private readonly Dictionary<TransitServicePatternId, TransitServicePatternSnapshot> patterns = [];
     private readonly Dictionary<TransitTripId, TransitTripSnapshot> trips = [];
@@ -39,6 +41,7 @@ internal sealed class MultimodalTransitStore
         var id = new TransitStopId(nextStopId++);
         var stop = new TransitStopSnapshot(id, kind, position, laneId, stationId, platformId);
         stops.Add(id, stop);
+        orderedStops.Add(stop);
         IndexStop(stop);
         return id;
     }
@@ -118,7 +121,8 @@ internal sealed class MultimodalTransitStore
     public TaxiRequestId AddTaxiRequest(TripRequestId tripRequestId, WorldPoint pickup, WorldPoint dropOff, ulong requestedTick)
     {
         if (tripRequestId.Value == 0) throw new ArgumentOutOfRangeException(nameof(tripRequestId));
-        if (taxiRequestByTrip.ContainsKey(tripRequestId) || passengerByTrip.ContainsKey(tripRequestId))
+        if ((taxiRequestByTrip.Count != 0 && taxiRequestByTrip.ContainsKey(tripRequestId))
+            || (passengerByTrip.Count != 0 && passengerByTrip.ContainsKey(tripRequestId)))
             throw new InvalidOperationException($"Trip Request {tripRequestId.Value} already has active multimodal state.");
         EnsureCapacity(nextTaxiRequestId, "Taxi request");
         var id = new TaxiRequestId(nextTaxiRequestId++);
@@ -149,7 +153,8 @@ internal sealed class MultimodalTransitStore
     public PassengerId AddPassenger(TripRequestId tripRequestId, JourneyId journeyId, ulong tickCount)
     {
         if (!journeys.TryGetValue(journeyId, out var journey) || journey.TripRequestId != tripRequestId) throw new ArgumentException("Passenger Journey does not match the Trip Request.", nameof(journeyId));
-        if (passengerByTrip.ContainsKey(tripRequestId) || taxiRequestByTrip.ContainsKey(tripRequestId))
+        if ((passengerByTrip.Count != 0 && passengerByTrip.ContainsKey(tripRequestId))
+            || (taxiRequestByTrip.Count != 0 && taxiRequestByTrip.ContainsKey(tripRequestId)))
             throw new InvalidOperationException($"Trip Request {tripRequestId.Value} already has active multimodal state.");
         EnsureCapacity(nextPassengerId, "Passenger");
         var id = new PassengerId(nextPassengerId++);
@@ -235,10 +240,22 @@ internal sealed class MultimodalTransitStore
     {
         if (!double.IsFinite(radiusMeters) || radiusMeters < 0d) throw new ArgumentOutOfRangeException(nameof(radiusMeters));
         if (radiusMeters == 0d) return 0;
-        var center = SpatialGrid.ToCell(position, TransferSpatialCellSizeMeters);
-        var cellRadius = checked((int)Math.Ceiling(radiusMeters / TransferSpatialCellSizeMeters));
         var radiusSquared = radiusMeters * radiusMeters;
         var count = 0;
+        if (orderedStops.Count <= DirectTransferScanStopThreshold)
+        {
+            for (var index = 0; index < orderedStops.Count; index++)
+            {
+                var stop = orderedStops[index];
+                if (DistanceSquared(position, stop.Position) > radiusSquared) continue;
+                if (count >= destination.Length) throw new ArgumentException("Transfer candidate destination buffer is too small.", nameof(destination));
+                destination[count++] = stop.Id;
+            }
+            return count;
+        }
+
+        var center = SpatialGrid.ToCell(position, TransferSpatialCellSizeMeters);
+        var cellRadius = checked((int)Math.Ceiling(radiusMeters / TransferSpatialCellSizeMeters));
         for (var x = (long)center.X - cellRadius; x <= (long)center.X + cellRadius; x++)
         {
             if (x < int.MinValue || x > int.MaxValue) continue;
@@ -262,7 +279,7 @@ internal sealed class MultimodalTransitStore
         return count;
     }
 
-    public TransitStopSnapshot[] GetStops() => stops.Values.OrderBy(static item => item.Id.Value).ToArray();
+    public TransitStopSnapshot[] GetStops() => orderedStops.ToArray();
     public TransitLineSnapshot[] GetLines() => lines.Values.OrderBy(static item => item.Id.Value).ToArray();
     public TransitServicePatternSnapshot[] GetPatterns() => patterns.Values.OrderBy(static item => item.Id.Value).ToArray();
     public TransitTripSnapshot[] GetTrips() => trips.Values.OrderBy(static item => item.Id.Value).ToArray();
@@ -361,7 +378,7 @@ internal sealed class MultimodalTransitStore
 
     public void Restore(MultimodalTransitCheckpoint? checkpoint)
     {
-        stops.Clear(); lines.Clear(); patterns.Clear(); trips.Clear(); vehicles.Clear(); taxiRequests.Clear(); journeys.Clear(); passengers.Clear();
+        stops.Clear(); orderedStops.Clear(); lines.Clear(); patterns.Clear(); trips.Clear(); vehicles.Clear(); taxiRequests.Clear(); journeys.Clear(); passengers.Clear();
         taxiRequestByTrip.Clear(); passengerByTrip.Clear(); outgoingPatternEdges.Clear(); stopSpatialIndex.Clear();
         if (checkpoint is null) { nextStopId = nextLineId = nextPatternId = nextTripId = nextVehicleId = nextTaxiRequestId = nextJourneyId = nextPassengerId = 1; return; }
         ValidateNextId(checkpoint.NextStopId, checkpoint.Stops.Select(static x => x.Id.Value), "Transit stop");
@@ -372,7 +389,13 @@ internal sealed class MultimodalTransitStore
         ValidateNextId(checkpoint.NextTaxiRequestId, checkpoint.TaxiRequests.Select(static x => x.Id.Value), "Taxi request");
         ValidateNextId(checkpoint.NextJourneyId, checkpoint.Journeys.Select(static x => x.Id.Value), "Journey");
         ValidateNextId(checkpoint.NextPassengerId, checkpoint.Passengers.Select(static x => x.Id.Value), "Passenger");
-        foreach (var item in checkpoint.Stops) { stops.Add(item.Id, item); IndexStop(item); }
+        foreach (var item in checkpoint.Stops)
+        {
+            stops.Add(item.Id, item);
+            orderedStops.Add(item);
+            IndexStop(item);
+        }
+        orderedStops.Sort(static (left, right) => left.Id.Value.CompareTo(right.Id.Value));
         foreach (var item in checkpoint.Lines) lines.Add(item.Id, item);
         foreach (var item in checkpoint.Patterns)
         {
