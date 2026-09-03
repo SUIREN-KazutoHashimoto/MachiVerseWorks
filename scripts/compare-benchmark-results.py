@@ -52,13 +52,15 @@ def finite_number(value: Any) -> float | None:
     return number if math.isfinite(number) and number >= 0.0 else None
 
 
-def compare_metric(base: float | None, head: float | None, ratio: float) -> tuple[bool, float | None]:
-    if base is None or head is None:
-        return False, None
+def compare_metric(base: float | None, head: float | None, ratio: float) -> tuple[str, float | None]:
+    if head is None:
+        return "fail", None
+    if base is None:
+        return "not_comparable", None
     if base == 0.0:
-        return head == 0.0, None
+        return ("pass" if head == 0.0 else "fail"), None
     observed = head / base
-    return observed <= ratio, observed
+    return ("pass" if observed <= ratio else "fail"), observed
 
 
 def main() -> int:
@@ -75,27 +77,32 @@ def main() -> int:
     rows: list[dict[str, Any]] = []
     failed = False
     for name in common:
-        latency_ok, latency_ratio = compare_metric(base[name]["mean_ns"], head[name]["mean_ns"], args.latency_ratio)
-        allocation_ok, allocation_ratio = compare_metric(base[name]["allocated_bytes"], head[name]["allocated_bytes"], args.allocation_ratio)
-        ok = latency_ok and allocation_ok
-        failed |= not ok
+        latency_status, latency_ratio = compare_metric(base[name]["mean_ns"], head[name]["mean_ns"], args.latency_ratio)
+        allocation_status, allocation_ratio = compare_metric(base[name]["allocated_bytes"], head[name]["allocated_bytes"], args.allocation_ratio)
+        statuses = (latency_status, allocation_status)
+        status = "fail" if "fail" in statuses else "not_comparable" if "not_comparable" in statuses else "pass"
+        failed |= status == "fail"
         rows.append({
             "benchmark": name,
             "base_mean_ns": base[name]["mean_ns"],
             "head_mean_ns": head[name]["mean_ns"],
             "latency_ratio": latency_ratio,
             "latency_limit": args.latency_ratio,
+            "latency_status": latency_status,
             "base_allocated_bytes": base[name]["allocated_bytes"],
             "head_allocated_bytes": head[name]["allocated_bytes"],
             "allocation_ratio": allocation_ratio,
             "allocation_limit": args.allocation_ratio,
-            "passed": ok,
+            "allocation_status": allocation_status,
+            "status": status,
+            "passed": status != "fail",
         })
 
     report = {
         "base_directory": str(args.base),
         "head_directory": str(args.head),
         "benchmarks_compared": len(rows),
+        "benchmarks_not_comparable": sum(row["status"] == "not_comparable" for row in rows),
         "passed": not failed,
         "results": rows,
     }
@@ -103,7 +110,11 @@ def main() -> int:
     args.report.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     for row in rows:
-        status = "PASS" if row["passed"] else "FAIL"
+        status = {
+            "pass": "PASS",
+            "fail": "FAIL",
+            "not_comparable": "NOT_COMPARABLE",
+        }[row["status"]]
         print(f"{status}: {row['benchmark']} latency={row['latency_ratio']} allocation={row['allocation_ratio']}")
     return 1 if failed else 0
 
