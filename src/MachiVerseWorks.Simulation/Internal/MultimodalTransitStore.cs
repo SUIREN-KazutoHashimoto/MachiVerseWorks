@@ -259,18 +259,6 @@ internal sealed class MultimodalTransitStore
                 }
             }
         }
-
-        for (var index = 1; index < count; index++)
-        {
-            var value = destination[index];
-            var insertionIndex = index - 1;
-            while (insertionIndex >= 0 && destination[insertionIndex].Value > value.Value)
-            {
-                destination[insertionIndex + 1] = destination[insertionIndex];
-                insertionIndex--;
-            }
-            destination[insertionIndex + 1] = value;
-        }
         return count;
     }
 
