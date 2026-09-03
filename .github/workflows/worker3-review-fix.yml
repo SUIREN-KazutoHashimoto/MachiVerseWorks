@@ -47,11 +47,12 @@ jobs:
         run: |
           python3 scripts/worker3-review-patch.py
           sed -i 's/private static IReadOnlyList<WaterSewerServicePointSnapshot> SelectServicePointCandidates/private static List<WaterSewerServicePointSnapshot> SelectServicePointCandidates/' src/MachiVerseWorks.Server/WaterSewerMessageMapper.cs
+          python3 scripts/worker3-review-followup.py
 
       - name: Finalize merge commit
         shell: bash
         run: |
-          git rm scripts/worker3-review-patch.py
+          git rm scripts/worker3-review-patch.py scripts/worker3-review-followup.py
           git add -A
           unresolved="$(git diff --name-only --diff-filter=U)"
           if [ -n "$unresolved" ]; then
