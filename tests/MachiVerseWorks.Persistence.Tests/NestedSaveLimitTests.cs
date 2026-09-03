@@ -113,6 +113,17 @@ public sealed class NestedSaveLimitTests
     }
 
     [TestMethod]
+    public void OpticalDemandRouteCableIdsAreRejectedBeforeDtoMaterializationAboveLimit()
+    {
+        var limits = new WorldSaveLimits(maximumBytes: 100_000, maximumOpticalRouteCableCount: 1);
+        AssertNestedBoundary(
+            CreateSimulationJson("\"economy\":{\"optical\":{\"demands\":[{\"routeCableIds\":[1]}]}}"),
+            CreateSimulationJson("\"economy\":{\"optical\":{\"demands\":[{\"routeCableIds\":[1,2]}]}}"),
+            limits,
+            "simulation.economy.optical.demands[].routeCableIds");
+    }
+
+    [TestMethod]
     public void EconomyCoreCollectionsAreRejectedBeforeDtoMaterializationAboveLimit()
     {
         foreach (var property in new[] { "companies", "establishments" })

@@ -213,6 +213,7 @@ public static partial class WorldSaveSerializer
             if (reader.ValueTextEquals("backhauls")) return NestedSaveProperty.OpticalBackhauls;
             if (reader.ValueTextEquals("demands")) return NestedSaveProperty.OpticalDemands;
         }
+        else if (context == NestedSaveContext.OpticalDemand && reader.ValueTextEquals("routeCableIds")) return NestedSaveProperty.OpticalRouteCableIds;
         else if (context == NestedSaveContext.Radio)
         {
             if (reader.ValueTextEquals("sites")) return NestedSaveProperty.RadioSites;
@@ -280,6 +281,7 @@ public static partial class WorldSaveSerializer
             (NestedSaveContext.RailwayOperations, NestedSaveProperty.Timetables) => NestedSaveContext.Timetable,
             (NestedSaveContext.MultimodalTransit, NestedSaveProperty.TransitPatterns) => NestedSaveContext.TransitPattern,
             (NestedSaveContext.MultimodalTransit, NestedSaveProperty.TransitJourneys) => NestedSaveContext.TransitJourney,
+            (NestedSaveContext.Optical, NestedSaveProperty.OpticalDemands) => NestedSaveContext.OpticalDemand,
             (NestedSaveContext.WorldEnvironment, NestedSaveProperty.Features) => NestedSaveContext.GeographicFeature,
             (NestedSaveContext.RegionalGenerationSnapshot, NestedSaveProperty.RegionalCorridors) => NestedSaveContext.RegionalCorridor,
             _ => NestedSaveContext.Other,
@@ -330,6 +332,7 @@ public static partial class WorldSaveSerializer
             (NestedSaveContext.Optical, NestedSaveProperty.OpticalEquipment) => new(limits.MaximumInfrastructureSiteCount, "simulation.economy.optical.equipment", NestedArrayKind.None),
             (NestedSaveContext.Optical, NestedSaveProperty.OpticalBackhauls) => new(limits.MaximumInfrastructureSiteCount, "simulation.economy.optical.backhauls", NestedArrayKind.None),
             (NestedSaveContext.Optical, NestedSaveProperty.OpticalDemands) => new(limits.MaximumInfrastructureSiteCount, "simulation.economy.optical.demands", NestedArrayKind.None),
+            (NestedSaveContext.OpticalDemand, NestedSaveProperty.OpticalRouteCableIds) => new(limits.MaximumOpticalRouteCableCount, "simulation.economy.optical.demands[].routeCableIds", NestedArrayKind.None),
             (NestedSaveContext.Radio, NestedSaveProperty.RadioSites) => new(limits.MaximumInfrastructureSiteCount, "simulation.economy.radio.sites", NestedArrayKind.None),
             (NestedSaveContext.Radio, NestedSaveProperty.RadioBands) => new(limits.MaximumInfrastructureNodeCount, "simulation.economy.radio.bands", NestedArrayKind.None),
             (NestedSaveContext.Radio, NestedSaveProperty.RadioFrequencyBlocks) => new(limits.MaximumInfrastructureSegmentCount, "simulation.economy.radio.frequencyBlocks", NestedArrayKind.None),
@@ -362,7 +365,7 @@ public static partial class WorldSaveSerializer
 
     private enum NestedSaveContext : byte
     {
-        Other, Root, Simulation, Vehicle, Person, BlockSection, Depot, RailwayOperations, RailwayRoute, Timetable, MultimodalTransit, TransitPattern, TransitJourney, Economy, Logistics, Power, WaterSewer, Gas, Optical, Radio, WorldEnvironment, GeographicFeature,
+        Other, Root, Simulation, Vehicle, Person, BlockSection, Depot, RailwayOperations, RailwayRoute, Timetable, MultimodalTransit, TransitPattern, TransitJourney, Economy, Logistics, Power, WaterSewer, Gas, Optical, OpticalDemand, Radio, WorldEnvironment, GeographicFeature,
         RegionalGeneration, RegionalGenerationSnapshot, RegionalCorridor,
     }
 
@@ -372,7 +375,7 @@ public static partial class WorldSaveSerializer
         Economy, Companies, Establishments, Jobs, Employments, EconomyHouseholds, Logistics, Commodities, Inventories, Orders, Shipments, Power, PowerNodes, PowerLines, Generators, PowerLoads,
         WaterSewer, WaterNodes, WaterPipes, SewerNodes, SewerPipes, WaterSources, Reservoirs, Pumps, TreatmentPlants, ServicePoints,
         Gas, GasNodes, GasPipelines, GasSources, GasImportTerminals, GasStorages, GasServicePoints,
-        Optical, OpticalNodes, FiberCables, OpticalEquipment, OpticalBackhauls, OpticalDemands,
+        Optical, OpticalNodes, FiberCables, OpticalEquipment, OpticalBackhauls, OpticalDemands, OpticalRouteCableIds,
         Radio, RadioSites, RadioBands, RadioFrequencyBlocks, RadioLinks, RadioPeers, RadioAntennas, RadioTransmitters, RadioReceivers, RadioEmissions, RadioSiteInfrastructure, RadioLinkEntityBindings,
         WorldEnvironment, Features, Toponyms, Geometry,
         RegionalGeneration, Snapshot, RegionalSettlements, RegionalGrowthEvents, RegionalCorridors, RegionalDistricts, RegionalParcels, RegionalBuildings, RegionalPois, RegionalToponyms, RegionalRoadSigns, RegionalCorridorGeometry,

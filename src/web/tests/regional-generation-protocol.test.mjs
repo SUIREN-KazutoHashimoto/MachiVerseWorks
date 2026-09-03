@@ -37,6 +37,11 @@ test('RegionalGeneration rejects broken stable ID relationships', () => {
   assert.throws(() => decodeRegionalGenerationFrame(createFrame(broken)), /Parcel hierarchy/);
 });
 
+test('RegionalGeneration rejects Int32 overflow from wire JSON', () => {
+  const overflow = createSnapshotJson().replace('\"population\":500', '\"population\":2147483648');
+  assert.throws(() => decodeRegionalGenerationFrame(createFrame(overflow)), ProtocolDecodeFailure);
+});
+
 function createFrame(json, version = { major: 2, minor: 18 }) {
   const payload = new TextEncoder().encode(json);
   const frame = new ArrayBuffer(PROTOCOL_HEADER_SIZE + payload.byteLength);

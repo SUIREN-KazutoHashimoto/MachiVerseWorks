@@ -56,4 +56,22 @@ public sealed class IntersectionControlProtocolTests
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
             IntersectionControlProtocolCodec.Serialize(message, new ProtocolVersion(2, 3)));
     }
+
+    [TestMethod]
+    public void IntersectionControlSnapshotRejectsMismatchedOrDuplicatedMovementIdentity()
+    {
+        var mismatched = new IntersectionControlSnapshotMessage(
+            1, 5, ProtocolIntersectionControlMode.Unsignalized, 0, 0,
+            [new ProtocolIntersectionMovementState(10, 11, 21, 22, ProtocolTurnMovement.Straight, 0, 0, 0, ProtocolSignalIndication.Green, 0, false)]);
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => IntersectionControlProtocolCodec.Serialize(mismatched, ProtocolVersion.Current));
+
+        var duplicated = new IntersectionControlSnapshotMessage(
+            1, 5, ProtocolIntersectionControlMode.Unsignalized, 0, 0,
+            [
+                new ProtocolIntersectionMovementState(10, 10, 21, 22, ProtocolTurnMovement.Straight, 0, 0, 0, ProtocolSignalIndication.Green, 0, false),
+                new ProtocolIntersectionMovementState(10, 10, 23, 24, ProtocolTurnMovement.Right, 0, 0, 0, ProtocolSignalIndication.Green, 0, false),
+            ]);
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => IntersectionControlProtocolCodec.Serialize(duplicated, ProtocolVersion.Current));
+    }
+
 }

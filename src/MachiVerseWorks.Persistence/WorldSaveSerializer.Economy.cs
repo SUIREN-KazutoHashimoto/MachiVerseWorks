@@ -74,6 +74,11 @@ public static partial class WorldSaveSerializer
         ValidateCount(optical.Equipment.Count, limits.MaximumBuildingCount, "OpticalEquipment");
         ValidateCount(optical.Backhauls.Count, limits.MaximumBuildingCount, "OpticalBackhauls");
         ValidateCount(optical.Demands.Count, limits.MaximumBuildingCount, "OpticalDemands");
+        foreach (var demand in optical.Demands)
+        {
+            ArgumentNullException.ThrowIfNull(demand.RouteCableIds);
+            ValidateCount(demand.RouteCableIds.Count, limits.MaximumOpticalRouteCableCount, "OpticalDemandRouteCableIds");
+        }
     }
 
     private static void ValidateRadioCheckpointWithinLimits(RadioCheckpoint? radio, WorldSaveLimits limits)

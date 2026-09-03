@@ -19,6 +19,7 @@ const MAXIMUM_POIS = 1_024;
 const MAXIMUM_TOPONYMS = 4_096;
 const MAXIMUM_ROAD_SIGNS = 4_096;
 const MAXIMUM_TEXT_LENGTH = 256;
+const INT32_MAX = 2_147_483_647;
 const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
 
 type WireUInt64 = string | number;
@@ -372,15 +373,15 @@ function containsHorizontal(outer: { readonly minX:number; readonly minY:number;
 function normalizeSettlement(raw: WireSettlement): SettlementObservation {
   if (!isRecord(raw) || !isRecord(raw.suitability) || !validPoint(raw) || !enumRange(raw.environment, 0, 7)
     || !enumRange(raw.origin, SettlementOriginKind.InlandPlain, SettlementOriginKind.Island) || !enumRange(raw.role, RegionalRole.LocalService, RegionalRole.Resource)
-    || !enumRange(raw.initialEconomy, InitialEconomyKind.Subsistence, InitialEconomyKind.Services) || !integerRange(raw.population, 0, Number.MAX_SAFE_INTEGER)
-    || !integerRange(raw.jobs, 0, Number.MAX_SAFE_INTEGER) || !positive(raw.influenceRadiusMeters)) throw new ProtocolDecodeFailure('RegionalGeneration Settlement values are invalid.');
+    || !enumRange(raw.initialEconomy, InitialEconomyKind.Subsistence, InitialEconomyKind.Services) || !integerRange(raw.population, 0, INT32_MAX)
+    || !integerRange(raw.jobs, 0, INT32_MAX) || !positive(raw.influenceRadiusMeters)) throw new ProtocolDecodeFailure('RegionalGeneration Settlement values are invalid.');
   return Object.freeze({ ...raw, settlementId: parsePositiveUInt64(raw.settlementId, 'Settlement ID'), nameId: parsePositiveUInt64(raw.nameId, 'Settlement name ID'), suitability: normalizeSuitability(raw.suitability as unknown as SettlementSuitabilityObservation) });
 }
 
 function normalizeGrowthEvent(raw: WireGrowthEvent): HistoricalGrowthEventObservation {
   if (!isRecord(raw) || !validPoint(raw) || !enumRange(raw.stage, HistoricalGrowthStage.Origin, HistoricalGrowthStage.NewCenterFormation)
-    || !integerRange(raw.sequence, 0, Number.MAX_SAFE_INTEGER) || !integerRange(raw.populationDelta, 0, Number.MAX_SAFE_INTEGER)
-    || !integerRange(raw.jobDelta, 0, Number.MAX_SAFE_INTEGER) || !validText(raw.reason, MAXIMUM_TEXT_LENGTH)) throw new ProtocolDecodeFailure('RegionalGeneration GrowthEvent values are invalid.');
+    || !integerRange(raw.sequence, 0, INT32_MAX) || !integerRange(raw.populationDelta, 0, INT32_MAX)
+    || !integerRange(raw.jobDelta, 0, INT32_MAX) || !validText(raw.reason, MAXIMUM_TEXT_LENGTH)) throw new ProtocolDecodeFailure('RegionalGeneration GrowthEvent values are invalid.');
   return Object.freeze({ ...raw, eventId: parsePositiveUInt64(raw.eventId, 'GrowthEvent ID'), settlementId: parsePositiveUInt64(raw.settlementId, 'GrowthEvent settlement ID') });
 }
 
@@ -407,7 +408,7 @@ function normalizeParcel(raw: WireParcel): ParcelObservation {
 
 function normalizeBuilding(raw: WireBuilding): GeneratedBuildingObservation {
   if (!isRecord(raw) || !validVolume(raw, true) || !enumRange(raw.use, GeneratedBuildingUse.Residential, GeneratedBuildingUse.Utility)
-    || !integerRange(raw.floors, 1, 256) || !integerRange(raw.capacity, 0, Number.MAX_SAFE_INTEGER) || !integerRange(raw.historicalStage, 0, Number.MAX_SAFE_INTEGER)) throw new ProtocolDecodeFailure('RegionalGeneration Building values are invalid.');
+    || !integerRange(raw.floors, 1, 256) || !integerRange(raw.capacity, 0, INT32_MAX) || !integerRange(raw.historicalStage, 0, INT32_MAX)) throw new ProtocolDecodeFailure('RegionalGeneration Building values are invalid.');
   return Object.freeze({ ...raw, buildingId: parsePositiveUInt64(raw.buildingId, 'Building ID'), parcelId: parsePositiveUInt64(raw.parcelId, 'Building parcel ID') });
 }
 
