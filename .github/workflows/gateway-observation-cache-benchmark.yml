@@ -7,8 +7,18 @@ on:
     paths:
       - 'src/MachiVerseWorks.Server/**'
       - 'src/MachiVerseWorks.Protocol/**'
-      - 'src/MachiVerseWorks.Simulation/**'
-      - 'benchmarks/MachiVerseWorks.Benchmarks/**'
+      - 'src/MachiVerseWorks.Simulation/Agent*.cs'
+      - 'src/MachiVerseWorks.Simulation/Geometry.cs'
+      - 'src/MachiVerseWorks.Simulation/*Snapshot*.cs'
+      - 'src/MachiVerseWorks.Simulation/*ReadModel*.cs'
+      - 'src/MachiVerseWorks.Simulation/RoadNetwork*.cs'
+      - 'src/MachiVerseWorks.Simulation/Railway*.cs'
+      - 'src/MachiVerseWorks.Simulation/Intersection*.cs'
+      - 'benchmarks/MachiVerseWorks.Benchmarks/ObservationCacheBenchmarks.cs'
+      - 'benchmarks/MachiVerseWorks.Benchmarks/ObservationCacheBenchmarkRunner.cs'
+      - 'benchmarks/MachiVerseWorks.Benchmarks/Program.cs'
+      - 'benchmarks/MachiVerseWorks.Benchmarks/PerformanceBenchmarkConfig.cs'
+      - 'benchmarks/MachiVerseWorks.Benchmarks/MachiVerseWorks.Benchmarks.csproj'
       - '.github/workflows/gateway-observation-cache-benchmark.yml'
       - 'Directory.Build.props'
       - 'Directory.Packages.props'
@@ -35,6 +45,14 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
 
       - name: Restore
         run: dotnet restore MachiVerseWorks.slnx
