@@ -49,7 +49,7 @@ internal static class SimulationNumeric
 
     public static int SaturatingToInt32NonNegative(long value)
     {
-        if (value < 0) throw new ArgumentOutOfRangeException(nameof(value));
+        ArgumentOutOfRangeException.ThrowIfNegative(value);
         return value >= int.MaxValue ? int.MaxValue : (int)value;
     }
 
