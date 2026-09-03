@@ -1,7 +1,7 @@
 import { MachiVerseConnection } from '../../src/connection.ts';
 import { WEB_CURRENT_PROTOCOL_VERSION } from '../../src/person-inspection-protocol.ts';
 import { RailwayInfrastructureLayer, RailwayMessageType } from '../../src/railway-infrastructure.ts';
-import { RailwayOperationsLayer, RailwayOperationsMessageType, RailwayServiceState, TrainMovementState } from '../../src/railway-operations.ts';
+import { RailwayOperationsLayer, RailwayOperationsMessageType, TrainMovementState } from '../../src/railway-operations.ts';
 import { WorldView } from '../../src/world-view.ts';
 
 const parameters = new URLSearchParams(window.location.search);
@@ -57,8 +57,15 @@ try {
   connection.setSubscription({ minX: -120, minY: 0, minZ: -10, maxX: 120, maxY: 50, maxZ: 15 });
   await waitUntil(() => infrastructure !== null && infrastructure.stations.length === 2 && infrastructure.platforms.length === 2, 'Phase 18 railway infrastructure');
   await waitUntil(() => operations !== null && operations.trains.length === 2 && operations.services.length === 2 && operations.timetables.length === 2, 'two trains and services');
+
+  assert(operations.timetables.every((timetable) => timetable.stops.length === 2), 'both Timetables contain two stops while the runs are active');
+  const group = view.scene.getObjectByName('railway-trains');
+  assert(group?.children.length === 2, 'two train meshes were rendered while the runs were active');
+  const renderedHeights = new Set(group.children.map((child) => child.position.y.toFixed(3)));
+  assert(renderedHeights.has('2.000'), 'train altitude is rendered in Three.js Y');
+
   await waitUntil(() => observedMovement && observedPlatform && observedDelay, 'movement, platform assignment, and delay');
-  await waitUntil(() => operations !== null && operations.services.every((service) => service.state === RailwayServiceState.Completed), 'both services completing', 70_000);
+  await waitUntil(() => operations !== null && operations.trains.length === 0 && operations.services.length === 0, 'completed train/service retirement', 70_000);
 
   assert(
     negotiatedVersion?.major === WEB_CURRENT_PROTOCOL_VERSION.major && negotiatedVersion?.minor === WEB_CURRENT_PROTOCOL_VERSION.minor,
@@ -66,20 +73,13 @@ try {
   );
   assert(infrastructure.stations.length === 2, 'two Stations were published');
   assert(infrastructure.platforms.length === 2, 'two Platforms were published');
-  assert(operations.trains.length === 2, 'two Trains were published');
-  assert(operations.timetables.every((timetable) => timetable.stops.length === 2), 'both Timetables contain two stops');
   assert(observedMovement, 'train 3D position changed');
   assert(observedPlatform, 'platform assignment or occupancy was observed');
   assert(observedDelay, 'delay propagation was observed');
   assert(observedDwell, 'station dwell was observed');
-  assert(operations.services.every((service) => service.state === RailwayServiceState.Completed), 'both Services completed');
-  assert(operations.trains.every((train) => train.state === TrainMovementState.Completed), 'both Trains completed');
-  assert(operations.trains.every((train) => train.currentDepotId !== null), 'both Trains returned to a Depot');
-
-  const group = view.scene.getObjectByName('railway-trains');
-  assert(group?.children.length === 2, 'two train meshes remain rendered');
-  const renderedHeights = new Set(group.children.map((child) => child.position.y.toFixed(3)));
-  assert(renderedHeights.has('2.000'), 'train altitude is rendered in Three.js Y');
+  assert(operations.trains.length === 0, 'completed Trains were retired from the current observation');
+  assert(operations.services.length === 0, 'completed Services were retired from the current observation');
+  assert(group.children.length === 0, 'retired train meshes were removed from the browser scene');
 
   result.dataset.status = 'passed';
   result.textContent = JSON.stringify({
@@ -93,7 +93,6 @@ try {
     observedPlatform,
     observedDelay,
     observedDwell,
-    delays: operations.services.map((service) => service.delayTicks.toString()),
   });
 } catch (error) {
   const normalized = error instanceof Error ? error : new Error(String(error));
