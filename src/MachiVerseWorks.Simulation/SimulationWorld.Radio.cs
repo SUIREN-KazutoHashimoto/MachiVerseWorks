@@ -93,6 +93,7 @@ public sealed partial class SimulationWorld
         _radioLinks.Add(state);
         _radioLinkIndex.Add(id, state);
         MarkRadioCandidateIndexesDirty();
+        RecalculateRadioPlan();
         return id;
     }
 
@@ -123,6 +124,7 @@ public sealed partial class SimulationWorld
         if (!_radioSiteIndex.TryGetValue(id, out var site)) throw new ArgumentException($"Radio site {id.Value} does not exist.", nameof(id));
         site.IsInService = isInService;
         _radioPlanDirty = true;
+        RecalculateRadioPlan();
     }
 
     public void SetRadioLinkInService(RadioLinkId id, bool isInService)
@@ -130,6 +132,7 @@ public sealed partial class SimulationWorld
         if (!_radioLinkIndex.TryGetValue(id, out var link)) throw new ArgumentException($"Radio link {id.Value} does not exist.", nameof(id));
         link.IsInService = isInService;
         _radioPlanDirty = true;
+        RecalculateRadioPlan();
     }
 
     public void SetRadioLinkUtilization(RadioLinkId id, double utilization)
@@ -138,6 +141,7 @@ public sealed partial class SimulationWorld
         if (!double.IsFinite(utilization) || utilization < 0d || utilization > 1d) throw new ArgumentOutOfRangeException(nameof(utilization));
         link.Utilization = utilization;
         _radioPlanDirty = true;
+        RecalculateRadioPlan();
     }
 
     public bool TryGetRadioLinkSnapshot(RadioLinkId id, out RadioLinkSnapshot snapshot)
