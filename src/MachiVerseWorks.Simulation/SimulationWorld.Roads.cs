@@ -133,6 +133,8 @@ public sealed partial class SimulationWorld
         ValidateAccessReferences(buildingId, poiId);
         if (_railway.ContainsRoadAccessPointReference(id) && (mode & RoadAccessMode.Foot) == 0)
             throw new InvalidOperationException($"Road access point {id.Value} must remain walkable while a Platform access point references it.");
+        if (ContainsLogisticsRoadAccessPointReference(id))
+            throw new InvalidOperationException($"Road access point {id.Value} cannot be updated while Logistics inventory or shipment state references it.");
         InvalidatePedestrianNetwork();
         return _roads.UpdateAccessPoint(id, segmentId, segmentOffset, buildingId, poiId, mode);
     }
@@ -141,6 +143,8 @@ public sealed partial class SimulationWorld
     {
         if (_railway.ContainsRoadAccessPointReference(id))
             throw new InvalidOperationException($"Road access point {id.Value} cannot be removed while a Platform access point references it.");
+        if (ContainsLogisticsRoadAccessPointReference(id))
+            throw new InvalidOperationException($"Road access point {id.Value} cannot be removed while Logistics inventory or shipment state references it.");
         InvalidatePedestrianNetwork();
         return _roads.RemoveAccessPoint(id);
     }
