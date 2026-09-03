@@ -35,7 +35,7 @@
 | 5 | Infrastructure & Dynamic Entity Fidelity | 各Simulation domain source / Gateway delivery contract | ⏳ 実装待ち |
 | 6 | Large World Rendering & Rendering LOD | Simulation Phase 29〜31 source / Gateway Phase 2〜3 | ⏳ Simulation / Gateway依存待ち |
 | 7 | Object Selection & Inspector | Gateway Phase 4 Current / Relations | ⏳ Gateway依存待ち |
-| 8 | Temporal Observation | Simulation semantic history / schedule + Gateway Phase 4 | ⏳ Gateway依存待ち |
+| 8 | Temporal Observation | Simulation semantic history / schedule + Gateway Phase 4 | ⏳ Simulation / Gateway依存待ち |
 | 9 | Historical World View | Simulation Phase 35 + Gateway Phase 5 | ⏳ Simulation / Gateway依存待ち |
 | 10 | Localization | stable observation / error contract | ⏳ 待機 |
 | 11 | Production Visual & Audio Presentation | available authoritative presentation source | ⏳ View基盤待ち |
