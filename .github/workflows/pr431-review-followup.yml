@@ -1,0 +1,80 @@
+name: PR 431 Review Follow-up
+
+on:
+  push:
+    paths:
+      - '.github/workflows/pr431-review-followup.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-test-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: fix/pr431-review-followup
+
+      - name: Apply review follow-up
+        run: python .github/scripts/pr431_review_followup.py
+
+      - name: Validate Markdown links
+        run: python scripts/check-markdown-links.py
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+
+      - name: Restore .NET
+        run: dotnet restore MachiVerseWorks.slnx
+
+      - name: Build .NET
+        run: dotnet build MachiVerseWorks.slnx --configuration Release --no-restore
+
+      - name: Test .NET
+        run: dotnet test MachiVerseWorks.slnx --configuration Release --no-build
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version-file: src/web/.node-version
+          cache: npm
+          cache-dependency-path: src/web/package-lock.json
+
+      - name: Install Web dependencies
+        working-directory: src/web
+        run: npm ci
+
+      - name: Lint Web
+        working-directory: src/web
+        run: npm run lint --if-present
+
+      - name: Typecheck Web
+        working-directory: src/web
+        run: npm run typecheck --if-present
+
+      - name: Test Web
+        working-directory: src/web
+        run: npm test --if-present
+
+      - name: Build Web
+        working-directory: src/web
+        run: npm run build
+
+      - name: Commit reviewed changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src tests
+          if git diff --cached --quiet; then
+            echo "No reviewed changes to commit."
+            exit 0
+          fi
+          git commit -m "fix: address PR 431 review feedback"
+          git push origin HEAD:fix/pr431-review-followup
