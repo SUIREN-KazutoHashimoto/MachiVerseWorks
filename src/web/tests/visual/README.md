@@ -15,7 +15,9 @@ Visual Regression は、構造・数値 assertion を既に持つ決定論的な
 
 Visual Regression の required E2E は `ubuntu-24.04` 上で実行し、Visual 対象ジョブだけ Chrome for Testing `152.0.7977.75` を `scripts/install-visual-browser.sh` から取得して使用します。描画には Chrome 同梱の SwiftShader を使用し、`run-headless-visual-e2e.mjs` が CDP の `Browser.getVersion` を検証して diagnostics に記録します。
 
-Golden 更新時も、可能な限り同じ固定ブラウザーを使用してください。CI と異なる Chrome / Chromium で生成した画像をそのまま Golden として登録しません。
+ラベル描画の generic `sans-serif` が runner image のフォント構成に依存しないよう、Visual 対象ジョブでは `fonts-dejavu-core` `2.37-8` を明示インストールし、Visual E2E 専用の fontconfig で `sans-serif` を `DejaVu Sans` へ固定します。CI は package version と `fc-match sans-serif` の結果を検証し、使用した font family / package version も diagnostics に記録します。
+
+Golden 更新時も、可能な限り同じ固定ブラウザー・フォント環境を使用してください。CI と異なる Chrome / Chromium や generic font mapping で生成した画像をそのまま Golden として登録しません。
 
 ## 失敗時 Artifact
 
@@ -28,7 +30,7 @@ Golden 更新時も、可能な限り同じ固定ブラウザーを使用して�
 - `diagnostics/<name>.json`
 - Browser HTML と Chrome log
 
-`diagnostics/<name>.json` には既存 fixture の構造・描画 metric、canvas dimensions、device pixel ratio、使用した Browser version を記録します。
+`diagnostics/<name>.json` には既存 fixture の構造・描画 metric、canvas dimensions、device pixel ratio、使用した Browser version、Visual E2E の font family / package version を記録します。
 
 ## Golden Image の更新
 
@@ -40,6 +42,8 @@ CI を通す目的だけで Golden Image を更新してはいけません。ま
 export MVW_VISUAL_BROWSER_VERSION=152.0.7977.75
 export MVW_VISUAL_BROWSER="$(bash scripts/install-visual-browser.sh .artifacts/visual-browser)"
 ```
+
+ローカル環境のフォント構成が CI と一致しない場合は、ローカルで生成した画像を Golden に採用せず、固定 CI 環境で生成された `actual` Artifact をレビューします。
 
 意図した変更として承認した場合だけ、対象 E2E を Golden 更新モードで実行します。
 
