@@ -13,8 +13,8 @@ internal sealed class PersistentRegionalEvolutionPublishService(
     ObservationCache cache,
     ILogger<PersistentRegionalEvolutionPublishService> logger) : BackgroundService
 {
-    private static readonly Action<ILogger, int, byte, byte, Exception?> LogEncodingFailure =
-        LoggerMessage.Define<int, byte, byte>(
+    private static readonly Action<ILogger, int, ushort, ushort, Exception?> LogEncodingFailure =
+        LoggerMessage.Define<int, ushort, ushort>(
             LogLevel.Error,
             new EventId(1, nameof(LogEncodingFailure)),
             "Persistent Regional Evolution year {CurrentYear} cannot be encoded for Protocol {Major}.{Minor}; delivery is suppressed until the source identity changes.");
@@ -55,8 +55,6 @@ internal sealed class PersistentRegionalEvolutionPublishService(
                     var captured = observationSource.CapturePersistentRegionalEvolutionSnapshot();
                     if (captured is null) continue;
 
-                    // Do not publish a mixed/stale snapshot if an economy/logistics/evolution source changed
-                    // while the detached payload was being captured.
                     if (!TryCaptureSourceIdentity(out var afterCapture) || afterCapture != sourceIdentity)
                         continue;
 
@@ -95,8 +93,6 @@ internal sealed class PersistentRegionalEvolutionPublishService(
                                 IsStatic: true);
                             cacheKeys[index] = key;
                             var message = prepared.Messages[index];
-                            // Populate the encoded cache before any per-client task is scheduled. Codec/domain
-                            // failures therefore remain server-side and cannot abort an otherwise healthy client.
                             _ = cache.GetOrEncode(key, () => ObservationProtocolAdapter.Serialize(message, version));
                         }
                     }
@@ -159,8 +155,9 @@ internal sealed class PersistentRegionalEvolutionPublishService(
             _delivered.Remove(connectionId);
     }
 
-    private static string CreateIdentityText(PersistentRegionalObservationIdentity identity) =>
-        FormattableString.Invariant($"y{identity.CurrentYear}:e{identity.EconomicCycle}:l{identity.LogisticsCycle}:emp{identity.EmploymentCount}:ship{identity.ShipmentCount}:del{identity.DeliveredShipmentCount}");
+    private static string CreateIdentityText(PersistentRegionalObservationIdentity observation) =>
+        FormattableString.Invariant(
+            $"year:{observation.CurrentYear}:economic:{observation.EconomicCycle}:logistics:{observation.LogisticsCycle}:events:{observation.EventCount}:interactions:{observation.InteractionEventCount}");
 
     private readonly record struct SourceIdentity(
         ulong Generation,
