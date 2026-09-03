@@ -2,6 +2,9 @@ namespace MachiVerseWorks.Simulation.Internal;
 
 internal sealed class RoadNetworkStore
 {
+    internal const double MaximumLaneWidthMeters = 25d;
+    internal const double MaximumDirectionalRoadwayWidthMeters = 250d;
+
     private readonly Dictionary<RoadNodeId, RoadNodeSnapshot> nodes = [];
     private readonly Dictionary<RoadSegmentId, RoadSegmentSnapshot> segments = [];
     private readonly Dictionary<LaneId, LaneSnapshot> lanes = [];
@@ -134,7 +137,25 @@ internal sealed class RoadNetworkStore
     }
     private void ValidateSegmentNodes(RoadNodeId start, RoadNodeId end, RoadSegmentId? excluding) { if (start == end) throw new ArgumentException("A road segment must connect two distinct road nodes."); if (!nodes.ContainsKey(start)) throw new ArgumentException($"Road node {start.Value} does not exist.", nameof(start)); if (!nodes.ContainsKey(end)) throw new ArgumentException($"Road node {end.Value} does not exist.", nameof(end)); ValidateAttachment(start, excluding); ValidateAttachment(end, excluding); }
     private void ValidateAttachment(RoadNodeId node, RoadSegmentId? excluding) { if (nodes[node].Kind == RoadNodeKind.Intersection) return; var degree = degreeByNode[node]; if (excluding is { } id && segments.TryGetValue(id, out var s) && (s.StartNodeId == node || s.EndNodeId == node)) degree--; if (degree > 0) throw new InvalidOperationException($"Endpoint road node {node.Value} cannot connect more than one segment; promote it to Intersection first."); }
-    private void ValidateLane(RoadSegmentId segment, LaneDirection direction, ushort order, double width, double speed, LaneId? excluding) { if (!segments.ContainsKey(segment)) throw new ArgumentException($"Road segment {segment.Value} does not exist.", nameof(segment)); if (!Enum.IsDefined(direction)) throw new ArgumentOutOfRangeException(nameof(direction)); if (!double.IsFinite(width) || width <= 0) throw new ArgumentOutOfRangeException(nameof(width)); if (!double.IsFinite(speed) || speed <= 0) throw new ArgumentOutOfRangeException(nameof(speed)); if (lanes.Values.Any(x => x.Id != excluding && x.SegmentId == segment && x.Direction == direction && x.Order == order)) throw new ArgumentException($"Lane order {order} is already used for direction {direction} on road segment {segment.Value}.", nameof(order)); }
+    private void ValidateLane(RoadSegmentId segment, LaneDirection direction, ushort order, double width, double speed, LaneId? excluding)
+    {
+        if (!segments.ContainsKey(segment)) throw new ArgumentException($"Road segment {segment.Value} does not exist.", nameof(segment));
+        if (!Enum.IsDefined(direction)) throw new ArgumentOutOfRangeException(nameof(direction));
+        if (!double.IsFinite(width) || width <= 0d || width > MaximumLaneWidthMeters)
+            throw new ArgumentOutOfRangeException(nameof(width), width, $"Lane width must be greater than zero and at most {MaximumLaneWidthMeters} meters.");
+        if (!double.IsFinite(speed) || speed <= 0d) throw new ArgumentOutOfRangeException(nameof(speed));
+        if (lanes.Values.Any(x => x.Id != excluding && x.SegmentId == segment && x.Direction == direction && x.Order == order))
+            throw new ArgumentException($"Lane order {order} is already used for direction {direction} on road segment {segment.Value}.", nameof(order));
+
+        var totalWidth = width;
+        foreach (var lane in lanes.Values)
+        {
+            if (lane.Id == excluding || lane.SegmentId != segment || lane.Direction != direction) continue;
+            totalWidth += lane.WidthMeters;
+            if (!double.IsFinite(totalWidth) || totalWidth > MaximumDirectionalRoadwayWidthMeters)
+                throw new ArgumentOutOfRangeException(nameof(width), width, $"Total lane width for one segment direction cannot exceed {MaximumDirectionalRoadwayWidthMeters} meters.");
+        }
+    }
     private void ValidateConnection(LaneId fromId, LaneId toId, RoadNodeId viaId, TurnMovement movement, LaneConnectionId? excluding) { if (fromId == toId) throw new ArgumentException("A lane connection must connect two distinct lanes."); if (!lanes.TryGetValue(fromId, out var from)) throw new ArgumentException($"Lane {fromId.Value} does not exist.", nameof(fromId)); if (!lanes.TryGetValue(toId, out var to)) throw new ArgumentException($"Lane {toId.Value} does not exist.", nameof(toId)); if (!nodes.TryGetValue(viaId, out var via)) throw new ArgumentException($"Road node {viaId.Value} does not exist.", nameof(viaId)); if (via.Kind != RoadNodeKind.Intersection) throw new InvalidOperationException($"Lane connections require an Intersection road node; {viaId.Value} is {via.Kind}."); if (!Enum.IsDefined(movement)) throw new ArgumentOutOfRangeException(nameof(movement)); if (GetExitNode(from) != viaId || GetEntryNode(to) != viaId) throw new InvalidOperationException("Lane directions do not enter and exit through the declared intersection node."); if (connections.Values.Any(x => x.Id != excluding && x.FromLaneId == fromId && x.ToLaneId == toId && x.ViaNodeId == viaId)) throw new ArgumentException("An equivalent lane connection already exists."); }
     private void ValidateAccessPoint(RoadSegmentId segment, double offset, BuildingId? building, PoiId? poi, RoadAccessMode mode) { if (!segments.ContainsKey(segment)) throw new ArgumentException($"Road segment {segment.Value} does not exist.", nameof(segment)); if (!double.IsFinite(offset) || offset < 0 || offset > 1) throw new ArgumentOutOfRangeException(nameof(offset), offset, "Road access point offset must be between zero and one."); if (building is null && poi is null) throw new ArgumentException("A road access point must reference a Building, POI, or both."); const RoadAccessMode supported = RoadAccessMode.Motor | RoadAccessMode.Foot; if (mode == RoadAccessMode.None || (mode & ~supported) != 0) throw new ArgumentOutOfRangeException(nameof(mode)); }
     private void ValidateConnectionsForLane(LaneId id) { foreach (var x in connections.Values.Where(x => x.FromLaneId == id || x.ToLaneId == id)) ValidateConnection(x.FromLaneId, x.ToLaneId, x.ViaNodeId, x.Movement, x.Id); }
