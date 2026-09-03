@@ -14,6 +14,7 @@ export const REGIONAL_GENERATION_SNAPSHOT_CHUNK_MESSAGE_TYPE = 811;
 const REGIONAL_GENERATION_CHUNK_PROTOCOL_MINOR = 22;
 const CHUNK_METADATA_LENGTH = 20;
 const MAXIMUM_AGGREGATE_PAYLOAD_BYTES = 64 * 1024 * 1024;
+const MAXIMUM_CHUNKS = 8_192;
 const MAXIMUM_SETTLEMENTS = 64;
 const MAXIMUM_GROWTH_EVENTS = 1_024;
 const MAXIMUM_CORRIDORS = 512;
@@ -91,7 +92,8 @@ export function decodeRegionalGenerationChunkFrame(frame: ArrayBuffer): Regional
   const chunkCount = view.getInt32(payloadOffset + 12, true);
   const totalPayloadBytes = view.getInt32(payloadOffset + 16, true);
   const dataLength = payloadLength - CHUNK_METADATA_LENGTH;
-  if (snapshotId === 0n || chunkCount <= 0 || chunkIndex < 0 || chunkIndex >= chunkCount
+  if (snapshotId === 0n || chunkCount <= 0 || chunkCount > MAXIMUM_CHUNKS
+    || chunkIndex < 0 || chunkIndex >= chunkCount
     || totalPayloadBytes <= 0 || totalPayloadBytes > MAXIMUM_AGGREGATE_PAYLOAD_BYTES
     || dataLength < 0 || dataLength > totalPayloadBytes) {
     throw new ProtocolDecodeFailure('RegionalGeneration chunk metadata is invalid.');
