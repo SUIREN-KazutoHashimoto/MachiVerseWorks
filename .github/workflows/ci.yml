@@ -143,19 +143,28 @@ jobs:
           base_parts = parse(base)
           current_parts = parse(current)
 
+          if current_parts < base_parts:
+              raise SystemExit(
+                  f"Application VERSION cannot move backwards from PR base {base}; current is {current}."
+              )
+
+          if current_parts == base_parts:
+              print(f"Application VERSION unchanged for ordinary PR: target={target}, version={current}")
+              raise SystemExit(0)
+
           if target == "develop":
               expected = (base_parts[0], base_parts[1] + 1, 0)
               if current_parts != expected:
                   expected_text = ".".join(map(str, expected))
                   raise SystemExit(
-                      f"develop PR must set VERSION to {expected_text}; base is {base}, current is {current}."
+                      f"When a develop PR changes VERSION it must set {expected_text}; base is {base}, current is {current}."
                   )
           elif target == "main":
               expected = (base_parts[0] + 1, 0, 0)
               if current_parts != expected:
                   expected_text = ".".join(map(str, expected))
                   raise SystemExit(
-                      f"main PR must set VERSION to {expected_text}; base is {base}, current is {current}."
+                      f"When a main PR changes VERSION it must set {expected_text}; base is {base}, current is {current}."
                   )
           elif current_parts <= base_parts:
               raise SystemExit(
@@ -202,13 +211,21 @@ jobs:
     outputs:
       dotnet: ${{ steps.detect.outputs.dotnet }}
       web: ${{ steps.detect.outputs.web }}
+      e2e: ${{ steps.detect.outputs.e2e }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
 
       - name: Detect implemented components
         id: detect
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
 
@@ -223,6 +240,15 @@ jobs:
           else
             echo "web=false" >> "$GITHUB_OUTPUT"
           fi
+
+          e2e=false
+          if [[ "$EVENT_NAME" == "pull_request" && "$BASE_REF" == "develop" ]]; then
+            changed_files="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+            if grep -Eq '^(src/|scripts/|tests/fixtures/|docs/development/baselines/|Directory\.Build\.props$|Directory\.Packages\.props$|MachiVerseWorks\.slnx$|global\.json$|\.github/workflows/e2e\.yml$)' <<< "$changed_files"; then
+              e2e=true
+            fi
+          fi
+          echo "e2e=$e2e" >> "$GITHUB_OUTPUT"
 
   dotnet:
     name: dotnet
@@ -323,10 +349,16 @@ jobs:
           path: src/web/dist
           retention-days: 7
 
+  e2e:
+    name: required e2e
+    needs: [repository, detect]
+    if: needs.detect.outputs.e2e == 'true'
+    uses: ./.github/workflows/e2e.yml
+
   gate:
     name: ci-gate
     if: always()
-    needs: [repository, detect, dotnet, web]
+    needs: [repository, detect, dotnet, web, e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -337,6 +369,7 @@ jobs:
           DETECT_RESULT: ${{ needs.detect.result }}
           DOTNET_RESULT: ${{ needs.dotnet.result }}
           WEB_RESULT: ${{ needs.web.result }}
+          E2E_RESULT: ${{ needs.e2e.result }}
         run: |
           set -euo pipefail
 
@@ -350,7 +383,7 @@ jobs:
             exit 1
           fi
 
-          for entry in "dotnet:$DOTNET_RESULT" "web:$WEB_RESULT"; do
+          for entry in "dotnet:$DOTNET_RESULT" "web:$WEB_RESULT" "e2e:$E2E_RESULT"; do
             name="${entry%%:*}"
             result="${entry#*:}"
             if [[ "$result" != "success" && "$result" != "skipped" ]]; then
