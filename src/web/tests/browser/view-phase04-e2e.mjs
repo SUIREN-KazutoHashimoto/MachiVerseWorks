@@ -10,11 +10,11 @@ if (!(result instanceof HTMLElement) || !(viewport instanceof HTMLElement)) thro
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b1020);
-const camera = new THREE.PerspectiveCamera(55, 1024 / 768, 0.1, 10_000);
+const camera = new THREE.PerspectiveCamera(55, viewport.clientWidth / viewport.clientHeight, 0.1, 10_000);
 camera.position.set(1_000, 1_500, 2_400);
 camera.lookAt(1_000, 0, 600);
 const webgl = new THREE.WebGLRenderer({ antialias: false });
-webgl.setSize(1024, 768, false);
+webgl.setSize(viewport.clientWidth, viewport.clientHeight, false);
 viewport.appendChild(webgl.domElement);
 
 const store = new RegionalGenerationStore();
