@@ -174,18 +174,21 @@ public sealed partial class SimulationWorld
             _powerGenerators.Count,
             _powerLoads.Count,
             outageCount,
-            _powerGenerators.Sum(static item => item.CapacityMegawatts),
-            _powerGenerators.Sum(static item => item.OutputMegawatts),
-            _powerLoads.Sum(static item => item.DemandMegawatts),
-            _powerLoads.Sum(static item => item.ServedMegawatts),
-            _powerLoads.Sum(static item => item.UnservedMegawatts),
+            SimulationNumeric.SaturatingDoubleSum(_powerGenerators, static item => item.CapacityMegawatts),
+            SimulationNumeric.SaturatingDoubleSum(_powerGenerators, static item => item.OutputMegawatts),
+            SimulationNumeric.SaturatingDoubleSum(_powerLoads, static item => item.DemandMegawatts),
+            SimulationNumeric.SaturatingDoubleSum(_powerLoads, static item => item.ServedMegawatts),
+            SimulationNumeric.SaturatingDoubleSum(_powerLoads, static item => item.UnservedMegawatts),
             Time.TickCount);
     }
 
     private void StepPower(SimulationTime nextTime)
     {
-        foreach (var load in _powerLoads.OrderBy(static item => item.Id.Value))
-            load.DemandMegawatts = CalculatePowerDemand(load, nextTime);
+        var calculatedDemands = _powerLoads
+            .OrderBy(static item => item.Id.Value)
+            .Select(load => (Load: load, Demand: CalculatePowerDemand(load, nextTime)))
+            .ToArray();
+        foreach (var item in calculatedDemands) item.Load.DemandMegawatts = item.Demand;
 
         var request = new PowerDispatchRequest(
             _powerNodes.OrderBy(static item => item.Id.Value).Select(static item => new PowerDispatchNode(item.Id)).ToArray(),
@@ -266,8 +269,13 @@ public sealed partial class SimulationWorld
             var jobs = _economyJobs.Where(item => item.EstablishmentId == establishmentId).ToArray();
             if (jobs.Length > 0)
             {
-                var required = jobs.Sum(static item => item.RequiredWorkerCount);
-                var filled = jobs.Sum(item => GetFilledWorkerCount(item.Id));
+                long required = 0;
+                long filled = 0;
+                foreach (var job in jobs)
+                {
+                    required += job.RequiredWorkerCount;
+                    filled += GetFilledWorkerCount(job.Id);
+                }
                 var utilization = required == 0 ? 0d : Math.Min(1d, (double)filled / required);
                 activityFactor = 0.6d + (0.4d * utilization);
             }
@@ -277,7 +285,7 @@ public sealed partial class SimulationWorld
             }
         }
 
-        return load.BaseDemandMegawatts * timeFactor * useFactor * activityFactor;
+        return SimulationNumeric.SaturatingMultiplyNonNegative(load.BaseDemandMegawatts, timeFactor, useFactor, activityFactor);
     }
 
     private double GetEstablishmentPowerAvailabilityFactor(EstablishmentId establishmentId)
@@ -297,9 +305,9 @@ public sealed partial class SimulationWorld
 
     private static double GetPowerAvailabilityFactor(IReadOnlyList<PowerLoadStateData> loads)
     {
-        var demand = loads.Sum(static item => item.DemandMegawatts);
+        var demand = SimulationNumeric.SaturatingDoubleSum(loads, static item => item.DemandMegawatts);
         if (demand <= PowerDefaults.SupplyEpsilonMegawatts) return 1d;
-        return Math.Clamp(loads.Sum(static item => item.ServedMegawatts) / demand, 0d, 1d);
+        return Math.Clamp(SimulationNumeric.SaturatingDoubleSum(loads, static item => item.ServedMegawatts) / demand, 0d, 1d);
     }
 
     private EconomyCheckpoint CreateEconomyCheckpointWithExtensions() =>

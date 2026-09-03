@@ -174,7 +174,7 @@ public sealed partial class SimulationWorld
 
     public OpticalStatistics CreateOpticalStatistics()
     {
-        var allocated = _opticalDemands.Sum(static item => item.AllocatedGigabitsPerSecond);
+        var allocated = SimulationNumeric.SaturatingDoubleSum(_opticalDemands, static item => item.AllocatedGigabitsPerSecond);
         var peakFiberUtilization = _fiberCables.Count == 0
             ? 0d
             : _fiberCables.Max(static item => CalculateOpticalUtilization(item.LoadGigabitsPerSecond, item.CapacityGigabitsPerSecond));
@@ -188,8 +188,8 @@ public sealed partial class SimulationWorld
             _opticalDemands.Count(static item => item.QualityState == OpticalQualityState.Congested),
             _opticalDemands.Count(static item => item.QualityState == OpticalQualityState.Degraded),
             _opticalDemands.Count(static item => item.QualityState == OpticalQualityState.Unavailable),
-            _opticalBackhauls.Where(static item => item.IsInService).Sum(static item => item.CapacityGigabitsPerSecond),
-            _opticalDemands.Sum(static item => item.DemandGigabitsPerSecond),
+            SimulationNumeric.SaturatingDoubleSum(_opticalBackhauls.Where(static item => item.IsInService), static item => item.CapacityGigabitsPerSecond),
+            SimulationNumeric.SaturatingDoubleSum(_opticalDemands, static item => item.DemandGigabitsPerSecond),
             allocated,
             peakFiberUtilization,
             Time.TickCount);
@@ -197,10 +197,12 @@ public sealed partial class SimulationWorld
 
     private void StepOptical(SimulationTime nextTime)
     {
+        var calculatedDemands = _opticalDemands
+            .Select(demand => (DemandState: demand, Value: CalculateOpticalDemand(demand, nextTime)))
+            .ToArray();
         foreach (var equipment in _opticalEquipment)
             equipment.IsPowered = IsOpticalEquipmentPowered(equipment);
-        foreach (var demand in _opticalDemands)
-            demand.DemandGigabitsPerSecond = CalculateOpticalDemand(demand, nextTime);
+        foreach (var item in calculatedDemands) item.DemandState.DemandGigabitsPerSecond = item.Value;
 
         var equipmentByNode = _opticalEquipment
             .GroupBy(static item => item.NodeId)
@@ -352,9 +354,9 @@ public sealed partial class SimulationWorld
         IReadOnlyDictionary<OpticalNodeId, OpticalEquipmentState[]> equipmentByNode)
     {
         if (!equipmentByNode.TryGetValue(nodeId, out var equipment)) return 0d;
-        return equipment
-            .Where(static item => item.IsInService && item.IsPowered && IsEndpointEquipment(item.Kind))
-            .Sum(static item => item.CapacityGigabitsPerSecond);
+        return SimulationNumeric.SaturatingDoubleSum(
+            equipment.Where(static item => item.IsInService && item.IsPowered && IsEndpointEquipment(item.Kind)),
+            static item => item.CapacityGigabitsPerSecond);
     }
 
     private static double CalculateBackhaulEquipmentCapacity(
@@ -362,9 +364,9 @@ public sealed partial class SimulationWorld
         IReadOnlyDictionary<OpticalNodeId, OpticalEquipmentState[]> equipmentByNode)
     {
         if (!equipmentByNode.TryGetValue(nodeId, out var equipment)) return 0d;
-        return equipment
-            .Where(static item => item.IsInService && item.IsPowered && IsBackhaulEquipment(item.Kind))
-            .Sum(static item => item.CapacityGigabitsPerSecond);
+        return SimulationNumeric.SaturatingDoubleSum(
+            equipment.Where(static item => item.IsInService && item.IsPowered && IsBackhaulEquipment(item.Kind)),
+            static item => item.CapacityGigabitsPerSecond);
     }
 
     private static bool IsEndpointEquipment(OpticalEquipmentKind kind) =>
@@ -413,7 +415,7 @@ public sealed partial class SimulationWorld
             };
         }
         if (demand.Kind == OpticalDemandKind.DataCenter) useFactor *= 1.25d;
-        return demand.BaseDemandGigabitsPerSecond * timeFactor * useFactor;
+        return SimulationNumeric.SaturatingMultiplyNonNegative(demand.BaseDemandGigabitsPerSecond, timeFactor, useFactor);
     }
 
     private OpticalDemandId CreateOpticalDemandCore(

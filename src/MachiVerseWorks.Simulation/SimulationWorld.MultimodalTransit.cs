@@ -263,7 +263,7 @@ public sealed partial class SimulationWorld
                 if (!TryGetVehicleSnapshot(roadVehicleId, out var roadVehicle)) continue;
                 vehicle.Position = roadVehicle.Position;
                 if (roadVehicle.State != VehicleMovementState.Arrived) continue;
-                RemoveVehicle(roadVehicleId);
+                RemoveVehicleCore(roadVehicleId);
                 vehicle.RoadVehicleId = null;
                 vehicle.StopIndex++;
                 var stop = GetTransitStop(pattern.Stops[vehicle.StopIndex].StopId);
@@ -304,7 +304,7 @@ public sealed partial class SimulationWorld
                 if (!TryGetVehicleSnapshot(roadVehicleId, out var roadVehicle)) continue;
                 vehicle.Position = roadVehicle.Position;
                 if (roadVehicle.State != VehicleMovementState.Arrived) continue;
-                RemoveVehicle(roadVehicleId);
+                RemoveVehicleCore(roadVehicleId);
                 vehicle.RoadVehicleId = null;
                 if (vehicle.State == TransitVehicleMovementState.EnRouteToPickup)
                 {

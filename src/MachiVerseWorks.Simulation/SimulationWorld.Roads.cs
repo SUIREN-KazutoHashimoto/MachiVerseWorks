@@ -93,6 +93,8 @@ public sealed partial class SimulationWorld
 
     public bool RemoveLane(LaneId id)
     {
+        if (_multimodalTransit.ContainsLaneReference(id))
+            throw new InvalidOperationException($"Lane {id.Value} cannot be removed while a Multimodal Transit stop references it.");
         EnsureRoadTopologyMutable();
         var removed = _roads.RemoveLane(id);
         if (removed) InvalidateRouting();

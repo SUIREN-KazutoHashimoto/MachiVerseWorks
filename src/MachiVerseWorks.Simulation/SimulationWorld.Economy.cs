@@ -177,7 +177,7 @@ public sealed partial class SimulationWorld
 
     public EconomyStatistics CreateEconomyStatistics()
     {
-        var vacantPositions = 0;
+        long vacantPositions = 0;
         for (var index = 0; index < _economyJobs.Count; index++)
         {
             var job = _economyJobs[index];
@@ -189,14 +189,14 @@ public sealed partial class SimulationWorld
             _economyEstablishments.Count,
             _economyJobs.Count,
             _economyEmployments.Count,
-            vacantPositions,
-            _economyHouseholds.Values.Sum(static item => item.CashBalance),
-            _economyHouseholds.Values.Sum(static item => item.Income),
-            _economyHouseholds.Values.Sum(static item => item.Spending),
-            _economyCompanies.Sum(static item => item.CashBalance),
-            _economyCompanies.Sum(static item => item.Revenue),
-            _economyCompanies.Sum(static item => item.Expense),
-            _economyCompanies.Sum(static item => item.ProducedUnits),
+            SimulationNumeric.SaturatingToInt32NonNegative(vacantPositions),
+            SimulationNumeric.SaturatingLongSum(_economyHouseholds.Values, static item => item.CashBalance),
+            SimulationNumeric.SaturatingLongSum(_economyHouseholds.Values, static item => item.Income),
+            SimulationNumeric.SaturatingLongSum(_economyHouseholds.Values, static item => item.Spending),
+            SimulationNumeric.SaturatingLongSum(_economyCompanies, static item => item.CashBalance),
+            SimulationNumeric.SaturatingLongSum(_economyCompanies, static item => item.Revenue),
+            SimulationNumeric.SaturatingLongSum(_economyCompanies, static item => item.Expense),
+            SimulationNumeric.SaturatingDoubleSum(_economyCompanies, static item => item.ProducedUnits),
             _processedEconomicCycle,
             Time.TickCount);
     }
@@ -231,15 +231,15 @@ public sealed partial class SimulationWorld
     {
         foreach (var company in _economyCompanies.OrderBy(static item => item.Id.Value))
         {
-            var requiredWorkers = 0;
-            var filledWorkers = 0;
+            long requiredWorkers = 0;
+            long filledWorkers = 0;
             for (var index = 0; index < _economyJobs.Count; index++)
             {
                 var job = _economyJobs[index];
                 if (!_economyEstablishmentIndex.TryGetValue(job.EstablishmentId, out var establishment) || establishment.CompanyId != company.Id)
                     continue;
-                requiredWorkers = checked(requiredWorkers + job.RequiredWorkerCount);
-                filledWorkers = checked(filledWorkers + GetFilledWorkerCount(job.Id));
+                requiredWorkers += job.RequiredWorkerCount;
+                filledWorkers += GetFilledWorkerCount(job.Id);
             }
             var utilization = requiredWorkers == 0 ? 0d : Math.Min(1d, (double)filledWorkers / requiredWorkers);
             var producedUnits = company.ProducedUnits + (company.DailyProductionCapacity * utilization);

@@ -7,6 +7,7 @@ public sealed partial class SimulationWorld
     private readonly AgentStore _agents = new();
     private readonly SpatialIndex _spatialIndex;
     private DeterministicRandom _random;
+    private bool _isFaulted;
 
     public SimulationWorld(
         SimulationConfig? config = null,
@@ -36,6 +37,7 @@ public sealed partial class SimulationWorld
     public SimulationTime Time { get; private set; }
     public int ActiveAgentCount => _agents.ActiveCount;
     public int TotalCreatedAgentCount => _agents.TotalCreatedCount;
+    public bool IsFaulted => _isFaulted;
 
     public AgentId CreateAgent(WorldPoint position)
     {
@@ -66,25 +68,36 @@ public sealed partial class SimulationWorld
 
     public void Step()
     {
-        var nextTime = Time.Advance(Config.TickRate);
-        _agents.Step(Config.TickDurationSeconds, _spatialIndex);
-        CapturePowerProductionBaselines();
-        StepPower(nextTime);
-        StepWaterSewerTransactional(nextTime);
-        StepGas(nextTime);
-        StepOptical(nextTime);
-        StepRadio(nextTime);
-        StepEconomy(nextTime);
-        ApplyPowerOperationalConstraints();
-        StepLogistics(nextTime);
-        StepPersistentRegionalEvolution(nextTime);
-        PlanPopulationAndEconomyTrips(nextTime);
-        StepVehicles(Config.TickDurationSeconds, nextTime.TickCount);
-        StepRailwayOperations(Config.TickDurationSeconds, nextTime.TickCount);
-        StepPedestrians(Config.TickDurationSeconds);
-        StepMultimodalTransit(nextTime.TickCount);
-        CompletePopulationTrips();
-        Time = nextTime;
+        if (_isFaulted)
+            throw new InvalidOperationException("Simulation world is faulted because a previous Step failed and cannot be stepped again.");
+
+        try
+        {
+            var nextTime = Time.Advance(Config.TickRate);
+            _agents.Step(Config.TickDurationSeconds, _spatialIndex);
+            CapturePowerProductionBaselines();
+            StepPower(nextTime);
+            StepWaterSewerTransactional(nextTime);
+            StepGas(nextTime);
+            StepOptical(nextTime);
+            StepRadio(nextTime);
+            StepEconomy(nextTime);
+            ApplyPowerOperationalConstraints();
+            StepLogistics(nextTime);
+            StepPersistentRegionalEvolution(nextTime);
+            PlanPopulationAndEconomyTrips(nextTime);
+            StepVehicles(Config.TickDurationSeconds, nextTime.TickCount);
+            StepRailwayOperations(Config.TickDurationSeconds, nextTime.TickCount);
+            StepPedestrians(Config.TickDurationSeconds);
+            StepMultimodalTransit(nextTime.TickCount);
+            CompletePopulationTrips();
+            Time = nextTime;
+        }
+        catch
+        {
+            _isFaulted = true;
+            throw;
+        }
     }
 
     public bool TryGetAgentSnapshot(AgentId id, out AgentSnapshot snapshot) => _agents.TryGetSnapshot(id, Time.TickCount, out snapshot);
@@ -92,6 +105,8 @@ public sealed partial class SimulationWorld
 
     public SimulationCheckpoint CreateCheckpoint()
     {
+        if (_isFaulted)
+            throw new InvalidOperationException("A faulted Simulation world cannot be checkpointed because its domain state may represent a partial tick.");
         EnsurePedestrianNetwork();
         var railwayOperations = _railwayOperations?.CreateSnapshot();
         var economy = CreateEconomyCheckpointWithRadio() with
