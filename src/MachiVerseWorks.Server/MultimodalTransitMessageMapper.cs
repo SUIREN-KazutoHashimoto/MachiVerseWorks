@@ -44,8 +44,8 @@ internal static class MultimodalTransitMessageMapper
         var patternById = transit.Patterns.ToDictionary(static item => item.Id);
 
         IReadOnlyList<TransitVehicleSnapshot> selectedVehicles;
-        IReadOnlySet<TransitServicePatternId>? selectedPatternIds = null;
-        IReadOnlySet<TransitStopId>? selectedStopIds = null;
+        HashSet<TransitServicePatternId>? selectedPatternIds = null;
+        HashSet<TransitStopId>? selectedStopIds = null;
         if (volume is { } selectedVolume)
         {
             var visibleStopIds = transit.Stops
@@ -65,8 +65,6 @@ internal static class MultimodalTransitMessageMapper
                     patternIds.Add(trip.PatternId);
             }
 
-            // Pattern validation requires every referenced stop to be present. Pull the complete topology
-            // only for patterns touching the subscription instead of publishing every world-wide pattern.
             var stopIds = new HashSet<TransitStopId>(visibleStopIds);
             foreach (var patternId in patternIds)
                 if (patternById.TryGetValue(patternId, out var pattern))
