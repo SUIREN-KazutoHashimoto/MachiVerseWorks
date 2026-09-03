@@ -52,7 +52,6 @@ internal sealed class AdminCommandExecutorV2(
                     using var executionCancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, request.CancellationToken);
                     request.CancellationToken.ThrowIfCancellationRequested();
                     var result = await ExecuteCoreAsync(request.Command, executionCancellation.Token);
-                    request.CancellationToken.ThrowIfCancellationRequested();
                     request.Completion.TrySetResult(result);
                 }
                 catch (OperationCanceledException) when (request.CancellationToken.IsCancellationRequested)
