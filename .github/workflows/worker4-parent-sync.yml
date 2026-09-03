@@ -1,0 +1,31 @@
+name: Worker 4 Parent Sync
+
+on:
+  push:
+    branches:
+      - fix/all-open-issues-worker-4
+    paths:
+      - '.github/workflows/worker4-parent-sync.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout worker branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Merge parent branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin fix/all-open-issues
+          git merge --no-ff -X ours origin/fix/all-open-issues -m 'chore: sync parent into worker-4'
+          git push origin HEAD:fix/all-open-issues-worker-4
