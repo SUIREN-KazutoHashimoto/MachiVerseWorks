@@ -78,6 +78,15 @@ public sealed class PersistentRegionalEvolutionProtocolCodecTests
             PersistentRegionalEvolutionProtocolCodec.Serialize(invalid, ProtocolVersion.Current));
     }
 
+    [TestMethod]
+    public void BatchMetadataRequiresFullFirstChunkEvenWhenBatchHasOneChunk()
+    {
+        var invalid = CreateMessage() with { SnapshotId = 9, ChunkIndex = 0, ChunkCount = 1, IsFullSnapshot = false };
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            PersistentRegionalEvolutionProtocolCodec.Serialize(invalid, ProtocolVersion.Current));
+    }
+
     private static PersistentRegionalEvolutionSnapshotMessage CreateMessage() => new(
         12,
         7_200,
