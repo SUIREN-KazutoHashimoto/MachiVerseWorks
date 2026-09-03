@@ -146,6 +146,7 @@ public sealed partial class SimulationWorld
 
     private void StepLogistics(SimulationTime nextTime)
     {
+        PruneCompletedLogisticsHistory(nextTime.TickCount);
         while (_processedLogisticsCycle < _processedEconomicCycle)
         {
             ProcessLogisticsCycle(nextTime.TickCount);
@@ -266,9 +267,9 @@ public sealed partial class SimulationWorld
 
     private void AdvanceShipments(ulong tickCount)
     {
-        List<(ShipmentId ShipmentId, LogisticsOrderId OrderId)>? completed = null;
         foreach (var shipment in _logisticsShipments.OrderBy(static item => item.Id.Value))
         {
+            if (shipment.State == ShipmentState.Delivered) continue;
             if (shipment.State == ShipmentState.Pickup)
             {
                 shipment.State = ShipmentState.Loading;
@@ -313,18 +314,27 @@ public sealed partial class SimulationWorld
                     if (!_activeLogisticsOrderKeys.Remove((order.DestinationEstablishmentId, order.CommodityId)))
                         throw new InvalidOperationException($"Completed Logistics Order {order.Id.Value} was missing from the active-order index.");
                 }
-                completed ??= [];
-                completed.Add((shipment.Id, shipment.OrderId));
             }
         }
+    }
 
-        if (completed is null) return;
-        foreach (var (shipmentId, orderId) in completed)
+    private void PruneCompletedLogisticsHistory(ulong tickCount)
+    {
+        var windowTicks = _persistentRegionalEvolutionOptions.TicksPerYear;
+        var minimumDeliveredTick = tickCount > windowTicks ? tickCount - windowTicks : 0UL;
+        var expired = _logisticsShipments
+            .Where(item => item.State == ShipmentState.Delivered && item.DeliveredTick is { } deliveredTick && deliveredTick < minimumDeliveredTick)
+            .OrderBy(static item => item.Id.Value)
+            .ToArray();
+        foreach (var shipment in expired)
         {
-            if (_logisticsShipmentIndex.Remove(shipmentId, out var completedShipment))
-                _logisticsShipments.Remove(completedShipment);
-            if (_logisticsOrderIndex.Remove(orderId, out var completedOrder))
-                _logisticsOrders.Remove(completedOrder);
+            _logisticsShipmentIndex.Remove(shipment.Id);
+            _logisticsShipments.Remove(shipment);
+            if (_logisticsOrderIndex.TryGetValue(shipment.OrderId, out var order) && order.State == LogisticsOrderState.Completed)
+            {
+                _logisticsOrderIndex.Remove(order.Id);
+                _logisticsOrders.Remove(order);
+            }
         }
     }
 
@@ -442,7 +452,6 @@ public sealed partial class SimulationWorld
         }
         foreach (var item in checkpoint.Orders)
         {
-            if (item.State == LogisticsOrderState.Completed) continue;
             var state = new LogisticsOrderStateData(item.Id, item.DestinationEstablishmentId, item.CommodityId, item.Quantity, item.CreatedTick)
             {
                 State = item.State,
@@ -450,12 +459,12 @@ public sealed partial class SimulationWorld
             };
             _logisticsOrders.Add(state);
             _logisticsOrderIndex.Add(state.Id, state);
-            if (!_activeLogisticsOrderKeys.Add((state.DestinationEstablishmentId, state.CommodityId)))
+            if (state.State != LogisticsOrderState.Completed
+                && !_activeLogisticsOrderKeys.Add((state.DestinationEstablishmentId, state.CommodityId)))
                 throw new InvalidOperationException("Restored Logistics state contains duplicate active Orders for one destination inventory.");
         }
         foreach (var item in checkpoint.Shipments)
         {
-            if (item.State == ShipmentState.Delivered) continue;
             var state = new LogisticsShipmentStateData(item.Id, item.OrderId, item.SourceEstablishmentId, item.DestinationEstablishmentId,
                 item.CommodityId, item.Quantity, item.PickupAccessPointId, item.DeliveryAccessPointId, item.CreatedTick, item.LoadingCompleteTick)
             {
