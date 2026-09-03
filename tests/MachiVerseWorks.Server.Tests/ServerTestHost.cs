@@ -134,6 +134,11 @@ internal sealed class ServerTestHost : IAsyncDisposable
         {
             decoded = RegionalGenerationProtocolCodec.TryDeserialize(frame, out envelope, out error);
         }
+        else if (header.MessageType == MessageType.RegionalGenerationSnapshotChunk)
+        {
+            decoded = RegionalGenerationSnapshotChunkProtocolCodec.TryDeserialize(frame, out var regionalChunk, out error);
+            envelope = decoded ? new ProtocolEnvelope(header.Version, regionalChunk) : null;
+        }
         else if (header.MessageType == MessageType.PersistentRegionalEvolutionSnapshot)
         {
             decoded = PersistentRegionalEvolutionProtocolCodec.TryDeserialize(frame, out envelope, out error);
