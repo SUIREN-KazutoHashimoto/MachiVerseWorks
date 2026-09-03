@@ -22,6 +22,24 @@ jobs:
           fetch-depth: 0
       - name: Apply batch 2 fixes
         run: python .github/scripts/worker2_batch2.py
+      - name: Align batch 2 analyzer-safe dictionary lookup
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('src/MachiVerseWorks.Simulation/SimulationWorld.RailwayOperations.Validation.cs')
+          text = path.read_text(encoding='utf-8')
+          old = '''                || !routeById.ContainsKey(service.RouteId)
+                || !timetableById.TryGetValue(service.TimetableId, out var timetable)'''
+          new = '''                || !routeById.TryGetValue(service.RouteId, out var route)
+                || !timetableById.TryGetValue(service.TimetableId, out var timetable)'''
+          if text.count(old) != 1:
+              raise SystemExit('Railway service route lookup marker mismatch')
+          text = text.replace(old, new, 1)
+          old = 'serviceDefinitionValidator.ValidateServiceDefinition(routeById[service.RouteId], timetable, service.OriginDepotId, service.DestinationDepotId);'
+          new = 'serviceDefinitionValidator.ValidateServiceDefinition(route, timetable, service.OriginDepotId, service.DestinationDepotId);'
+          if text.count(old) != 1:
+              raise SystemExit('Railway service validator route marker mismatch')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
