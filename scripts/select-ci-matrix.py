@@ -162,9 +162,6 @@ def select_e2e(files: list[str], full: bool) -> dict[str, object]:
             selected.add(script_map[path])
             continue
 
-        # Browser E2E source/HTML is not covered by npm test. Mapping every current
-        # and future browser fixture is brittle, so changes there deliberately run
-        # the complete E2E matrix.
         if path.startswith("src/web/tests/browser/"):
             uncertain = True
             continue
@@ -172,8 +169,8 @@ def select_e2e(files: list[str], full: bool) -> dict[str, object]:
         if path.startswith("src/web/"):
             matched = False
             web_mappings = [
-                (("road", "routing"), {"road-network", "road-traffic", "signal-traffic", "gas"}),
-                (("traffic", "signal"), {"road-traffic", "signal-traffic"}),
+                (("road", "routing"), {"road-network", "road-traffic", "signal-traffic", "multimodal-transit", "logistics", "gas"}),
+                (("traffic", "signal"), {"road-traffic", "signal-traffic", "multimodal-transit"}),
                 (("population",), {"population", "pedestrian", "economy", "logistics", "gas"}),
                 (("pedestrian",), {"pedestrian"}),
                 (("railway", "rail"), {"railway", "railway-operations", "multimodal-transit"}),
@@ -199,16 +196,14 @@ def select_e2e(files: list[str], full: bool) -> dict[str, object]:
             continue
 
         if path.startswith("src/MachiVerseWorks.Simulation/"):
-            # Building identity/bounds feed multiple infrastructure domains. Treat
-            # them as cross-domain rather than suppressing the safe full fallback.
             if contains_any(path, ("building",)):
                 uncertain = True
                 continue
 
             matched = False
             mappings = [
-                (("roadnetwork", "road-network", "routing"), {"road-network", "road-traffic", "signal-traffic", "gas"}),
-                (("roadtraffic", "traffic", "vehicle"), {"road-traffic", "signal-traffic"}),
+                (("roadnetwork", "road-network", "routing"), {"road-network", "road-traffic", "signal-traffic", "multimodal-transit", "logistics", "gas"}),
+                (("roadtraffic", "traffic", "vehicle"), {"road-traffic", "signal-traffic", "multimodal-transit"}),
                 (("intersection", "signal"), {"signal-traffic", "road-traffic"}),
                 (("population",), {"population", "pedestrian", "economy"}),
                 (("pedestrian",), {"pedestrian"}),
@@ -290,9 +285,6 @@ def select_benchmarks(files: list[str], full: bool) -> dict[str, object]:
             if name in direct:
                 benchmark_ids.update(direct[name])
             elif name in DEDICATED_BENCHMARK_FILES:
-                # A dedicated workflow owns these benchmark classes. Keep the
-                # central benchmark workflow at smoke-only rather than running an
-                # unrelated full matrix.
                 continue
             else:
                 uncertain = True
@@ -301,12 +293,12 @@ def select_benchmarks(files: list[str], full: bool) -> dict[str, object]:
         if path.startswith("src/MachiVerseWorks.Simulation/"):
             matched = False
             mappings = [
-                (("roadnetwork", "road-network"), {"road-network", "routing"}, set()),
-                (("routing",), {"routing", "gas"}, set()),
+                (("roadnetwork", "road-network"), {"road-network", "routing", "multimodal-transit", "logistics", "gas"}, set()),
+                (("routing",), {"routing", "gas", "multimodal-transit", "logistics"}, set()),
                 (("intersection", "signal"), {"intersection-control"}, set()),
-                (("roadtraffic", "traffic", "vehicle"), set(), {"road-traffic"}),
+                (("roadtraffic", "traffic", "vehicle"), {"multimodal-transit"}, {"road-traffic"}),
                 (("population",), set(), {"population"}),
-                (("pedestrian",), {"pedestrian"}, set()),
+                (("pedestrian",), {"pedestrian"}, {"population"}),
                 (("railway", "rail"), {"railway-infrastructure", "railway-operations", "multimodal-transit"}, set()),
                 (("multimodal", "transit"), {"multimodal-transit"}, set()),
                 (("logistics", "freight", "inventory"), {"logistics", "gas"}, set()),
@@ -314,8 +306,6 @@ def select_benchmarks(files: list[str], full: bool) -> dict[str, object]:
                 (("water", "sewer"), {"water-sewer"}, set()),
                 (("gas",), {"gas"}, set()),
                 (("regional", "settlement", "toponym"), {"persistent-regional-evolution"}, set()),
-                # These domains have dedicated benchmark workflows. Marking them
-                # as understood prevents an unrelated central full fallback.
                 (("optical",), set(), set()),
                 (("radio", "spectrum"), set(), set()),
                 (("worldenvironment", "environment", "weather", "climate"), set(), set()),
@@ -325,7 +315,11 @@ def select_benchmarks(files: list[str], full: bool) -> dict[str, object]:
                     benchmark_ids.update(bench)
                     scenario_ids.update(scenario)
                     matched = True
-            if contains_any(path, ("snapshot", "readmodel", "publishedreadmodel")):
+            if contains_any(path, ("snapshot",)):
+                snapshot = True
+                regression = True
+                matched = True
+            elif contains_any(path, ("readmodel", "publishedreadmodel")):
                 snapshot = True
                 matched = True
             if not matched:

@@ -6,8 +6,10 @@ ARTIFACT_DIR="$ROOT_DIR/.artifacts/phase27-e2e"
 mkdir -p "$ARTIFACT_DIR"
 rm -f "$ARTIFACT_DIR"/*
 
-dotnet restore "$ROOT_DIR/MachiVerseWorks.slnx" 2>&1 | tee "$ARTIFACT_DIR/dotnet-restore.log"
-dotnet build "$ROOT_DIR/MachiVerseWorks.slnx" --configuration Release --no-restore 2>&1 | tee "$ARTIFACT_DIR/dotnet-build.log"
+if [[ "${MVW_E2E_PREPARED:-0}" != "1" ]]; then
+  dotnet restore "$ROOT_DIR/MachiVerseWorks.slnx" 2>&1 | tee "$ARTIFACT_DIR/dotnet-restore.log"
+  dotnet build "$ROOT_DIR/MachiVerseWorks.slnx" --configuration Release --no-restore 2>&1 | tee "$ARTIFACT_DIR/dotnet-build.log"
+fi
 dotnet test "$ROOT_DIR/tests/MachiVerseWorks.Server.Tests/MachiVerseWorks.Server.Tests.csproj" \
   --configuration Release \
   --no-build \

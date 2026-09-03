@@ -12,6 +12,7 @@ on:
       - 'scripts/select-ci-matrix.py'
       - 'Directory.Build.props'
       - 'Directory.Packages.props'
+      - 'MachiVerseWorks.slnx'
       - 'global.json'
       - '.github/workflows/benchmarks.yml'
   pull_request:
@@ -25,6 +26,7 @@ on:
       - 'scripts/select-ci-matrix.py'
       - 'Directory.Build.props'
       - 'Directory.Packages.props'
+      - 'MachiVerseWorks.slnx'
       - 'global.json'
       - '.github/workflows/benchmarks.yml'
   workflow_dispatch:
