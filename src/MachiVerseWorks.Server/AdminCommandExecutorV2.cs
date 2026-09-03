@@ -49,7 +49,15 @@ internal sealed class AdminCommandExecutorV2(
             {
                 try
                 {
-                    request.Completion.TrySetResult(await ExecuteCoreAsync(request.Command, stoppingToken));
+                    using var executionCancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, request.CancellationToken);
+                    request.CancellationToken.ThrowIfCancellationRequested();
+                    var result = await ExecuteCoreAsync(request.Command, executionCancellation.Token);
+                    request.CancellationToken.ThrowIfCancellationRequested();
+                    request.Completion.TrySetResult(result);
+                }
+                catch (OperationCanceledException) when (request.CancellationToken.IsCancellationRequested)
+                {
+                    request.Completion.TrySetCanceled(request.CancellationToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -375,15 +383,26 @@ internal sealed class AdminCommandExecutorV2(
         var action = Action(command, "world"); var path = Path.GetFullPath(Arg(command, 1, "path"));
         if (Eq(action, "save"))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var detached = SimulationWorld.RestoreCheckpoint(simulation.CaptureCheckpoint());
+            cancellationToken.ThrowIfCancellationRequested();
             var data = WorldSaveSerializer.Serialize(detached);
+            cancellationToken.ThrowIfCancellationRequested();
             await File.WriteAllBytesAsync(path, data, cancellationToken);
             return AdminCommandResult.Ok($"World saved to '{path}'.");
         }
         if (Eq(action, "load"))
         {
-            var world = WorldSaveSerializer.Deserialize(await File.ReadAllBytesAsync(path, cancellationToken));
+            var data = await File.ReadAllBytesAsync(path, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            var world = WorldSaveSerializer.Deserialize(data);
+            cancellationToken.ThrowIfCancellationRequested();
             simulation.ReplaceWorld(world);
+            foreach (var connection in connections.CreateSnapshot())
+            {
+                connection.Abort();
+                connections.Remove(connection.Id);
+            }
             return AdminCommandResult.Ok($"World loaded from '{path}'.");
         }
         return InvalidAction("world", action);

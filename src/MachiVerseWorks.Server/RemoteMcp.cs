@@ -337,13 +337,11 @@ internal sealed class RemoteMcpLogBuffer(int capacity) : ILoggerProvider
     private sealed class BufferLogger(RemoteMcpLogBuffer owner, string category) : ILogger
     {
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-        public bool IsEnabled(LogLevel logLevel) => logLevel != LogLevel.None;
+        public bool IsEnabled(LogLevel logLevel) => false;
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
-            if (!IsEnabled(logLevel)) return;
-            var message = formatter(state, exception);
-            if (exception is not null) message = $"{message} | {exception.GetType().Name}: {exception.Message}";
-            owner.Add(new RemoteMcpLogEntry(DateTimeOffset.UtcNow, logLevel.ToString(), category, eventId.Id, message));
+            // General ILogger output is deliberately outside the MCP-visible diagnostics boundary.
+            // Safe remote diagnostics must be explicitly projected instead of mirroring arbitrary state or exception text.
         }
     }
 }
@@ -476,26 +474,72 @@ internal sealed class RemoteMcpTools
     [McpServerTool(Name = "simulation_resume", ReadOnly = false, Destructive = false, Idempotent = true, UseStructuredContent = true), Authorize(Policy = RemoteMcpPolicies.Write), Description("Resume simulation execution through the administration command queue.")]
     public static Task<RemoteMcpResult> SimulationResume(RemoteMcpAdminGateway admin, CancellationToken cancellationToken) => admin.ExecuteAsync("simulation resume", cancellationToken);
 
-    [McpServerTool(Name = "simulation_save", ReadOnly = false, Destructive = false, UseStructuredContent = true), Authorize(Policy = RemoteMcpPolicies.Write), Description("Save the authoritative world into the configured MCP save directory. Arbitrary file paths are not accepted.")]
-    public static Task<RemoteMcpResult> SimulationSave(RemoteMcpAdminGateway admin, RemoteMcpOptions options, [Description("Save slot name using letters, digits, dot, underscore, or hyphen.")] string slot, CancellationToken cancellationToken)
+    [McpServerTool(Name = "simulation_save", ReadOnly = false, Destructive = false, UseStructuredContent = true), Authorize(Policy = RemoteMcpPolicies.Write), Description("Create a new authoritative-world save slot in the configured MCP save directory. Existing slots are never overwritten.")]
+    public static Task<RemoteMcpResult> SimulationSave(RemoteMcpAdminGateway admin, RemoteMcpOptions options, [Description("Save slot name using letters, digits, dot, underscore, or hyphen.")] string slot, CancellationToken cancellationToken) =>
+        SaveToSlotAsync(admin, options, slot, overwrite: false, cancellationToken);
+
+    [McpServerTool(Name = "simulation_save_overwrite", ReadOnly = false, Destructive = true, UseStructuredContent = true), Authorize(Policy = RemoteMcpPolicies.Destructive), Description("Save the authoritative world while allowing an existing MCP save slot to be overwritten. Requires destructive scope and explicit confirmation.")]
+    public static Task<RemoteMcpResult> SimulationSaveOverwrite(RemoteMcpAdminGateway admin, RemoteMcpOptions options, [Description("Save slot name using letters, digits, dot, underscore, or hyphen.")] string slot, [Description("Must be true to confirm overwriting an existing save slot.")] bool confirm, CancellationToken cancellationToken)
     {
-        if (!IsSafeSlot(slot)) return Task.FromResult(RemoteMcpResult.Rejected("invalid_argument", "slot must be 1-64 characters and contain only letters, digits, dot, underscore, or hyphen."));
+        if (!confirm) return Task.FromResult(RemoteMcpResult.Rejected("confirmation_required", "Set confirm=true to overwrite a save slot."));
+        return SaveToSlotAsync(admin, options, slot, overwrite: true, cancellationToken);
+    }
+
+    private static async Task<RemoteMcpResult> SaveToSlotAsync(RemoteMcpAdminGateway admin, RemoteMcpOptions options, string slot, bool overwrite, CancellationToken cancellationToken)
+    {
+        if (!IsSafeSlot(slot)) return RemoteMcpResult.Rejected("invalid_argument", "slot must be 1-64 characters and contain only letters, digits, dot, underscore, or hyphen.");
         try
         {
             Directory.CreateDirectory(options.SaveDirectory);
         }
         catch (UnauthorizedAccessException)
         {
-            return Task.FromResult(RemoteMcpResult.Rejected("io_error", "The configured MCP save directory cannot be created or accessed."));
+            return RemoteMcpResult.Rejected("io_error", "The configured MCP save directory cannot be created or accessed.");
         }
         catch (IOException)
         {
-            return Task.FromResult(RemoteMcpResult.Rejected("io_error", "The configured MCP save directory cannot be created or accessed."));
+            return RemoteMcpResult.Rejected("io_error", "The configured MCP save directory cannot be created or accessed.");
         }
-        var path = Path.Combine(options.SaveDirectory, slot + ".mvw");
-        return admin.ExecuteAsync($"world save {Quote(path)}", cancellationToken);
-    }
 
+        var path = Path.Combine(options.SaveDirectory, slot + ".mvw");
+        var reservationCreated = false;
+        if (!overwrite)
+        {
+            try
+            {
+                using var reservation = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+                reservationCreated = true;
+            }
+            catch (IOException) when (File.Exists(path))
+            {
+                return RemoteMcpResult.Rejected("conflict", "The requested save slot already exists. Use simulation_save_overwrite with destructive scope and confirm=true to replace it.");
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return RemoteMcpResult.Rejected("io_error", "The requested MCP save slot cannot be created or accessed.");
+            }
+            catch (IOException)
+            {
+                return RemoteMcpResult.Rejected("io_error", "The requested MCP save slot cannot be created or accessed.");
+            }
+        }
+
+        try
+        {
+            var result = await admin.ExecuteAsync($"world save {Quote(path)}", cancellationToken);
+            if (result.Success) reservationCreated = false;
+            return result;
+        }
+        finally
+        {
+            if (reservationCreated)
+            {
+                try { File.Delete(path); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+        }
+    }
     [McpServerTool(Name = "entity_write", ReadOnly = false, Destructive = false, UseStructuredContent = true), Authorize(Policy = RemoteMcpPolicies.Write), Description("Create or update an allowlisted entity by mapping structured MCP input to the existing administration command boundary.")]
     public static Task<RemoteMcpResult> EntityWrite(RemoteMcpAdminGateway admin, [Description("Allowlisted entity type.")] string entity, [Description("Operation: add or update.")] string operation, [Description("Administration arguments for the selected entity operation. Each item becomes exactly one quoted command token.")] string[] arguments, CancellationToken cancellationToken)
     {
