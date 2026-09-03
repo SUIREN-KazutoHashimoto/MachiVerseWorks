@@ -255,7 +255,8 @@ internal sealed class SnapshotPublishService(
             }
             if (roadMessage is not null)
             {
-                var key = new EncodedObservationCacheKey($"road:{publishSnapshot.RoadNetwork.Revision}", connection.NegotiatedVersion, revision, volumeIdentity);
+                var roadRevision = new ObservationRevision(publishSnapshot.ObservationGeneration, publishSnapshot.RoadNetwork.Revision);
+                var key = new EncodedObservationCacheKey("road", connection.NegotiatedVersion, roadRevision, volumeIdentity, IsStatic: true);
                 var sent = await connection.SendCachedAsync(roadMessage, connection.NegotiatedVersion, key, cache, sendCancellation.Token);
                 bytes = checked(bytes + sent.FrameBytes); encodeTimeMs += sent.EncodeTimeMs; sendTimeMs += sent.SendTimeMs;
             }
