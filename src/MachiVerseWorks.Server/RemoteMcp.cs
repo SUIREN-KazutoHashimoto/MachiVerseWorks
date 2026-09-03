@@ -198,25 +198,34 @@ internal sealed class RemoteMcpRequestGate(RemoteMcpOptions options) : IDisposab
     {
         lease = null;
         statusCode = StatusCodes.Status200OK;
-        lock (_rateLock)
-        {
-            var now = DateTimeOffset.UtcNow;
-            if (!_rates.TryGetValue(credential, out var rate) || now - rate.WindowStart >= TimeSpan.FromMinutes(1)) rate = (now, 0);
-            if (rate.Count >= options.RequestsPerMinute)
-            {
-                _rates[credential] = rate;
-                statusCode = StatusCodes.Status429TooManyRequests;
-                return false;
-            }
-            _rates[credential] = (rate.WindowStart, rate.Count + 1);
-        }
         if (!_concurrency.Wait(0))
         {
             statusCode = StatusCodes.Status503ServiceUnavailable;
             return false;
         }
-        lease = new Lease(_concurrency);
-        return true;
+
+        try
+        {
+            lock (_rateLock)
+            {
+                var now = DateTimeOffset.UtcNow;
+                if (!_rates.TryGetValue(credential, out var rate) || now - rate.WindowStart >= TimeSpan.FromMinutes(1)) rate = (now, 0);
+                if (rate.Count >= options.RequestsPerMinute)
+                {
+                    _rates[credential] = rate;
+                    statusCode = StatusCodes.Status429TooManyRequests;
+                    return false;
+                }
+                _rates[credential] = (rate.WindowStart, rate.Count + 1);
+            }
+
+            lease = new Lease(_concurrency);
+            return true;
+        }
+        finally
+        {
+            if (lease is null) _concurrency.Release();
+        }
     }
 
     public void Dispose() => _concurrency.Dispose();

@@ -1,3 +1,4 @@
+import { initializeLocalization, type Localizer } from './localization.ts';
 import {
   GeneratorOperatingState,
   PowerNodeKind,
@@ -12,7 +13,7 @@ export class PowerDebugOverlay {
   private readonly summary: HTMLPreElement;
   private readonly svg: SVGSVGElement;
 
-  public constructor(host: HTMLElement) {
+  public constructor(host: HTMLElement, private readonly localizer: Localizer = initializeLocalization()) {
     this.element = document.createElement('div');
     this.element.dataset.powerDebug = 'true';
     Object.assign(this.element.style, {
@@ -34,7 +35,7 @@ export class PowerDebugOverlay {
     this.svg.setAttribute('viewBox', '0 0 340 150');
     this.svg.setAttribute('width', '340');
     this.svg.setAttribute('height', '150');
-    this.svg.setAttribute('aria-label', 'Power network debug view');
+    this.svg.setAttribute('aria-label', this.localizer.t('powerDebug.ariaLabel'));
     this.element.append(this.summary, this.svg);
     host.append(this.element);
     this.clear();
@@ -43,15 +44,15 @@ export class PowerDebugOverlay {
   public apply(message: PowerSnapshotMessage): void {
     const statistics = message.statistics;
     this.summary.textContent = [
-      `Power tick=${statistics.tickCount.toString()} outages=${String(statistics.outageLoadCount)}`,
-      `generation=${statistics.generationOutputMegawatts.toFixed(2)}/${statistics.generationCapacityMegawatts.toFixed(2)} MW`,
-      `demand=${statistics.demandMegawatts.toFixed(2)} served=${statistics.servedMegawatts.toFixed(2)} unserved=${statistics.unservedMegawatts.toFixed(2)} MW`,
+      this.localizer.t('powerDebug.summary', { tick: this.localizer.formatNumber(statistics.tickCount), outages: this.localizer.formatNumber(statistics.outageLoadCount) }),
+      this.localizer.t('powerDebug.generation', { output: this.localizer.formatNumber(statistics.generationOutputMegawatts), capacity: this.localizer.formatNumber(statistics.generationCapacityMegawatts) }),
+      this.localizer.t('powerDebug.demand', { demand: this.localizer.formatNumber(statistics.demandMegawatts), served: this.localizer.formatNumber(statistics.servedMegawatts), unserved: this.localizer.formatNumber(statistics.unservedMegawatts) }),
     ].join('\n');
     this.renderNetwork(message);
   }
 
   public clear(): void {
-    this.summary.textContent = 'Power: waiting for snapshot';
+    this.summary.textContent = this.localizer.t('powerDebug.waiting');
     this.svg.replaceChildren();
   }
 

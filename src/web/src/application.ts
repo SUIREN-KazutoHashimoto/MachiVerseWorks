@@ -71,12 +71,12 @@ export class Application {
     this.railway = new RailwayInfrastructureLayer(this.view.scene);
     this.railwayOperations = new RailwayOperationsLayer(this.view.scene);
     this.ui = new ClientUi(host, this.localizer, performanceMetrics !== null);
-    this.logisticsDebug = new LogisticsDebugOverlay(host);
-    this.powerDebug = new PowerDebugOverlay(host);
+    this.logisticsDebug = new LogisticsDebugOverlay(host, this.localizer);
+    this.powerDebug = new PowerDebugOverlay(host, this.localizer);
     this.waterSewerDebug = new WaterSewerDebugOverlay(host);
     this.gasDebug = new GasDebugOverlay(host, this.localizer);
-    this.opticalDebug = new OpticalDebugOverlay(host);
-    this.radioDebug = new RadioDebugOverlay(host);
+    this.opticalDebug = new OpticalDebugOverlay(host, this.localizer);
+    this.radioDebug = new RadioDebugOverlay(host, this.localizer);
     this.connection = new MachiVerseConnection(
       this.config.serverUrl,
       { minimumDelayMs: this.config.reconnectMinimumDelayMs, maximumDelayMs: this.config.reconnectMaximumDelayMs },
