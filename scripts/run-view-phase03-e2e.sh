@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACT_DIR="$ROOT_DIR/.artifacts/view-phase03-e2e"
-GOLDEN_FILE="$ROOT_DIR/src/web/tests/visual/golden/view-physical-world.png"
+GOLDEN_DIR="$ROOT_DIR/src/web/tests/visual/golden"
 WEB_PORT=5187
 SERVER_PORT=5094
 WEB_PID=""
@@ -56,12 +56,37 @@ wait_http "http://127.0.0.1:$WEB_PORT/tests/browser/view-phase03-e2e.html"
 env Server__Port="$SERVER_PORT" Simulation__TickRate=30 Simulation__Seed=29027 Simulation__SpatialCellSize=4096 Server__SnapshotRate=2 Server__MaximumSubscriptionCellCount=524288 Server__AllowedWebSocketOrigins="http://127.0.0.1:$WEB_PORT" Simulation__InitialAgentCount=0 dotnet run --project "$ROOT_DIR/src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj" --configuration Release --no-build >"$ARTIFACT_DIR/server.log" 2>&1 & SERVER_PID=$!
 wait_http "http://127.0.0.1:$SERVER_PORT/health"
 
-URL="http://127.0.0.1:$WEB_PORT/tests/browser/view-phase03-e2e.html?server=ws%3A%2F%2F127.0.0.1%3A$SERVER_PORT%2Fws"
-node "$ROOT_DIR/scripts/run-headless-browser-e2e.mjs" "$CHROME" "$URL" "$ARTIFACT_DIR/browser.html" "$ARTIFACT_DIR/chrome.log"
+BASE_URL="http://127.0.0.1:$WEB_PORT/tests/browser/view-phase03-e2e.html?server=ws%3A%2F%2F127.0.0.1%3A$SERVER_PORT%2Fws"
+node "$ROOT_DIR/scripts/run-headless-browser-e2e.mjs" "$CHROME" "$BASE_URL" "$ARTIFACT_DIR/browser.html" "$ARTIFACT_DIR/chrome.log"
 grep -Fq 'data-status="passed"' "$ARTIFACT_DIR/browser.html" || { cat "$ARTIFACT_DIR/browser.html" >&2; cat "$ARTIFACT_DIR/server.log" >&2; exit 1; }
 
-node "$ROOT_DIR/scripts/run-headless-visual-e2e.mjs" "$CHROME" "$URL" "$ARTIFACT_DIR" "view-physical-world"
-bash "$ROOT_DIR/scripts/check-visual-regression.sh" "$ROOT_DIR" "$ARTIFACT_DIR" "view-physical-world" "$GOLDEN_FILE"
+capture_visual() {
+  local checkpoint="$1"
+  local inspection="$2"
+  local url="$BASE_URL"
+  if [[ "$checkpoint" != "physical-world" ]]; then url="$BASE_URL&visualCheckpoint=$checkpoint"; fi
+  node "$ROOT_DIR/scripts/run-headless-visual-e2e.mjs" "$CHROME" "$url" "$ARTIFACT_DIR" "$inspection"
+}
+
+capture_visual physical-world view-physical-world
+capture_visual world-overview view-integrated-world-overview
+capture_visual terrain-closeup view-terrain-closeup
+capture_visual city-center view-city-center
+capture_visual agent-grounding view-agent-grounding
+
+check_visual() {
+  local inspection="$1"
+  local threshold="${2:-0.001}"
+  MVW_VISUAL_MAX_CHANGED_RATIO="$threshold" \
+    bash "$ROOT_DIR/scripts/check-visual-regression.sh" "$ROOT_DIR" "$ARTIFACT_DIR" "$inspection" "$GOLDEN_DIR/$inspection.png"
+}
+
+# Capture every checkpoint before comparing so a missing/changed Golden still leaves the full camera tour in the Artifact.
+check_visual view-physical-world
+check_visual view-integrated-world-overview
+check_visual view-terrain-closeup
+check_visual view-city-center 0.0005
+check_visual view-agent-grounding 0.0002
 
 extract_metric() {
   local name="$1"
@@ -78,7 +103,8 @@ extract_metric() {
   echo "water_samples=$(extract_metric water-samples)"
   echo "feature_segments=$(extract_metric feature-segments)"
   echo "toponym_labels=$(extract_metric toponym-labels)"
+  echo "visual_checkpoints=5"
 } | tee "$ARTIFACT_DIR/rendering-baseline.txt"
 
 cat "$ARTIFACT_DIR/browser.html"
-echo "View Phase 3 Physical World Rendering E2E + visual regression passed."
+echo "View Phase 3 Physical World Rendering E2E + 5-checkpoint visual regression passed."
