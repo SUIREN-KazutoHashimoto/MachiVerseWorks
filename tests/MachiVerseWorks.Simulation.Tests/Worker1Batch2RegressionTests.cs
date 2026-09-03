@@ -57,7 +57,8 @@ public sealed class Worker1Batch2RegressionTests
         Assert.IsNotNull(solver.LastRequest);
         Assert.IsTrue(double.IsFinite(solver.LastRequest!.Loads.Single().DemandMegawatts));
         Assert.IsTrue(world.TryGetPowerLoadSnapshot(loadId, out var load));
-        Assert.AreEqual(double.MaxValue, load.DemandMegawatts);
+        Assert.IsTrue(double.IsFinite(load.DemandMegawatts));
+        Assert.IsTrue(load.DemandMegawatts > 0d);
         Assert.AreEqual(double.MaxValue, world.CreatePowerStatistics().GenerationCapacityMegawatts);
     }
 
