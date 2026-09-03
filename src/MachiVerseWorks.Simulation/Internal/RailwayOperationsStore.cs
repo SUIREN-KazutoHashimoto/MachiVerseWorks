@@ -12,6 +12,7 @@ internal sealed class RailwayOperationsStore
     private readonly Dictionary<RailwayServiceId, ServiceState> _services = [];
     private readonly Dictionary<TrainId, TrainState> _trains = [];
     private readonly List<TrainState> _trainOrder = [];
+    private readonly HashSet<TrainId> _completedRetirementPending = [];
     private readonly Dictionary<TrackNodeId, TrackNodeSnapshot> _nodes = [];
     private readonly Dictionary<TrackSegmentId, TrackSegmentSnapshot> _segments = [];
     private readonly Dictionary<TrackSegmentId, BlockSectionId> _segmentBlocks = [];
@@ -207,14 +208,13 @@ internal sealed class RailwayOperationsStore
         ArgumentNullException.ThrowIfNull(timetables);
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(trains);
-        _formations.Clear(); _routes.Clear(); _timetables.Clear(); _services.Clear(); _trains.Clear(); _trainOrder.Clear(); _blockOwners.Clear(); _platformOwners.Clear();
+        _formations.Clear(); _routes.Clear(); _timetables.Clear(); _services.Clear(); _trains.Clear(); _trainOrder.Clear(); _completedRetirementPending.Clear(); _blockOwners.Clear(); _platformOwners.Clear();
 
         foreach (var formation in formations) _formations.Add(formation.Id, formation);
         foreach (var route in routes) _routes.Add(route.Id, BuildRoute(route.Id, route.TrackSegmentIds));
         foreach (var timetable in timetables) _timetables.Add(timetable.Id, new TimetableSnapshot(timetable.Id, timetable.Stops.ToArray()));
         foreach (var service in services)
         {
-            if (service.State == RailwayServiceState.Completed) continue;
             var timetable = _timetables[service.TimetableId];
             var route = _routes[service.RouteId];
             var distances = new double[timetable.Stops.Count];
@@ -226,11 +226,11 @@ internal sealed class RailwayOperationsStore
         }
         foreach (var snapshotItem in trains)
         {
-            if (snapshotItem.State == TrainMovementState.Completed) continue;
             var train = TrainState.FromSnapshot(snapshotItem);
             if (!_services.ContainsKey(train.ServiceId)) continue;
             _trains.Add(train.Id, train);
             _trainOrder.Add(train);
+            if (train.State == TrainMovementState.Completed) _completedRetirementPending.Add(train.Id);
             if (train.CurrentBlockId is { } block && !_blockOwners.TryAdd(block, train.Id)) throw new InvalidOperationException("Saved railway operations contain a block ownership conflict.");
             if (train.AssignedPlatformId is { } assigned && !_platformOwners.TryAdd(assigned, train.Id)) throw new InvalidOperationException("Saved railway operations contain a platform ownership conflict.");
             if (train.AssignedPlatformId is { } assignedPlatform && _services.TryGetValue(train.ServiceId, out var assignedService) && assignedService.NextStopIndex < _timetables[assignedService.TimetableId].Stops.Count)
@@ -245,11 +245,13 @@ internal sealed class RailwayOperationsStore
 
     private void RetireCompletedTrain(TrainState train)
     {
+        if (_completedRetirementPending.Add(train.Id)) return;
+        _completedRetirementPending.Remove(train.Id);
         if (train.CurrentBlockId is { } block) ReleaseBlock(block, train.Id);
         if (train.AssignedPlatformId is { } assigned) ReleasePlatform(assigned, train.Id);
         if (train.CurrentPlatformId is { } current && current != train.AssignedPlatformId) ReleasePlatform(current, train.Id);
-        _blockOwners.Where(pair => pair.Value == train.Id).Select(static pair => pair.Key).ToArray().ToList().ForEach(key => _blockOwners.Remove(key));
-        _platformOwners.Where(pair => pair.Value == train.Id).Select(static pair => pair.Key).ToArray().ToList().ForEach(key => _platformOwners.Remove(key));
+        foreach (var key in _blockOwners.Where(pair => pair.Value == train.Id).Select(static pair => pair.Key).ToArray()) _blockOwners.Remove(key);
+        foreach (var key in _platformOwners.Where(pair => pair.Value == train.Id).Select(static pair => pair.Key).ToArray()) _platformOwners.Remove(key);
         _trains.Remove(train.Id);
         _trainOrder.Remove(train);
         _services.Remove(train.ServiceId);
