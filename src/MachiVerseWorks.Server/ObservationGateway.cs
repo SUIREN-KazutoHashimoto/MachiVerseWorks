@@ -110,8 +110,16 @@ internal sealed class SimulationObservationSource(SimulationRuntime simulation) 
     public OpticalSnapshot CaptureOpticalSnapshot() => simulation.Read(static world => world.CreateOpticalSnapshot());
     public RadioSnapshot CaptureRadioSnapshot() => simulation.Read(static world => world.CreateRadioSnapshot());
 
-    public VersionedObservation<WorldEnvironmentSnapshot> CaptureWorldEnvironmentSnapshot(WorldVolume volume) =>
-        simulation.CaptureWorldEnvironmentSnapshot(volume);
+    public VersionedObservation<WorldEnvironmentSnapshot> CaptureWorldEnvironmentSnapshot(WorldVolume volume)
+    {
+        var context = simulation.Read(world => new EnvironmentObservationContext(
+            simulation.ObservationGeneration,
+            simulation.ObservationRevision,
+            world.Time.TickCount,
+            world.WorldEnvironment));
+        var snapshot = SimulationWorld.CreateDetachedDetailedWorldEnvironmentSnapshot(context.Config, context.TickCount, volume);
+        return new VersionedObservation<WorldEnvironmentSnapshot>(context.Generation, context.Revision, snapshot);
+    }
 
     public RegionalGenerationObservation CaptureRegionalGenerationObservation()
     {
@@ -140,6 +148,12 @@ internal sealed class SimulationObservationSource(SimulationRuntime simulation) 
 
     public bool PersonExists(ulong personId) =>
         personId != 0 && simulation.TryGetPersonSnapshot(new PersonId(personId), out _);
+
+    private readonly record struct EnvironmentObservationContext(
+        ulong Generation,
+        ulong Revision,
+        ulong TickCount,
+        WorldEnvironmentConfig Config);
 }
 
 /// <summary>
