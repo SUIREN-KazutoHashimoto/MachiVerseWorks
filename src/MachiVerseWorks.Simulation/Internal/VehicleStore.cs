@@ -5,6 +5,7 @@ internal sealed class VehicleStore
     private const double QueueSpeedThresholdMetersPerSecond = 0.5d;
     private readonly Dictionary<VehicleId, VehicleState> vehicles = [];
     private readonly List<VehicleId> orderedIds = [];
+    private readonly List<VehicleId> stepOrder = [];
     private readonly LaneOccupancyIndex occupancy = new();
     private ulong nextId = 1;
 
@@ -98,13 +99,8 @@ internal sealed class VehicleStore
         intersectionControl.PrepareTick(tickCount, intents);
         if (vehicles.Count == 0) return;
 
-        var updateOrder = orderedIds
-            .Where(id => vehicles[id].State != VehicleMovementState.Arrived)
-            .OrderBy(id => vehicles[id].CurrentStep.LaneId.Value)
-            .ThenByDescending(id => topology.GetLaneTravelProgress(vehicles[id].CurrentStep.LaneId, vehicles[id].SegmentOffset))
-            .ThenBy(static id => id.Value)
-            .ToArray();
-        foreach (var id in updateOrder)
+        occupancy.CopyVehicleIdsFrontToBack(stepOrder);
+        foreach (var id in stepOrder)
         {
             var vehicle = vehicles[id];
             if (!occupancy.Remove(id)) throw new InvalidOperationException($"Vehicle {id.Value} was missing from Lane occupancy before update.");

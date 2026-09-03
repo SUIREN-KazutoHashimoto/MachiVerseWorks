@@ -93,37 +93,42 @@ public sealed class Worker1FinalBatchRegressionTests
     }
 
     [TestMethod]
-    public void OversizedAndAggregateLaneWidthsAreRejectedBeforeCommit()
+    public void LegacyWideLanesRemainValidWhileAggregateOverflowIsRejected()
     {
         var world = new SimulationWorld();
         var startNode = world.CreateRoadNode(new WorldPoint(0d, 0d, 0d));
         var endNode = world.CreateRoadNode(new WorldPoint(100d, 0d, 0d));
         var segment = world.CreateRoadSegment(startNode, endNode);
 
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
-            world.CreateLane(segment, LaneDirection.Forward, 0, double.MaxValue, 10d));
-        Assert.AreEqual(0, world.LaneCount);
+        world.CreateLane(segment, LaneDirection.Forward, 0, 30d, 10d);
+        world.CreateLane(segment, LaneDirection.Forward, 1, 250d, 10d);
+        var restored = SimulationWorld.RestoreCheckpoint(world.CreateCheckpoint());
+        Assert.AreEqual(2, restored.LaneCount);
 
-        for (ushort order = 0; order < 10; order++)
-            world.CreateLane(segment, LaneDirection.Forward, order, 25d, 10d);
+        var overflowWorld = new SimulationWorld();
+        var overflowStart = overflowWorld.CreateRoadNode(new WorldPoint(0d, 0d, 0d));
+        var overflowEnd = overflowWorld.CreateRoadNode(new WorldPoint(100d, 0d, 0d));
+        var overflowSegment = overflowWorld.CreateRoadSegment(overflowStart, overflowEnd);
+        overflowWorld.CreateLane(overflowSegment, LaneDirection.Forward, 0, double.MaxValue, 10d);
 
-        Assert.AreEqual(10, world.LaneCount);
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
-            world.CreateLane(segment, LaneDirection.Forward, 10, 1d, 10d));
-        Assert.AreEqual(10, world.LaneCount);
+            overflowWorld.CreateLane(overflowSegment, LaneDirection.Forward, 1, 1d, 10d));
+        Assert.AreEqual(1, overflowWorld.LaneCount);
     }
 
     [TestMethod]
-    public void CheckpointRestoreRejectsOversizedLaneWidth()
+    public void CheckpointRestoreRejectsAggregateLaneWidthOverflow()
     {
         var world = new SimulationWorld();
         var startNode = world.CreateRoadNode(new WorldPoint(0d, 0d, 0d));
         var endNode = world.CreateRoadNode(new WorldPoint(100d, 0d, 0d));
         var segment = world.CreateRoadSegment(startNode, endNode);
         world.CreateLane(segment, LaneDirection.Forward, 0, 3.5d, 10d);
+        world.CreateLane(segment, LaneDirection.Forward, 1, 3.5d, 10d);
         var checkpoint = world.CreateCheckpoint();
         var lanes = checkpoint.Lanes.ToArray();
         lanes[0] = lanes[0] with { WidthMeters = double.MaxValue };
+        lanes[1] = lanes[1] with { WidthMeters = 1d };
 
         Assert.ThrowsExactly<ArgumentException>(() =>
             SimulationWorld.RestoreCheckpoint(checkpoint with { Lanes = lanes }));

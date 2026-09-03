@@ -177,7 +177,7 @@ Protocol 2.9以上。Client → Server、payloadは0 bytes。connectionに保持
 
 ### PopulationStatistics
 
-固定56 bytes。Household / Person、travel state、activity別countとtickを持つ。多数Person detailを毎publishで転送しない。
+Protocol 2.5〜2.20は固定56 bytes。Protocol 2.21以降は末尾に `TransitCount` (`uint32`) を追加した固定60 bytes。Household / Person、travel state、activity別countとtickを持つ。2.20以前のdecoderではTransit人数を0相当として扱う。多数Person detailを毎publishで転送しない。
 
 ### PersonDebug
 

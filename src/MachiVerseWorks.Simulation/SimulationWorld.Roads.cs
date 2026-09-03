@@ -235,7 +235,6 @@ public sealed partial class SimulationWorld
             if (!segments.ContainsKey(lane.SegmentId)
                 || !double.IsFinite(lane.WidthMeters)
                 || lane.WidthMeters <= 0d
-                || lane.WidthMeters > RoadNetworkStore.MaximumLaneWidthMeters
                 || !double.IsFinite(lane.SpeedLimitMetersPerSecond)
                 || lane.SpeedLimitMetersPerSecond <= 0d)
             {
@@ -244,10 +243,10 @@ public sealed partial class SimulationWorld
             if (!laneOrders.Add((lane.SegmentId, lane.Direction, lane.Order))) throw new ArgumentException("Lane order is duplicated within a segment and direction.", nameof(checkpoint));
 
             var key = (lane.SegmentId, lane.Direction);
-            var totalWidth = laneWidthsByDirection.GetValueOrDefault(key) + lane.WidthMeters;
-            if (!double.IsFinite(totalWidth) || totalWidth > RoadNetworkStore.MaximumDirectionalRoadwayWidthMeters)
-                throw new ArgumentException($"Lane widths for Road segment {lane.SegmentId.Value} direction {lane.Direction} exceed the supported roadway width.", nameof(checkpoint));
-            laneWidthsByDirection[key] = totalWidth;
+            var previousWidth = laneWidthsByDirection.GetValueOrDefault(key);
+            if (lane.WidthMeters > double.MaxValue - previousWidth)
+                throw new ArgumentException($"Lane widths for Road segment {lane.SegmentId.Value} direction {lane.Direction} overflow the representable roadway width.", nameof(checkpoint));
+            laneWidthsByDirection[key] = previousWidth + lane.WidthMeters;
         }
 
         var connectionIds = new HashSet<LaneConnectionId>();

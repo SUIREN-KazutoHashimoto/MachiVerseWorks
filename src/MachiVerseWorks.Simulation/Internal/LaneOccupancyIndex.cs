@@ -3,6 +3,7 @@ namespace MachiVerseWorks.Simulation.Internal;
 internal sealed class LaneOccupancyIndex
 {
     private readonly Dictionary<LaneId, SortedSet<Entry>> entriesByLane = [];
+    private readonly SortedSet<LaneId> orderedLaneIds = new(LaneIdComparer.Instance);
     private readonly Dictionary<VehicleId, Location> locations = [];
     private static readonly EntryComparer Comparer = new();
 
@@ -11,6 +12,7 @@ internal sealed class LaneOccupancyIndex
     public void Clear()
     {
         entriesByLane.Clear();
+        orderedLaneIds.Clear();
         locations.Clear();
     }
 
@@ -18,7 +20,7 @@ internal sealed class LaneOccupancyIndex
     {
         Validate(progressMeters, lengthMeters, speedMetersPerSecond);
         if (locations.ContainsKey(id)) throw new InvalidOperationException($"Vehicle {id.Value} is already registered in Lane occupancy.");
-        if (!entriesByLane.TryGetValue(laneId, out var set)) { set = new SortedSet<Entry>(Comparer); entriesByLane.Add(laneId, set); }
+        if (!entriesByLane.TryGetValue(laneId, out var set)) { set = new SortedSet<Entry>(Comparer); entriesByLane.Add(laneId, set); orderedLaneIds.Add(laneId); }
         var entry = new Entry(progressMeters, id, lengthMeters, speedMetersPerSecond);
         if (!set.Add(entry)) throw new InvalidOperationException($"Vehicle {id.Value} could not be registered in Lane occupancy.");
         locations.Add(id, new Location(laneId, entry));
@@ -29,8 +31,18 @@ internal sealed class LaneOccupancyIndex
         if (!locations.Remove(id, out var location)) return false;
         if (!entriesByLane.TryGetValue(location.LaneId, out var set) || !set.Remove(location.Entry))
             throw new InvalidOperationException($"Vehicle {id.Value} was missing from its Lane occupancy set.");
-        if (set.Count == 0) entriesByLane.Remove(location.LaneId);
+        if (set.Count == 0) { entriesByLane.Remove(location.LaneId); orderedLaneIds.Remove(location.LaneId); }
         return true;
+    }
+
+    public void CopyVehicleIdsFrontToBack(List<VehicleId> destination)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        destination.Clear();
+        if (destination.Capacity < locations.Count) destination.Capacity = locations.Count;
+        foreach (var laneId in orderedLaneIds)
+            foreach (var entry in entriesByLane[laneId].Reverse())
+                destination.Add(entry.Id);
     }
 
     public bool TryGetLeader(LaneId laneId, double progressMeters, out OccupancyNeighbor leader) =>
@@ -89,6 +101,12 @@ internal sealed class LaneOccupancyIndex
 
     private readonly record struct Entry(double ProgressMeters, VehicleId Id, double LengthMeters, double SpeedMetersPerSecond);
     private readonly record struct Location(LaneId LaneId, Entry Entry);
+
+    private sealed class LaneIdComparer : IComparer<LaneId>
+    {
+        public static LaneIdComparer Instance { get; } = new();
+        public int Compare(LaneId left, LaneId right) => left.Value.CompareTo(right.Value);
+    }
 
     private sealed class EntryComparer : IComparer<Entry>
     {
