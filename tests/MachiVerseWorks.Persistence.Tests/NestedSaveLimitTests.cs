@@ -90,6 +90,50 @@ public sealed class NestedSaveLimitTests
     }
 
     [TestMethod]
+    public void OpticalCollectionsAreRejectedBeforeDtoMaterializationAboveLimit()
+    {
+        AssertNestedBoundary(
+            CreateSimulationJson("\"economy\":{\"optical\":{\"nodes\":[{}]}}"),
+            CreateSimulationJson("\"economy\":{\"optical\":{\"nodes\":[{},{}]}}"),
+            new WorldSaveLimits(maximumBytes: 100_000, maximumRoadNodeCount: 1),
+            "simulation.economy.optical.nodes");
+        AssertNestedBoundary(
+            CreateSimulationJson("\"economy\":{\"optical\":{\"fiberCables\":[{}]}}"),
+            CreateSimulationJson("\"economy\":{\"optical\":{\"fiberCables\":[{},{}]}}"),
+            new WorldSaveLimits(maximumBytes: 100_000, maximumRoadSegmentCount: 1),
+            "simulation.economy.optical.fiberCables");
+        foreach (var property in new[] { "equipment", "backhauls", "demands" })
+        {
+            AssertNestedBoundary(
+                CreateSimulationJson($"\"economy\":{{\"optical\":{{\"{property}\":[{{}}]}}}}"),
+                CreateSimulationJson($"\"economy\":{{\"optical\":{{\"{property}\":[{{}},{{}}]}}}}"),
+                new WorldSaveLimits(maximumBytes: 100_000, maximumBuildingCount: 1),
+                $"simulation.economy.optical.{property}");
+        }
+    }
+
+    [TestMethod]
+    public void EconomyCoreCollectionsAreRejectedBeforeDtoMaterializationAboveLimit()
+    {
+        foreach (var property in new[] { "companies", "establishments" })
+        {
+            AssertNestedBoundary(
+                CreateSimulationJson($"\"economy\":{{\"{property}\":[{{}}]}}"),
+                CreateSimulationJson($"\"economy\":{{\"{property}\":[{{}},{{}}]}}"),
+                new WorldSaveLimits(maximumBytes: 100_000, maximumBuildingCount: 1),
+                $"simulation.economy.{property}");
+        }
+        foreach (var property in new[] { "jobs", "employments" })
+        {
+            AssertNestedBoundary(
+                CreateSimulationJson($"\"economy\":{{\"{property}\":[{{}}]}}"),
+                CreateSimulationJson($"\"economy\":{{\"{property}\":[{{}},{{}}]}}"),
+                new WorldSaveLimits(maximumBytes: 100_000, maximumPersonCount: 1),
+                $"simulation.economy.{property}");
+        }
+    }
+
+    [TestMethod]
     public void SerializeAppliesVehicleAndPersonNestedLimitsBeforeDtoProjection()
     {
         var vehicleWorld = CreateTwoStepVehicleWorld();

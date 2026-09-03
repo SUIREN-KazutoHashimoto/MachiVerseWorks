@@ -21,6 +21,15 @@ public sealed partial class SimulationWorld
         var platformById = (checkpoint.Platforms ?? []).ToDictionary(static item => item.Id);
         var depotIds = (checkpoint.Depots ?? []).Select(static item => item.Id).ToHashSet();
         var blockIds = (checkpoint.BlockSections ?? []).Select(static item => item.Id).ToHashSet();
+        var serviceDefinitionValidator = new Internal.RailwayOperationsStore(new RailwayInfrastructureSnapshot(
+            (checkpoint.TrackNodes ?? []).Select(static item => new TrackNodeSnapshot(item.Id, item.Kind, item.Position)).ToArray(),
+            (checkpoint.TrackSegments ?? []).Select(static item => new TrackSegmentSnapshot(item.Id, item.StartNodeId, item.EndNodeId, item.Direction, item.GaugeMeters, item.SpeedLimitMetersPerSecond, item.Electrification, item.Usage)).ToArray(),
+            (checkpoint.TrackConnections ?? []).Select(static item => new TrackConnectionSnapshot(item.Id, item.FromSegmentId, item.ToSegmentId, item.ViaNodeId)).ToArray(),
+            (checkpoint.BlockSections ?? []).Select(static item => new BlockSectionSnapshot(item.Id, item.SegmentIds.ToArray())).ToArray(),
+            (checkpoint.Stations ?? []).Select(static item => new StationSnapshot(item.Id, item.Bounds)).ToArray(),
+            (checkpoint.Platforms ?? []).Select(static item => new PlatformSnapshot(item.Id, item.StationId, item.TrackSegmentId, item.StartSegmentOffset, item.EndSegmentOffset, item.Bounds)).ToArray(),
+            (checkpoint.PlatformAccessPoints ?? []).Select(static item => new PlatformAccessPointSnapshot(item.Id, item.PlatformId, item.RoadAccessPointId)).ToArray(),
+            (checkpoint.Depots ?? []).Select(static item => new DepotSnapshot(item.Id, item.Bounds, item.TrackSegmentIds.ToArray())).ToArray()));
 
         var formationById = new Dictionary<TrainFormationId, TrainFormationSnapshot>();
         foreach (var formation in formations)
@@ -79,13 +88,14 @@ public sealed partial class SimulationWorld
                 throw new ArgumentException($"Railway service ID {service.Id.Value} is zero or duplicated.", nameof(checkpoint));
             ValidateEnum(service.State, nameof(checkpoint));
             if (!formationById.ContainsKey(service.FormationId)
-                || !routeById.ContainsKey(service.RouteId)
+                || !routeById.TryGetValue(service.RouteId, out var route)
                 || !timetableById.TryGetValue(service.TimetableId, out var timetable)
                 || !depotIds.Contains(service.OriginDepotId)
                 || !depotIds.Contains(service.DestinationDepotId))
                 throw new ArgumentException($"Railway service {service.Id.Value} contains a missing formation, route, timetable, or depot reference.", nameof(checkpoint));
             if (service.NextStopIndex < 0 || service.NextStopIndex > timetable.Stops.Count)
                 throw new ArgumentException($"Railway service {service.Id.Value} has an invalid next stop index.", nameof(checkpoint));
+            serviceDefinitionValidator.ValidateServiceDefinition(route, timetable, service.OriginDepotId, service.DestinationDepotId);
         }
 
         var trainById = new Dictionary<TrainId, TrainSnapshot>();

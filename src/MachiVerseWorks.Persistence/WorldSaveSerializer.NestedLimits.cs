@@ -136,6 +136,11 @@ public static partial class WorldSaveSerializer
         else if (context == NestedSaveContext.Timetable && reader.ValueTextEquals("stops")) return NestedSaveProperty.Stops;
         else if (context == NestedSaveContext.Economy)
         {
+            if (reader.ValueTextEquals("companies")) return NestedSaveProperty.Companies;
+            if (reader.ValueTextEquals("establishments")) return NestedSaveProperty.Establishments;
+            if (reader.ValueTextEquals("jobs")) return NestedSaveProperty.Jobs;
+            if (reader.ValueTextEquals("employments")) return NestedSaveProperty.Employments;
+            if (reader.ValueTextEquals("households")) return NestedSaveProperty.EconomyHouseholds;
             if (reader.ValueTextEquals("logistics")) return NestedSaveProperty.Logistics;
             if (reader.ValueTextEquals("power")) return NestedSaveProperty.Power;
             if (reader.ValueTextEquals("waterSewer")) return NestedSaveProperty.WaterSewer;
@@ -267,6 +272,11 @@ public static partial class WorldSaveSerializer
             (NestedSaveContext.Depot, NestedSaveProperty.TrackSegmentIds) => new(limits.MaximumDepotTrackSegmentCount, "simulation.depots[].trackSegmentIds", NestedArrayKind.None),
             (NestedSaveContext.RailwayRoute, NestedSaveProperty.TrackSegmentIds) => new(limits.MaximumRailwayRouteSegmentCount, "simulation.railwayOperations.routes[].trackSegmentIds", NestedArrayKind.None),
             (NestedSaveContext.Timetable, NestedSaveProperty.Stops) => new(limits.MaximumTimetableStopCount, "simulation.railwayOperations.timetables[].stops", NestedArrayKind.TimetableStops),
+            (NestedSaveContext.Economy, NestedSaveProperty.Companies) => new(limits.MaximumBuildingCount, "simulation.economy.companies", NestedArrayKind.None),
+            (NestedSaveContext.Economy, NestedSaveProperty.Establishments) => new(limits.MaximumBuildingCount, "simulation.economy.establishments", NestedArrayKind.None),
+            (NestedSaveContext.Economy, NestedSaveProperty.Jobs) => new(limits.MaximumPersonCount, "simulation.economy.jobs", NestedArrayKind.None),
+            (NestedSaveContext.Economy, NestedSaveProperty.Employments) => new(limits.MaximumPersonCount, "simulation.economy.employments", NestedArrayKind.None),
+            (NestedSaveContext.Economy, NestedSaveProperty.EconomyHouseholds) => new(limits.MaximumHouseholdCount, "simulation.economy.households", NestedArrayKind.None),
             (NestedSaveContext.Logistics, NestedSaveProperty.Commodities) => new(limits.MaximumBuildingCount, "simulation.economy.logistics.commodities", NestedArrayKind.None),
             (NestedSaveContext.Logistics, NestedSaveProperty.Inventories) => new(limits.MaximumBuildingCount, "simulation.economy.logistics.inventories", NestedArrayKind.None),
             (NestedSaveContext.Logistics, NestedSaveProperty.Orders) => new(limits.MaximumPersonCount, "simulation.economy.logistics.orders", NestedArrayKind.None),
@@ -334,7 +344,7 @@ public static partial class WorldSaveSerializer
     private enum NestedSaveProperty : byte
     {
         Other, Simulation, Vehicles, Persons, BlockSections, Depots, RailwayOperations, RouteSteps, Schedule, Needs, SegmentIds, TrackSegmentIds, Routes, Timetables, Stops,
-        Economy, Logistics, Commodities, Inventories, Orders, Shipments, Power, PowerNodes, PowerLines, Generators, PowerLoads,
+        Economy, Companies, Establishments, Jobs, Employments, EconomyHouseholds, Logistics, Commodities, Inventories, Orders, Shipments, Power, PowerNodes, PowerLines, Generators, PowerLoads,
         WaterSewer, WaterNodes, WaterPipes, SewerNodes, SewerPipes, WaterSources, Reservoirs, Pumps, TreatmentPlants, ServicePoints,
         Gas, GasNodes, GasPipelines, GasSources, GasImportTerminals, GasStorages, GasServicePoints,
         Optical, OpticalNodes, FiberCables, OpticalEquipment, OpticalBackhauls, OpticalDemands,

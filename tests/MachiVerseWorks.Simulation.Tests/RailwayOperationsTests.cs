@@ -129,6 +129,20 @@ public sealed class RailwayOperationsTests
     }
 
     [TestMethod]
+    public void CheckpointRejectsServiceWhoseOriginDepotDoesNotOwnRouteStart()
+    {
+        var world = new SimulationWorld();
+        RailwayOperationsFixtures.SeedDeterministic(world);
+        var checkpoint = world.CreateCheckpoint();
+        var services = checkpoint.RailwayServices!.ToArray();
+        var first = services[0];
+        Assert.AreNotEqual(first.OriginDepotId, first.DestinationDepotId);
+        services[0] = first with { OriginDepotId = first.DestinationDepotId };
+
+        Assert.ThrowsExactly<ArgumentException>(() => SimulationWorld.RestoreCheckpoint(checkpoint with { RailwayServices = services }));
+    }
+
+    [TestMethod]
     public void CheckpointRestoreContinuesWithIdenticalOperationState()
     {
         var original = new SimulationWorld(new SimulationConfig(seed: 0x18UL));

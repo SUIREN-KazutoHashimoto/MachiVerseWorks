@@ -10,6 +10,9 @@ const LANE_LENGTH = 35;
 const LANE_CONNECTION_LENGTH = 33;
 const ROAD_ACCESS_POINT_LENGTH = 41;
 const PEDESTRIAN_STATE_LENGTH = 81;
+const MAXIMUM_ERROR_PARAMETERS = 16;
+const MAXIMUM_ERROR_PARAMETER_KEY_BYTES = 64;
+const MAXIMUM_ERROR_PARAMETER_VALUE_BYTES = 256;
 
 export enum MessageType {
   Hello = 1,
@@ -245,15 +248,20 @@ function decodeRoadNetwork(view: DataView, offset: number, payloadLength: number
 function decodeProtocolError(view: DataView, offset: number, payloadLength: number): ProtocolErrorMessage {
   if (payloadLength < 4) throw new ProtocolDecodeFailure('Error payload is too short.');
   const end = offset + payloadLength; const code = view.getUint16(offset, true) as ProtocolErrorCode; const parameterCount = view.getUint16(offset + 2, true); let cursor = offset + 4; const parameters: ProtocolErrorParameter[] = [];
+  if (parameterCount > MAXIMUM_ERROR_PARAMETERS) throw new ProtocolDecodeFailure('Error parameter count exceeds the supported limit.');
   for (let index = 0; index < parameterCount; index += 1) {
-    const key = readUtf8String(view, cursor, end); cursor = key.nextOffset; const value = readUtf8String(view, cursor, end); cursor = value.nextOffset; parameters.push({ key: key.value, value: value.value });
+    const key = readUtf8String(view, cursor, end, MAXIMUM_ERROR_PARAMETER_KEY_BYTES, 'key'); cursor = key.nextOffset;
+    const value = readUtf8String(view, cursor, end, MAXIMUM_ERROR_PARAMETER_VALUE_BYTES, 'value'); cursor = value.nextOffset;
+    parameters.push({ key: key.value, value: value.value });
   }
   if (cursor !== end) throw new ProtocolDecodeFailure('Error payload contains trailing bytes.');
   return { type: MessageType.Error, code, parameters };
 }
 
-function readUtf8String(view: DataView, offset: number, end: number): { readonly value: string; readonly nextOffset: number } {
-  if (offset + 2 > end) throw new ProtocolDecodeFailure('Error string length is truncated.'); const length = view.getUint16(offset, true); const start = offset + 2; const nextOffset = start + length;
+function readUtf8String(view: DataView, offset: number, end: number, maximumBytes: number, fieldName: string): { readonly value: string; readonly nextOffset: number } {
+  if (offset + 2 > end) throw new ProtocolDecodeFailure('Error string length is truncated.');
+  const length = view.getUint16(offset, true); const start = offset + 2; const nextOffset = start + length;
+  if (length > maximumBytes) throw new ProtocolDecodeFailure(`Error parameter ${fieldName} exceeds the supported UTF-8 byte limit.`);
   if (nextOffset > end) throw new ProtocolDecodeFailure('Error string payload is truncated.');
   try { return { value: utf8Decoder.decode(new Uint8Array(view.buffer, view.byteOffset + start, length)), nextOffset }; } catch { throw new ProtocolDecodeFailure('Error payload contains invalid UTF-8.'); }
 }

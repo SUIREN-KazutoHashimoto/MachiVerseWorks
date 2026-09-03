@@ -67,3 +67,27 @@ test('Road Network decoder preserves 3D grade separation and explicit references
   view.setBigUint64(offset, 1n, true); view.setBigUint64(offset + 8, 1n, true); view.setFloat64(offset + 16, 0.5, true); view.setBigUint64(offset + 24, 9n, true); view.setBigUint64(offset + 32, 0n, true); view.setUint8(offset + 40, 1);
   const message = decodeFrame(frame).message; assert.equal(message.type, MessageType.RoadNetworkSnapshot); assert.equal(message.nodes[3].z, 20); assert.equal(message.connections[0].viaNodeId, 2n); assert.equal(message.accessPoints[0].buildingId, 9n); assert.equal(message.accessPoints[0].poiId, null);
 });
+
+
+function createProtocolErrorFrame(parameters) {
+  const encoder = new TextEncoder();
+  const encoded = parameters.map(({ key, value }) => ({ key: encoder.encode(key), value: encoder.encode(value) }));
+  const payloadLength = 4 + encoded.reduce((total, item) => total + 4 + item.key.byteLength + item.value.byteLength, 0);
+  const frame = new ArrayBuffer(PROTOCOL_HEADER_SIZE + payloadLength); const view = new DataView(frame);
+  view.setUint32(0, PROTOCOL_MAGIC, true); view.setUint16(4, 2, true); view.setUint16(6, 20, true); view.setUint16(8, MessageType.Error, true); view.setUint32(12, payloadLength, true);
+  let offset = PROTOCOL_HEADER_SIZE; view.setUint16(offset, 4, true); view.setUint16(offset + 2, encoded.length, true); offset += 4;
+  for (const item of encoded) {
+    view.setUint16(offset, item.key.byteLength, true); offset += 2; new Uint8Array(frame, offset, item.key.byteLength).set(item.key); offset += item.key.byteLength;
+    view.setUint16(offset, item.value.byteLength, true); offset += 2; new Uint8Array(frame, offset, item.value.byteLength).set(item.value); offset += item.value.byteLength;
+  }
+  return frame;
+}
+
+test('Protocol Error decoder enforces C# parameter count and UTF-8 byte limits', () => {
+  const boundary = decodeFrame(createProtocolErrorFrame([{ key: 'k'.repeat(64), value: 'v'.repeat(256) }])).message;
+  assert.equal(boundary.type, MessageType.Error); assert.equal(boundary.parameters.length, 1);
+  assert.throws(() => decodeFrame(createProtocolErrorFrame(Array.from({ length: 17 }, (_, index) => ({ key: `k${String(index)}`, value: 'v' })))), /parameter count/i);
+  assert.throws(() => decodeFrame(createProtocolErrorFrame([{ key: 'k'.repeat(65), value: 'v' }])), /key.*byte limit/i);
+  assert.throws(() => decodeFrame(createProtocolErrorFrame([{ key: 'k', value: 'v'.repeat(257) }])), /value.*byte limit/i);
+  assert.throws(() => decodeFrame(createProtocolErrorFrame([{ key: 'あ'.repeat(22), value: 'v' }])), /key.*byte limit/i);
+});
