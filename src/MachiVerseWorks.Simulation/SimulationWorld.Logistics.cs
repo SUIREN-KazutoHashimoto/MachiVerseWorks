@@ -232,8 +232,10 @@ public sealed partial class SimulationWorld
 
     private void AllocateOpenOrders(ulong tickCount)
     {
-        foreach (var order in _logisticsOrders.Where(static item => item.State == LogisticsOrderState.Open).OrderBy(static item => item.Id.Value))
+        for (var orderIndex = 0; orderIndex < _logisticsOrders.Count; orderIndex++)
         {
+            var order = _logisticsOrders[orderIndex];
+            if (order.State != LogisticsOrderState.Open) continue;
             var supplier = _logisticsInventories.Values
                 .Where(item => item.Role == InventoryRole.Supplier
                     && item.CommodityId == order.CommodityId
@@ -270,8 +272,9 @@ public sealed partial class SimulationWorld
 
     private void AdvanceShipments(ulong tickCount)
     {
-        foreach (var shipment in _logisticsShipments.OrderBy(static item => item.Id.Value))
+        for (var shipmentIndex = 0; shipmentIndex < _logisticsShipments.Count; shipmentIndex++)
         {
+            var shipment = _logisticsShipments[shipmentIndex];
             if (shipment.State == ShipmentState.Delivered) continue;
             if (shipment.State == ShipmentState.Pickup)
             {
@@ -335,14 +338,15 @@ public sealed partial class SimulationWorld
     {
         var windowTicks = _persistentRegionalEvolutionOptions.TicksPerYear;
         var minimumDeliveredTick = tickCount > windowTicks ? tickCount - windowTicks : 0UL;
-        var expired = _logisticsShipments
-            .Where(item => item.State == ShipmentState.Delivered && item.DeliveredTick is { } deliveredTick && deliveredTick < minimumDeliveredTick)
-            .OrderBy(static item => item.Id.Value)
-            .ToArray();
-        foreach (var shipment in expired)
+        for (var shipmentIndex = _logisticsShipments.Count - 1; shipmentIndex >= 0; shipmentIndex--)
         {
+            var shipment = _logisticsShipments[shipmentIndex];
+            if (shipment.State != ShipmentState.Delivered
+                || shipment.DeliveredTick is not { } deliveredTick
+                || deliveredTick >= minimumDeliveredTick) continue;
+
             _logisticsShipmentIndex.Remove(shipment.Id);
-            _logisticsShipments.Remove(shipment);
+            _logisticsShipments.RemoveAt(shipmentIndex);
             if (_logisticsOrderIndex.TryGetValue(shipment.OrderId, out var order) && order.State == LogisticsOrderState.Completed)
             {
                 _logisticsOrderIndex.Remove(order.Id);
@@ -491,6 +495,8 @@ public sealed partial class SimulationWorld
             _logisticsShipments.Add(state);
             _logisticsShipmentIndex.Add(state.Id, state);
         }
+        _logisticsOrders.Sort(static (left, right) => left.Id.Value.CompareTo(right.Id.Value));
+        _logisticsShipments.Sort(static (left, right) => left.Id.Value.CompareTo(right.Id.Value));
         _nextCommodityId = checkpoint.NextCommodityId;
         _nextLogisticsOrderId = checkpoint.NextOrderId;
         _nextShipmentId = checkpoint.NextShipmentId;
