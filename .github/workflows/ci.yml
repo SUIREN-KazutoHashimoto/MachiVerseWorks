@@ -74,6 +74,20 @@ jobs:
           grep -Fq "MachiVerseWorks 開発ルール" AGENTS.md
           grep -Fq "MachiVerseWorks" NOTICE
 
+      - name: Validate required Web quality scripts
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+          package = json.loads(Path('src/web/package.json').read_text(encoding='utf-8'))
+          scripts = package.get('scripts')
+          if not isinstance(scripts, dict):
+              raise SystemExit('src/web/package.json must contain a scripts object')
+          for name in ('lint', 'typecheck', 'test', 'build'):
+              value = scripts.get(name)
+              if not isinstance(value, str) or not value.strip():
+                  raise SystemExit(f'src/web/package.json requires a non-empty scripts.{name}')
+
       - name: Validate Markdown links
         run: python scripts/check-markdown-links.py
 
@@ -330,13 +344,13 @@ jobs:
         run: npm ci
 
       - name: Lint
-        run: npm run lint --if-present
+        run: npm run lint
 
       - name: Type check
-        run: npm run typecheck --if-present
+        run: npm run typecheck
 
       - name: Test
-        run: npm test --if-present
+        run: npm test
 
       - name: Build
         run: npm run build
@@ -349,6 +363,18 @@ jobs:
           path: src/web/dist
           retention-days: 7
 
+  dependency_review:
+    name: dependency review
+    needs: [repository]
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5
+        with:
+          fail-on-severity: high
+
   e2e:
     name: required e2e
     needs: [repository, detect]
@@ -358,7 +384,7 @@ jobs:
   gate:
     name: ci-gate
     if: always()
-    needs: [repository, detect, dotnet, web, e2e]
+    needs: [repository, detect, dotnet, web, dependency_review, e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -369,6 +395,7 @@ jobs:
           DETECT_RESULT: ${{ needs.detect.result }}
           DOTNET_RESULT: ${{ needs.dotnet.result }}
           WEB_RESULT: ${{ needs.web.result }}
+          DEPENDENCY_REVIEW_RESULT: ${{ needs.dependency_review.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
         run: |
           set -euo pipefail
@@ -383,7 +410,7 @@ jobs:
             exit 1
           fi
 
-          for entry in "dotnet:$DOTNET_RESULT" "web:$WEB_RESULT" "e2e:$E2E_RESULT"; do
+          for entry in "dotnet:$DOTNET_RESULT" "web:$WEB_RESULT" "dependency-review:$DEPENDENCY_REVIEW_RESULT" "e2e:$E2E_RESULT"; do
             name="${entry%%:*}"
             result="${entry#*:}"
             if [[ "$result" != "success" && "$result" != "skipped" ]]; then
