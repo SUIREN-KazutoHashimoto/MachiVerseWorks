@@ -14,6 +14,7 @@ on:
       - 'MachiVerseWorks.slnx'
       - 'global.json'
       - '.github/workflows/e2e.yml'
+      - 'scripts/select-ci-matrix.py'
   workflow_call:
   workflow_dispatch:
 
@@ -25,8 +26,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  select:
+    name: select affected e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+      reason: ${{ steps.select.outputs.reason }}
+    steps:
+      - name: Checkout with history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Select E2E matrix
+        id: select
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            selection="$(python scripts/select-ci-matrix.py e2e --base "$BASE_SHA" --head "$HEAD_SHA")"
+          else
+            selection="$(python scripts/select-ci-matrix.py e2e --full)"
+          fi
+          echo "matrix=$(jq -c '.matrix' <<< "$selection")" >> "$GITHUB_OUTPUT"
+          echo "reason=$(jq -r '.reason' <<< "$selection")" >> "$GITHUB_OUTPUT"
+          jq -r '.matrix.include[].name' <<< "$selection"
+
   prepare:
     name: prepare shared build
+    needs: select
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -36,6 +68,13 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
+      - name: Cache NuGet packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
@@ -61,123 +100,12 @@ jobs:
 
   e2e:
     name: ${{ matrix.name }}
-    needs: prepare
+    needs: [select, prepare]
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.timeout }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - id: core-poc
-            name: core-server-browser
-            script: scripts/run-phase6-e2e.sh
-            artifacts: .artifacts/phase6-e2e
-            timeout: 25
-          - id: road-network
-            name: road-network-server-browser
-            script: scripts/run-phase11-e2e.sh
-            artifacts: .artifacts/phase11-e2e
-            timeout: 15
-          - id: road-traffic
-            name: road-traffic-server-browser
-            script: scripts/run-phase13-e2e.sh
-            artifacts: .artifacts/phase13-e2e
-            timeout: 15
-          - id: signal-traffic
-            name: signal-traffic-server-browser
-            script: scripts/run-phase14-e2e.sh
-            artifacts: .artifacts/phase14-e2e
-            timeout: 15
-          - id: population
-            name: population-server-browser
-            script: scripts/run-phase15-e2e.sh
-            artifacts: .artifacts/phase15-e2e
-            timeout: 15
-          - id: pedestrian
-            name: building-to-building-pedestrian
-            script: scripts/run-phase16-e2e.sh
-            artifacts: .artifacts/phase16-e2e
-            timeout: 15
-          - id: railway
-            name: save-server-browser-railway
-            script: scripts/run-phase17-e2e.sh
-            artifacts: .artifacts/phase17-e2e
-            timeout: 15
-          - id: railway-operations
-            name: railway-operations-server-browser
-            script: scripts/run-phase18-e2e.sh
-            artifacts: .artifacts/phase18-e2e
-            timeout: 15
-          - id: multimodal-transit
-            name: multimodal-transit-server-browser
-            script: scripts/run-phase19-e2e.sh
-            artifacts: .artifacts/phase19-e2e
-            timeout: 15
-          - id: administration-console
-            name: administration-console-server-browser
-            script: scripts/run-phase20-e2e.sh
-            artifacts: .artifacts/phase20-e2e
-            timeout: 15
-          - id: economy
-            name: economy-employment-server-browser
-            script: scripts/run-phase21-e2e.sh
-            artifacts: .artifacts/phase21-e2e
-            timeout: 15
-          - id: logistics
-            name: logistics-freight-server-browser
-            script: scripts/run-phase22-e2e.sh
-            artifacts: .artifacts/phase22-e2e
-            timeout: 15
-          - id: power
-            name: power-outage-server-browser
-            script: scripts/run-phase23-e2e.sh
-            artifacts: .artifacts/phase23-e2e
-            timeout: 15
-          - id: water-sewer
-            name: water-sewer-outage-server-browser
-            script: scripts/run-phase24-e2e.sh
-            artifacts: .artifacts/phase24-e2e
-            timeout: 15
-          - id: gas
-            name: gas-pipeline-delivery-server-browser
-            script: scripts/run-phase25-e2e.sh
-            artifacts: .artifacts/phase25-e2e
-            timeout: 15
-          - id: optical
-            name: optical-reroute-outage-server-browser
-            script: scripts/run-phase26-e2e.sh
-            artifacts: .artifacts/phase26-e2e
-            timeout: 15
-          - id: remote-mcp
-            name: remote-mcp-administration
-            script: scripts/run-phase27-e2e.sh
-            artifacts: .artifacts/phase27-e2e
-            timeout: 15
-          - id: radio-spectrum
-            name: radio-spectrum-server-browser
-            script: scripts/run-phase28-e2e.sh
-            artifacts: .artifacts/phase28-e2e
-            timeout: 15
-          - id: world-environment
-            name: world-environment-restart-reproducibility
-            script: scripts/run-phase29-e2e.sh
-            artifacts: .artifacts/phase29-e2e
-            timeout: 20
-          - id: view-physical-world
-            name: view-physical-world-rendering
-            script: scripts/run-view-phase03-e2e.sh
-            artifacts: .artifacts/view-phase03-e2e
-            timeout: 20
-          - id: view-settlement-structure
-            name: view-settlement-structure-rendering
-            script: scripts/run-view-phase04-e2e.sh
-            artifacts: .artifacts/view-phase04-e2e
-            timeout: 15
-          - id: view-settlement-structure-live
-            name: view-settlement-structure-live-delivery
-            script: scripts/run-view-phase04-live-e2e.sh
-            artifacts: .artifacts/view-phase04-live-e2e
-            timeout: 20
+      matrix: ${{ fromJSON(needs.select.outputs.matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
