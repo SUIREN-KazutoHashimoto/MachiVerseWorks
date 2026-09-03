@@ -6,7 +6,7 @@ namespace MachiVerseWorks.Server.Tests;
 public sealed class WebSocketRateLimitPolicyTests
 {
     [TestMethod]
-    public void RateLimitedHandlerPathDoesNotRegisterInvalidRequestStrike()
+    public void RateLimitedHandlerPathUsesRecoverableStrikePolicy()
     {
         var sourcePath = Path.Combine(FindRepositoryRoot(), "src", "MachiVerseWorks.Server", "WebSocketSessionHandler.cs");
         var source = File.ReadAllText(sourcePath);
@@ -16,9 +16,14 @@ public sealed class WebSocketRateLimitPolicyTests
         Assert.IsTrue(observationCheck > rateStart);
         var rateBlock = source[rateStart..observationCheck];
         StringAssert.Contains(rateBlock, "ProtocolErrorParameterKeys.DetailCode, \"rateLimited\"");
-        StringAssert.Contains(rateBlock, "return true;");
-        Assert.IsFalse(rateBlock.Contains("RejectRecoverableAsync", StringComparison.Ordinal));
-        Assert.IsFalse(rateBlock.Contains("RegisterInvalidRequest", StringComparison.Ordinal));
+        StringAssert.Contains(rateBlock, "RejectRecoverableAsync");
+        Assert.IsFalse(rateBlock.Contains("return true;", StringComparison.Ordinal));
+
+        var rejectStart = source.IndexOf("private async Task<bool> RejectRecoverableAsync", StringComparison.Ordinal);
+        Assert.IsTrue(rejectStart >= 0);
+        var rejectBlock = source[rejectStart..];
+        StringAssert.Contains(rejectBlock, "RegisterInvalidRequest(options.InvalidRequestStrikeLimit, options.InvalidRequestStrikeWindow)");
+        StringAssert.Contains(rejectBlock, "WebSocketCloseStatus.PolicyViolation");
     }
 
     private static string FindRepositoryRoot()
