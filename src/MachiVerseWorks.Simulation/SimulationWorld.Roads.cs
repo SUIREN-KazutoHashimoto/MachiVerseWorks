@@ -259,35 +259,41 @@ public sealed partial class SimulationWorld
             if (!lanes.TryGetValue(connection.FromLaneId, out var from) || !lanes.TryGetValue(connection.ToLaneId, out var to) || connection.FromLaneId == connection.ToLaneId || !nodes.TryGetValue(connection.ViaNodeId, out var via) || via.Kind != RoadNodeKind.Intersection) throw new ArgumentException($"Lane connection {connection.Id.Value} has invalid references.", nameof(checkpoint));
             if (ExitNode(from, segments) != connection.ViaNodeId || EntryNode(to, segments) != connection.ViaNodeId) throw new ArgumentException($"Lane connection {connection.Id.Value} directions do not meet at its via node.", nameof(checkpoint));
             if (!connectionKeys.Add((connection.FromLaneId, connection.ToLaneId, connection.ViaNodeId))) throw new ArgumentException("Equivalent lane connection is duplicated.", nameof(checkpoint));
-
-            var reverseKey = (connection.ToLaneId, connection.FromLaneId, connection.ViaNodeId);
-            if (connectionKeys.Contains(reverseKey))
-                throw new ArgumentException("Direct reverse lane connection pairs are not allowed at the same road node.", nameof(checkpoint));
         }
 
-        var accessPointIds = new HashSet<RoadAccessPointId>();
-        foreach (var accessPoint in checkpoint.RoadAccessPoints)
+        var buildings = checkpoint.Buildings.Select(static item => item.Id).ToHashSet();
+        var pois = checkpoint.Pois.Select(static item => item.Id).ToHashSet();
+        var accessIds = new HashSet<RoadAccessPointId>();
+        foreach (var access in checkpoint.RoadAccessPoints)
         {
-            if (accessPoint.Id.Value == 0 || !accessPointIds.Add(accessPoint.Id)) throw new ArgumentException($"Road access point ID {accessPoint.Id.Value} is zero or duplicated.", nameof(checkpoint));
-            if (!segments.ContainsKey(accessPoint.SegmentId) || !double.IsFinite(accessPoint.SegmentOffset) || accessPoint.SegmentOffset < 0d || accessPoint.SegmentOffset > 1d) throw new ArgumentException($"Road access point {accessPoint.Id.Value} is invalid.", nameof(checkpoint));
-            ValidateEnum(accessPoint.Mode, nameof(checkpoint));
+            if (access.Id.Value == 0 || !accessIds.Add(access.Id) || !segments.ContainsKey(access.SegmentId) || !double.IsFinite(access.SegmentOffset) || access.SegmentOffset < 0 || access.SegmentOffset > 1 || (access.BuildingId is null && access.PoiId is null)) throw new ArgumentException($"Road access point {access.Id.Value} is invalid.", nameof(checkpoint));
+            if (access.BuildingId is { } building && !buildings.Contains(building)) throw new ArgumentException($"Road access point {access.Id.Value} references missing Building {building.Value}.", nameof(checkpoint));
+            if (access.PoiId is { } poi && !pois.Contains(poi)) throw new ArgumentException($"Road access point {access.Id.Value} references missing POI {poi.Value}.", nameof(checkpoint));
+            const RoadAccessMode supported = RoadAccessMode.Motor | RoadAccessMode.Foot;
+            if (access.Mode == RoadAccessMode.None || (access.Mode & ~supported) != 0) throw new ArgumentException($"Road access point {access.Id.Value} has an invalid access mode.", nameof(checkpoint));
         }
     }
 
-    private static void ValidateNextId(ulong nextId, IEnumerable<ulong> existingIds, string label)
-    {
-        if (nextId == 0) throw new ArgumentOutOfRangeException(nameof(nextId), nextId, $"Next {label} ID must be greater than zero.");
-        var maximum = existingIds.DefaultIfEmpty().Max();
-        if (nextId <= maximum) throw new ArgumentOutOfRangeException(nameof(nextId), nextId, $"Next {label} ID must be greater than every stored {label} ID.");
-    }
-
-    private static RoadNodeId EntryNode(SimulationLaneCheckpoint lane, IReadOnlyDictionary<RoadSegmentId, SimulationRoadSegmentCheckpoint> segments)
+    private static RoadNodeId EntryNode(SimulationLaneCheckpoint lane, Dictionary<RoadSegmentId, SimulationRoadSegmentCheckpoint> segments)
     {
         var segment = segments[lane.SegmentId]; return lane.Direction == LaneDirection.Forward ? segment.StartNodeId : segment.EndNodeId;
     }
 
-    private static RoadNodeId ExitNode(SimulationLaneCheckpoint lane, IReadOnlyDictionary<RoadSegmentId, SimulationRoadSegmentCheckpoint> segments)
+    private static RoadNodeId ExitNode(SimulationLaneCheckpoint lane, Dictionary<RoadSegmentId, SimulationRoadSegmentCheckpoint> segments)
     {
         var segment = segments[lane.SegmentId]; return lane.Direction == LaneDirection.Forward ? segment.EndNodeId : segment.StartNodeId;
+    }
+
+    private static void ValidateNextId(ulong nextId, IEnumerable<ulong> ids, string entityName)
+    {
+        if (nextId == 0) throw new ArgumentOutOfRangeException(nameof(nextId), $"Next {entityName} ID must be greater than zero.");
+        var maximum = 0UL;
+        foreach (var id in ids) maximum = Math.Max(maximum, id);
+        if (nextId <= maximum) throw new ArgumentOutOfRangeException(nameof(nextId), $"Next {entityName} ID must be greater than every stored ID.");
+    }
+
+    private static void ValidateEnum<T>(T value, string parameterName) where T : struct, Enum
+    {
+        if (!Enum.IsDefined(value)) throw new ArgumentOutOfRangeException(parameterName, value, $"{typeof(T).Name} value is not defined.");
     }
 }
