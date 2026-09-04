@@ -118,7 +118,7 @@ public sealed class DefaultWorldBootstrapTests
         Assert.AreEqual(2, state.TrainCount);
     }
 
-    [DataTestMethod]
+    [TestMethod]
     [DataRow("Simulation:LogisticsFixture")]
     [DataRow("Simulation:GasFixture")]
     public async Task ExplicitRoadMutatingFixtureSuppressesDefaultBootstrap(string fixtureKey)
