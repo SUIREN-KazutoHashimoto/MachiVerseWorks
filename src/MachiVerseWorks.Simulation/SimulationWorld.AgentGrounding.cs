@@ -14,7 +14,13 @@ public sealed partial class SimulationWorld
             if (!_agents.TryGetSnapshot(id, Time.TickCount, out var snapshot))
                 throw new InvalidOperationException($"Newly created Agent {id.Value} could not be read for terrain grounding.");
 
-            var groundedPosition = SnapToGround(snapshot.Position);
+            // Initial Agent grounding only needs the authoritative terrain elevation. Avoid TerrainSurface.Sample(),
+            // which also computes normals, slope, hydrology and material and is unnecessarily expensive for large bootstraps.
+            var surface = GetTerrainPartition(snapshot.Position).Surface;
+            var groundedPosition = new WorldPoint(
+                snapshot.Position.X,
+                snapshot.Position.Y,
+                surface.SampleHeight(snapshot.Position.X, snapshot.Position.Y));
             if (!_agents.Update(id, groundedPosition, snapshot.Velocity, _spatialIndex))
                 throw new InvalidOperationException($"Newly created Agent {id.Value} could not be updated for terrain grounding.");
         }
