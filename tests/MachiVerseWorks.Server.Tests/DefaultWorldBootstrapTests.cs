@@ -46,6 +46,25 @@ public sealed class DefaultWorldBootstrapTests
         Assert.IsTrue(state.ActivePedestrianCount > 0);
         Assert.IsTrue(state.ActiveVehicleCount > 0);
         Assert.IsTrue(state.TrainCount > 0);
+
+        // Bootstrap street activity is explicitly transient and must never make normal road
+        // management permanently immutable. A topology mutation retires only bootstrap-owned
+        // mobility while preserving the authoritative Regional city itself.
+        simulation.Mutate(static world =>
+        {
+            _ = world.CreateRoadNode(new WorldPoint(900_000d, 900_000d, 0d));
+            return true;
+        }, roadTopologyChanged: true);
+
+        var afterEdit = simulation.Read(static world => new
+        {
+            world.HasRegionalGeneration,
+            world.PedestrianCount,
+            world.VehicleCount,
+        });
+        Assert.IsTrue(afterEdit.HasRegionalGeneration);
+        Assert.AreEqual(0, afterEdit.PedestrianCount);
+        Assert.AreEqual(0, afterEdit.VehicleCount);
     }
 
     [TestMethod]
@@ -97,5 +116,31 @@ public sealed class DefaultWorldBootstrapTests
         Assert.IsFalse(state.HasRegionalGeneration);
         Assert.AreEqual(0, state.BuildingCount);
         Assert.AreEqual(2, state.TrainCount);
+    }
+
+    [DataTestMethod]
+    [DataRow("Simulation:LogisticsFixture")]
+    [DataRow("Simulation:GasFixture")]
+    public async Task ExplicitRoadMutatingFixtureSuppressesDefaultBootstrap(string fixtureKey)
+    {
+        await using var host = await ServerTestHost.StartAsync(
+            initialAgentCount: 0,
+            additionalConfiguration: new Dictionary<string, string?>
+            {
+                ["Simulation:DefaultWorldBootstrap:Enabled"] = "true",
+                [fixtureKey] = "true",
+            });
+
+        var simulation = host.App.Services.GetRequiredService<SimulationRuntime>();
+        var state = simulation.Read(static world => new
+        {
+            world.HasRegionalGeneration,
+            world.PedestrianCount,
+            world.VehicleCount,
+        });
+
+        Assert.IsFalse(state.HasRegionalGeneration);
+        Assert.AreEqual(0, state.PedestrianCount);
+        Assert.AreEqual(0, state.VehicleCount);
     }
 }
