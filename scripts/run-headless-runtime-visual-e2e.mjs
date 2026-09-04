@@ -111,7 +111,9 @@ async function waitForRuntimeReady(client, browserProcess, timeout) {
         stableAgentCount = latest.agentCount;
         stablePolls = 1;
       }
-      if (stablePolls >= 5) return latest;
+      // Initial snapshots can arrive in batches. Require five seconds of an unchanged Agent count
+      // so runtime-default represents the settled user-visible state instead of a partial delivery.
+      if (stablePolls >= 20) return latest;
     } else {
       stableAgentCount = null;
       stablePolls = 0;
