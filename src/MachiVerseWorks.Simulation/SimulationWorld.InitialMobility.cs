@@ -25,17 +25,39 @@ public sealed partial class SimulationWorld
         if (participantCount == 0) return default;
 
         var roadSnapshot = CreateRoadNetworkSnapshot();
-        var accessPoints = roadSnapshot.AccessPoints
-            .Where(static access =>
+        var walkableSegmentIds = roadSnapshot.Segments
+            .Where(static segment => segment.Kind != RoadKind.Highway)
+            .Select(static segment => segment.Id)
+            .ToHashSet();
+
+        // The derived pedestrian network intentionally excludes Highway segments. Keep one
+        // deterministic building access per usable segment so equal-offset access points on the
+        // same segment do not dominate the candidate set with zero-length walking trips.
+        var pedestrianAccessPoints = roadSnapshot.AccessPoints
+            .Where(access =>
                 access.BuildingId is not null
-                && (access.Mode & (RoadAccessMode.Foot | RoadAccessMode.Motor)) == (RoadAccessMode.Foot | RoadAccessMode.Motor))
+                && (access.Mode & RoadAccessMode.Foot) != 0
+                && walkableSegmentIds.Contains(access.SegmentId))
             .OrderBy(static access => access.Id.Value)
+            .GroupBy(static access => access.SegmentId)
+            .Select(static group => group.First())
             .Take(InitialMobilityRouteCandidateLimit)
             .ToArray();
-        if (accessPoints.Length < 2) return default;
 
-        var pedestrianPair = FindInitialWalkingPair(accessPoints);
-        var vehicleRoute = FindInitialVehicleRoute(roadSnapshot, accessPoints);
+        var vehicleAccessPoints = roadSnapshot.AccessPoints
+            .Where(static access => access.BuildingId is not null && (access.Mode & RoadAccessMode.Motor) != 0)
+            .OrderBy(static access => access.Id.Value)
+            .GroupBy(static access => access.SegmentId)
+            .Select(static group => group.First())
+            .Take(InitialMobilityRouteCandidateLimit)
+            .ToArray();
+
+        var pedestrianPair = pedestrianAccessPoints.Length >= 2
+            ? FindInitialWalkingPair(pedestrianAccessPoints)
+            : null;
+        var vehicleRoute = vehicleAccessPoints.Length >= 2
+            ? FindInitialVehicleRoute(roadSnapshot, vehicleAccessPoints)
+            : null;
         if (pedestrianPair is null && vehicleRoute is null) return default;
 
         var pedestriansCreated = 0;
@@ -105,8 +127,8 @@ public sealed partial class SimulationWorld
                 }
                 catch (InvalidOperationException)
                 {
-                    // Regional road access can reference a building whose derived pedestrian
-                    // access node is unavailable or disconnected. Continue probing candidates.
+                    // Separate Regional road components can both expose Foot access points without
+                    // a walkable route between them. Continue probing deterministic candidates.
                 }
             }
         }
