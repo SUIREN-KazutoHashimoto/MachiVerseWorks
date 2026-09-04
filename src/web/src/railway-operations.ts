@@ -191,6 +191,8 @@ export class RailwayOperationsLayer {
     this.scene.add(this.group);
   }
 
+  public get trainCount(): number { return this.meshes.size; }
+
   public apply(snapshot: RailwayOperationsSnapshotMessage): void {
     const activeIds = new Set<bigint>();
     for (const train of snapshot.trains) {
