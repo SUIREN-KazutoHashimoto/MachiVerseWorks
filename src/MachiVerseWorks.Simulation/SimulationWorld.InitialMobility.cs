@@ -10,6 +10,7 @@ public sealed partial class SimulationWorld
     private const int InitialMobilityRouteCandidateLimit = 64;
     private const double PreferredInitialWalkingDistanceMeters = 100d;
     private const double PreferredInitialVehicleDistanceMeters = 300d;
+    private const double MinimumInitialWalkingStreetLengthMeters = 25d;
     private const ulong InitialMobilityTripRequestBase = 9_000_000_000UL;
     private readonly HashSet<PedestrianId> _initialMobilityPedestrianIds = [];
     private readonly HashSet<VehicleId> _initialMobilityVehicleIds = [];
@@ -31,22 +32,21 @@ public sealed partial class SimulationWorld
             roadSnapshot = CreateRoadNetworkSnapshot();
         }
 
-        var walkableSegmentIds = roadSnapshot.Segments
-            .Where(static segment => segment.Kind != RoadKind.Highway)
-            .Select(static segment => segment.Id)
-            .ToHashSet();
+        var pedestrianAccessPoints = CreateInitialPedestrianAccessCandidates(roadSnapshot);
+        var pedestrianPair = pedestrianAccessPoints.Length >= 2
+            ? FindInitialWalkingPair(pedestrianAccessPoints)
+            : null;
 
-        // The derived pedestrian network intentionally excludes Highway segments. Keep the
-        // individual building access points because Regional materialization can attach several
-        // buildings to the same road segment at distinct projected offsets.
-        var pedestrianAccessPoints = roadSnapshot.AccessPoints
-            .Where(access =>
-                access.BuildingId is not null
-                && (access.Mode & RoadAccessMode.Foot) != 0
-                && walkableSegmentIds.Contains(access.SegmentId))
-            .OrderBy(static access => access.Id.Value)
-            .Take(InitialMobilityRouteCandidateLimit)
-            .ToArray();
+        // Regional corridors can legitimately be Highway-only. PedestrianNetwork excludes
+        // Highways by design, so a fresh city would otherwise have buildings but no legal walking
+        // route. Add one deterministic Local street between the nearest materialized buildings.
+        // Existing Motor access remains on the Regional corridors.
+        if (pedestrianPair is null && HasRegionalGeneration)
+        {
+            pedestrianPair = TryCreateInitialWalkingStreet(roadSnapshot);
+            if (pedestrianPair is not null)
+                roadSnapshot = CreateRoadNetworkSnapshot();
+        }
 
         var vehicleAccessPoints = roadSnapshot.AccessPoints
             .Where(static access => access.BuildingId is not null && (access.Mode & RoadAccessMode.Motor) != 0)
@@ -56,9 +56,6 @@ public sealed partial class SimulationWorld
             .Take(InitialMobilityRouteCandidateLimit)
             .ToArray();
 
-        var pedestrianPair = pedestrianAccessPoints.Length >= 2
-            ? FindInitialWalkingPair(pedestrianAccessPoints)
-            : null;
         var vehicleRoute = vehicleAccessPoints.Length >= 2
             ? FindInitialVehicleRoute(roadSnapshot, vehicleAccessPoints)
             : null;
@@ -102,6 +99,23 @@ public sealed partial class SimulationWorld
             vehiclesCreated);
     }
 
+    private static RoadAccessPointSnapshot[] CreateInitialPedestrianAccessCandidates(RoadNetworkSnapshot roadSnapshot)
+    {
+        var walkableSegmentIds = roadSnapshot.Segments
+            .Where(static segment => segment.Kind != RoadKind.Highway)
+            .Select(static segment => segment.Id)
+            .ToHashSet();
+
+        return roadSnapshot.AccessPoints
+            .Where(access =>
+                access.BuildingId is not null
+                && (access.Mode & RoadAccessMode.Foot) != 0
+                && walkableSegmentIds.Contains(access.SegmentId))
+            .OrderBy(static access => access.Id.Value)
+            .Take(InitialMobilityRouteCandidateLimit)
+            .ToArray();
+    }
+
     private void NormalizeRegionalBuildingAccessOffsets(RoadNetworkSnapshot roadSnapshot)
     {
         var segments = roadSnapshot.Segments.ToDictionary(static segment => segment.Id);
@@ -139,6 +153,65 @@ public sealed partial class SimulationWorld
                 access.BuildingId,
                 access.PoiId,
                 access.Mode);
+        }
+    }
+
+    private (TripEndpoint Origin, TripEndpoint Destination)? TryCreateInitialWalkingStreet(
+        RoadNetworkSnapshot roadSnapshot)
+    {
+        var buildingIds = roadSnapshot.AccessPoints
+            .Where(static access => access.BuildingId is not null)
+            .Select(static access => access.BuildingId!.Value)
+            .Distinct()
+            .OrderBy(static id => id.Value)
+            .Take(InitialMobilityRouteCandidateLimit)
+            .ToArray();
+        if (buildingIds.Length < 2) return null;
+
+        BuildingId? selectedFirst = null;
+        BuildingId? selectedSecond = null;
+        WorldPoint selectedFirstCenter = default;
+        WorldPoint selectedSecondCenter = default;
+        var selectedDistance = double.PositiveInfinity;
+
+        for (var firstIndex = 0; firstIndex < buildingIds.Length - 1; firstIndex++)
+        {
+            if (!TryGetBuildingSnapshot(buildingIds[firstIndex], out var firstBuilding)) continue;
+            var firstCenter = Center(firstBuilding.Bounds);
+            for (var secondIndex = firstIndex + 1; secondIndex < buildingIds.Length; secondIndex++)
+            {
+                if (!TryGetBuildingSnapshot(buildingIds[secondIndex], out var secondBuilding)) continue;
+                var secondCenter = Center(secondBuilding.Bounds);
+                var distance = Distance2D(firstCenter, secondCenter);
+                if (distance < MinimumInitialWalkingStreetLengthMeters || distance >= selectedDistance) continue;
+                selectedFirst = buildingIds[firstIndex];
+                selectedSecond = buildingIds[secondIndex];
+                selectedFirstCenter = firstCenter;
+                selectedSecondCenter = secondCenter;
+                selectedDistance = distance;
+            }
+        }
+
+        if (selectedFirst is not { } firstId || selectedSecond is not { } secondId) return null;
+
+        var start = CreateRoadNode(SnapToGround(selectedFirstCenter));
+        var end = CreateRoadNode(SnapToGround(selectedSecondCenter));
+        var segment = CreateRoadSegment(start, end, RoadKind.Local);
+        _ = CreateRoadAccessPoint(segment, 0.05d, firstId, mode: RoadAccessMode.Foot);
+        _ = CreateRoadAccessPoint(segment, 0.95d, secondId, mode: RoadAccessMode.Foot);
+
+        var origin = TripEndpoint.ForBuilding(firstId);
+        var destination = TripEndpoint.ForBuilding(secondId);
+        try
+        {
+            var route = FindWalkingRoute(origin, destination);
+            return route.Legs.Count > 0 && route.TotalLengthMeters > 1d
+                ? (origin, destination)
+                : null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
         }
     }
 
