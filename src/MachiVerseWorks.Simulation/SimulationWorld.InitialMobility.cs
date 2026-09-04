@@ -25,22 +25,26 @@ public sealed partial class SimulationWorld
         if (participantCount == 0) return default;
 
         var roadSnapshot = CreateRoadNetworkSnapshot();
+        if (HasRegionalGeneration)
+        {
+            NormalizeRegionalBuildingAccessOffsets(roadSnapshot);
+            roadSnapshot = CreateRoadNetworkSnapshot();
+        }
+
         var walkableSegmentIds = roadSnapshot.Segments
             .Where(static segment => segment.Kind != RoadKind.Highway)
             .Select(static segment => segment.Id)
             .ToHashSet();
 
-        // The derived pedestrian network intentionally excludes Highway segments. Keep one
-        // deterministic building access per usable segment so equal-offset access points on the
-        // same segment do not dominate the candidate set with zero-length walking trips.
+        // The derived pedestrian network intentionally excludes Highway segments. Keep the
+        // individual building access points because Regional materialization can attach several
+        // buildings to the same road segment at distinct projected offsets.
         var pedestrianAccessPoints = roadSnapshot.AccessPoints
             .Where(access =>
                 access.BuildingId is not null
                 && (access.Mode & RoadAccessMode.Foot) != 0
                 && walkableSegmentIds.Contains(access.SegmentId))
             .OrderBy(static access => access.Id.Value)
-            .GroupBy(static access => access.SegmentId)
-            .Select(static group => group.First())
             .Take(InitialMobilityRouteCandidateLimit)
             .ToArray();
 
@@ -96,6 +100,46 @@ public sealed partial class SimulationWorld
             pedestriansCreated + vehiclesCreated,
             pedestriansCreated,
             vehiclesCreated);
+    }
+
+    private void NormalizeRegionalBuildingAccessOffsets(RoadNetworkSnapshot roadSnapshot)
+    {
+        var segments = roadSnapshot.Segments.ToDictionary(static segment => segment.Id);
+        var nodes = roadSnapshot.Nodes.ToDictionary(static node => node.Id);
+
+        foreach (var access in roadSnapshot.AccessPoints
+                     .Where(static item => item.BuildingId is not null)
+                     .OrderBy(static item => item.Id.Value))
+        {
+            if (!segments.TryGetValue(access.SegmentId, out var segment)
+                || !nodes.TryGetValue(segment.StartNodeId, out var start)
+                || !nodes.TryGetValue(segment.EndNodeId, out var end)
+                || !TryGetBuildingSnapshot(access.BuildingId!.Value, out var building))
+            {
+                continue;
+            }
+
+            var dx = end.Position.X - start.Position.X;
+            var dy = end.Position.Y - start.Position.Y;
+            var lengthSquared = (dx * dx) + (dy * dy);
+            if (lengthSquared <= double.Epsilon) continue;
+
+            var centerX = (building.Bounds.MinX + building.Bounds.MaxX) * 0.5d;
+            var centerY = (building.Bounds.MinY + building.Bounds.MaxY) * 0.5d;
+            var offset = Math.Clamp(
+                (((centerX - start.Position.X) * dx) + ((centerY - start.Position.Y) * dy)) / lengthSquared,
+                0d,
+                1d);
+            if (Math.Abs(offset - access.SegmentOffset) <= 1e-9d) continue;
+
+            _ = UpdateRoadAccessPoint(
+                access.Id,
+                access.SegmentId,
+                offset,
+                access.BuildingId,
+                access.PoiId,
+                access.Mode);
+        }
     }
 
     private (TripEndpoint Origin, TripEndpoint Destination)? FindInitialWalkingPair(
