@@ -13,7 +13,7 @@ public sealed partial class SimulationWorld
     /// </summary>
     public InitialMobilitySummary SeedInitialMobility(int participantCount)
     {
-        if (participantCount < 0) throw new ArgumentOutOfRangeException(nameof(participantCount));
+        ArgumentOutOfRangeException.ThrowIfNegative(participantCount);
         if (participantCount == 0) return default;
 
         var requiredModes = RoadAccessMode.Foot | RoadAccessMode.Motor;
