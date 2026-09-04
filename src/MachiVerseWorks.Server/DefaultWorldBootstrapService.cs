@@ -47,11 +47,13 @@ internal sealed class DefaultWorldBootstrapService(
 
         simulation.Mutate(world =>
         {
+            // Do not query Railway Operations state here: reading that state initializes the
+            // operations subsystem and would make Railway infrastructure immutable before the
+            // deterministic startup railway fixture gets a chance to author its tracks.
             if (world.HasRegionalGeneration
                 || world.ActiveAgentCount != 0
                 || world.RoadSegmentCount != 0
                 || world.TrackSegmentCount != 0
-                || world.TrainCount != 0
                 || world.BuildingCount != 0
                 || world.HouseholdCount != 0
                 || world.PersonCount != 0)
