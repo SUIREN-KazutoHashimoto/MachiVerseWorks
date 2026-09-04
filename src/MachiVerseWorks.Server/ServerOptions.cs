@@ -145,7 +145,7 @@ internal sealed class ServerOptions
         var seed = ReadUInt64(configuration, "Simulation:Seed", 1UL);
         var spatialCellSize = ReadDouble(configuration, "Simulation:SpatialCellSize", 64d);
         if (!double.IsFinite(spatialCellSize) || spatialCellSize <= 0d) throw new InvalidOperationException("Simulation:SpatialCellSize must be finite and greater than zero.");
-        var initialAgentCount = ReadInt32(configuration, "Simulation:InitialAgentCount", 1000);
+        var initialAgentCount = ReadInt32(configuration, "Simulation:InitialAgentCount", 0);
         if (initialAgentCount is < 0 or > MaximumSupportedInitialAgentCount) throw new InvalidOperationException($"Simulation:InitialAgentCount must be between 0 and {MaximumSupportedInitialAgentCount}.");
         var spawnMinX = ReadDouble(configuration, "Simulation:SpawnVolume:MinX", -500d);
         var spawnMinY = ReadDouble(configuration, "Simulation:SpawnVolume:MinY", -500d);
