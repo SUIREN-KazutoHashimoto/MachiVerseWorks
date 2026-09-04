@@ -27,7 +27,7 @@ type RuntimeVisualWindow = Window & {
   __MACHIVERSE_RUNTIME_VISUAL_TEST__?: RuntimeVisualTestApi;
 };
 
-type ApplicationWithRuntimeVisualState = Application & {
+type RuntimeVisualApplicationInternals = {
   readonly railwayOperations: { readonly trainCount: number };
 };
 
@@ -94,7 +94,7 @@ function collectRuntimeDiagnostics(application: Application): RuntimeVisualDiagn
   const roadSegmentCount = state.roadNetwork.segmentCount;
   const pedestrianCount = state.pedestrians.size;
   const vehicleCount = state.vehicles.size;
-  const trainCount = (application as ApplicationWithRuntimeVisualState).railwayOperations.trainCount;
+  const trainCount = (application as unknown as RuntimeVisualApplicationInternals).railwayOperations.trainCount;
   const genericAgentCount = state.entities.size;
   const visibleDebugOverlayCount = countVisibleElements(DEBUG_OVERLAY_SELECTOR);
   const japaneseFontReady = document.fonts.check('16px "Noto Sans CJK JP"', '日本語')
