@@ -22,7 +22,10 @@ internal sealed class DefaultWorldBootstrapService(
         "Simulation:EconomyFixture",
     ];
 
-    private const double DefaultHalfExtentMeters = 1_500d;
+    // Regional generation operates on a continental terrain scale (250 km by default).
+    // The established regional tests use 1.4-2.0 Mm wide volumes so the deterministic
+    // environment contains viable land candidates across seeds.
+    private const double DefaultHalfExtentMeters = 1_000_000d;
     private const int DefaultSettlementCount = 2;
     private const int DefaultIterationBudget = 1;
     private const int DefaultStarterMobilityCount = 12;
@@ -49,13 +52,13 @@ internal sealed class DefaultWorldBootstrapService(
                 return false;
             }
 
-            var halfExtent = ReadDouble("Simulation:DefaultWorldBootstrap:HalfExtentMeters", DefaultHalfExtentMeters, minimum: 250d, maximum: 25_000d);
+            var halfExtent = ReadDouble("Simulation:DefaultWorldBootstrap:HalfExtentMeters", DefaultHalfExtentMeters, minimum: 25_000d, maximum: 5_000_000d);
             var settlementCount = ReadInt("Simulation:DefaultWorldBootstrap:SettlementCount", DefaultSettlementCount, minimum: 2, maximum: 12);
             var iterationBudget = ReadInt("Simulation:DefaultWorldBootstrap:IterationBudget", DefaultIterationBudget, minimum: 1, maximum: 8);
             var mobilityCount = ReadInt("Simulation:DefaultWorldBootstrap:StarterMobilityCount", DefaultStarterMobilityCount, minimum: 0, maximum: 128);
 
             _ = world.InitializeRegionalWorld(
-                new WorldVolume(-halfExtent, -halfExtent, -2_000d, halfExtent, halfExtent, 2_000d),
+                new WorldVolume(-halfExtent, -halfExtent, -12_000d, halfExtent, halfExtent, 12_000d),
                 new RegionalGenerationOptions(
                     RegionalGenerationQualityPreset.Draft,
                     settlementCount,
