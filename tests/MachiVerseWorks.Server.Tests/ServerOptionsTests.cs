@@ -52,6 +52,7 @@ public sealed class ServerOptionsTests
 
         Assert.AreEqual(1_048_576, options.MaximumSubscriptionCellCount);
         Assert.AreEqual(TimeSpan.FromSeconds(5), options.ObservationDeliveryTimeout);
+        Assert.AreEqual(0, options.InitialAgentCount);
     }
 
     [TestMethod]
