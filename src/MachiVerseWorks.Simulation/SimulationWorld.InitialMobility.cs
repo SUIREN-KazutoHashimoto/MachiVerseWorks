@@ -9,10 +9,13 @@ public sealed partial class SimulationWorld
 {
     private const int InitialMobilityRouteCandidateLimit = 64;
     private const ulong InitialMobilityTripRequestBase = 9_000_000_000UL;
+    private readonly HashSet<PedestrianId> _initialMobilityPedestrianIds = [];
+    private readonly HashSet<VehicleId> _initialMobilityVehicleIds = [];
 
     /// <summary>
-    /// Primes a newly materialized regional world with a small amount of street activity
-    /// without advancing the entire simulation or inventing Population/Economy state.
+    /// Primes a newly materialized regional world with a small amount of transient street activity
+    /// without advancing the entire simulation or inventing Population/Economy state. Bootstrap
+    /// mobility is retired after arrival and may be retired early when road topology is edited.
     /// </summary>
     public InitialMobilitySummary SeedInitialMobility(int participantCount)
     {
@@ -33,37 +36,36 @@ public sealed partial class SimulationWorld
         var vehicleRoute = FindInitialVehicleRoute(roadSnapshot, accessPoints);
         if (pedestrianPair is null && vehicleRoute is null) return default;
 
-        var pedestrianTarget = pedestrianPair is null ? 0 : Math.Max(1, participantCount / 2);
-        var vehicleTarget = vehicleRoute is null ? 0 : Math.Max(1, participantCount - pedestrianTarget);
-        if (pedestrianPair is null) vehicleTarget = participantCount;
-        if (vehicleRoute is null) pedestrianTarget = participantCount;
-
         var pedestriansCreated = 0;
+        var vehiclesCreated = 0;
+
+        // A single entity per mode is enough to prove that the authoritative runtime is publishing
+        // real street activity. Reusing the same route for multiple vehicles would overlap their
+        // initial lane occupancy, so bootstrap intentionally does not synthesize a traffic queue.
         if (pedestrianPair is { } pair)
         {
-            for (var index = 0; index < pedestrianTarget; index++)
-            {
-                _ = CreatePedestrian(
-                    new TripRequest(
-                        new TripRequestId(checked(InitialMobilityTripRequestBase + (ulong)index)),
-                        pair.Origin,
-                        pair.Destination,
-                        TravelMode.Foot),
-                    walkingSpeedMetersPerSecond: 1.4d + ((index % 3) * 0.1d));
-                pedestriansCreated++;
-            }
+            var pedestrianId = CreatePedestrian(
+                new TripRequest(
+                    new TripRequestId(InitialMobilityTripRequestBase),
+                    pair.Origin,
+                    pair.Destination,
+                    TravelMode.Foot),
+                walkingSpeedMetersPerSecond: 1.4d);
+            _initialMobilityPedestrianIds.Add(pedestrianId);
+            pedestriansCreated = 1;
         }
 
-        var vehiclesCreated = 0;
-        if (vehicleRoute is not null)
+        if (vehicleRoute is not null && participantCount > pedestriansCreated)
         {
-            for (var index = 0; index < vehicleTarget; index++)
-            {
-                _ = CreateVehicle(
-                    vehicleRoute,
-                    initialSpeedMetersPerSecond: 4d + (index % 4));
-                vehiclesCreated++;
-            }
+            var vehicleId = CreateVehicle(vehicleRoute, initialSpeedMetersPerSecond: 4d);
+            _initialMobilityVehicleIds.Add(vehicleId);
+            vehiclesCreated = 1;
+        }
+        else if (pedestriansCreated == 0 && vehicleRoute is not null)
+        {
+            var vehicleId = CreateVehicle(vehicleRoute, initialSpeedMetersPerSecond: 4d);
+            _initialMobilityVehicleIds.Add(vehicleId);
+            vehiclesCreated = 1;
         }
 
         return new InitialMobilitySummary(
@@ -93,8 +95,7 @@ public sealed partial class SimulationWorld
                 catch (InvalidOperationException)
                 {
                     // Regional road access can reference a building whose derived pedestrian
-                    // access node is unavailable or disconnected. Such endpoints are unsuitable
-                    // bootstrap candidates, so continue probing the remaining deterministic set.
+                    // access node is unavailable or disconnected. Continue probing candidates.
                 }
             }
         }
@@ -117,8 +118,16 @@ public sealed partial class SimulationWorld
                 var second = accessPoints[secondIndex];
                 if (first.SegmentId == second.SegmentId) continue;
                 if (!TryResolveAccessPosition(second, segments, nodes, out var destination)) continue;
-                var route = FindRoadRoute(new RouteRequest(origin, destination, RoutingCostMetric.EstimatedTravelTime));
-                if (route.Steps.Count > 0 && route.TotalDistanceMeters > 1d) return route;
+                try
+                {
+                    var route = FindRoadRoute(new RouteRequest(origin, destination, RoutingCostMetric.EstimatedTravelTime));
+                    if (route.Steps.Count > 0 && route.TotalDistanceMeters > 1d) return route;
+                }
+                catch (InvalidOperationException)
+                {
+                    // Separate Regional road components can both have motor access points without
+                    // a drivable route between them. Continue probing the deterministic candidates.
+                }
             }
         }
         return null;
@@ -144,5 +153,51 @@ public sealed partial class SimulationWorld
             start.Position.Y + ((end.Position.Y - start.Position.Y) * offset),
             start.Position.Z + ((end.Position.Z - start.Position.Z) * offset));
         return true;
+    }
+
+    private void RetireCompletedInitialMobility()
+    {
+        foreach (var pedestrianId in _initialMobilityPedestrianIds.ToArray())
+        {
+            if (!TryGetPedestrianSnapshot(pedestrianId, out var snapshot)
+                || snapshot.State == PedestrianMovementState.Arrived)
+            {
+                _ = RemovePedestrianCore(pedestrianId);
+                _initialMobilityPedestrianIds.Remove(pedestrianId);
+            }
+        }
+
+        foreach (var vehicleId in _initialMobilityVehicleIds.ToArray())
+        {
+            if (!TryGetVehicleSnapshot(vehicleId, out var snapshot)
+                || snapshot.State == VehicleMovementState.Arrived)
+            {
+                _ = RemoveVehicleCore(vehicleId);
+                _initialMobilityVehicleIds.Remove(vehicleId);
+            }
+        }
+    }
+
+    private void RetireInitialMobilityForRoadTopologyMutation()
+    {
+        foreach (var pedestrianId in _initialMobilityPedestrianIds.ToArray())
+        {
+            _ = RemovePedestrianCore(pedestrianId);
+            _initialMobilityPedestrianIds.Remove(pedestrianId);
+        }
+        foreach (var vehicleId in _initialMobilityVehicleIds.ToArray())
+        {
+            _ = RemoveVehicleCore(vehicleId);
+            _initialMobilityVehicleIds.Remove(vehicleId);
+        }
+    }
+
+    private void RetireInitialPedestriansForNetworkMutation()
+    {
+        foreach (var pedestrianId in _initialMobilityPedestrianIds.ToArray())
+        {
+            _ = RemovePedestrianCore(pedestrianId);
+            _initialMobilityPedestrianIds.Remove(pedestrianId);
+        }
     }
 }
