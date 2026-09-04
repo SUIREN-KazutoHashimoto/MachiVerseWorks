@@ -15,11 +15,6 @@ public sealed partial class SimulationWorld
     private readonly HashSet<PedestrianId> _initialMobilityPedestrianIds = [];
     private readonly HashSet<VehicleId> _initialMobilityVehicleIds = [];
 
-    /// <summary>
-    /// Primes a newly materialized regional world with a small amount of transient street activity
-    /// without advancing the entire simulation or inventing Population/Economy state. Bootstrap
-    /// mobility is retired after arrival and may be retired early when road topology is edited.
-    /// </summary>
     public InitialMobilitySummary SeedInitialMobility(int participantCount)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(participantCount);
@@ -36,14 +31,11 @@ public sealed partial class SimulationWorld
         var pedestrianPair = pedestrianAccessPoints.Length >= 2
             ? FindInitialWalkingPair(pedestrianAccessPoints)
             : null;
+        RouteResult? starterStreetVehicleRoute = null;
 
-        // Regional corridors can legitimately be Highway-only. PedestrianNetwork excludes
-        // Highways by design, so a fresh city would otherwise have buildings but no legal walking
-        // route. Add one deterministic Local street between the nearest materialized buildings.
-        // Existing Motor access remains on the Regional corridors.
         if (pedestrianPair is null && HasRegionalGeneration)
         {
-            pedestrianPair = TryCreateInitialWalkingStreet(roadSnapshot);
+            pedestrianPair = TryCreateInitialStreet(roadSnapshot, out starterStreetVehicleRoute);
             if (pedestrianPair is not null)
                 roadSnapshot = CreateRoadNetworkSnapshot();
         }
@@ -56,17 +48,14 @@ public sealed partial class SimulationWorld
             .Take(InitialMobilityRouteCandidateLimit)
             .ToArray();
 
-        var vehicleRoute = vehicleAccessPoints.Length >= 2
-            ? FindInitialVehicleRoute(roadSnapshot, vehicleAccessPoints)
-            : null;
+        var vehicleRoute = starterStreetVehicleRoute
+            ?? (vehicleAccessPoints.Length >= 2
+                ? FindInitialVehicleRoute(roadSnapshot, vehicleAccessPoints)
+                : null);
         if (pedestrianPair is null && vehicleRoute is null) return default;
 
         var pedestriansCreated = 0;
         var vehiclesCreated = 0;
-
-        // A single entity per mode is enough to prove that the authoritative runtime is publishing
-        // real street activity. Reusing the same route for multiple vehicles would overlap their
-        // initial lane occupancy, so bootstrap intentionally does not synthesize a traffic queue.
         if (pedestrianPair is { } pair)
         {
             var pedestrianId = CreatePedestrian(
@@ -105,7 +94,6 @@ public sealed partial class SimulationWorld
             .Where(static segment => segment.Kind != RoadKind.Highway)
             .Select(static segment => segment.Id)
             .ToHashSet();
-
         return roadSnapshot.AccessPoints
             .Where(access =>
                 access.BuildingId is not null
@@ -120,7 +108,6 @@ public sealed partial class SimulationWorld
     {
         var segments = roadSnapshot.Segments.ToDictionary(static segment => segment.Id);
         var nodes = roadSnapshot.Nodes.ToDictionary(static node => node.Id);
-
         foreach (var access in roadSnapshot.AccessPoints
                      .Where(static item => item.BuildingId is not null)
                      .OrderBy(static item => item.Id.Value))
@@ -128,16 +115,11 @@ public sealed partial class SimulationWorld
             if (!segments.TryGetValue(access.SegmentId, out var segment)
                 || !nodes.TryGetValue(segment.StartNodeId, out var start)
                 || !nodes.TryGetValue(segment.EndNodeId, out var end)
-                || !TryGetBuildingSnapshot(access.BuildingId!.Value, out var building))
-            {
-                continue;
-            }
-
+                || !TryGetBuildingSnapshot(access.BuildingId!.Value, out var building)) continue;
             var dx = end.Position.X - start.Position.X;
             var dy = end.Position.Y - start.Position.Y;
             var lengthSquared = (dx * dx) + (dy * dy);
             if (lengthSquared <= double.Epsilon) continue;
-
             var centerX = (building.Bounds.MinX + building.Bounds.MaxX) * 0.5d;
             var centerY = (building.Bounds.MinY + building.Bounds.MaxY) * 0.5d;
             var offset = Math.Clamp(
@@ -145,20 +127,15 @@ public sealed partial class SimulationWorld
                 0d,
                 1d);
             if (Math.Abs(offset - access.SegmentOffset) <= 1e-9d) continue;
-
-            _ = UpdateRoadAccessPoint(
-                access.Id,
-                access.SegmentId,
-                offset,
-                access.BuildingId,
-                access.PoiId,
-                access.Mode);
+            _ = UpdateRoadAccessPoint(access.Id, access.SegmentId, offset, access.BuildingId, access.PoiId, access.Mode);
         }
     }
 
-    private (TripEndpoint Origin, TripEndpoint Destination)? TryCreateInitialWalkingStreet(
-        RoadNetworkSnapshot roadSnapshot)
+    private (TripEndpoint Origin, TripEndpoint Destination)? TryCreateInitialStreet(
+        RoadNetworkSnapshot roadSnapshot,
+        out RouteResult? vehicleRoute)
     {
+        vehicleRoute = null;
         var buildingIds = roadSnapshot.AccessPoints
             .Where(static access => access.BuildingId is not null)
             .Select(static access => access.BuildingId!.Value)
@@ -173,7 +150,6 @@ public sealed partial class SimulationWorld
         WorldPoint selectedFirstCenter = default;
         WorldPoint selectedSecondCenter = default;
         var selectedDistance = double.PositiveInfinity;
-
         for (var firstIndex = 0; firstIndex < buildingIds.Length - 1; firstIndex++)
         {
             if (!TryGetBuildingSnapshot(buildingIds[firstIndex], out var firstBuilding)) continue;
@@ -191,36 +167,50 @@ public sealed partial class SimulationWorld
                 selectedDistance = distance;
             }
         }
-
         if (selectedFirst is not { } firstId || selectedSecond is not { } secondId) return null;
 
-        var start = CreateRoadNode(SnapToGround(selectedFirstCenter));
-        var end = CreateRoadNode(SnapToGround(selectedSecondCenter));
-        var segment = CreateRoadSegment(start, end, RoadKind.Local);
-        _ = CreateRoadAccessPoint(segment, 0.05d, firstId, mode: RoadAccessMode.Foot);
-        _ = CreateRoadAccessPoint(segment, 0.95d, secondId, mode: RoadAccessMode.Foot);
+        var startPosition = SnapToGround(selectedFirstCenter);
+        var endPosition = SnapToGround(selectedSecondCenter);
+        var middlePosition = SnapToGround(Midpoint(selectedFirstCenter, selectedSecondCenter));
+        var start = CreateRoadNode(startPosition);
+        var middle = CreateRoadNode(middlePosition, RoadNodeKind.Intersection);
+        var end = CreateRoadNode(endPosition);
+        var firstSegment = CreateRoadSegment(start, middle, RoadKind.Local);
+        var secondSegment = CreateRoadSegment(middle, end, RoadKind.Local);
+        var firstForward = CreateLane(firstSegment, LaneDirection.Forward, 0, speedLimitMetersPerSecond: 11d);
+        var firstReverse = CreateLane(firstSegment, LaneDirection.Reverse, 0, speedLimitMetersPerSecond: 11d);
+        var secondForward = CreateLane(secondSegment, LaneDirection.Forward, 0, speedLimitMetersPerSecond: 11d);
+        var secondReverse = CreateLane(secondSegment, LaneDirection.Reverse, 0, speedLimitMetersPerSecond: 11d);
+        _ = CreateLaneConnection(firstForward, secondForward, middle);
+        _ = CreateLaneConnection(secondReverse, firstReverse, middle);
+        _ = CreateRoadAccessPoint(firstSegment, 0.05d, firstId, mode: RoadAccessMode.Motor | RoadAccessMode.Foot);
+        _ = CreateRoadAccessPoint(secondSegment, 0.95d, secondId, mode: RoadAccessMode.Motor | RoadAccessMode.Foot);
 
         var origin = TripEndpoint.ForBuilding(firstId);
         var destination = TripEndpoint.ForBuilding(secondId);
         try
         {
-            var route = FindWalkingRoute(origin, destination);
-            return route.Legs.Count > 0 && route.TotalLengthMeters > 1d
-                ? (origin, destination)
-                : null;
+            var walkingRoute = FindWalkingRoute(origin, destination);
+            if (walkingRoute.Legs.Count == 0 || walkingRoute.TotalLengthMeters <= 1d) return null;
+            vehicleRoute = FindRoadRoute(new RouteRequest(
+                Interpolate(startPosition, middlePosition, 0.05d),
+                Interpolate(middlePosition, endPosition, 0.95d),
+                RoutingCostMetric.EstimatedTravelTime));
+            if (vehicleRoute.Steps.Count == 0 || vehicleRoute.TotalDistanceMeters <= 1d)
+                vehicleRoute = null;
+            return (origin, destination);
         }
         catch (InvalidOperationException)
         {
+            vehicleRoute = null;
             return null;
         }
     }
 
-    private (TripEndpoint Origin, TripEndpoint Destination)? FindInitialWalkingPair(
-        RoadAccessPointSnapshot[] accessPoints)
+    private (TripEndpoint Origin, TripEndpoint Destination)? FindInitialWalkingPair(RoadAccessPointSnapshot[] accessPoints)
     {
         (TripEndpoint Origin, TripEndpoint Destination)? fallback = null;
         var fallbackDistance = 0d;
-
         for (var firstIndex = 0; firstIndex < accessPoints.Length - 1; firstIndex++)
         {
             var first = accessPoints[firstIndex];
@@ -234,33 +224,25 @@ public sealed partial class SimulationWorld
                 {
                     var route = FindWalkingRoute(origin, destination);
                     if (route.Legs.Count == 0 || route.TotalLengthMeters <= 1d) continue;
-                    if (route.TotalLengthMeters >= PreferredInitialWalkingDistanceMeters)
-                        return (origin, destination);
+                    if (route.TotalLengthMeters >= PreferredInitialWalkingDistanceMeters) return (origin, destination);
                     if (route.TotalLengthMeters > fallbackDistance)
                     {
                         fallback = (origin, destination);
                         fallbackDistance = route.TotalLengthMeters;
                     }
                 }
-                catch (InvalidOperationException)
-                {
-                    // Separate Regional road components can both expose Foot access points without
-                    // a walkable route between them. Continue probing deterministic candidates.
-                }
+                catch (InvalidOperationException) { }
             }
         }
         return fallback;
     }
 
-    private RouteResult? FindInitialVehicleRoute(
-        RoadNetworkSnapshot roadSnapshot,
-        RoadAccessPointSnapshot[] accessPoints)
+    private RouteResult? FindInitialVehicleRoute(RoadNetworkSnapshot roadSnapshot, RoadAccessPointSnapshot[] accessPoints)
     {
         var segments = roadSnapshot.Segments.ToDictionary(static segment => segment.Id);
         var nodes = roadSnapshot.Nodes.ToDictionary(static node => node.Id);
         RouteResult? fallback = null;
         var fallbackDistance = 0d;
-
         for (var firstIndex = 0; firstIndex < accessPoints.Length - 1; firstIndex++)
         {
             var first = accessPoints[firstIndex];
@@ -281,11 +263,7 @@ public sealed partial class SimulationWorld
                         fallbackDistance = route.TotalDistanceMeters;
                     }
                 }
-                catch (InvalidOperationException)
-                {
-                    // Separate Regional road components can both have motor access points without
-                    // a drivable route between them. Continue probing the deterministic candidates.
-                }
+                catch (InvalidOperationException) { }
             }
         }
         return fallback;
@@ -300,16 +278,8 @@ public sealed partial class SimulationWorld
         position = default;
         if (!segments.TryGetValue(access.SegmentId, out var segment)
             || !nodes.TryGetValue(segment.StartNodeId, out var start)
-            || !nodes.TryGetValue(segment.EndNodeId, out var end))
-        {
-            return false;
-        }
-
-        var offset = Math.Clamp(access.SegmentOffset, 0d, 1d);
-        position = new WorldPoint(
-            start.Position.X + ((end.Position.X - start.Position.X) * offset),
-            start.Position.Y + ((end.Position.Y - start.Position.Y) * offset),
-            start.Position.Z + ((end.Position.Z - start.Position.Z) * offset));
+            || !nodes.TryGetValue(segment.EndNodeId, out var end)) return false;
+        position = Interpolate(start.Position, end.Position, Math.Clamp(access.SegmentOffset, 0d, 1d));
         return true;
     }
 
@@ -317,18 +287,15 @@ public sealed partial class SimulationWorld
     {
         foreach (var pedestrianId in _initialMobilityPedestrianIds.ToArray())
         {
-            if (!TryGetPedestrianSnapshot(pedestrianId, out var snapshot)
-                || snapshot.State == PedestrianMovementState.Arrived)
+            if (!TryGetPedestrianSnapshot(pedestrianId, out var snapshot) || snapshot.State == PedestrianMovementState.Arrived)
             {
                 _ = RemovePedestrianCore(pedestrianId);
                 _initialMobilityPedestrianIds.Remove(pedestrianId);
             }
         }
-
         foreach (var vehicleId in _initialMobilityVehicleIds.ToArray())
         {
-            if (!TryGetVehicleSnapshot(vehicleId, out var snapshot)
-                || snapshot.State == VehicleMovementState.Arrived)
+            if (!TryGetVehicleSnapshot(vehicleId, out var snapshot) || snapshot.State == VehicleMovementState.Arrived)
             {
                 _ = RemoveVehicleCore(vehicleId);
                 _initialMobilityVehicleIds.Remove(vehicleId);
