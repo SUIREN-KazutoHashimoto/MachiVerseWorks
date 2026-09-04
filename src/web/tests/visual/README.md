@@ -11,6 +11,20 @@ Visual Regression は、構造・数値 assertion を既に持つ決定論的な
 - `view-physical-world.png`: View Phase 3 の Physical World Rendering。Terrain、Water、GeographicFeature、自然地名を確認します。
 - `view-settlement-structure.png`: View Phase 4 の Settlement / Structure Rendering。Settlement、District、Parcel、Building、POI、Label、Road Sign を確認します。
 
+## Actual Runtime User View
+
+View Phase 3 E2E は Golden fixture の比較後に Server を再起動し、通常の `Simulation -> Server/Gateway protocol -> Application -> WorldView` 経路を通った実ランタイム画面も観測します。この段階では `Simulation__InitialAgentCount=0` を指定せず、テスト側から Agent / Building / Settlement を注入しません。
+
+`?visualTest=runtime` は通常描画を差し替えず、実際に受信した `Application.state` を読み取る診断 seam だけを追加します。CI は次の UI 込み FHD スクリーンショットを `.artifacts/view-phase03-e2e/runtime-user-view/actual/` に保存します。
+
+- `runtime-default.png`: Application 起動後、ユーザーが最初に見る通常View。
+- `runtime-agent-cloud.png`: 実際に受信した Agent 群全体を確認する固定カメラ。
+- `runtime-worst-grounding.png`: `Agent.Z - nearest Terrain.Z` の絶対値が最大の実Agentと地表を同一画面で確認する固定カメラ。
+
+同じ Artifact の `diagnostics/` には Agent 件数、Terrain sample 件数、Agent Z 範囲、`±0.5m` 以内の件数、Terrain より `5m` 超上方 / 下方にいる件数、最大高度差と対象 Agent を保存します。
+
+この実ランタイム試験は初期導入時点では **observation-only** です。既知の見た目不具合を誤って正解として固定しないため、Golden 比較はまだ行いません。まず CI の `actual` と diagnostics をレビューし、通常Viewの不具合を修正した後に承認済み Runtime Golden を追加して required Visual Regression へ移行します。
+
 ## 固定実行環境
 
 Visual Regression の required E2E は `ubuntu-24.04` 上で実行し、Visual 対象ジョブだけ Chrome for Testing `152.0.7977.75` を `scripts/install-visual-browser.sh` から取得して使用します。描画には Chrome 同梱の SwiftShader を使用し、`run-headless-visual-e2e.mjs` が CDP の `Browser.getVersion` を検証して diagnostics に記録します。

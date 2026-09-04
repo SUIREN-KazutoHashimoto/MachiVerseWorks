@@ -3,15 +3,25 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACT_DIR="$ROOT_DIR/.artifacts/view-phase03-e2e"
+RUNTIME_ARTIFACT_DIR="$ARTIFACT_DIR/runtime-user-view"
 GOLDEN_FILE="$ROOT_DIR/src/web/tests/visual/golden/view-physical-world.png"
 WEB_PORT=5187
 SERVER_PORT=5094
 WEB_PID=""
 SERVER_PID=""
 mkdir -p "$ARTIFACT_DIR"; rm -rf "$ARTIFACT_DIR"/*
+mkdir -p "$RUNTIME_ARTIFACT_DIR"
+
+stop_server() {
+  if [[ -n "$SERVER_PID" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
+    kill "$SERVER_PID" 2>/dev/null || true
+    wait "$SERVER_PID" 2>/dev/null || true
+  fi
+  SERVER_PID=""
+}
 
 cleanup() {
-  if [[ -n "$SERVER_PID" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then kill "$SERVER_PID" 2>/dev/null || true; wait "$SERVER_PID" 2>/dev/null || true; fi
+  stop_server
   if [[ -n "$WEB_PID" ]] && kill -0 "$WEB_PID" 2>/dev/null; then kill "$WEB_PID" 2>/dev/null || true; wait "$WEB_PID" 2>/dev/null || true; fi
 }
 trap cleanup EXIT INT TERM
@@ -50,15 +60,15 @@ if [[ "${MVW_E2E_PREPARED:-0}" != "1" ]]; then
   npm --prefix "$ROOT_DIR/src/web" test
   npm --prefix "$ROOT_DIR/src/web" run build
 fi
-npm --prefix "$ROOT_DIR/src/web" run dev -- --host 127.0.0.1 --port "$WEB_PORT" --strictPort >"$ARTIFACT_DIR/vite.log" 2>&1 & WEB_PID=$!
+VITE_SERVER_URL="ws://127.0.0.1:$SERVER_PORT/ws" npm --prefix "$ROOT_DIR/src/web" run dev -- --host 127.0.0.1 --port "$WEB_PORT" --strictPort >"$ARTIFACT_DIR/vite.log" 2>&1 & WEB_PID=$!
 wait_http "http://127.0.0.1:$WEB_PORT/tests/browser/view-phase03-e2e.html"
 
-env Server__Port="$SERVER_PORT" Simulation__TickRate=30 Simulation__Seed=29027 Simulation__SpatialCellSize=4096 Server__SnapshotRate=2 Server__MaximumSubscriptionCellCount=524288 Server__AllowedWebSocketOrigins="http://127.0.0.1:$WEB_PORT" Simulation__InitialAgentCount=0 dotnet run --project "$ROOT_DIR/src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj" --configuration Release --no-build >"$ARTIFACT_DIR/server.log" 2>&1 & SERVER_PID=$!
+env Server__Port="$SERVER_PORT" Simulation__TickRate=30 Simulation__Seed=29027 Simulation__SpatialCellSize=4096 Server__SnapshotRate=2 Server__MaximumSubscriptionCellCount=524288 Server__AllowedWebSocketOrigins="http://127.0.0.1:$WEB_PORT" Simulation__InitialAgentCount=0 dotnet run --project "$ROOT_DIR/src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj" --configuration Release --no-build >"$ARTIFACT_DIR/server-renderer.log" 2>&1 & SERVER_PID=$!
 wait_http "http://127.0.0.1:$SERVER_PORT/health"
 
 URL="http://127.0.0.1:$WEB_PORT/tests/browser/view-phase03-e2e.html?server=ws%3A%2F%2F127.0.0.1%3A$SERVER_PORT%2Fws"
 node "$ROOT_DIR/scripts/run-headless-browser-e2e.mjs" "$CHROME" "$URL" "$ARTIFACT_DIR/browser.html" "$ARTIFACT_DIR/chrome.log"
-grep -Fq 'data-status="passed"' "$ARTIFACT_DIR/browser.html" || { cat "$ARTIFACT_DIR/browser.html" >&2; cat "$ARTIFACT_DIR/server.log" >&2; exit 1; }
+grep -Fq 'data-status="passed"' "$ARTIFACT_DIR/browser.html" || { cat "$ARTIFACT_DIR/browser.html" >&2; cat "$ARTIFACT_DIR/server-renderer.log" >&2; exit 1; }
 
 node "$ROOT_DIR/scripts/run-headless-visual-e2e.mjs" "$CHROME" "$URL" "$ARTIFACT_DIR" "view-physical-world"
 bash "$ROOT_DIR/scripts/check-visual-regression.sh" "$ROOT_DIR" "$ARTIFACT_DIR" "view-physical-world" "$GOLDEN_FILE"
@@ -80,5 +90,15 @@ extract_metric() {
   echo "toponym_labels=$(extract_metric toponym-labels)"
 } | tee "$ARTIFACT_DIR/rendering-baseline.txt"
 
+# User-visible runtime observation: restart the real Server without replacing the normal InitialAgentCount.
+# This intentionally goes through Application -> MachiVerseConnection -> Server/Simulation rather than injecting test entities.
+stop_server
+env Server__Port="$SERVER_PORT" Simulation__TickRate=30 Simulation__Seed=29027 Simulation__SpatialCellSize=4096 Server__SnapshotRate=2 Server__MaximumSubscriptionCellCount=524288 Server__AllowedWebSocketOrigins="http://127.0.0.1:$WEB_PORT" dotnet run --project "$ROOT_DIR/src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj" --configuration Release --no-build >"$RUNTIME_ARTIFACT_DIR/server-runtime.log" 2>&1 & SERVER_PID=$!
+wait_http "http://127.0.0.1:$SERVER_PORT/health"
+
+RUNTIME_URL="http://127.0.0.1:$WEB_PORT/?visualTest=runtime"
+node "$ROOT_DIR/scripts/run-headless-runtime-visual-e2e.mjs" "$CHROME" "$RUNTIME_URL" "$RUNTIME_ARTIFACT_DIR"
+
 cat "$ARTIFACT_DIR/browser.html"
-echo "View Phase 3 Physical World Rendering E2E + visual regression passed."
+cat "$RUNTIME_ARTIFACT_DIR/summary.json"
+echo "View Phase 3 Physical World visual regression + actual runtime user-view observation passed."
