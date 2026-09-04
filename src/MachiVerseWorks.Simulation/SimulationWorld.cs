@@ -160,7 +160,7 @@ public sealed partial class SimulationWorld
         var seenAgentIds = new HashSet<ulong>(checkpoint.Agents.Count); var maximumAgentId = 0UL;
         foreach (var agent in checkpoint.Agents)
         {
-            if (agent.Id.Value == 0) throw new ArgumentOutOfRangeException(nameof(checkpoint), checkpoint.AgentIds, "Agent IDs must be greater than zero.");
+            if (agent.Id.Value == 0) throw new ArgumentOutOfRangeException(nameof(checkpoint), agent.Id.Value, "Agent IDs must be greater than zero.");
             if (!seenAgentIds.Add(agent.Id.Value)) throw new ArgumentException($"Duplicate Agent ID {agent.Id.Value}.", nameof(checkpoint));
             ValidatePoint(agent.Position); ValidateVector(agent.Velocity); maximumAgentId = Math.Max(maximumAgentId, agent.Id.Value);
         }
