@@ -60,9 +60,9 @@ try {
   }
 
   const defaultDiagnostics = await waitForRuntimeReady(devToolsSocket, browser, timeoutMs);
-  await captureCheckpoint(devToolsSocket, browserVersion, expectedBrowserVersion, 'runtime-default', null);
-  await captureCheckpoint(devToolsSocket, browserVersion, expectedBrowserVersion, 'runtime-city-overview', 'city-overview');
-  await captureCheckpoint(devToolsSocket, browserVersion, expectedBrowserVersion, 'runtime-street-activity', 'street-activity');
+  await captureCheckpoint(devToolsSocket, browser, browserVersion, expectedBrowserVersion, 'runtime-default', null);
+  await captureCheckpoint(devToolsSocket, browser, browserVersion, expectedBrowserVersion, 'runtime-city-overview', 'city-overview');
+  await captureCheckpoint(devToolsSocket, browser, browserVersion, expectedBrowserVersion, 'runtime-street-activity', 'street-activity');
 
   const summary = {
     status: 'passed',
@@ -136,14 +136,21 @@ async function waitForRuntimeReady(client, browserProcess, timeout) {
   throw new Error(`Timed out waiting for the actual runtime View to become stable. Last diagnostics: ${JSON.stringify(latest)}`);
 }
 
-async function captureCheckpoint(client, browserVersion, expectedBrowserVersion, inspectionName, checkpoint) {
+async function captureCheckpoint(client, browserProcess, browserVersion, expectedBrowserVersion, inspectionName, checkpoint) {
+  let previousRoadSnapshotSequence = null;
   if (checkpoint !== null) {
+    const before = await client.evaluate('window.__MACHIVERSE_RUNTIME_VISUAL_TEST__?.getDiagnostics?.() ?? null');
+    previousRoadSnapshotSequence = before?.roadSnapshotSequence ?? null;
+    if (!Number.isInteger(previousRoadSnapshotSequence)) {
+      throw new Error(`Runtime road snapshot sequence is unavailable before checkpoint: ${inspectionName}.`);
+    }
+
     const positioned = await client.evaluate(`window.__MACHIVERSE_RUNTIME_VISUAL_TEST__?.setCheckpoint?.(${JSON.stringify(checkpoint)}) ?? false`);
     if (positioned !== true) throw new Error(`Failed to position actual runtime View checkpoint: ${checkpoint}.`);
+    await waitForRoadSnapshotAfter(client, browserProcess, previousRoadSnapshotSequence, commandTimeoutMs, checkpoint);
   }
 
-  await client.evaluate(`new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))))`);
-  await sleep(250);
+  await client.evaluate('new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))))');
 
   const diagnostics = await client.evaluate(`(() => ({
     runtime: window.__MACHIVERSE_RUNTIME_VISUAL_TEST__?.getDiagnostics?.() ?? null,
@@ -167,6 +174,21 @@ async function captureCheckpoint(client, browserVersion, expectedBrowserVersion,
     captureBeyondViewport: false,
   });
   await writeFile(join(actualDirectory, `${inspectionName}.png`), Buffer.from(screenshot.data, 'base64'));
+}
+
+async function waitForRoadSnapshotAfter(client, browserProcess, previousSequence, timeout, checkpoint) {
+  const deadline = Date.now() + timeout;
+  let latest = null;
+  while (Date.now() < deadline) {
+    ensureBrowserRunning(browserProcess);
+    latest = await client.evaluate('window.__MACHIVERSE_RUNTIME_VISUAL_TEST__?.getDiagnostics?.() ?? null');
+    if (latest?.roadSnapshotSequence > previousSequence && latest.ready === true) return latest;
+    await sleep(100);
+  }
+  throw new Error(
+    `Timed out waiting for a Road snapshot from the ${checkpoint} subscription. `
+      + `Previous sequence=${String(previousSequence)}, latest=${JSON.stringify(latest)}.`,
+  );
 }
 
 async function waitForDevToolsPort(profileDirectoryValue, browserProcess, timeout) {
