@@ -73,13 +73,13 @@ public sealed partial class SimulationWorld
     }
 
     private (TripEndpoint Origin, TripEndpoint Destination)? FindInitialWalkingPair(
-        IReadOnlyList<RoadAccessPointSnapshot> accessPoints)
+        RoadAccessPointSnapshot[] accessPoints)
     {
-        for (var firstIndex = 0; firstIndex < accessPoints.Count - 1; firstIndex++)
+        for (var firstIndex = 0; firstIndex < accessPoints.Length - 1; firstIndex++)
         {
             var first = accessPoints[firstIndex];
             var origin = TripEndpoint.ForBuilding(first.BuildingId!.Value);
-            for (var secondIndex = firstIndex + 1; secondIndex < accessPoints.Count; secondIndex++)
+            for (var secondIndex = firstIndex + 1; secondIndex < accessPoints.Length; secondIndex++)
             {
                 var second = accessPoints[secondIndex];
                 if (first.BuildingId == second.BuildingId) continue;
@@ -94,16 +94,16 @@ public sealed partial class SimulationWorld
 
     private RouteResult? FindInitialVehicleRoute(
         RoadNetworkSnapshot roadSnapshot,
-        IReadOnlyList<RoadAccessPointSnapshot> accessPoints)
+        RoadAccessPointSnapshot[] accessPoints)
     {
         var segments = roadSnapshot.Segments.ToDictionary(static segment => segment.Id);
         var nodes = roadSnapshot.Nodes.ToDictionary(static node => node.Id);
 
-        for (var firstIndex = 0; firstIndex < accessPoints.Count - 1; firstIndex++)
+        for (var firstIndex = 0; firstIndex < accessPoints.Length - 1; firstIndex++)
         {
             var first = accessPoints[firstIndex];
             if (!TryResolveAccessPosition(first, segments, nodes, out var origin)) continue;
-            for (var secondIndex = firstIndex + 1; secondIndex < accessPoints.Count; secondIndex++)
+            for (var secondIndex = firstIndex + 1; secondIndex < accessPoints.Length; secondIndex++)
             {
                 var second = accessPoints[secondIndex];
                 if (first.SegmentId == second.SegmentId) continue;
@@ -117,8 +117,8 @@ public sealed partial class SimulationWorld
 
     private static bool TryResolveAccessPosition(
         RoadAccessPointSnapshot access,
-        IReadOnlyDictionary<RoadSegmentId, RoadSegmentSnapshot> segments,
-        IReadOnlyDictionary<RoadNodeId, RoadNodeSnapshot> nodes,
+        Dictionary<RoadSegmentId, RoadSegmentSnapshot> segments,
+        Dictionary<RoadNodeId, RoadNodeSnapshot> nodes,
         out WorldPoint position)
     {
         position = default;
