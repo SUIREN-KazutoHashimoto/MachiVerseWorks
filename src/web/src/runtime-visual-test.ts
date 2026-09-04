@@ -48,7 +48,11 @@ export function installRuntimeVisualTest(application: Application): void {
 
 function positionCheckpoint(application: Application, checkpoint: RuntimeVisualCheckpoint): boolean {
   const observation = collectRuntimeObservation(application);
-  if (!observation.diagnostics.ready || observation.agents.length === 0) return false;
+  if (!observation.diagnostics.ready) return false;
+  // Normal user startup intentionally has no generic debug Agent population. Keep the
+  // historical Agent-oriented checkpoints as no-op captures so the observation artifact
+  // shape stays stable while still proving that the cyan debug cloud is absent.
+  if (observation.agents.length === 0) return true;
 
   if (checkpoint === 'agent-cloud') {
     let minX = Number.POSITIVE_INFINITY;
@@ -133,7 +137,10 @@ function collectRuntimeObservation(application: Application): {
   return {
     agents,
     diagnostics: Object.freeze({
-      ready: agents.length > 0 && terrainSampleCount > 0 && matchedCount > 0,
+      // The real user-facing startup must not expose the old generic 3D debug Agent
+      // population. Terrain readiness plus zero generic Agents is therefore the expected
+      // runtime contract; explicit stress/debug scenarios still configure Agents separately.
+      ready: terrainSampleCount > 0 && agents.length === 0,
       agentCount: agents.length,
       terrainSampleCount,
       agentZ: Object.freeze({

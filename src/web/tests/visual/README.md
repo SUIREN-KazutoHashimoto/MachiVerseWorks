@@ -13,15 +13,15 @@ Visual Regression は、構造・数値 assertion を既に持つ決定論的な
 
 ## Actual Runtime User View
 
-View Phase 3 E2E は Golden fixture の比較後に Server を再起動し、通常の `Simulation -> Server/Gateway protocol -> Application -> WorldView` 経路を通った実ランタイム画面も観測します。この段階では `Simulation__InitialAgentCount=0` を指定せず、テスト側から Agent / Building / Settlement を注入しません。
+View Phase 3 E2E は Golden fixture の比較後に Server を再起動し、通常の `Simulation -> Server/Gateway protocol -> Application -> WorldView` 経路を通った実ランタイム画面も観測します。この段階では `Simulation__InitialAgentCount=0` を指定せず、テスト側から Agent / Building / Settlement を注入しません。通常設定および configuration fallback の `Simulation:InitialAgentCount` は `0` であり、Terrain snapshot を受信済みかつ generic Agent が 0 件であることを runtime readiness の正常契約として扱います。generic Agent が再び現れた場合は readiness を満たしません。
 
 `?visualTest=runtime` は通常描画を差し替えず、実際に受信した `Application.state` を読み取る診断 seam だけを追加します。CI は次の UI 込み FHD スクリーンショットを `.artifacts/view-phase03-e2e/runtime-user-view/actual/` に保存します。
 
 - `runtime-default.png`: Application 起動後、ユーザーが最初に見る通常View。
-- `runtime-agent-cloud.png`: 実際に受信した Agent 群全体を確認する固定カメラ。
-- `runtime-worst-grounding.png`: `Agent.Z - nearest Terrain.Z` の絶対値が最大の実Agentと地表を同一画面で確認する固定カメラ。
+- `runtime-agent-cloud.png`: Artifact 名の互換性を維持する historical Agent checkpoint。通常起動では generic Agent が 0 件のためカメラを動かさず、`runtime-default.png` と同じ通常カメラ位置で no-op capture します。
+- `runtime-worst-grounding.png`: Artifact 名の互換性を維持する historical grounding checkpoint。通常起動では generic Agent が 0 件のため worst Agent は存在せず、カメラを動かさない no-op capture になります。
 
-同じ Artifact の `diagnostics/` には Agent 件数、Terrain sample 件数、Agent Z 範囲、`±0.5m` 以内の件数、Terrain より `5m` 超上方 / 下方にいる件数、最大高度差と対象 Agent を保存します。
+同じ Artifact の `diagnostics/` には Agent 件数、Terrain sample 件数、Agent Z 範囲、`±0.5m` 以内の件数、Terrain より `5m` 超上方 / 下方にいる件数、最大高度差と対象 Agent を保存します。通常起動の `agentCount=0` では Agent Z の minimum / maximum、Agent-Terrain delta の minimum / maximum / maximumAbsolute、および `worst` は `null` になり、Agent 対応件数系の値は `0` になります。これらは Agent grounding の成功を示す値ではなく、generic debug Agent population が存在しない通常起動契約を確認するための diagnostics です。
 
 この実ランタイム試験は初期導入時点では **observation-only** です。既知の見た目不具合を誤って正解として固定しないため、Golden 比較はまだ行いません。まず CI の `actual` と diagnostics をレビューし、通常Viewの不具合を修正した後に承認済み Runtime Golden を追加して required Visual Regression へ移行します。
 
