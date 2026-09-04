@@ -20,10 +20,12 @@ dotnet run --project src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj
 - snapshot publish rate: `10 Hz`
 - maximum subscription cells: `262,144`
 - allowed Browser WebSocket origins: `http://127.0.0.1:5173`, `http://localhost:5173`
-- initial Agent count: `1,000`
+- initial Agent count: `0`
 - default spawn volume: `X/Y = -500..500`, `Z = -64..64`
 
-listen address / port、tick rate、snapshot rate、maximum subscription cell count、WebSocket Origin allowlist、seed、spatial cell size、initial Agent count、3D spawn volume は configuration provider から上書きできます。
+通常ユーザー起動では generic 3D Agent population を自動生成しません。generic Agent は任意高度を保持できるネイティブ3D entityであり、stress / protocol / debug用途で必要な場合は `Simulation:InitialAgentCount` を明示的に設定して生成します。
+
+listen address / port、tick rate、snapshot rate、maximum subscription cell count、WebSocket Origin allowlist、seed、spatial cell size、initial Agent count、3D spawn volume は configuration provider から上書きできます。`appsettings.json` を含まないconfiguration providerでも `Simulation:InitialAgentCount` のフォールバック既定値は `0` です。
 
 spawn volume の設定キーは `Simulation:SpawnVolume:MinX/MinY/MinZ/MaxX/MaxY/MaxZ` です。
 
