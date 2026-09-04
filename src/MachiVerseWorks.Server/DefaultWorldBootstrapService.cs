@@ -65,13 +65,13 @@ internal sealed class DefaultWorldBootstrapService(
                     iterationBudget),
                 out _);
 
-            // The semantic policy for initial residents and their movement belongs to Simulation.
-            // SeedInitialMobility also advances the first authoritative tick so street activity is
-            // visible before the hosted simulation timer emits its first callback.
+            // The semantic policy for initial street activity belongs to Simulation. This command
+            // places a few Pedestrian/Vehicle entities on the materialized city network without
+            // advancing the whole world or creating synthetic Population/Economy state.
             _ = world.SeedInitialMobility(mobilityCount);
 
-            // Seed trains only after the first mobility tick so startup street mode choice cannot be
-            // redirected onto the deterministic railway fixture.
+            // Railway infrastructure is still mutable here because initial street activity does not
+            // advance the simulation or initialize Railway Operations.
             if (ReadBoolean("Simulation:DefaultWorldBootstrap:SeedRailwayOperations", defaultValue: true))
                 _ = RailwayOperationsFixtures.SeedDeterministic(world);
 
