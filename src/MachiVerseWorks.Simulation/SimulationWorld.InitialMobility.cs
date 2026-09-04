@@ -84,9 +84,18 @@ public sealed partial class SimulationWorld
                 var second = accessPoints[secondIndex];
                 if (first.BuildingId == second.BuildingId) continue;
                 var destination = TripEndpoint.ForBuilding(second.BuildingId!.Value);
-                var route = FindWalkingRoute(origin, destination);
-                if (route.Legs.Count > 0 && route.TotalLengthMeters > 1d)
-                    return (origin, destination);
+                try
+                {
+                    var route = FindWalkingRoute(origin, destination);
+                    if (route.Legs.Count > 0 && route.TotalLengthMeters > 1d)
+                        return (origin, destination);
+                }
+                catch (InvalidOperationException)
+                {
+                    // Regional road access can reference a building whose derived pedestrian
+                    // access node is unavailable or disconnected. Such endpoints are unsuitable
+                    // bootstrap candidates, so continue probing the remaining deterministic set.
+                }
             }
         }
         return null;
