@@ -1,12 +1,13 @@
 using MachiVerseWorks.Simulation;
 using Microsoft.Extensions.DependencyInjection;
-using Xunit;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace MachiVerseWorks.Server.Tests;
 
+[TestClass]
 public sealed class DefaultWorldBootstrapTests
 {
-    [Fact]
+    [TestMethod]
     public async Task EnabledBootstrapCreatesRegionalCityAndVisibleActivity()
     {
         await using var host = await ServerTestHost.StartAsync(
@@ -35,19 +36,19 @@ public sealed class DefaultWorldBootstrapTests
             Regional = world.CreateRegionalGenerationSnapshot(),
         });
 
-        Assert.True(state.HasRegionalGeneration);
-        Assert.NotEmpty(state.Regional.Settlements);
-        Assert.NotEmpty(state.Regional.Buildings);
-        Assert.True(state.BuildingCount > 0);
-        Assert.True(state.RoadSegmentCount > 0);
-        Assert.True(state.HouseholdCount > 0);
-        Assert.True(state.PersonCount > 0);
-        Assert.True(state.ActivePedestrianCount > 0);
-        Assert.True(state.ActiveVehicleCount > 0);
-        Assert.True(state.TrainCount > 0);
+        Assert.IsTrue(state.HasRegionalGeneration);
+        Assert.IsTrue(state.Regional.Settlements.Count > 0);
+        Assert.IsTrue(state.Regional.Buildings.Count > 0);
+        Assert.IsTrue(state.BuildingCount > 0);
+        Assert.IsTrue(state.RoadSegmentCount > 0);
+        Assert.IsTrue(state.HouseholdCount > 0);
+        Assert.IsTrue(state.PersonCount > 0);
+        Assert.IsTrue(state.ActivePedestrianCount > 0);
+        Assert.IsTrue(state.ActiveVehicleCount > 0);
+        Assert.IsTrue(state.TrainCount > 0);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task DisabledBootstrapPreservesExplicitEmptyWorldBehavior()
     {
         await using var host = await ServerTestHost.StartAsync(
@@ -67,14 +68,14 @@ public sealed class DefaultWorldBootstrapTests
             world.PersonCount,
         });
 
-        Assert.False(state.HasRegionalGeneration);
-        Assert.Equal(0, state.BuildingCount);
-        Assert.Equal(0, state.RoadSegmentCount);
-        Assert.Equal(0, state.HouseholdCount);
-        Assert.Equal(0, state.PersonCount);
+        Assert.IsFalse(state.HasRegionalGeneration);
+        Assert.AreEqual(0, state.BuildingCount);
+        Assert.AreEqual(0, state.RoadSegmentCount);
+        Assert.AreEqual(0, state.HouseholdCount);
+        Assert.AreEqual(0, state.PersonCount);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task ExplicitRailwayOperationsFixtureSuppressesDefaultBootstrap()
     {
         await using var host = await ServerTestHost.StartAsync(
@@ -93,8 +94,8 @@ public sealed class DefaultWorldBootstrapTests
             world.TrainCount,
         });
 
-        Assert.False(state.HasRegionalGeneration);
-        Assert.Equal(0, state.BuildingCount);
-        Assert.Equal(2, state.TrainCount);
+        Assert.IsFalse(state.HasRegionalGeneration);
+        Assert.AreEqual(0, state.BuildingCount);
+        Assert.AreEqual(2, state.TrainCount);
     }
 }
