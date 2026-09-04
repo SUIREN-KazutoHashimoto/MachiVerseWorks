@@ -8,6 +8,8 @@ public readonly record struct InitialMobilitySummary(
 public sealed partial class SimulationWorld
 {
     private const int InitialMobilityRouteCandidateLimit = 64;
+    private const double PreferredInitialWalkingDistanceMeters = 100d;
+    private const double PreferredInitialVehicleDistanceMeters = 300d;
     private const ulong InitialMobilityTripRequestBase = 9_000_000_000UL;
     private readonly HashSet<PedestrianId> _initialMobilityPedestrianIds = [];
     private readonly HashSet<VehicleId> _initialMobilityVehicleIds = [];
@@ -77,6 +79,9 @@ public sealed partial class SimulationWorld
     private (TripEndpoint Origin, TripEndpoint Destination)? FindInitialWalkingPair(
         RoadAccessPointSnapshot[] accessPoints)
     {
+        (TripEndpoint Origin, TripEndpoint Destination)? fallback = null;
+        var fallbackDistance = 0d;
+
         for (var firstIndex = 0; firstIndex < accessPoints.Length - 1; firstIndex++)
         {
             var first = accessPoints[firstIndex];
@@ -89,8 +94,14 @@ public sealed partial class SimulationWorld
                 try
                 {
                     var route = FindWalkingRoute(origin, destination);
-                    if (route.Legs.Count > 0 && route.TotalLengthMeters > 1d)
+                    if (route.Legs.Count == 0 || route.TotalLengthMeters <= 1d) continue;
+                    if (route.TotalLengthMeters >= PreferredInitialWalkingDistanceMeters)
                         return (origin, destination);
+                    if (route.TotalLengthMeters > fallbackDistance)
+                    {
+                        fallback = (origin, destination);
+                        fallbackDistance = route.TotalLengthMeters;
+                    }
                 }
                 catch (InvalidOperationException)
                 {
@@ -99,7 +110,7 @@ public sealed partial class SimulationWorld
                 }
             }
         }
-        return null;
+        return fallback;
     }
 
     private RouteResult? FindInitialVehicleRoute(
@@ -108,6 +119,8 @@ public sealed partial class SimulationWorld
     {
         var segments = roadSnapshot.Segments.ToDictionary(static segment => segment.Id);
         var nodes = roadSnapshot.Nodes.ToDictionary(static node => node.Id);
+        RouteResult? fallback = null;
+        var fallbackDistance = 0d;
 
         for (var firstIndex = 0; firstIndex < accessPoints.Length - 1; firstIndex++)
         {
@@ -121,7 +134,13 @@ public sealed partial class SimulationWorld
                 try
                 {
                     var route = FindRoadRoute(new RouteRequest(origin, destination, RoutingCostMetric.EstimatedTravelTime));
-                    if (route.Steps.Count > 0 && route.TotalDistanceMeters > 1d) return route;
+                    if (route.Steps.Count == 0 || route.TotalDistanceMeters <= 1d) continue;
+                    if (route.TotalDistanceMeters >= PreferredInitialVehicleDistanceMeters) return route;
+                    if (route.TotalDistanceMeters > fallbackDistance)
+                    {
+                        fallback = route;
+                        fallbackDistance = route.TotalDistanceMeters;
+                    }
                 }
                 catch (InvalidOperationException)
                 {
@@ -130,7 +149,7 @@ public sealed partial class SimulationWorld
                 }
             }
         }
-        return null;
+        return fallback;
     }
 
     private static bool TryResolveAccessPosition(
