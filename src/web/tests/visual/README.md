@@ -17,7 +17,7 @@ Renderer Golden は決定論的 fixture に対する pixel regression です。S
 
 Renderer Golden の後、View Phase 3 E2E は Server を通常設定で再起動し、`Simulation -> Server/Gateway protocol -> Application -> WorldView` の実経路を通ったユーザー画面を検証します。View 側から Agent / Building / Settlement / Road / Train を注入しません。
 
-通常起動は `Simulation:DefaultWorldBootstrap` により fresh world に Regional Generation を materialize し、道路・建物・人口・経済・初期移動主体・列車運行を成立させます。保存済みワールドや明示的 fixture が既に状態を持つ場合は bootstrap で上書きしません。
+通常起動は `Simulation:DefaultWorldBootstrap` により fresh world に Regional Generation を materialize し、道路・建物・人口・経済・初期都市活動・列車運行を成立させます。`Simulation:SavePath` による復元や明示的 fixture は authoritative startup source として扱い、default bootstrap を実行しません。
 
 `golden/view-runtime-integrated.json` は通常ユーザー画面の正式な統合 Golden 契約です。次の主要可視状態を required E2E で検証します。
 
@@ -35,8 +35,8 @@ Renderer Golden の後、View Phase 3 E2E は Server を通常設定で再起動
 現在の Runtime capture は次の 3 枚です。
 
 - `runtime-default.png`: Application 起動後の通常ユーザー View。
-- `runtime-agent-cloud.png`: 既存 Artifact 名との互換性を維持した capture。runtime visual seam では都市全体へフォーカスします。
-- `runtime-worst-grounding.png`: 既存 Artifact 名との互換性を維持した capture。同じく都市レイヤーを観測します。
+- `runtime-city-overview.png`: Settlement / Building / Road / Terrain を含む都市全景。
+- `runtime-street-activity.png`: Pedestrian / Vehicle を確認しやすい街路活動フォーカス。
 
 Runtime は Simulation tick によって動的に変化するため、Renderer fixture と同じ pixel-perfect baseline ではなく、固定 Browser・固定 Font・FHD screenshot と主要レイヤーの構造 Golden を組み合わせます。これにより建物・道路・交通主体・Debug Overlay などの欠落を false negative にしない一方、tick 差だけで全画面 pixel comparison が不安定になることを避けます。
 
