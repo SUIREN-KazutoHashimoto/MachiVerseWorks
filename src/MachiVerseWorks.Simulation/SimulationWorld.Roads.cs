@@ -17,8 +17,9 @@ public sealed partial class SimulationWorld
         ValidatePoint(position);
         ValidateEnum(kind, nameof(kind));
         EnsureRoadTopologyMutable();
-        InvalidatePedestrianNetwork();
         var id = _roads.AddNode(position, kind);
+        RetireInitialMobilityForRoadTopologyMutation();
+        InvalidatePedestrianNetwork();
         InvalidateRouting();
         return id;
     }
@@ -29,18 +30,26 @@ public sealed partial class SimulationWorld
         ValidateEnum(kind, nameof(kind));
         ValidateIncidentRoadSegmentGeometry(id, position);
         EnsureRoadTopologyMutable();
-        InvalidatePedestrianNetwork();
         var updated = _roads.UpdateNode(id, position, kind);
-        if (updated) InvalidateRouting();
+        if (updated)
+        {
+            RetireInitialMobilityForRoadTopologyMutation();
+            InvalidatePedestrianNetwork();
+            InvalidateRouting();
+        }
         return updated;
     }
 
     public bool RemoveRoadNode(RoadNodeId id)
     {
         EnsureRoadTopologyMutable();
-        InvalidatePedestrianNetwork();
         var removed = _roads.RemoveNode(id);
-        if (removed) InvalidateRouting();
+        if (removed)
+        {
+            RetireInitialMobilityForRoadTopologyMutation();
+            InvalidatePedestrianNetwork();
+            InvalidateRouting();
+        }
         return removed;
     }
 
@@ -49,8 +58,9 @@ public sealed partial class SimulationWorld
         ValidateEnum(kind, nameof(kind));
         ValidateRoadSegmentGeometry(startNodeId, endNodeId);
         EnsureRoadTopologyMutable();
-        InvalidatePedestrianNetwork();
         var id = _roads.AddSegment(startNodeId, endNodeId, kind);
+        RetireInitialMobilityForRoadTopologyMutation();
+        InvalidatePedestrianNetwork();
         InvalidateRouting();
         return id;
     }
@@ -60,18 +70,26 @@ public sealed partial class SimulationWorld
         ValidateEnum(kind, nameof(kind));
         ValidateRoadSegmentGeometry(startNodeId, endNodeId);
         EnsureRoadTopologyMutable();
-        InvalidatePedestrianNetwork();
         var updated = _roads.UpdateSegment(id, startNodeId, endNodeId, kind);
-        if (updated) InvalidateRouting();
+        if (updated)
+        {
+            RetireInitialMobilityForRoadTopologyMutation();
+            InvalidatePedestrianNetwork();
+            InvalidateRouting();
+        }
         return updated;
     }
 
     public bool RemoveRoadSegment(RoadSegmentId id)
     {
         EnsureRoadTopologyMutable();
-        InvalidatePedestrianNetwork();
         var removed = _roads.RemoveSegment(id);
-        if (removed) InvalidateRouting();
+        if (removed)
+        {
+            RetireInitialMobilityForRoadTopologyMutation();
+            InvalidatePedestrianNetwork();
+            InvalidateRouting();
+        }
         return removed;
     }
 
@@ -79,6 +97,7 @@ public sealed partial class SimulationWorld
     {
         EnsureRoadTopologyMutable();
         var id = _roads.AddLane(segmentId, direction, order, widthMeters, speedLimitMetersPerSecond);
+        RetireInitialVehiclesForRoadTopologyMutation();
         InvalidateRouting();
         return id;
     }
@@ -87,7 +106,11 @@ public sealed partial class SimulationWorld
     {
         EnsureRoadTopologyMutable();
         var updated = _roads.UpdateLane(id, segmentId, direction, order, widthMeters, speedLimitMetersPerSecond);
-        if (updated) InvalidateRouting();
+        if (updated)
+        {
+            RetireInitialVehiclesForRoadTopologyMutation();
+            InvalidateRouting();
+        }
         return updated;
     }
 
@@ -97,7 +120,11 @@ public sealed partial class SimulationWorld
             throw new InvalidOperationException($"Lane {id.Value} cannot be removed while a Multimodal Transit stop references it.");
         EnsureRoadTopologyMutable();
         var removed = _roads.RemoveLane(id);
-        if (removed) InvalidateRouting();
+        if (removed)
+        {
+            RetireInitialVehiclesForRoadTopologyMutation();
+            InvalidateRouting();
+        }
         return removed;
     }
 
@@ -105,6 +132,7 @@ public sealed partial class SimulationWorld
     {
         EnsureRoadTopologyMutable();
         var id = _roads.AddConnection(fromLaneId, toLaneId, viaNodeId, movement);
+        RetireInitialVehiclesForRoadTopologyMutation();
         InvalidateRouting();
         return id;
     }
@@ -113,7 +141,11 @@ public sealed partial class SimulationWorld
     {
         EnsureRoadTopologyMutable();
         var updated = _roads.UpdateConnection(id, fromLaneId, toLaneId, viaNodeId, movement);
-        if (updated) InvalidateRouting();
+        if (updated)
+        {
+            RetireInitialVehiclesForRoadTopologyMutation();
+            InvalidateRouting();
+        }
         return updated;
     }
 
@@ -121,13 +153,21 @@ public sealed partial class SimulationWorld
     {
         EnsureRoadTopologyMutable();
         var removed = _roads.RemoveConnection(id);
-        if (removed) InvalidateRouting();
+        if (removed)
+        {
+            RetireInitialVehiclesForRoadTopologyMutation();
+            InvalidateRouting();
+        }
         return removed;
     }
 
     public RoadAccessPointId CreateRoadAccessPoint(RoadSegmentId segmentId, double segmentOffset, BuildingId? buildingId = null, PoiId? poiId = null, RoadAccessMode mode = RoadAccessMode.Motor)
     {
-        ValidateAccessReferences(buildingId, poiId); InvalidatePedestrianNetwork(); return _roads.AddAccessPoint(segmentId, segmentOffset, buildingId, poiId, mode);
+        ValidateAccessReferences(buildingId, poiId);
+        var id = _roads.AddAccessPoint(segmentId, segmentOffset, buildingId, poiId, mode);
+        RetireInitialPedestriansForNetworkMutation();
+        InvalidatePedestrianNetwork();
+        return id;
     }
 
     public bool UpdateRoadAccessPoint(RoadAccessPointId id, RoadSegmentId segmentId, double segmentOffset, BuildingId? buildingId, PoiId? poiId, RoadAccessMode mode)
@@ -137,8 +177,13 @@ public sealed partial class SimulationWorld
             throw new InvalidOperationException($"Road access point {id.Value} must remain walkable while a Platform access point references it.");
         if (ContainsLogisticsRoadAccessPointReference(id))
             throw new InvalidOperationException($"Road access point {id.Value} cannot be updated while Logistics inventory or shipment state references it.");
-        InvalidatePedestrianNetwork();
-        return _roads.UpdateAccessPoint(id, segmentId, segmentOffset, buildingId, poiId, mode);
+        var updated = _roads.UpdateAccessPoint(id, segmentId, segmentOffset, buildingId, poiId, mode);
+        if (updated)
+        {
+            RetireInitialPedestriansForNetworkMutation();
+            InvalidatePedestrianNetwork();
+        }
+        return updated;
     }
 
     public bool RemoveRoadAccessPoint(RoadAccessPointId id)
@@ -147,8 +192,13 @@ public sealed partial class SimulationWorld
             throw new InvalidOperationException($"Road access point {id.Value} cannot be removed while a Platform access point references it.");
         if (ContainsLogisticsRoadAccessPointReference(id))
             throw new InvalidOperationException($"Road access point {id.Value} cannot be removed while Logistics inventory or shipment state references it.");
-        InvalidatePedestrianNetwork();
-        return _roads.RemoveAccessPoint(id);
+        var removed = _roads.RemoveAccessPoint(id);
+        if (removed)
+        {
+            RetireInitialPedestriansForNetworkMutation();
+            InvalidatePedestrianNetwork();
+        }
+        return removed;
     }
 
     public RoadNetworkSnapshot CreateRoadNetworkSnapshot() => _roads.CreateSnapshot();
@@ -167,8 +217,7 @@ public sealed partial class SimulationWorld
 
     private void EnsureRoadTopologyMutable()
     {
-        RetireInitialMobilityForRoadTopologyMutation();
-        if (_vehicles.Count > 0)
+        if (_vehicles.Count > _initialMobilityVehicleIds.Count)
             throw new InvalidOperationException("Road topology cannot be changed while stored Vehicles reference derived routes. Remove them before mutating Road nodes, segments, lanes, or lane connections.");
     }
 
