@@ -36,7 +36,7 @@ internal sealed class SimulationRuntime
         }
         _world = new SimulationWorld(new SimulationConfig(options.TickRate, options.Seed, options.SpatialCellSize));
         if (options.InitialAgentCount > 0)
-            _world.CreateGroundedAgents(options.InitialAgentCount, new WorldVolume(options.SpawnMinX, options.SpawnMinY, options.SpawnMinZ, options.SpawnMaxX, options.SpawnMaxY, options.SpawnMaxZ));
+            _world.CreateAgents(options.InitialAgentCount, new WorldVolume(options.SpawnMinX, options.SpawnMinY, options.SpawnMinZ, options.SpawnMaxX, options.SpawnMaxY, options.SpawnMaxZ));
         _pedestrianFixturePending = ReadFixture(configuration, "Simulation:PedestrianFixture");
         _roadTrafficFixturePending = ReadFixture(configuration, "Simulation:RoadTrafficFixture");
         _trafficFixturePending = ReadFixture(configuration, "Simulation:TrafficFixture");
@@ -217,7 +217,7 @@ internal sealed class SimulationRuntime
         if (_trafficFixturePending) { SeedTrafficFixture(_world); _trafficFixturePending = false; _roadRevision = checked(_roadRevision + 1); _roadReadModel = null; changed = true; }
         if (_populationFixturePending) { SeedPopulationFixture(_world); _populationFixturePending = false; changed = true; }
         if (_railwayFixturePending) { RailwayInfrastructureFixtures.SeedDeterministic(_world); _railwayFixturePending = false; _railwayRevision = checked(_railwayRevision + 1); _railwayReadModel = null; changed = true; }
-        if (_railwayOperationsFixturePending) { RailwayOperationsFixtures.SeedDeterministic(_world); _railwayFixturePending = false; _railwayRevision = checked(_railwayRevision + 1); _railwayReadModel = null; changed = true; }
+        if (_railwayOperationsFixturePending) { RailwayOperationsFixtures.SeedDeterministic(_world); _railwayOperationsFixturePending = false; _railwayRevision = checked(_railwayRevision + 1); _railwayReadModel = null; changed = true; }
         if (_multimodalTransitFixturePending) { MultimodalTransitFixtures.SeedDeterministic(_world); _multimodalTransitFixturePending = false; _roadRevision = checked(_roadRevision + 1); _railwayRevision = checked(_railwayRevision + 1); _roadReadModel = null; _railwayReadModel = null; changed = true; }
         if (_economyFixturePending) { SeedEconomyFixture(_world); _economyFixturePending = false; changed = true; }
         if (changed) AdvanceObservationRevision();
