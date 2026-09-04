@@ -20,6 +20,13 @@ internal sealed class DefaultWorldBootstrapService(
         "Simulation:RailwayOperationsFixture",
         "Simulation:MultimodalTransitFixture",
         "Simulation:EconomyFixture",
+        "Simulation:LogisticsFixture",
+        "Simulation:PowerFixture",
+        "Simulation:WaterSewerFixture",
+        "Simulation:GasFixture",
+        "Simulation:OpticalFixture",
+        "Simulation:RadioFixture",
+        "Simulation:RegionalGenerationFixture",
     ];
 
     // Regional generation operates on a continental terrain scale (250 km by default).
