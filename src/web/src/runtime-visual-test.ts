@@ -11,6 +11,7 @@ export interface RuntimeVisualDiagnostics {
   readonly settlementCount: number;
   readonly buildingCount: number;
   readonly roadSegmentCount: number;
+  readonly roadSnapshotSequence: number;
   readonly pedestrianCount: number;
   readonly vehicleCount: number;
   readonly trainCount: number;
@@ -92,19 +93,20 @@ function collectRuntimeDiagnostics(application: Application): RuntimeVisualDiagn
   const settlementCount = regional?.settlements.length ?? 0;
   const buildingCount = regional?.buildings.length ?? 0;
   const roadSegmentCount = state.roadNetwork.segmentCount;
+  const roadSnapshotSequence = state.roadSnapshotSequence;
   const pedestrianCount = state.pedestrians.size;
   const vehicleCount = state.vehicles.size;
   const trainCount = (application as unknown as RuntimeVisualApplicationInternals).railwayOperations.trainCount;
   const genericAgentCount = state.entities.size;
   const visibleDebugOverlayCount = countVisibleElements(DEBUG_OVERLAY_SELECTOR);
-  const japaneseFontReady = document.fonts.check('16px "Noto Sans CJK JP"', '日本語')
-    || document.fonts.check('16px "Noto Sans JP"', '日本語');
+  const japaneseFontReady = isJapaneseFontReady();
 
   return Object.freeze({
     ready: terrainSampleCount > 0
       && settlementCount > 0
       && buildingCount > 0
       && roadSegmentCount > 0
+      && roadSnapshotSequence > 0
       && pedestrianCount > 0
       && vehicleCount > 0
       && trainCount > 0
@@ -116,12 +118,43 @@ function collectRuntimeDiagnostics(application: Application): RuntimeVisualDiagn
     settlementCount,
     buildingCount,
     roadSegmentCount,
+    roadSnapshotSequence,
     pedestrianCount,
     vehicleCount,
     trainCount,
     visibleDebugOverlayCount,
     japaneseFontReady,
   });
+}
+
+function isJapaneseFontReady(): boolean {
+  const sample = '日本語漢字かなカナ';
+  return ['Noto Sans CJK JP', 'Noto Sans JP'].some((family) =>
+    document.fonts.check(`32px "${family}"`, sample) && rendersDifferentlyFromMissingFont(family, sample));
+}
+
+function rendersDifferentlyFromMissingFont(family: string, sample: string): boolean {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 64;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (context === null) return false;
+
+  const render = (font: string): Uint8ClampedArray => {
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.font = `32px ${font}`;
+    context.textBaseline = 'top';
+    context.fillText(sample, 4, 4);
+    return context.getImageData(0, 0, canvas.width, canvas.height).data.slice();
+  };
+
+  const target = render(`"${family}", monospace`);
+  const missing = render('"__MACHIVERSE_MISSING_FONT__", monospace');
+  if (target.length !== missing.length) return false;
+  for (let index = 0; index < target.length; index += 1) {
+    if (target[index] !== missing[index]) return true;
+  }
+  return false;
 }
 
 function countVisibleElements(selector: string): number {
