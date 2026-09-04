@@ -15,7 +15,7 @@ public sealed class DefaultWorldBootstrapTests
             additionalConfiguration: new Dictionary<string, string?>
             {
                 ["Simulation:DefaultWorldBootstrap:Enabled"] = "true",
-                ["Simulation:DefaultWorldBootstrap:HalfExtentMeters"] = "1500",
+                ["Simulation:DefaultWorldBootstrap:HalfExtentMeters"] = "1000000",
                 ["Simulation:DefaultWorldBootstrap:SettlementCount"] = "2",
                 ["Simulation:DefaultWorldBootstrap:IterationBudget"] = "1",
                 ["Simulation:DefaultWorldBootstrap:StarterMobilityCount"] = "8",
