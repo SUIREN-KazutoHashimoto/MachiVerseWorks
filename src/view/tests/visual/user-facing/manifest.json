@@ -62,7 +62,7 @@
     },
     {
       "id": "railway",
-      "purpose": "Read railway/train presence using an authoritative active train position when available.",
+      "purpose": "Read railway/train presence from a stable authoritative station/corridor anchor while requiring live train state before capture.",
       "legacyReviewCriteria": ["railway presence", "train visibility", "rail/road context", "scale continuity"]
     },
     {
