@@ -7,13 +7,51 @@ RUNTIME_ARTIFACT_DIR="$ARTIFACT_DIR/runtime-user-view"
 USER_FACING_ARTIFACT_DIR="$ARTIFACT_DIR/user-facing"
 GOLDEN_FILE="$ROOT_DIR/src/view/tests/visual/golden/view-physical-world.png"
 RUNTIME_GOLDEN_FILE="$ROOT_DIR/src/view/tests/visual/golden/view-runtime-integrated.json"
+USER_FACING_MANIFEST="$ROOT_DIR/src/view/tests/visual/user-facing/manifest.json"
 WEB_PORT=5187
 SERVER_PORT=5094
-USER_FACING_PAUSE_TICK=60
 WEB_PID=""
 SERVER_PID=""
 mkdir -p "$ARTIFACT_DIR"; rm -rf "$ARTIFACT_DIR"/*
 mkdir -p "$RUNTIME_ARTIFACT_DIR" "$USER_FACING_ARTIFACT_DIR"
+
+manifest_value() {
+  node - "$USER_FACING_MANIFEST" "$1" <<'NODE'
+const fs = require('node:fs');
+const [manifestPath, key] = process.argv.slice(2);
+const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+let value = manifest;
+for (const part of key.split('.')) value = value?.[part];
+if (value === undefined || value === null) {
+  console.error(`Missing VQ-0 manifest value: ${key}`);
+  process.exit(1);
+}
+process.stdout.write(String(value));
+NODE
+}
+
+USER_FACING_SEED="$(manifest_value runtime.simulationSeed)"
+USER_FACING_TICK_RATE="$(manifest_value runtime.tickRate)"
+USER_FACING_PAUSE_TICK="$(manifest_value runtime.pauseAtTick)"
+USER_FACING_SNAPSHOT_RATE="$(manifest_value runtime.snapshotRate)"
+USER_FACING_BOOTSTRAP="$(manifest_value runtime.defaultWorldBootstrap)"
+USER_FACING_BROWSER_VERSION="$(manifest_value capture.browser)"
+USER_FACING_BROWSER_VERSION="${USER_FACING_BROWSER_VERSION##* }"
+USER_FACING_FONT_FAMILY="$(manifest_value capture.fontFamily)"
+USER_FACING_FONT_PACKAGE_VERSION="$(manifest_value capture.fontPackageVersion)"
+
+if [[ -n "${MVW_VISUAL_BROWSER_VERSION:-}" && "$MVW_VISUAL_BROWSER_VERSION" != "$USER_FACING_BROWSER_VERSION" ]]; then
+  echo "Installed visual browser version does not match VQ-0 manifest: env=$MVW_VISUAL_BROWSER_VERSION manifest=$USER_FACING_BROWSER_VERSION" >&2
+  exit 1
+fi
+if [[ -n "${MVW_VISUAL_FONT_FAMILY:-}" && "$MVW_VISUAL_FONT_FAMILY" != "$USER_FACING_FONT_FAMILY" ]]; then
+  echo "Installed visual font family does not match VQ-0 manifest: env=$MVW_VISUAL_FONT_FAMILY manifest=$USER_FACING_FONT_FAMILY" >&2
+  exit 1
+fi
+if [[ -n "${MVW_VISUAL_FONT_PACKAGE_VERSION:-}" && "$MVW_VISUAL_FONT_PACKAGE_VERSION" != "$USER_FACING_FONT_PACKAGE_VERSION" ]]; then
+  echo "Installed visual font package does not match VQ-0 manifest: env=$MVW_VISUAL_FONT_PACKAGE_VERSION manifest=$USER_FACING_FONT_PACKAGE_VERSION" >&2
+  exit 1
+fi
 
 stop_server() {
   if [[ -n "$SERVER_PID" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
@@ -103,17 +141,15 @@ RUNTIME_URL="http://127.0.0.1:$WEB_PORT/?visualTest=runtime"
 node "$ROOT_DIR/scripts/run-headless-runtime-visual-e2e.mjs" "$CHROME" "$RUNTIME_URL" "$RUNTIME_ARTIFACT_DIR"
 node "$ROOT_DIR/scripts/check-runtime-visual-golden.mjs" "$RUNTIME_ARTIFACT_DIR" "$RUNTIME_GOLDEN_FILE"
 
-# VQ-0 user-facing Golden suite gets its own deterministic runtime. Bootstrap completes first,
-# then the Server advances synchronously to one exact simulation tick and remains paused while
-# every camera composition is captured. This keeps Vehicle/Train positions identical across scenes.
+# VQ-0 user-facing Golden suite gets its own deterministic runtime. All runtime/capture
+# conditions below are read from the reviewed manifest so the documented contract and the
+# executed contract cannot silently diverge.
 stop_server
-env Server__Port="$SERVER_PORT" Simulation__TickRate=30 Simulation__Seed=29027 Simulation__SpatialCellSize=4096 Simulation__PauseAtTick="$USER_FACING_PAUSE_TICK" Server__SnapshotRate=2 Server__MaximumSubscriptionCellCount=524288 Server__AllowedWebSocketOrigins="http://127.0.0.1:$WEB_PORT" dotnet run --project "$ROOT_DIR/src/server/MachiVerseWorks.Server.csproj" --configuration Release --no-build >"$USER_FACING_ARTIFACT_DIR/server-runtime.log" 2>&1 & SERVER_PID=$!
+env Server__Port="$SERVER_PORT" Simulation__TickRate="$USER_FACING_TICK_RATE" Simulation__Seed="$USER_FACING_SEED" Simulation__SpatialCellSize=4096 Simulation__DefaultWorldBootstrap__Enabled="$USER_FACING_BOOTSTRAP" Simulation__PauseAtTick="$USER_FACING_PAUSE_TICK" Server__SnapshotRate="$USER_FACING_SNAPSHOT_RATE" Server__MaximumSubscriptionCellCount=524288 Server__AllowedWebSocketOrigins="http://127.0.0.1:$WEB_PORT" dotnet run --project "$ROOT_DIR/src/server/MachiVerseWorks.Server.csproj" --configuration Release --no-build >"$USER_FACING_ARTIFACT_DIR/server-runtime.log" 2>&1 & SERVER_PID=$!
 wait_http "http://127.0.0.1:$SERVER_PORT/health"
 
-# VQ-0 user-facing Golden suite. This is deliberately separate from the renderer fixture
-# and runtime structural Golden: it captures stable camera compositions for visual review.
 USER_FACING_URL="http://127.0.0.1:$WEB_PORT/?visualTest=user-facing"
-node "$ROOT_DIR/scripts/run-headless-user-facing-visual-e2e.mjs" "$CHROME" "$USER_FACING_URL" "$USER_FACING_ARTIFACT_DIR"
+MVW_USER_FACING_VISUAL_MANIFEST="$USER_FACING_MANIFEST" node "$ROOT_DIR/scripts/run-headless-user-facing-visual-e2e.mjs" "$CHROME" "$USER_FACING_URL" "$USER_FACING_ARTIFACT_DIR"
 bash "$ROOT_DIR/scripts/check-user-facing-visual-goldens.sh" "$ROOT_DIR" "$USER_FACING_ARTIFACT_DIR"
 
 cat "$ARTIFACT_DIR/browser.html"
