@@ -14,6 +14,7 @@
   "runtime": {
     "simulationSeed": 29027,
     "tickRate": 30,
+    "pauseAtTick": 60,
     "snapshotRate": 2,
     "defaultWorldBootstrap": true
   },
@@ -31,7 +32,7 @@
   },
   "goldenPolicy": {
     "technicalGolden": "Renderer fixture and runtime structural contracts detect pipeline/layer regressions. They do not prove user-facing visual quality.",
-    "userFacingGolden": "Five fixed runtime compositions provide a reproducible baseline for visual review and intentional VQ-1+ improvements.",
+    "userFacingGolden": "Five fixed runtime compositions at one paused simulation tick provide a reproducible baseline for visual review and intentional VQ-1+ improvements.",
     "updateRule": "Update only after reviewing actual/diff artifacts and confirming the visual change is intentional. Never update only to make CI pass.",
     "legacyParity": "Legacy remains the minimum quality floor, but parity is reviewed and enforced by VQ-7 rather than inferred from these current-baseline pixels."
   },
