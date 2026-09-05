@@ -1,6 +1,6 @@
 # Protocol Binary Layout
 
-MachiVerseWorksのServer / Web Client間binary protocolを定義する。ProtocolはApplication `VERSION`とSave formatから独立してversioningし、current protocol versionは **2.18** とする。実装上の正本は [`ProtocolVersion.Current`](../../src/MachiVerseWorks.Protocol/ProtocolVersion.cs) と [`MessageType`](../../src/MachiVerseWorks.Protocol/MessageType.cs) である。
+MachiVerseWorksのServer / Web Client間binary protocolを定義する。ProtocolはApplication `VERSION`とSave formatから独立してversioningし、current protocol versionは **2.18** とする。実装上の正本は [`ProtocolVersion.Current`](../../src/protocol/ProtocolVersion.cs) と [`MessageType`](../../src/protocol/MessageType.cs) である。
 
 ## Version compatibility
 
