@@ -35,11 +35,14 @@ User-facing Goldenは、通常のDefault World Bootstrapを固定Seedで起動�
 4. `railway` — Railway / Trainの存在感
 5. `street-activity` — Vehicle / Pedestrian等の近距離活動
 
-Camera targetは固定座標をハードコードせず、固定Seedから得られたauthoritative observationのstable ID / geometryを決定論的に選択します。これによりWorld生成内容が正当に更新された場合は差分を明示的にレビューしつつ、毎回同じ選定規則で再取得できます。
+Camera targetは固定座標をハードコードせず、固定Seedから得られたauthoritative observationのstable ID / geometryを決定論的に選択します。Camera移動後は新しいRoad subscription snapshotを受信し、安定時間が経過するまで次の構図へ進みません。これにより前構図の遅延snapshotを次構図のanchor選択に使うraceを防ぎます。
 
 ## 固定実行条件
 
 - Simulation Seed: `29027`
+- Simulation Tick Rate: `30`
+- Capture Tick: `60`（通常Bootstrap完了後にこのtickまで進めてPause）
+- Snapshot Rate: `2`
 - Default World Bootstrap: enabled
 - Viewport: `1920x1080`
 - Device Pixel Ratio: `1`
@@ -47,7 +50,7 @@ Camera targetは固定座標をハードコードせず、固定Seedから得ら
 - Renderer: SwiftShader
 - Font: `Noto Sans CJK JP` / `fonts-noto-cjk 1:20230817+repack1-3`
 
-通常起動で非表示となるDebug Overlayに加え、Person / Railway / Transit / Economy / Performance等の診断専用UIもcapture seamで非表示を強制します。通常ユーザー向けstatus chrome、Camera hint、identityは残すため、UIがWorld観測を過度に妨げていないかも画像から確認できます。
+5構図はすべて同じPause済みSimulation stateから撮影します。Vehicle / Pedestrian / Trainを含むauthoritative World stateは構図間で進行しません。通常起動で非表示となるDebug Overlayに加え、Person / Railway / Transit / Economy / Performance等の診断専用UIもcapture seamで非表示を強制します。通常ユーザー向けstatus chrome、Camera hint、identityは残すため、UIがWorld観測を過度に妨げていないかも画像から確認できます。
 
 ## Golden保存場所
 
@@ -76,6 +79,6 @@ MVW_UPDATE_USER_FACING_GOLDEN=1 bash scripts/run-view-phase03-e2e.sh
 
 ## 差分判定
 
-User-facing runtimeにはVehicle / Pedestrian / Train等の動的Entityが存在するため、channel thresholdはTechnical Goldenと同じ`8/255`を維持しつつ、changed-pixel ratioは既定`0.5%`まで許容します。大きな構図崩れ・layer消失・UI占有増加を検出しながら、capture timingによる小さなEntity移動を許容するためです。
+Simulation stateは固定tickで停止させるため、動的Entityの時間進行を理由に差分を許容しません。channel thresholdはTechnical Goldenと同じ`8/255`を維持し、changed-pixel ratioはブラウザのrasterization差を吸収するため既定`0.5%`まで許容します。大きな構図崩れ・layer消失・UI占有増加はこの範囲を超えるため回帰として扱います。
 
 このpixel baselineは**Legacy parityの合否そのものではありません**。VQ-1〜VQ-6では同じ5構図に対して意図した改善をレビューし、VQ-7で固定したLegacy参照とUser-facing Goldenを正式なParity Gateへ昇格します。
