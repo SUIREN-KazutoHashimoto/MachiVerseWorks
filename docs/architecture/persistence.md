@@ -20,7 +20,7 @@ loadは逆方向に、byte/resource validation → JSON DTO → checkpoint valid
 
 ## Current format
 
-current Save formatは **11**。Application `VERSION`およびProtocol versionとは独立してversioningする。実装上の正本は [`SaveFormatVersion.Current`](../../src/MachiVerseWorks.Persistence/SaveFormatVersion.cs) である。
+current Save formatは **11**。Application `VERSION`およびProtocol versionとは独立してversioningする。実装上の正本は [`SaveFormatVersion.Current`](../../src/persistence/SaveFormatVersion.cs) である。
 
 - Format 3: Agent + Building / POI
 - Format 4: Road Network
