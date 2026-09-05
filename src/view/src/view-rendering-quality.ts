@@ -56,6 +56,9 @@ export function installEnvironmentLighting(
 ): Readonly<{ hemisphere: THREE.HemisphereLight; sun: THREE.DirectionalLight }> {
   scene.background = new THREE.Color(quality.backgroundColor);
   scene.fog = new THREE.Fog(quality.fogColor, quality.fogNear, quality.fogFar);
+  scene.onBeforeRender = (_renderer, _scene, camera) => {
+    if (camera instanceof THREE.PerspectiveCamera) updateEnvironmentFog(scene, camera, quality);
+  };
 
   const hemisphere = new THREE.HemisphereLight(
     quality.hemisphereSkyColor,
