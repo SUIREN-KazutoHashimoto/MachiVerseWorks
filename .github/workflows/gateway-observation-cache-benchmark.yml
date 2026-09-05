@@ -5,7 +5,7 @@ on:
     branches:
       - develop
     paths:
-      - 'src/gateway/**'
+      - 'src/server/**'
       - 'src/protocol/**'
       - 'src/simulation/Agent*.cs'
       - 'src/simulation/Geometry.cs'
