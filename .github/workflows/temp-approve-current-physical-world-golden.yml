@@ -66,6 +66,7 @@ jobs:
           test "$(fc-match -f '%{family}\n' sans-serif | head -n 1 | cut -d, -f1)" = 'Noto Sans CJK JP'
           echo "MVW_VISUAL_FONT_FAMILY=Noto Sans CJK JP" >> "$GITHUB_ENV"
           echo "MVW_VISUAL_FONT_PACKAGE_VERSION=$MVW_VISUAL_FONT_PACKAGE_VERSION" >> "$GITHUB_ENV"
+      # Re-run after the runtime checkpoint was constrained to the View subscription depth.
       - name: Verify reviewed Runtime and generate Golden
         env:
           MVW_UPDATE_VISUAL_GOLDEN: '1'
