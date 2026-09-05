@@ -47,6 +47,28 @@ public sealed class DefaultWorldBootstrapTests
         Assert.IsTrue(state.ActiveVehicleCount > 0);
         Assert.IsTrue(state.TrainCount > 0);
 
+        var primarySettlement = state.Regional.Settlements
+            .OrderByDescending(static settlement => settlement.Population)
+            .ThenBy(static settlement => settlement.Id.Value)
+            .First();
+        var primaryCenter = primarySettlement.Center;
+        const double initialViewRadiusMeters = 5_000d;
+        var initialViewActivity = simulation.Read(world => new
+        {
+            VehicleCount = world.CreateVehicleSnapshot(new WorldVolume(
+                primaryCenter.X - initialViewRadiusMeters,
+                primaryCenter.Y - initialViewRadiusMeters,
+                primaryCenter.Z - initialViewRadiusMeters,
+                primaryCenter.X + initialViewRadiusMeters,
+                primaryCenter.Y + initialViewRadiusMeters,
+                primaryCenter.Z + initialViewRadiusMeters)).Length,
+            TrainCount = world.CreateTrainSnapshot().Count(train =>
+                Math.Abs(train.Position.X - primaryCenter.X) <= initialViewRadiusMeters
+                && Math.Abs(train.Position.Y - primaryCenter.Y) <= initialViewRadiusMeters),
+        });
+        Assert.IsTrue(initialViewActivity.VehicleCount > 0, "Starter Vehicle must begin inside the primary city's initial View area.");
+        Assert.IsTrue(initialViewActivity.TrainCount > 0, "Starter Train must begin inside the primary city's initial View area.");
+
         // Saving must not mutate the live world. Starter mobility identity is part of the
         // checkpoint so a restored world can still retire only those transient subjects when
         // a later Management road edit invalidates their derived routes.
