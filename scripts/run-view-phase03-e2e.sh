@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACT_DIR="$ROOT_DIR/.artifacts/view-phase03-e2e"
 RUNTIME_ARTIFACT_DIR="$ARTIFACT_DIR/runtime-user-view"
+USER_FACING_ARTIFACT_DIR="$ARTIFACT_DIR/user-facing"
 GOLDEN_FILE="$ROOT_DIR/src/view/tests/visual/golden/view-physical-world.png"
 RUNTIME_GOLDEN_FILE="$ROOT_DIR/src/view/tests/visual/golden/view-runtime-integrated.json"
 WEB_PORT=5187
@@ -11,7 +12,7 @@ SERVER_PORT=5094
 WEB_PID=""
 SERVER_PID=""
 mkdir -p "$ARTIFACT_DIR"; rm -rf "$ARTIFACT_DIR"/*
-mkdir -p "$RUNTIME_ARTIFACT_DIR"
+mkdir -p "$RUNTIME_ARTIFACT_DIR" "$USER_FACING_ARTIFACT_DIR"
 
 stop_server() {
   if [[ -n "$SERVER_PID" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
@@ -101,6 +102,13 @@ RUNTIME_URL="http://127.0.0.1:$WEB_PORT/?visualTest=runtime"
 node "$ROOT_DIR/scripts/run-headless-runtime-visual-e2e.mjs" "$CHROME" "$RUNTIME_URL" "$RUNTIME_ARTIFACT_DIR"
 node "$ROOT_DIR/scripts/check-runtime-visual-golden.mjs" "$RUNTIME_ARTIFACT_DIR" "$RUNTIME_GOLDEN_FILE"
 
+# VQ-0 user-facing Golden suite. This is deliberately separate from the renderer fixture
+# and runtime structural Golden: it captures stable camera compositions for visual review.
+USER_FACING_URL="http://127.0.0.1:$WEB_PORT/?visualTest=user-facing"
+node "$ROOT_DIR/scripts/run-headless-user-facing-visual-e2e.mjs" "$CHROME" "$USER_FACING_URL" "$USER_FACING_ARTIFACT_DIR"
+bash "$ROOT_DIR/scripts/check-user-facing-visual-goldens.sh" "$ROOT_DIR" "$USER_FACING_ARTIFACT_DIR"
+
 cat "$ARTIFACT_DIR/browser.html"
 cat "$RUNTIME_ARTIFACT_DIR/summary.json"
-echo "View Phase 3 Physical World visual regression + required actual runtime integrated Golden passed."
+cat "$USER_FACING_ARTIFACT_DIR/summary.json"
+echo "View Phase 3 Technical Golden + runtime structural Golden + VQ-0 user-facing Golden passed."
