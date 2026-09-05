@@ -1,0 +1,41 @@
+name: Temporary Sync View P0 Roadmap
+
+on:
+  push:
+    branches:
+      - docs/view-legacy-visual-parity
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Sync VQ track and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('roadmap/VIEW_ROADMAP.md')
+          text = path.read_text(encoding='utf-8')
+          marker = '## 最上位原則\n'
+          if '## P0 Track — Legacy Visual Parity' not in text:
+              block = '''## P0 Track — Legacy Visual Parity\n\n> **状態: ⏳ VQ-0着手中**  \n> **優先度: P0 / View最優先**  \n> **詳細計画:** [`../docs/roadmap/view-legacy-visual-parity.md`](../docs/roadmap/view-legacy-visual-parity.md)  \n> **Tracking:** #465\n\n既存のView Phase番号は維持したまま、Legacy版を最低品質基準とする横断Visual品質Trackを最優先で進める。VQ Taskは既存Phaseの責務を置き換えず、Legacy parityに必要な成果をPhase横断で前倒し・統合するための正本Task IDとしてこのRoadmapでも状態を管理する。Simulation / Gatewayの並行開発は停止しない。\n\n| VQ | 内容 | 主な対応View Task / Phase | 状態 |\n| --- | --- | --- | --- |\n| VQ-0 | Legacy baseline / User-facing Golden | V4-008 + Visual E2E基盤 | ⬜ #466 |\n| VQ-1 | Environment / Lighting / Fog / Terrain-Water readability | View Phase 3 / V11-004〜V11-005 | ⬜ #467 |\n| VQ-2a | Road surface / hierarchy | V5-001 / V6-005 / V11-002 | ⬜ #468 |\n| VQ-2b | Intersection / Bridge / elevated / grade separation | V5-001 / V6-005 / V11-002 | ⬜ #469 |\n| VQ-3a | Building appearance / height / skyline | View Phase 4 / V6-006 / V11-002 | ⬜ #470 |\n| VQ-3b | Urban block / density / alignment / LOD | V4-005 / V6-006〜V6-008 / V11-009 | ⬜ #471 |\n| VQ-4 | Railway / Station / Train presence | V5-002 / V6-005 / V11-002〜V11-003 | ⬜ #472 |\n| VQ-5 | Vehicle / Pedestrian / Signal / city activity | V5-003 / V5-005〜V5-008 / V11-002〜V11-003 | ⬜ #473 |\n| VQ-6a | Camera preset / continuous scale transition | View Phase 2 / V6-002〜V6-012 | ⬜ #474 |\n| VQ-6b | Label / UI hierarchy / debug suppression | V6-009 / V11-009 | ⬜ #475 |\n| VQ-7 | Legacy parity formal gate | V13 closeout + Visual E2E | ⬜ #476 |\n| VQ-8 | Legacy+ production observation | View Phase 5 / 6 / 11 / 12 | ⬜ #477 |\n\n### P0 Track運用ルール\n\n- **VQ-0〜VQ-3をImmediate wave**として、通常のView Phase 5以降の未着手Taskより優先する。\n- **VQ-7完了まではVisual Foundationを完成扱いにしない。** Technical Golden成功だけではLegacy parity達成とみなさない。\n- VQ Task完了時は、この表・Tracking Issue #465・詳細計画を同期する。\n- VQ実装で新しいSimulation semanticsが必要ならSimulation Roadmapへ、新しいdelivery能力が必要ならGateway RoadmapへTaskを切り出し、View側で意味を捏造しない。\n- VQ-8はVQ-7完了後に着手する。\n\n---\n\n'''
+              if marker not in text:
+                  raise SystemExit('VIEW_ROADMAP insertion marker was not found')
+              text = text.replace(marker, block + marker, 1)
+              path.write_text(text, encoding='utf-8')
+          PY
+          git rm .github/workflows/temp-sync-view-p0-roadmap.yml
+          git add roadmap/VIEW_ROADMAP.md
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs(view): sync P0 VQ track into canonical roadmap'
+          git push origin HEAD:docs/view-legacy-visual-parity
