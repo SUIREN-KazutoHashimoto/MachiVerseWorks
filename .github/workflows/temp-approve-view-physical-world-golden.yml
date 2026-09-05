@@ -21,6 +21,43 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+      - name: Apply reviewed source and roadmap follow-up
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          application = Path('src/web/src/application.ts')
+          text = application.read_text(encoding='utf-8')
+          old = """  private initializeRegionalCamera(message: RegionalGenerationSnapshotMessage): void {
+            if (this.regionalCameraInitialized || message.settlements.length === 0) return;
+            const settlement = [...message.settlements].sort((left, right) =>
+          """
+          new = """  private initializeRegionalCamera(message: RegionalGenerationSnapshotMessage): void {
+            if (this.regionalCameraInitialized || message.settlements.length === 0) return;
+            const currentSubscription = this.view.getSubscriptionVolume();
+            if (message.settlements.some((settlement) =>
+              settlement.x >= currentSubscription.minX && settlement.x <= currentSubscription.maxX
+                && settlement.y >= currentSubscription.minY && settlement.y <= currentSubscription.maxY)) {
+              this.regionalCameraInitialized = true;
+              return;
+            }
+            const settlement = [...message.settlements].sort((left, right) =>
+          """
+          if old not in text:
+              raise SystemExit('initializeRegionalCamera patch target not found')
+          application.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          roadmap = Path('roadmap/SIMULATION_ROADMAP.md')
+          text = roadmap.read_text(encoding='utf-8')
+          if 'P30-036' not in text:
+              needle = '- ✅ **P30-035** — World→Terrain→Settlement Network→Historical Growth→Urban Fabric→Validationのspecification / architecture / ADR / ROADMAPを同期する'
+              addition = needle + '\n- ✅ **P30-036** — 通常Runtimeのfresh world起動でRegional materializationを既定起動境界へ接続し、Simulation-owned starter Pedestrian / Vehicleのcheckpoint・道路編集lifecycleを統合する'
+              if needle not in text:
+                  raise SystemExit('P30-035 roadmap anchor not found')
+              roadmap.write_text(text.replace(needle, addition, 1), encoding='utf-8')
+          PY
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
@@ -68,13 +105,13 @@ jobs:
         env:
           MVW_UPDATE_VISUAL_GOLDEN: '1'
         run: bash scripts/run-view-phase03-e2e.sh
-      - name: Commit reviewed Golden
+      - name: Commit reviewed Golden and roadmap sync
         shell: bash
         run: |
           set -euo pipefail
-          git add src/web/tests/visual/golden/view-physical-world.png
-          git diff --cached --quiet && { echo 'Golden already matches reviewed actual.'; exit 0; }
+          git add src/web/src/application.ts roadmap/SIMULATION_ROADMAP.md src/web/tests/visual/golden/view-physical-world.png
+          git diff --cached --quiet && { echo 'Reviewed source, roadmap, and Golden already match.'; exit 0; }
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'test: approve physical world visual golden'
+          git commit -m 'test: approve runtime visual golden and sync roadmap'
           git push origin HEAD:fix/open-view-runtime-issues
