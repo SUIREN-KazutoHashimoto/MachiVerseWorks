@@ -2,7 +2,7 @@
 
 ## 概要
 
-Headless ServerはASP.NET Core / Kestrel上でHTTP health endpointとbinary WebSocket endpointを提供し、1つの`SimulationWorld`をserver-authoritativeな正本として所有する。current Protocolは **2.16**。実装上のversion正本は[`../../src/MachiVerseWorks.Protocol/ProtocolVersion.cs`](../../src/MachiVerseWorks.Protocol/ProtocolVersion.cs)、binary契約は[`protocol.md`](protocol.md)である。position、observation subscription、snapshotはnative 3Dを基本とする。
+Headless ServerはASP.NET Core / Kestrel上でHTTP health endpointとbinary WebSocket endpointを提供し、1つの`SimulationWorld`をserver-authoritativeな正本として所有する。current Protocolは **2.16**。実装上のversion正本は[`../../src/protocol/ProtocolVersion.cs`](../../src/protocol/ProtocolVersion.cs)、binary契約は[`protocol.md`](protocol.md)である。position、observation subscription、snapshotはnative 3Dを基本とする。
 
 Serverでは、read-onlyなObservation Gatewayとauthoritative mutationを扱うAdministration / Management command boundaryを明示的に分離する。
 
@@ -237,7 +237,6 @@ Protocol 2.10〜2.16のEconomy / Logistics / Infrastructure / Communication / Ra
 Road topologyはrevision-drivenで、subscription revision + topology revisionが変わらなければ同じstatic snapshotを無駄に再送しない。
 
 Railway InfrastructureはProtocol 2.6のmulti-frame contractを持ち、1 MiB超snapshotをentity境界でchunkできる。Railway Operations等のsingle-frame domainはcodecのpayload lengthをpreflightし、契約上の上限超過をconnection-localなstructured Errorへ変換する。
-
 slow Viewはconnection単位のdelivery task / timeoutで隔離し、他ClientやSimulation tickへbackpressureを波及させない。
 
 ## Subscription revision / remove consistency
