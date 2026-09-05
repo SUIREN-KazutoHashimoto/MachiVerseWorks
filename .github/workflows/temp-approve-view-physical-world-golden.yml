@@ -1,0 +1,80 @@
+name: Temporary approve reviewed View physical-world Golden
+
+on:
+  push:
+    branches:
+      - fix/open-view-runtime-issues
+
+permissions:
+  contents: write
+
+concurrency:
+  group: temp-approve-view-physical-world-golden
+  cancel-in-progress: true
+
+jobs:
+  approve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: src/web/.node-version
+          cache: npm
+          cache-dependency-path: src/web/package-lock.json
+      - name: Install pinned visual browser
+        shell: bash
+        env:
+          MVW_VISUAL_BROWSER_VERSION: '152.0.7977.75'
+        run: |
+          set -euo pipefail
+          browser="$(bash scripts/install-visual-browser.sh "$RUNNER_TEMP/machiverseworks-visual-browser")"
+          echo "MVW_VISUAL_BROWSER=$browser" >> "$GITHUB_ENV"
+          echo "MVW_VISUAL_BROWSER_VERSION=$MVW_VISUAL_BROWSER_VERSION" >> "$GITHUB_ENV"
+      - name: Install pinned Japanese visual font
+        shell: bash
+        env:
+          MVW_VISUAL_FONT_PACKAGE_VERSION: '1:20230817+repack1-3'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends "fonts-noto-cjk=$MVW_VISUAL_FONT_PACKAGE_VERSION"
+          test "$(dpkg-query -W -f='${Version}' fonts-noto-cjk)" = "$MVW_VISUAL_FONT_PACKAGE_VERSION"
+          mkdir -p "$HOME/.config/fontconfig"
+          cat > "$HOME/.config/fontconfig/fonts.conf" <<'EOF'
+          <?xml version="1.0"?>
+          <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+          <fontconfig>
+            <alias binding="strong">
+              <family>sans-serif</family>
+              <prefer><family>Noto Sans CJK JP</family></prefer>
+            </alias>
+          </fontconfig>
+          EOF
+          fc-cache -f
+          test "$(fc-match -f '%{family}\n' sans-serif | head -n 1 | cut -d, -f1)" = 'Noto Sans CJK JP'
+          echo "MVW_VISUAL_FONT_FAMILY=Noto Sans CJK JP" >> "$GITHUB_ENV"
+          echo "MVW_VISUAL_FONT_PACKAGE_VERSION=$MVW_VISUAL_FONT_PACKAGE_VERSION" >> "$GITHUB_ENV"
+      - name: Reproduce reviewed actual and approve Golden
+        env:
+          MVW_UPDATE_VISUAL_GOLDEN: '1'
+        run: bash scripts/run-view-phase03-e2e.sh
+      - name: Commit reviewed Golden
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add src/web/tests/visual/golden/view-physical-world.png
+          git diff --cached --quiet && { echo 'Golden already matches reviewed actual.'; exit 0; }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'test: approve physical world visual golden'
+          git push origin HEAD:fix/open-view-runtime-issues
