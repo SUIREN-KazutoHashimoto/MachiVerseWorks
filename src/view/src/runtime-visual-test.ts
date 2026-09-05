@@ -1,4 +1,5 @@
 import type { Application } from './application.ts';
+import type { RoadNode } from './protocol.ts';
 import { createStaticNavigationTarget } from './view-navigation.ts';
 
 export type RuntimeVisualCheckpoint = 'city-overview' | 'street-activity';
@@ -54,14 +55,23 @@ function positionCheckpoint(application: Application, checkpoint: RuntimeVisualC
   const snapshot = application.state.regionalGeneration.snapshot;
   if (snapshot === null || snapshot.buildings.length === 0 || snapshot.settlements.length === 0) return false;
 
-  const settlement = [...snapshot.settlements].sort((left, right) =>
-    right.population - left.population
+  const roadNodes = application.state.roadNetwork.snapshot?.nodes ?? [];
+  const settlementsWithBuildings = snapshot.settlements.filter((candidate) =>
+    snapshot.buildings.some((building) =>
+      application.state.regionalGeneration.getSettlementForBuilding(building.buildingId)?.settlementId === candidate.settlementId));
+  const settlementCandidates = settlementsWithBuildings.length > 0 ? settlementsWithBuildings : snapshot.settlements;
+  const settlement = [...settlementCandidates].sort((left, right) =>
+    nearestRoadDistanceSquared(left.x, left.y, roadNodes) - nearestRoadDistanceSquared(right.x, right.y, roadNodes)
+      || right.population - left.population
       || (left.settlementId < right.settlementId ? -1 : left.settlementId > right.settlementId ? 1 : 0))[0]!;
+  const nearestRoadNode = findNearestRoadNode(settlement.x, settlement.y, roadNodes);
+
   if (checkpoint === 'street-activity') {
+    const focus = nearestRoadNode ?? settlement;
     return application.focus(createStaticNavigationTarget(
       'position',
       'runtime-street-activity',
-      { x: settlement.x, y: settlement.y, z: settlement.z },
+      { x: focus.x, y: focus.y, z: focus.z },
       0.72,
     ));
   }
@@ -80,6 +90,10 @@ function positionCheckpoint(application: Application, checkpoint: RuntimeVisualC
     minX = Math.min(minX, building.minX); minY = Math.min(minY, building.minY); minZ = Math.min(minZ, building.minZ);
     maxX = Math.max(maxX, building.maxX); maxY = Math.max(maxY, building.maxY); maxZ = Math.max(maxZ, building.maxZ);
   }
+  if (nearestRoadNode !== undefined) {
+    minX = Math.min(minX, nearestRoadNode.x); minY = Math.min(minY, nearestRoadNode.y); minZ = Math.min(minZ, nearestRoadNode.z);
+    maxX = Math.max(maxX, nearestRoadNode.x); maxY = Math.max(maxY, nearestRoadNode.y); maxZ = Math.max(maxZ, nearestRoadNode.z);
+  }
   const span = Math.max(maxX - minX, maxY - minY, 250);
   const distance = clamp(span * 1.15, 450, 8_000);
   return application.focus(createStaticNavigationTarget(
@@ -88,6 +102,30 @@ function positionCheckpoint(application: Application, checkpoint: RuntimeVisualC
     { x: (minX + maxX) * 0.5, y: (minY + maxY) * 0.5, z: (minZ + maxZ) * 0.5 },
     250 / distance,
   ));
+}
+
+function nearestRoadDistanceSquared(x: number, y: number, nodes: readonly RoadNode[]): number {
+  const nearest = findNearestRoadNode(x, y, nodes);
+  if (nearest === undefined) return Number.POSITIVE_INFINITY;
+  return squaredDistance(x, y, nearest.x, nearest.y);
+}
+
+function findNearestRoadNode(x: number, y: number, nodes: readonly RoadNode[]): RoadNode | undefined {
+  let nearest: RoadNode | undefined;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  for (const node of nodes) {
+    const distance = squaredDistance(x, y, node.x, node.y);
+    if (distance >= nearestDistance) continue;
+    nearest = node;
+    nearestDistance = distance;
+  }
+  return nearest;
+}
+
+function squaredDistance(leftX: number, leftY: number, rightX: number, rightY: number): number {
+  const deltaX = leftX - rightX;
+  const deltaY = leftY - rightY;
+  return deltaX * deltaX + deltaY * deltaY;
 }
 
 function collectRuntimeDiagnostics(application: Application): RuntimeVisualDiagnostics {
