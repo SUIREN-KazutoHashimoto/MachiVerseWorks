@@ -107,7 +107,6 @@ public sealed partial class SimulationWorld
     {
         if (_isFaulted)
             throw new InvalidOperationException("A faulted Simulation world cannot be checkpointed because its domain state may represent a partial tick.");
-        RetireTransientInitialMobilityForCheckpoint();
         EnsurePedestrianNetwork();
         var railwayOperations = _railwayOperations?.CreateSnapshot();
         var economy = CreateEconomyCheckpointWithRadio() with
@@ -145,7 +144,9 @@ public sealed partial class SimulationWorld
             _railwayOperations?.NextTrainId ?? 1UL, railwayOperations?.Trains ?? Array.Empty<TrainSnapshot>(),
             _multimodalTransit.CreateCheckpoint(Time.TickCount),
             economy,
-            _agents.TotalCreatedCount);
+            _agents.TotalCreatedCount,
+            _initialMobilityPedestrianIds.OrderBy(static id => id.Value).ToArray(),
+            _initialMobilityVehicleIds.OrderBy(static id => id.Value).ToArray());
     }
 
     public static SimulationWorld RestoreCheckpoint(SimulationCheckpoint checkpoint)
@@ -229,6 +230,7 @@ public sealed partial class SimulationWorld
         world.RestoreRegionalGeneration(checkpoint.Economy?.RegionalGeneration);
         world.RestorePersistentRegionalEvolution(checkpoint.Economy?.RegionalEvolution);
         world._multimodalTransit.Restore(checkpoint.MultimodalTransit);
+        world.RestoreInitialMobilityCheckpoint(checkpoint);
         ValidateMultimodalTransitCheckpointReferences(checkpoint);
         return world;
     }
