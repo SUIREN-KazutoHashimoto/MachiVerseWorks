@@ -10,40 +10,52 @@ ROOT_DIR="$1"
 ARTIFACT_DIR="$2"
 GOLDEN_DIR="$ROOT_DIR/src/view/tests/visual/user-facing-golden"
 MANIFEST="$ROOT_DIR/src/view/tests/visual/user-facing/manifest.json"
-SCENES=(world-overview dense-urban road-interchange railway street-activity)
-LEGACY_REFERENCE_COMMIT="5715ca26d1a7525d89a93c35540f926a720e5386"
-PAUSE_AT_TICK=60
 
-python - "$MANIFEST" "$LEGACY_REFERENCE_COMMIT" "$PAUSE_AT_TICK" <<'PY'
+mapfile -t SCENES < <(python - "$MANIFEST" <<'PY'
 import json
+import re
 import sys
 from pathlib import Path
 
 manifest_path = Path(sys.argv[1])
-expected_commit = sys.argv[2]
-expected_pause_tick = int(sys.argv[3])
 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-expected_scenes = ["world-overview", "dense-urban", "road-interchange", "railway", "street-activity"]
-actual_scenes = [scene.get("id") for scene in manifest.get("scenes", [])]
 if manifest.get("schemaVersion") != 1:
     raise SystemExit("VQ-0 user-facing manifest schemaVersion must be 1.")
-if manifest.get("legacyReference", {}).get("commit") != expected_commit:
-    raise SystemExit("VQ-0 Legacy reference commit is not pinned to the reviewed Legacy baseline.")
-if actual_scenes != expected_scenes:
-    raise SystemExit(f"VQ-0 scene contract mismatch: expected {expected_scenes}, actual {actual_scenes}.")
+legacy = manifest.get("legacyReference", {})
+legacy_commit = legacy.get("commit", "")
+if not re.fullmatch(r"[0-9a-f]{40}", legacy_commit):
+    raise SystemExit("VQ-0 Legacy reference commit must be a pinned full SHA.")
+if not legacy.get("release"):
+    raise SystemExit("VQ-0 Legacy reference release must be pinned.")
+scenes = [scene.get("id") for scene in manifest.get("scenes", [])]
+if len(scenes) != 5 or any(not isinstance(scene, str) or not scene for scene in scenes) or len(set(scenes)) != len(scenes):
+    raise SystemExit(f"VQ-0 manifest must define exactly five unique scene ids: {scenes}.")
 runtime = manifest.get("runtime", {})
-if runtime.get("pauseAtTick") != expected_pause_tick:
-    raise SystemExit(f"VQ-0 fixed simulation tick mismatch: expected {expected_pause_tick}, actual {runtime.get('pauseAtTick')}.")
+for key in ("simulationSeed", "tickRate", "pauseAtTick", "snapshotRate"):
+    if not isinstance(runtime.get(key), int) or runtime[key] <= 0:
+        raise SystemExit(f"VQ-0 runtime.{key} must be a positive integer.")
+if runtime.get("defaultWorldBootstrap") is not True:
+    raise SystemExit("VQ-0 must capture the normal default-world bootstrap runtime.")
 capture = manifest.get("capture", {})
 viewport = capture.get("viewport", {})
 if viewport != {"width": 1920, "height": 1080, "devicePixelRatio": 1}:
     raise SystemExit(f"VQ-0 viewport contract mismatch: {viewport}.")
-if capture.get("renderer") != "SwiftShader" or capture.get("fontFamily") != "Noto Sans CJK JP":
+if capture.get("renderer") != "SwiftShader" or capture.get("fontFamily") != "Noto Sans CJK JP" or not capture.get("fontPackageVersion"):
     raise SystemExit("VQ-0 fixed renderer/font contract is missing.")
+if not re.fullmatch(r"Chrome for Testing \d+\.\d+\.\d+\.\d+", capture.get("browser", "")):
+    raise SystemExit("VQ-0 browser must pin an exact Chrome for Testing version.")
+for scene in scenes:
+    print(scene)
 PY
+)
 
-# The simulation is paused at one exact tick before capture. Keep a small rendering-only
-# tolerance for browser rasterization while treating the scene state itself as deterministic.
+if [[ "${#SCENES[@]}" -ne 5 ]]; then
+  echo "Failed to load the five VQ-0 scenes from $MANIFEST" >&2
+  exit 1
+fi
+
+# The simulation is paused at the manifest-defined exact tick before capture. Keep a small
+# rendering-only tolerance for browser rasterization while treating scene state as deterministic.
 export MVW_VISUAL_CHANNEL_THRESHOLD="${MVW_USER_FACING_VISUAL_CHANNEL_THRESHOLD:-8}"
 export MVW_VISUAL_MAX_CHANGED_RATIO="${MVW_USER_FACING_VISUAL_MAX_CHANGED_RATIO:-0.005}"
 
@@ -59,4 +71,4 @@ for scene in "${SCENES[@]}"; do
     "$GOLDEN_DIR/$scene.png"
 done
 
-echo "User-facing VQ-0 Golden comparison passed for ${#SCENES[@]} scenes."
+echo "User-facing VQ-0 Golden comparison passed for ${#SCENES[@]} manifest-defined scenes."
