@@ -27,27 +27,27 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           application = Path('src/web/src/application.ts')
           text = application.read_text(encoding='utf-8')
-          old = """  private initializeRegionalCamera(message: RegionalGenerationSnapshotMessage): void {
-            if (this.regionalCameraInitialized || message.settlements.length === 0) return;
-            const settlement = [...message.settlements].sort((left, right) =>
+          pattern = re.compile(
+              r'(  private initializeRegionalCamera\(message: RegionalGenerationSnapshotMessage\): void \{\n'
+              r'    if \(this\.regionalCameraInitialized \|\| message\.settlements\.length === 0\) return;\n)'
+          )
+          insertion = """    const currentSubscription = this.view.getSubscriptionVolume();
+              if (message.settlements.some((settlement) =>
+                settlement.x >= currentSubscription.minX && settlement.x <= currentSubscription.maxX
+                  && settlement.y >= currentSubscription.minY && settlement.y <= currentSubscription.maxY)) {
+                this.regionalCameraInitialized = true;
+                return;
+              }
           """
-          new = """  private initializeRegionalCamera(message: RegionalGenerationSnapshotMessage): void {
-            if (this.regionalCameraInitialized || message.settlements.length === 0) return;
-            const currentSubscription = this.view.getSubscriptionVolume();
-            if (message.settlements.some((settlement) =>
-              settlement.x >= currentSubscription.minX && settlement.x <= currentSubscription.maxX
-                && settlement.y >= currentSubscription.minY && settlement.y <= currentSubscription.maxY)) {
-              this.regionalCameraInitialized = true;
-              return;
-            }
-            const settlement = [...message.settlements].sort((left, right) =>
-          """
-          if old not in text:
-              raise SystemExit('initializeRegionalCamera patch target not found')
-          application.write_text(text.replace(old, new, 1), encoding='utf-8')
+          if 'currentSubscription = this.view.getSubscriptionVolume()' not in text:
+              text, count = pattern.subn(lambda match: match.group(1) + insertion, text, count=1)
+              if count != 1:
+                  raise SystemExit('initializeRegionalCamera patch target not found')
+              application.write_text(text, encoding='utf-8')
 
           roadmap = Path('roadmap/SIMULATION_ROADMAP.md')
           text = roadmap.read_text(encoding='utf-8')
