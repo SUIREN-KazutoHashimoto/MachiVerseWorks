@@ -9,6 +9,7 @@ GOLDEN_FILE="$ROOT_DIR/src/view/tests/visual/golden/view-physical-world.png"
 RUNTIME_GOLDEN_FILE="$ROOT_DIR/src/view/tests/visual/golden/view-runtime-integrated.json"
 WEB_PORT=5187
 SERVER_PORT=5094
+USER_FACING_PAUSE_TICK=60
 WEB_PID=""
 SERVER_PID=""
 mkdir -p "$ARTIFACT_DIR"; rm -rf "$ARTIFACT_DIR"/*
@@ -102,11 +103,11 @@ RUNTIME_URL="http://127.0.0.1:$WEB_PORT/?visualTest=runtime"
 node "$ROOT_DIR/scripts/run-headless-runtime-visual-e2e.mjs" "$CHROME" "$RUNTIME_URL" "$RUNTIME_ARTIFACT_DIR"
 node "$ROOT_DIR/scripts/check-runtime-visual-golden.mjs" "$RUNTIME_ARTIFACT_DIR" "$RUNTIME_GOLDEN_FILE"
 
-# VQ-0 user-facing Golden suite gets its own fresh deterministic runtime. Runtime activity
-# such as the initial vehicle/train set is time-dependent, so sharing the already-aged
-# structural-Golden server would make the baseline depend on how long the prior capture took.
+# VQ-0 user-facing Golden suite gets its own deterministic runtime. Bootstrap completes first,
+# then the Server advances synchronously to one exact simulation tick and remains paused while
+# every camera composition is captured. This keeps Vehicle/Train positions identical across scenes.
 stop_server
-env Server__Port="$SERVER_PORT" Simulation__TickRate=30 Simulation__Seed=29027 Simulation__SpatialCellSize=4096 Server__SnapshotRate=2 Server__MaximumSubscriptionCellCount=524288 Server__AllowedWebSocketOrigins="http://127.0.0.1:$WEB_PORT" dotnet run --project "$ROOT_DIR/src/server/MachiVerseWorks.Server.csproj" --configuration Release --no-build >"$USER_FACING_ARTIFACT_DIR/server-runtime.log" 2>&1 & SERVER_PID=$!
+env Server__Port="$SERVER_PORT" Simulation__TickRate=30 Simulation__Seed=29027 Simulation__SpatialCellSize=4096 Simulation__PauseAtTick="$USER_FACING_PAUSE_TICK" Server__SnapshotRate=2 Server__MaximumSubscriptionCellCount=524288 Server__AllowedWebSocketOrigins="http://127.0.0.1:$WEB_PORT" dotnet run --project "$ROOT_DIR/src/server/MachiVerseWorks.Server.csproj" --configuration Release --no-build >"$USER_FACING_ARTIFACT_DIR/server-runtime.log" 2>&1 & SERVER_PID=$!
 wait_http "http://127.0.0.1:$SERVER_PORT/health"
 
 # VQ-0 user-facing Golden suite. This is deliberately separate from the renderer fixture
