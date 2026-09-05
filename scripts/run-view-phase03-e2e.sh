@@ -102,6 +102,13 @@ RUNTIME_URL="http://127.0.0.1:$WEB_PORT/?visualTest=runtime"
 node "$ROOT_DIR/scripts/run-headless-runtime-visual-e2e.mjs" "$CHROME" "$RUNTIME_URL" "$RUNTIME_ARTIFACT_DIR"
 node "$ROOT_DIR/scripts/check-runtime-visual-golden.mjs" "$RUNTIME_ARTIFACT_DIR" "$RUNTIME_GOLDEN_FILE"
 
+# VQ-0 user-facing Golden suite gets its own fresh deterministic runtime. Runtime activity
+# such as the initial vehicle/train set is time-dependent, so sharing the already-aged
+# structural-Golden server would make the baseline depend on how long the prior capture took.
+stop_server
+env Server__Port="$SERVER_PORT" Simulation__TickRate=30 Simulation__Seed=29027 Simulation__SpatialCellSize=4096 Server__SnapshotRate=2 Server__MaximumSubscriptionCellCount=524288 Server__AllowedWebSocketOrigins="http://127.0.0.1:$WEB_PORT" dotnet run --project "$ROOT_DIR/src/server/MachiVerseWorks.Server.csproj" --configuration Release --no-build >"$USER_FACING_ARTIFACT_DIR/server-runtime.log" 2>&1 & SERVER_PID=$!
+wait_http "http://127.0.0.1:$SERVER_PORT/health"
+
 # VQ-0 user-facing Golden suite. This is deliberately separate from the renderer fixture
 # and runtime structural Golden: it captures stable camera compositions for visual review.
 USER_FACING_URL="http://127.0.0.1:$WEB_PORT/?visualTest=user-facing"
