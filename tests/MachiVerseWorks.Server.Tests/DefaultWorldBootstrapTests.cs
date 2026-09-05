@@ -47,6 +47,36 @@ public sealed class DefaultWorldBootstrapTests
         Assert.IsTrue(state.ActiveVehicleCount > 0);
         Assert.IsTrue(state.TrainCount > 0);
 
+        // Saving must not mutate the live world. Starter mobility identity is part of the
+        // checkpoint so a restored world can still retire only those transient subjects when
+        // a later Management road edit invalidates their derived routes.
+        var checkpointState = simulation.Read(static world =>
+        {
+            var pedestriansBefore = world.PedestrianCount;
+            var vehiclesBefore = world.VehicleCount;
+            var checkpoint = world.CreateCheckpoint();
+            return new
+            {
+                Checkpoint = checkpoint,
+                PedestriansBefore = pedestriansBefore,
+                VehiclesBefore = vehiclesBefore,
+                PedestriansAfter = world.PedestrianCount,
+                VehiclesAfter = world.VehicleCount,
+            };
+        });
+
+        Assert.AreEqual(checkpointState.PedestriansBefore, checkpointState.PedestriansAfter);
+        Assert.AreEqual(checkpointState.VehiclesBefore, checkpointState.VehiclesAfter);
+        Assert.IsTrue(checkpointState.Checkpoint.InitialMobilityPedestrianIds?.Count > 0);
+        Assert.IsTrue(checkpointState.Checkpoint.InitialMobilityVehicleIds?.Count > 0);
+
+        var restored = SimulationWorld.RestoreCheckpoint(checkpointState.Checkpoint);
+        Assert.AreEqual(checkpointState.PedestriansBefore, restored.PedestrianCount);
+        Assert.AreEqual(checkpointState.VehiclesBefore, restored.VehicleCount);
+        _ = restored.CreateRoadNode(new WorldPoint(900_000d, 900_000d, 0d));
+        Assert.AreEqual(0, restored.PedestrianCount);
+        Assert.AreEqual(0, restored.VehicleCount);
+
         // Bootstrap street activity is explicitly transient and must never make normal road
         // management permanently immutable. A topology mutation retires only bootstrap-owned
         // mobility while preserving the authoritative Regional city itself.
