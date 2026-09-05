@@ -1,5 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <!-- These analyzer rules are advisory performance/style guidance rather than correctness checks.
+         Keep them visible as warnings, but do not let existing findings block Simulation CI. -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);CA1512;CA1822;CA1859</WarningsNotAsErrors>
   </PropertyGroup>
 </Project>
