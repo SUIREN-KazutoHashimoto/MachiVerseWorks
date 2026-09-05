@@ -11,13 +11,25 @@ if (!browserExecutable || !targetUrl || !artifactDirectory) {
   process.exit(2);
 }
 
-const SCENES = Object.freeze([
-  'world-overview',
-  'dense-urban',
-  'road-interchange',
-  'railway',
-  'street-activity',
-]);
+const manifestPath = process.env.MVW_USER_FACING_VISUAL_MANIFEST ?? 'src/view/tests/visual/user-facing/manifest.json';
+const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+const scenes = Object.freeze((manifest.scenes ?? []).map((scene) => scene.id));
+const viewport = manifest.capture?.viewport ?? {};
+const browserDescriptor = manifest.capture?.browser ?? '';
+const expectedBrowserVersion = browserDescriptor.split(/\s+/).at(-1) ?? '';
+const expectedFontFamily = manifest.capture?.fontFamily ?? '';
+const expectedFontPackageVersion = manifest.capture?.fontPackageVersion ?? '';
+
+if (manifest.schemaVersion !== 1 || scenes.length === 0 || scenes.some((scene) => typeof scene !== 'string' || scene.length === 0)) {
+  throw new Error(`Invalid VQ-0 user-facing manifest scene contract: ${manifestPath}.`);
+}
+if (!Number.isInteger(viewport.width) || !Number.isInteger(viewport.height) || viewport.width <= 0 || viewport.height <= 0 || viewport.devicePixelRatio !== 1) {
+  throw new Error(`Invalid VQ-0 viewport contract in ${manifestPath}: ${JSON.stringify(viewport)}.`);
+}
+if (!expectedBrowserVersion || !expectedFontFamily || !expectedFontPackageVersion) {
+  throw new Error(`VQ-0 browser/font contract is incomplete in ${manifestPath}.`);
+}
+
 const timeoutMs = 120_000;
 const commandTimeoutMs = 30_000;
 const profileDirectory = await mkdtemp(join(tmpdir(), 'machiverseworks-user-facing-visual-e2e-'));
@@ -31,6 +43,16 @@ await mkdir(actualDirectory, { recursive: true });
 await mkdir(diagnosticsDirectory, { recursive: true });
 
 try {
+  if (process.env.MVW_VISUAL_BROWSER_VERSION && process.env.MVW_VISUAL_BROWSER_VERSION !== expectedBrowserVersion) {
+    throw new Error(`Installed visual browser contract disagrees with ${manifestPath}: manifest=${expectedBrowserVersion}, environment=${process.env.MVW_VISUAL_BROWSER_VERSION}.`);
+  }
+  if (process.env.MVW_VISUAL_FONT_FAMILY && process.env.MVW_VISUAL_FONT_FAMILY !== expectedFontFamily) {
+    throw new Error(`Installed visual font family disagrees with ${manifestPath}: manifest=${expectedFontFamily}, environment=${process.env.MVW_VISUAL_FONT_FAMILY}.`);
+  }
+  if (process.env.MVW_VISUAL_FONT_PACKAGE_VERSION && process.env.MVW_VISUAL_FONT_PACKAGE_VERSION !== expectedFontPackageVersion) {
+    throw new Error(`Installed visual font package disagrees with ${manifestPath}: manifest=${expectedFontPackageVersion}, environment=${process.env.MVW_VISUAL_FONT_PACKAGE_VERSION}.`);
+  }
+
   browser = spawn(browserExecutable, [
     '--headless=new',
     '--no-sandbox',
@@ -41,12 +63,12 @@ try {
     '--disable-lcd-text',
     '--font-render-hinting=none',
     '--force-color-profile=srgb',
-    '--force-device-scale-factor=1',
+    `--force-device-scale-factor=${String(viewport.devicePixelRatio)}`,
     '--lang=en-US',
     '--hide-scrollbars',
     '--enable-unsafe-swiftshader',
     '--use-angle=swiftshader',
-    '--window-size=1920,1080',
+    `--window-size=${String(viewport.width)},${String(viewport.height)}`,
     '--remote-debugging-port=0',
     `--user-data-dir=${profileDirectory}`,
     targetUrl,
@@ -60,20 +82,19 @@ try {
   await devToolsSocket.command('Page.enable');
   await devToolsSocket.command('Runtime.enable');
   await devToolsSocket.command('Emulation.setDeviceMetricsOverride', {
-    width: 1920,
-    height: 1080,
-    deviceScaleFactor: 1,
+    width: viewport.width,
+    height: viewport.height,
+    deviceScaleFactor: viewport.devicePixelRatio,
     mobile: false,
-    screenWidth: 1920,
-    screenHeight: 1080,
+    screenWidth: viewport.width,
+    screenHeight: viewport.height,
     positionX: 0,
     positionY: 0,
     dontSetVisibleSize: false,
   });
 
   const browserVersion = await devToolsSocket.command('Browser.getVersion');
-  const expectedBrowserVersion = process.env.MVW_VISUAL_BROWSER_VERSION;
-  if (expectedBrowserVersion && !browserVersion.product?.endsWith(`/${expectedBrowserVersion}`)) {
+  if (!browserVersion.product?.endsWith(`/${expectedBrowserVersion}`)) {
     throw new Error(`User-facing visual browser version mismatch: expected ${expectedBrowserVersion}, actual ${browserVersion.product ?? 'unknown'}.`);
   }
 
@@ -84,12 +105,15 @@ try {
   }
 
   const sceneDiagnostics = {};
-  for (const scene of SCENES) {
+  for (const scene of scenes) {
     sceneDiagnostics[scene] = await captureScene(
       devToolsSocket,
       browser,
       browserVersion,
       expectedBrowserVersion,
+      expectedFontFamily,
+      expectedFontPackageVersion,
+      viewport,
       scene,
     );
   }
@@ -99,20 +123,21 @@ try {
     status: 'passed',
     source: 'actual Application -> MachiVerseConnection -> Server/Simulation runtime',
     role: 'user-facing reproducible visual baseline; not a Legacy parity pass/fail decision',
-    viewport: { width: 1920, height: 1080, devicePixelRatio: 1 },
+    manifest: manifestPath,
+    viewport: { width: viewport.width, height: viewport.height, devicePixelRatio: viewport.devicePixelRatio },
     renderer: 'Chrome SwiftShader',
     browser: browserVersion,
-    expectedBrowserVersion: expectedBrowserVersion ?? null,
+    expectedBrowserVersion,
     visualFont: {
-      family: process.env.MVW_VISUAL_FONT_FAMILY ?? null,
-      packageVersion: process.env.MVW_VISUAL_FONT_PACKAGE_VERSION ?? null,
+      family: expectedFontFamily,
+      packageVersion: expectedFontPackageVersion,
     },
     hiddenDebugChromeCount,
     initialDiagnostics,
     scenes: sceneDiagnostics,
   };
   await writeFile(join(artifactDirectory, 'summary.json'), `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
-  console.log(`User-facing visual capture passed for ${SCENES.length} VQ-0 scenes.`);
+  console.log(`User-facing visual capture passed for ${scenes.length} VQ-0 scenes from ${manifestPath}.`);
 } catch (error) {
   const normalized = error instanceof Error ? error : new Error(String(error));
   console.error(normalized.stack ?? normalized.message);
@@ -163,7 +188,7 @@ async function waitForReady(client, browserProcess, timeout) {
   throw new Error(`Timed out waiting for user-facing visual runtime readiness. Last diagnostics: ${JSON.stringify(latest)}`);
 }
 
-async function captureScene(client, browserProcess, browserVersion, expectedBrowserVersion, scene) {
+async function captureScene(client, browserProcess, browserVersion, expectedBrowserVersionValue, expectedFontFamilyValue, expectedFontPackageVersionValue, viewportValue, scene) {
   const before = await client.evaluate('window.__MACHIVERSE_USER_FACING_VISUAL_TEST__?.getDiagnostics?.() ?? null');
   const previousRoadSnapshotSequence = before?.roadSnapshotSequence ?? null;
   if (!Number.isInteger(previousRoadSnapshotSequence)) throw new Error(`Road snapshot sequence is unavailable before ${scene}.`);
@@ -175,6 +200,7 @@ async function captureScene(client, browserProcess, browserVersion, expectedBrow
 
   const diagnostics = await client.evaluate(`(() => {
     const selector = '.person-debug,.railway-debug,.transit-debug,.economy-debug,.performance-overlay';
+    const expectedFontFamily = ${JSON.stringify(expectedFontFamilyValue)};
     let visibleDebugChromeCount = 0;
     for (const element of document.querySelectorAll(selector)) {
       const style = getComputedStyle(element);
@@ -185,22 +211,22 @@ async function captureScene(client, browserProcess, browserVersion, expectedBrow
       devicePixelRatio: window.devicePixelRatio,
       viewport: { width: window.innerWidth, height: window.innerHeight },
       visibleDebugChromeCount,
-      japaneseFontReady: ['Noto Sans CJK JP', 'Noto Sans JP'].some((family) => document.fonts.check('32px "' + family + '"', '日本語漢字かなカナ')),
+      japaneseFontReady: document.fonts.check('32px "' + expectedFontFamily + '"', '日本語漢字かなカナ'),
       location: location.href,
     };
   })()`);
   if (diagnostics.runtime?.ready !== true) throw new Error(`User-facing runtime diagnostics became unavailable at ${scene}.`);
-  if (diagnostics.viewport.width !== 1920 || diagnostics.viewport.height !== 1080 || diagnostics.devicePixelRatio !== 1) {
+  if (diagnostics.viewport.width !== viewportValue.width || diagnostics.viewport.height !== viewportValue.height || diagnostics.devicePixelRatio !== viewportValue.devicePixelRatio) {
     throw new Error(`User-facing viewport contract mismatch at ${scene}: ${JSON.stringify(diagnostics.viewport)} @ ${String(diagnostics.devicePixelRatio)}x.`);
   }
   if (diagnostics.visibleDebugChromeCount !== 0) throw new Error(`Debug-only chrome is visible in user-facing scene ${scene}.`);
-  if (process.env.MVW_VISUAL_FONT_FAMILY && diagnostics.japaneseFontReady !== true) throw new Error(`Pinned Japanese font is not ready in user-facing scene ${scene}.`);
+  if (diagnostics.japaneseFontReady !== true) throw new Error(`Pinned Japanese font is not ready in user-facing scene ${scene}.`);
 
   diagnostics.browser = browserVersion;
-  diagnostics.expectedBrowserVersion = expectedBrowserVersion ?? null;
+  diagnostics.expectedBrowserVersion = expectedBrowserVersionValue;
   diagnostics.visualFont = {
-    family: process.env.MVW_VISUAL_FONT_FAMILY ?? null,
-    packageVersion: process.env.MVW_VISUAL_FONT_PACKAGE_VERSION ?? null,
+    family: expectedFontFamilyValue,
+    packageVersion: expectedFontPackageVersionValue,
   };
   await writeFile(join(diagnosticsDirectory, `${scene}.json`), `${JSON.stringify(diagnostics, null, 2)}\n`, 'utf8');
 
