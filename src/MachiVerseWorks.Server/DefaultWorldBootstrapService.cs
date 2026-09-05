@@ -74,15 +74,28 @@ internal sealed class DefaultWorldBootstrapService(
                     iterationBudget),
                 out _);
 
-            // The semantic policy for initial street activity belongs to Simulation. This command
-            // places a few Pedestrian/Vehicle entities on the materialized city network without
-            // advancing the whole world or creating synthetic Population/Economy state.
-            _ = world.SeedInitialMobility(mobilityCount);
+            var primarySettlement = world.CreateRegionalGenerationSnapshot().Settlements
+                .OrderByDescending(static settlement => settlement.Population)
+                .ThenBy(static settlement => settlement.Id.Value)
+                .FirstOrDefault();
 
-            // Railway infrastructure is still mutable here because initial street activity does not
-            // advance the simulation or initialize Railway Operations.
+            // The semantic policy for initial street activity belongs to Simulation. This command
+            // places a few Pedestrian/Vehicle entities on the materialized primary city network
+            // without advancing the whole world or creating synthetic Population/Economy state.
+            if (primarySettlement is not null)
+                _ = world.SeedInitialMobility(mobilityCount, primarySettlement.Center);
+            else
+                _ = world.SeedInitialMobility(mobilityCount);
+
+            // Preserve the fixed-origin deterministic fixture for explicit fixture scenarios, while
+            // normal fresh-world bootstrap anchors the same railway contract to the primary city that
+            // the View initially focuses. This keeps Train activity in the user's initial subscription.
             if (ReadBoolean("Simulation:DefaultWorldBootstrap:SeedRailwayOperations", defaultValue: true))
-                _ = RailwayOperationsFixtures.SeedDeterministic(world);
+            {
+                _ = primarySettlement is not null
+                    ? RailwayOperationsFixtures.SeedDeterministic(world, primarySettlement.Center)
+                    : RailwayOperationsFixtures.SeedDeterministic(world);
+            }
 
             return true;
         }, roadTopologyChanged: true, railwayTopologyChanged: true);
