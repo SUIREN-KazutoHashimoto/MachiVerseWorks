@@ -4,23 +4,23 @@ on:
   push:
     branches: [develop]
     paths:
-      - 'src/MachiVerseWorks.Simulation/Radio*.cs'
-      - 'src/MachiVerseWorks.Simulation/DeterministicRadioPropagationSolver.cs'
-      - 'src/MachiVerseWorks.Simulation/Geometry.cs'
-      - 'src/MachiVerseWorks.Simulation/SimulationWorld.Radio*.cs'
-      - 'src/MachiVerseWorks.Simulation/SimulationWorld.cs'
-      - 'src/MachiVerseWorks.Simulation/SimulationNumeric.cs'
+      - 'src/simulation/Radio*.cs'
+      - 'src/simulation/DeterministicRadioPropagationSolver.cs'
+      - 'src/simulation/Geometry.cs'
+      - 'src/simulation/SimulationWorld.Radio*.cs'
+      - 'src/simulation/SimulationWorld.cs'
+      - 'src/simulation/SimulationNumeric.cs'
       - 'benchmarks/MachiVerseWorks.Benchmarks/RadioBenchmarks.cs'
       - '.github/workflows/radio-benchmark.yml'
   pull_request:
     branches: [develop]
     paths:
-      - 'src/MachiVerseWorks.Simulation/Radio*.cs'
-      - 'src/MachiVerseWorks.Simulation/DeterministicRadioPropagationSolver.cs'
-      - 'src/MachiVerseWorks.Simulation/Geometry.cs'
-      - 'src/MachiVerseWorks.Simulation/SimulationWorld.Radio*.cs'
-      - 'src/MachiVerseWorks.Simulation/SimulationWorld.cs'
-      - 'src/MachiVerseWorks.Simulation/SimulationNumeric.cs'
+      - 'src/simulation/Radio*.cs'
+      - 'src/simulation/DeterministicRadioPropagationSolver.cs'
+      - 'src/simulation/Geometry.cs'
+      - 'src/simulation/SimulationWorld.Radio*.cs'
+      - 'src/simulation/SimulationWorld.cs'
+      - 'src/simulation/SimulationNumeric.cs'
       - 'benchmarks/MachiVerseWorks.Benchmarks/RadioBenchmarks.cs'
       - '.github/workflows/radio-benchmark.yml'
   workflow_dispatch:
