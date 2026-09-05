@@ -5,6 +5,7 @@ export interface ViewRenderingQualityProfile {
   readonly fogColor: number;
   readonly fogNear: number;
   readonly fogFar: number;
+  readonly fogScaleReferenceAltitude: number;
   readonly exposure: number;
   readonly hemisphereSkyColor: number;
   readonly hemisphereGroundColor: number;
@@ -25,12 +26,13 @@ export const DEFAULT_VIEW_RENDERING_QUALITY: Readonly<ViewRenderingQualityProfil
   fogColor: 0xc7d7e2,
   fogNear: 1_800,
   fogFar: 10_000,
-  exposure: 1.08,
+  fogScaleReferenceAltitude: 2_000,
+  exposure: 1.02,
   hemisphereSkyColor: 0xeaf6ff,
   hemisphereGroundColor: 0x61705c,
-  hemisphereIntensity: 1.55,
+  hemisphereIntensity: 1.2,
   sunColor: 0xfff3d6,
-  sunIntensity: 2.4,
+  sunIntensity: 1.7,
   shadowMapSize: 2_048,
   shadowDistance: 4_000,
   shadowBias: -0.00012,
@@ -78,4 +80,20 @@ export function installEnvironmentLighting(
 
   scene.add(hemisphere, sun);
   return Object.freeze({ hemisphere, sun });
+}
+
+/**
+ * Fog is presentation-only and follows observation scale. A fixed 10 km fog plane makes a
+ * continent-scale camera completely opaque, while disabling fog loses urban depth cues.
+ */
+export function updateEnvironmentFog(
+  scene: THREE.Scene,
+  camera: THREE.PerspectiveCamera,
+  quality: ViewRenderingQualityProfile = DEFAULT_VIEW_RENDERING_QUALITY,
+): void {
+  if (!(scene.fog instanceof THREE.Fog)) return;
+  const altitude = Math.max(0, Math.abs(camera.position.y));
+  const scale = Math.max(1, altitude / quality.fogScaleReferenceAltitude);
+  scene.fog.near = quality.fogNear * scale;
+  scene.fog.far = quality.fogFar * scale;
 }
