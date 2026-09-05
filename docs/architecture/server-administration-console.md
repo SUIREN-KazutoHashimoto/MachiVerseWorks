@@ -48,4 +48,4 @@ See also:
 
 - [`../specifications/server-administration-console.md`](../specifications/server-administration-console.md)
 - [`../decisions/ADR-0005-server-administration-boundary.md`](../decisions/ADR-0005-server-administration-boundary.md)
-- [`../../src/MachiVerseWorks.Server/README.md`](../../src/MachiVerseWorks.Server/README.md)
+- [`../../src/gateway/README.md`](../../src/gateway/README.md)
