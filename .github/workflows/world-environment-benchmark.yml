@@ -4,25 +4,25 @@ on:
   push:
     branches: [develop]
     paths:
-      - 'src/MachiVerseWorks.Simulation/WorldEnvironment*.cs'
-      - 'src/MachiVerseWorks.Simulation/TerrainModel.cs'
-      - 'src/MachiVerseWorks.Simulation/Geometry.cs'
-      - 'src/MachiVerseWorks.Simulation/SimulationWorld.Environment*.cs'
-      - 'src/MachiVerseWorks.Simulation/SimulationWorld.cs'
-      - 'src/MachiVerseWorks.Simulation/SimulationNumeric.cs'
-      - 'src/MachiVerseWorks.Simulation/SimulationTime.cs'
+      - 'src/simulation/WorldEnvironment*.cs'
+      - 'src/simulation/TerrainModel.cs'
+      - 'src/simulation/Geometry.cs'
+      - 'src/simulation/SimulationWorld.Environment*.cs'
+      - 'src/simulation/SimulationWorld.cs'
+      - 'src/simulation/SimulationNumeric.cs'
+      - 'src/simulation/SimulationTime.cs'
       - 'benchmarks/MachiVerseWorks.Benchmarks/WorldEnvironmentBenchmarks.cs'
       - '.github/workflows/world-environment-benchmark.yml'
   pull_request:
     branches: [develop]
     paths:
-      - 'src/MachiVerseWorks.Simulation/WorldEnvironment*.cs'
-      - 'src/MachiVerseWorks.Simulation/TerrainModel.cs'
-      - 'src/MachiVerseWorks.Simulation/Geometry.cs'
-      - 'src/MachiVerseWorks.Simulation/SimulationWorld.Environment*.cs'
-      - 'src/MachiVerseWorks.Simulation/SimulationWorld.cs'
-      - 'src/MachiVerseWorks.Simulation/SimulationNumeric.cs'
-      - 'src/MachiVerseWorks.Simulation/SimulationTime.cs'
+      - 'src/simulation/WorldEnvironment*.cs'
+      - 'src/simulation/TerrainModel.cs'
+      - 'src/simulation/Geometry.cs'
+      - 'src/simulation/SimulationWorld.Environment*.cs'
+      - 'src/simulation/SimulationWorld.cs'
+      - 'src/simulation/SimulationNumeric.cs'
+      - 'src/simulation/SimulationTime.cs'
       - 'benchmarks/MachiVerseWorks.Benchmarks/WorldEnvironmentBenchmarks.cs'
       - '.github/workflows/world-environment-benchmark.yml'
   workflow_dispatch:
