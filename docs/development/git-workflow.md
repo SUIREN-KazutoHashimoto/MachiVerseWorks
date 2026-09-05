@@ -39,9 +39,10 @@ merge commit
 
 PRの標準マージ方式は **merge commit** とします。
 
-- 個々の開発コミットとversion推移を残すため、通常はsquash mergeを使用しない。
+- 個々の開発コミットとPR境界を残すため、通常はsquash mergeを使用しない。
 - commit SHAを書き換えないため、通常はrebase mergeを使用しない。
-- GitHubがPRマージ時に生成するmerge commitは管理上のコミットとして扱い、version `C`を別途加算しない。
+- GitHubがPRマージ時に生成するmerge commitは管理上の統合コミットとして扱う。
+- Application `VERSION`はmerge commitやPR数に連動させず、Release時だけ更新する。
 - マージ済みの短命branchは原則削除する。
 - `main`と`develop`は長期branchとして削除しない。
 
@@ -51,15 +52,31 @@ GitHub Repository側で設定する値は[`repository-settings.md`](repository-s
 
 変更前に最低限、次を確認します。
 
-1. 対象の状態・責務を所有するproject / class / module
-2. 呼び出し元と出力先
-3. 関連するtest
-4. 関連する仕様 (`docs/specifications/`)
-5. 関連する設計 (`docs/architecture/`)
-6. 重要な採用理由がある場合はADR (`docs/decisions/`)
-7. 対応する`roadmap/SIMULATION_ROADMAP.md`、`roadmap/GATEWAY_ROADMAP.md`、`roadmap/VIEW_ROADMAP.md`、`roadmap/MANAGEMENT_ROADMAP.md`のTask ID
+1. 今回の**対象コンポーネントを1つ**決める。
+2. 対象の状態・責務を所有するproject / class / moduleを確認する。
+3. 呼び出し元と出力先を確認する。
+4. 関連するtestを確認する。
+5. 関連する仕様 (`docs/specifications/`) を確認する。
+6. 関連する設計 (`docs/architecture/`) を確認する。
+7. 重要な採用理由がある場合はADR (`docs/decisions/`) を確認する。
+8. 対応する`roadmap/SIMULATION_ROADMAP.md`、`roadmap/GATEWAY_ROADMAP.md`、`roadmap/VIEW_ROADMAP.md`、`roadmap/MANAGEMENT_ROADMAP.md`のTask IDを確認する。
 
 ファイル名や古い資料だけで現在の挙動を決めつけず、実効コードとtestを確認します。
+
+### AGENTのコンポーネント境界
+
+1つの開発AGENTは、原則として1つの作業で1コンポーネントだけを実装します。
+
+対象候補はSimulation / Gateway / Server / Protocol / Persistence / View / Managementです。Gatewayは物理的には`src/server/`内でhostされますが、責務上は独立した対象コンポーネントとして扱います。
+
+作業中に別コンポーネントの変更が必要だと判明した場合は、同じAGENTがそのまま実装しません。
+
+1. 必要な変更内容・理由・依存元をIssueへ記録する。
+2. 元の作業との依存関係を明記する。
+3. 別AGENTへ引き継ぐ。
+4. 共有Protocol変更も、Protocol側の実装として別作業へ分割する。
+
+Repository全体のCI、運用ルール、共通ドキュメントだけを変更する作業は`Repository-wide tooling/docs`として扱えます。この例外を機能実装の跨ぎ変更に使用しません。
 
 ## 3. 新機能
 
@@ -86,7 +103,7 @@ GitHub Repository側で設定する値は[`repository-settings.md`](repository-s
 - build / edit / runtime control / Server config / Save UI → Management Roadmap
 - 統計分析 / trend / heatmap等 → View / Managementへ入れず将来Analytics系として別設計
 
-Simulation / Gateway / View / Managementにまたがる機能では、1 Taskへ混在させず責務ごとに分割します。
+Simulation / Gateway / Server / Protocol / Persistence / View / Managementにまたがる機能では、1 Task / 1 AGENTへ混在させず責務ごとのIssueへ分割します。
 
 ### ViewのSimulation / Gateway追従
 
@@ -125,9 +142,10 @@ version / commit / branch:
 1. 実効code pathを追う
 2. 原因を一文で説明できる状態にする
 3. 原因を持つ最小の責務で修正する
-4. 元の再現条件で確認する
-5. 近接する正常ケースが壊れていないか確認する
-6. 必要なら仕様・設計・ADRを同期する
+4. 別コンポーネントの追従が必要ならIssueへ切り出す
+5. 元の再現条件で確認する
+6. 近接する正常ケースが壊れていないか確認する
+7. 必要なら仕様・設計・ADRを同期する
 
 Timeout、強制リセット、fallbackは安全網として有効な場合がありますが、原因が別にある場合は回避策だけを最終修正にしません。
 
@@ -172,6 +190,8 @@ View ◄──── Observation Result ─────┤
 - Gatewayはrevision cache / request deduplication等で同じread処理を無駄に繰り返さない
 - 最適化によって仕様やdeterminismが変わる場合は、単なる`perf`として扱わず明示する
 
+Benchmark workflowは現時点ではadvisory / non-blockingです。ただし性能へ影響するPRで赤になった場合は原因を調査し、未解決ならPRに明記します。
+
 ## 7. 検証
 
 変更内容に応じて次を組み合わせます。
@@ -197,6 +217,7 @@ CIが成功していても、runtime behaviorを確認していない場合は�
 PR本文には最低限、可能な範囲で次を含めます。
 
 - 目的
+- 対象コンポーネント
 - 原因（bugfixの場合）
 - 実装内容
 - 重要なsemantic / protocol / performance変更
@@ -205,6 +226,9 @@ PR本文には最低限、可能な範囲で次を含めます。
 - 未確認事項
 - 既知制約
 - ドキュメント更新範囲
+- 他コンポーネントへのfollow-up Issue
+
+自動reviewでinline threadが作られた場合は、修正後にthreadをResolveし、最新pushで追加指摘がないか確認します。
 
 ## 9. ドキュメント同期
 
@@ -228,9 +252,10 @@ PR本文には最低限、可能な範囲で次を含めます。
 作業完了時は次を確認します。
 
 - 実装と文書が同じ意味を説明している
-- 必要なtest / build / benchmarkが成功している
+- 実装変更が対象コンポーネント1つに限定され、必要な他コンポーネント作業はIssueへ切り出されている
+- 必要なtest / build / benchmarkが成功している、またはnon-blocking benchmarkの未解決事項が明記されている
 - runtime確認が必要な項目は確認済み、または未確認と明記している
 - 不要なdebug code / experiment flagが残っていない
 - 対応する4 RoadmapのTask状態が同期されている
 - Markdownを追加・移動・改名した場合はlocal link / heading anchor validationが成功している
-- 通常開発期間では`AGENTS.md`と`versioning.md`のversion規則へ従っている
+- 通常開発では`VERSION`をRelease番号として扱い、PRやmergeの回数に応じて機械的に更新していない

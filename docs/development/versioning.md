@@ -4,41 +4,41 @@ MachiVerseWorks のアプリケーションバージョンと、互換性用vers
 
 ## 1. アプリケーションバージョン
 
-通常開発開始後は、リポジトリルートの `VERSION` を**唯一の正本**とします。
+リポジトリルートの `VERSION` を**公開成果物のRelease versionの唯一の正本**とします。
 
 ```text
 A.B.C
 ```
 
-`VERSION` には余分な接頭辞や説明を入れず、例として `1.4.12` のような値だけを保存します。
+`VERSION` には余分な接頭辞や説明を入れず、例として `0.72.0` や `1.0.0` のような値だけを保存します。
 
-Phase 0 の初期セットアップが完了していても、自動的にversion運用へ移行しません。通常開発へ移行することが明示された時点で初期値を決定して `VERSION` を作成します。
+`VERSION` はGit commit数、PR数、branch種別を表す番号ではありません。通常開発では既存値を維持し、Releaseとして公開するversionを決めたときだけ変更します。
 
-## 2. カウント規則
+## 2. 更新タイミング
 
-- `A`: releaseとして`main`へ統合するversion更新で`+1`し、`B = 0`, `C = 0`にする。
-- `B`: `develop`上の統合versionを進める明示的なversion更新で`+1`し、`C = 0`にする。
-- `C`: 必要に応じた通常のversion更新で`+1`する。
+通常のfeature / fix / perf / refactor / docs作業、worker branch、`develop`向けPull Requestでは、原則として`VERSION`を変更しません。
 
-並行作業ブランチや通常のPull Requestごとに`VERSION`更新を強制しない。複数PRが同じbase versionから同時に分岐する場合の機械的なA/B/C更新競合を避け、versionを進める操作はintegration/release境界で明示的に行う。
+複数PRを`develop`へ統合しても、Releaseを決めるまでは同じ`VERSION`を維持できます。
+
+Releaseを作成するときは、公開する成果物に付与したいversionへ明示的に更新します。
 
 例:
 
 ```text
-1.4.12
-  ↓ 通常コミット
-1.4.13
-  ↓ develop 向け PR
-1.5.0
-  ↓ 通常コミット
-1.5.1
-  ↓ main 向け PR
-2.0.0
+VERSION = 0.71.0
+  ↓ feature / fix / refactor PRを複数merge
+VERSION = 0.71.0
+  ↓ 次のReleaseを0.72.0にすると決定
+VERSION = 0.72.0
+  ↓ develop -> main
+Release 0.72.0
 ```
 
-PR 作成に伴う A / B のversion更新コミットでは、同じ操作で C を別途加算しません。GitHub がPRマージ時に生成する merge commit も管理上のコミットとして扱い、C を加算しません。
+`develop -> main`というbranch操作そのものはversion番号を決定しません。Release PRには、公開したいversionが既に`VERSION`へ設定されている状態で含めます。
 
-一度使用したversion以下の値へ戻してはなりません。過去versionの再利用はartifact、bug report、Release履歴の識別性を壊すため禁止します。
+A / B / Cのどこを変更するかは、そのReleaseの互換性・規模・公開方針に応じて決定します。Git branch名やPR種別から機械的に`A+1`、`B+1`、`C+1`を要求しません。
+
+一度公開済みのversionを別内容のReleaseへ再利用しません。
 
 ## 3. 各コンポーネントへの反映
 
@@ -71,28 +71,23 @@ Client / Server 間のwire互換性を表します。
 
 ## 5. CI
 
-通常開発への移行が明示されるまでは `VERSION` が存在しない状態を許可します。
+通常CIでは`VERSION`について次だけを検証します。
 
-`VERSION` が追加された後はCIで次を検証します。
-
+- Repository rootに`VERSION`が存在すること
 - `A.B.C` の3整数形式であること
 - 前後に不要な文字や空白行を持たないこと
-- PR側の`VERSION`がtarget/base branchと同一なら、通常のコード統合として許可すること
-- `develop`向けPull Requestで`VERSION`を変更する場合、baseが`A.B.C`ならPR側を厳密に`A.(B+1).0`とすること
-- `main`向けPull Requestで`VERSION`を変更する場合、baseが`A.B.C`ならPR側を厳密に`(A+1).0.0`とすること
-- その他のPR targetで`VERSION`を変更する場合、PR側の`VERSION`がtarget/base branchより大きいこと
 
-baseとの比較は`A`, `B`, `C`を整数tupleとして行います。`VERSION`が変更された`develop` / `main` PRでは単なる増加だけでなく、上記のbranch別transitionを要求します。未変更の通常PRは許可し、versionの後退・再利用・変更時の誤ったincrement種別を検出した場合はrepository jobを失敗させるため、必須`ci-gate`も失敗します。
+通常PRではbase branchとのversion比較を行いません。`develop`向けPR、`main`向けPR、その他branch向けPRのいずれでも、branch種別を理由としたversion incrementを要求しません。
 
-通常コミットやworker PRごとのversion更新は強制しません。並行開発との衝突を避け、integration/releaseで`VERSION`を変更した場合だけtarget branchに対応するtransitionを厳密に検証します。
-
-通常開発へ移行するときは、CIの必須ファイル一覧にも `VERSION` を追加します。
+将来Release workflowを追加する場合は、そのworkflow側でtag / GitHub Release / artifact metadataと`VERSION`の一致を検証します。通常CIへPRごとのversion increment規則を再導入しません。
 
 ## 6. 禁止事項
 
+- 通常PRやmerge commitのたびに機械的に`VERSION`を更新しない。
+- branch種別だけを理由にversion番号を決めない。
 - ServerとWeb Clientで別々にアプリケーションversionを手更新しない。
 - Protocol versionをアプリケーションversionで代用しない。
 - Save format versionをアプリケーションversionで代用しない。
 - Git tagだけをversionの正本にしない。
 - build日時を公式versionの代わりにしない。
-- target/base branchの規則に反する`VERSION`を持つPRを作らない。
+- 公開済みversionを別内容のReleaseへ再利用しない。
