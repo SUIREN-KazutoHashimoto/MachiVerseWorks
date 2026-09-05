@@ -152,7 +152,7 @@ unused key 検出は false positive が多い場合があるため、導入時�
 初期セットアップ中は次だけを必須とします。
 
 1. Simulation / Protocol / Save Data を言語非依存に保つ。
-2. Web presentation の locale resource 置き場を `src/web/locales/` に固定する。
+2. Web presentation の locale resource 置き場を `src/view/locales/` に固定する。
 3. default locale を `ja-JP` とする。
 4. i18n library はまだ固定しない。
 5. ViewとManagementが共通i18n基盤を再利用しても、feature固有Taskと責務境界はRoadmapどおり分離する。
