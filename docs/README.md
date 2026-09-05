@@ -9,7 +9,7 @@ MachiVerseWorks のドキュメント入口です。
 - Simulation側の現在地と次の作業: [`../roadmap/SIMULATION_ROADMAP.md`](../roadmap/SIMULATION_ROADMAP.md)
 - Gateway側の現在地と次の作業: [`../roadmap/GATEWAY_ROADMAP.md`](../roadmap/GATEWAY_ROADMAP.md)
 - View側の現在地と次の作業: [`../roadmap/VIEW_ROADMAP.md`](../roadmap/VIEW_ROADMAP.md)
-- View P0 Legacy Visual Parity詳細計画: [`roadmap/view-legacy-visual-parity.md`](roadmap/view-legacy-visual-parity.md)
+- View P0 Legacy Visual Parityの詳細計画: [`roadmap/view-legacy-visual-parity.md`](roadmap/view-legacy-visual-parity.md)
 - Phase 38 Addon conflict resolution詳細設計: [`roadmap/phase38-addon-conflict-resolution.md`](roadmap/phase38-addon-conflict-resolution.md)
 - Management側の現在地と次の作業: [`../roadmap/MANAGEMENT_ROADMAP.md`](../roadmap/MANAGEMENT_ROADMAP.md)
 - 共通の開発・文書ルール: [`../AGENTS.md`](../AGENTS.md)
