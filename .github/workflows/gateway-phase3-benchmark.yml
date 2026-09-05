@@ -5,8 +5,8 @@ on:
     branches:
       - develop
     paths:
-      - 'src/MachiVerseWorks.Server/**'
-      - 'src/MachiVerseWorks.Protocol/**'
+      - 'src/gateway/**'
+      - 'src/protocol/**'
       - 'benchmarks/MachiVerseWorks.Benchmarks/GatewayDeliveryBenchmarks.cs'
       - '.github/workflows/gateway-phase3-benchmark.yml'
   workflow_dispatch:
