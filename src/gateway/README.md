@@ -1,6 +1,6 @@
 # MachiVerseWorks.Server
 
-Headless ServerはASP.NET Core / Kestrel上で1つの`SimulationWorld`をserver-authoritativeに実行し、HTTP health endpointとProtocol 2.x binary WebSocketを提供します。現在のServer Protocol上限は[`ProtocolVersion.Current`](../MachiVerseWorks.Protocol/ProtocolVersion.cs)の **2.17** です。
+Headless ServerはASP.NET Core / Kestrel上で1つの`SimulationWorld`をserver-authoritativeに実行し、HTTP health endpointとProtocol 2.x binary WebSocketを提供します。現在のServer Protocol上限は[`ProtocolVersion.Current`](../protocol/ProtocolVersion.cs)の **2.17** です。
 
 Serverはread-onlyな**Observation Gateway**と、authoritative mutationを扱う**Administration / Management command boundary**を分離します。Gateway Phase 1でpublish / subscription / inspection処理のmodule boundaryを確立し、generic cache / request deduplication等の最適化基盤は[`GATEWAY_ROADMAP.md`](../../roadmap/GATEWAY_ROADMAP.md) Phase 2以降で段階実装します。
 
@@ -112,7 +112,7 @@ export Server__Mcp__Enabled=true
 export Server__Mcp__ReadToken='replace-with-at-least-32-random-characters'
 export Server__Mcp__WriteToken='replace-with-a-different-32-char-token'
 export Server__Mcp__DestructiveToken='replace-with-another-distinct-token'
-dotnet run --project src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj
+dotnet run --project src/gateway/MachiVerseWorks.Server.csproj
 ```
 
 Browser由来のMCP Clientだけを許可する場合はexact Originを設定します。通常のnon-browser MCP Clientは`Origin`を送らないため、この設定は必須ではありません。
@@ -172,7 +172,7 @@ Protocol 1.xの`SubscribeArea`や2D rectangle互換経路は提供しません�
 ## ローカル起動
 
 ```bash
-dotnet run --project src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj
+dotnet run --project src/gateway/MachiVerseWorks.Server.csproj
 ```
 
 詳細なlifecycle / Observation Gateway / revision / cache / oversize policyは[`../../docs/architecture/headless-server.md`](../../docs/architecture/headless-server.md)、wire contractは[`../../docs/architecture/protocol.md`](../../docs/architecture/protocol.md)を参照してください。
