@@ -3,9 +3,9 @@
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../MachiVerseWorks.Simulation/MachiVerseWorks.Simulation.csproj" />
-    <ProjectReference Include="../MachiVerseWorks.Protocol/MachiVerseWorks.Protocol.csproj" />
-    <ProjectReference Include="../MachiVerseWorks.Persistence/MachiVerseWorks.Persistence.csproj" />
+    <ProjectReference Include="../simulation/MachiVerseWorks.Simulation.csproj" />
+    <ProjectReference Include="../protocol/MachiVerseWorks.Protocol.csproj" />
+    <ProjectReference Include="../persistence/MachiVerseWorks.Persistence.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="ModelContextProtocol.AspNetCore" />
