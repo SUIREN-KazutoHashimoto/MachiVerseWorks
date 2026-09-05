@@ -4,6 +4,9 @@
 
 Visual Regression はスクリーンショットだけを正しさの根拠にせず、renderer diagnostics、構造 assertion、実 Runtime の主要レイヤー契約を組み合わせて回帰を検出します。正本となる View の画像は FHD（`1920x1080`）、device pixel ratio 1 で取得します。
 
+> [!IMPORTANT]
+> Technical Goldenの成功はLegacy Visual Parityの成功を意味しません。Legacy比較用のUser-facing Goldenは[`user-facing/README.md`](user-facing/README.md)で別契約として管理し、正式なLegacy parity判定はVQ-7で行います。
+
 ## Renderer Golden
 
 Renderer Golden は決定論的 fixture に対する pixel regression です。Simulation の通常 bootstrap とは分離し、個別 renderer の見た目を固定します。
@@ -39,6 +42,20 @@ Renderer Golden の後、View Phase 3 E2E は Server を通常設定で再起動
 - `runtime-street-activity.png`: Pedestrian / Vehicle を確認しやすい街路活動フォーカス。
 
 Runtime は Simulation tick によって動的に変化するため、Renderer fixture と同じ pixel-perfect baseline ではなく、固定 Browser・固定 Font・FHD screenshot と主要レイヤーの構造 Golden を組み合わせます。これにより建物・道路・交通主体・Debug Overlay などの欠落を false negative にしない一方、tick 差だけで全画面 pixel comparison が不安定になることを避けます。
+
+## User-facing Legacy Comparison Golden
+
+VQ-0ではTechnical Goldenとは別に、通常Default World Bootstrapから取得するUser-facing Goldenを管理します。
+
+- `user-facing-golden/world-overview.png`
+- `user-facing-golden/dense-urban.png`
+- `user-facing-golden/road-interchange.png`
+- `user-facing-golden/railway.png`
+- `user-facing-golden/street-activity.png`
+
+固定Seedとauthoritative observationから決定論的にCamera targetを選び、同じ5構図をVQ-1以降も継続利用します。Legacy側の参照正本、固定実行条件、比較項目、更新規約は[`user-facing/manifest.json`](user-facing/manifest.json)と[`user-facing/README.md`](user-facing/README.md)を参照してください。
+
+このUser-facing Goldenは「現在の新版Viewを再現可能に固定するbaseline」であり、画像が一致したこと自体をLegacy同等以上の証明にはしません。VQ-1〜VQ-6の改善を同じ構図で追跡し、VQ-7でLegacy referenceとの正式な品質Gateへ昇格します。
 
 ## Debug Overlay
 
@@ -84,6 +101,12 @@ MVW_UPDATE_VISUAL_GOLDEN=1 bash scripts/run-view-phase03-e2e.sh
 MVW_UPDATE_VISUAL_GOLDEN=1 bash scripts/run-view-phase04-e2e.sh
 ```
 
+User-facing Goldenだけを更新する場合は次を使用します。
+
+```bash
+MVW_UPDATE_USER_FACING_GOLDEN=1 bash scripts/run-view-phase03-e2e.sh
+```
+
 生成された PNG を目視確認してから通常の source change と同様にコミットします。Runtime Integrated Golden の構造条件を変更する場合も、同じく actual screenshot と diagnostics を確認してから `view-runtime-integrated.json` を更新します。
 
 ## 差分閾値
@@ -91,5 +114,7 @@ MVW_UPDATE_VISUAL_GOLDEN=1 bash scripts/run-view-phase04-e2e.sh
 共通 pixel comparator は、既定で各 channel `8/255` を noise threshold とし、画像全体に対する changed-pixel ratio の上限を `0.1%` とします。
 
 Settlement / Structure シーンは背景面積が大きいため、`run-view-phase04-e2e.sh` では既定上限を `0.01%` に厳格化します。FHD では約 207 pixel を超える有意差で失敗するため、Settlement や Building の透明化・背景色化のように件数 assertion だけでは検出できない回帰も検出します。
+
+VQ-0 User-facing Goldenは動的Entityの小さなcapture timing差を許容するため、channel threshold `8/255`を維持しつつchanged-pixel ratioを既定`0.5%`とします。これはLegacy parity判定閾値ではなく、現在baselineの再現性確認用です。
 
 調査時のみ `MVW_VISUAL_CHANNEL_THRESHOLD` と `MVW_VISUAL_MAX_CHANGED_RATIO` で上書きできます。正本 baseline の閾値を変更する場合は、検出能力が低下しないことを確認してレビュー対象にします。
