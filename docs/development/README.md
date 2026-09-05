@@ -13,7 +13,7 @@
 - [`performance.md`](performance.md): benchmark、profiling、性能指標、最適化判断の基準
 - [`localization-guidelines.md`](localization-guidelines.md): 将来の多言語対応を壊さない実装ルール
 
-共通の開発ルールはルートの[`../../AGENTS.md`](../../AGENTS.md)を正本とします。.NET SDKの基準はルートの`global.json`、Node.jsの基準は`src/web/.node-version`を正本とします。
+共通の開発ルールはルートの[`../../AGENTS.md`](../../AGENTS.md)を正本とします。.NET SDKの基準はルートの`global.json`、Node.jsの基準は`src/view/.node-version`を正本とします。
 
 実装計画・Task状態は、Simulation側を[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)、Gateway側を[`../../roadmap/GATEWAY_ROADMAP.md`](../../roadmap/GATEWAY_ROADMAP.md)、read-only View側を[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)、管理・編集UIを[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)で管理します。`docs/roadmap/`にあるPhase補足資料は詳細設計・検討用であり、Task状態の正本ではありません。
 
