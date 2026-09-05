@@ -1,6 +1,16 @@
 {
   "schemaVersion": 1,
   "role": "Reproducible user-facing visual baseline for Legacy comparison. Passing this baseline is not a Legacy parity decision; VQ-7 owns the parity gate.",
+  "legacyReference": {
+    "repository": "Machi-Sim_Legacy",
+    "commit": "5715ca26d1a7525d89a93c35540f926a720e5386",
+    "release": "v1.1.9",
+    "referencePolicy": "Pin the archived Legacy implementation as provenance. VQ-0 does not clone or execute Legacy in CI; VQ-7 owns direct parity review against this reference.",
+    "presentationEvidence": [
+      "src/main.ts uses PerspectiveCamera FOV 55, scene fog, directional sun, hemisphere light and PCF soft shadows.",
+      "README.md records road hierarchy, buildings/POIs, signals/crosswalks, railway/train rendering, GPU instancing and distance LOD as Legacy production capabilities."
+    ]
+  },
   "runtime": {
     "simulationSeed": 29027,
     "tickRate": 30,
@@ -17,7 +27,7 @@
     "renderer": "SwiftShader",
     "fontFamily": "Noto Sans CJK JP",
     "fontPackageVersion": "1:20230817+repack1-3",
-    "debugChrome": "hidden for person/railway/transit/economy/performance diagnostic sections; normal user status chrome remains visible"
+    "debugChrome": "hidden for diagnostics/debug sections; normal user status chrome remains visible"
   },
   "goldenPolicy": {
     "technicalGolden": "Renderer fixture and runtime structural contracts detect pipeline/layer regressions. They do not prove user-facing visual quality.",
@@ -25,6 +35,15 @@
     "updateRule": "Update only after reviewing actual/diff artifacts and confirming the visual change is intentional. Never update only to make CI pass.",
     "legacyParity": "Legacy remains the minimum quality floor, but parity is reviewed and enforced by VQ-7 rather than inferred from these current-baseline pixels."
   },
+  "qualityDimensions": [
+    "urban-density",
+    "road-hierarchy",
+    "railway-presence",
+    "city-activity",
+    "lighting-depth",
+    "scale-continuity",
+    "ui-visibility"
+  ],
   "scenes": [
     {
       "id": "world-overview",
