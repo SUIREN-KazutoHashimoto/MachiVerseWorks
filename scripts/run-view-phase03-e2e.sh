@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACT_DIR="$ROOT_DIR/.artifacts/view-phase03-e2e"
 RUNTIME_ARTIFACT_DIR="$ARTIFACT_DIR/runtime-user-view"
 GOLDEN_FILE="$ROOT_DIR/src/view/tests/visual/golden/view-physical-world.png"
+RUNTIME_GOLDEN_FILE="$ROOT_DIR/src/view/tests/visual/golden/view-runtime-integrated.json"
 WEB_PORT=5187
 SERVER_PORT=5094
 WEB_PID=""
@@ -63,7 +64,7 @@ fi
 VITE_SERVER_URL="ws://127.0.0.1:$SERVER_PORT/ws" npm --prefix "$ROOT_DIR/src/view" run dev -- --host 127.0.0.1 --port "$WEB_PORT" --strictPort >"$ARTIFACT_DIR/vite.log" 2>&1 & WEB_PID=$!
 wait_http "http://127.0.0.1:$WEB_PORT/tests/browser/view-phase03-e2e.html"
 
-env Server__Port="$SERVER_PORT" Simulation__TickRate=30 Simulation__Seed=29027 Simulation__SpatialCellSize=4096 Server__SnapshotRate=2 Server__MaximumSubscriptionCellCount=524288 Server__AllowedWebSocketOrigins="http://127.0.0.1:$WEB_PORT" Simulation__InitialAgentCount=0 dotnet run --project "$ROOT_DIR/src/server/MachiVerseWorks.Server.csproj" --configuration Release --no-build >"$ARTIFACT_DIR/server-renderer.log" 2>&1 & SERVER_PID=$!
+env Server__Port="$SERVER_PORT" Simulation__TickRate=30 Simulation__Seed=29027 Simulation__SpatialCellSize=4096 Simulation__DefaultWorldBootstrap__Enabled=false Server__SnapshotRate=2 Server__MaximumSubscriptionCellCount=524288 Server__AllowedWebSocketOrigins="http://127.0.0.1:$WEB_PORT" Simulation__InitialAgentCount=0 dotnet run --project "$ROOT_DIR/src/server/MachiVerseWorks.Server.csproj" --configuration Release --no-build >"$ARTIFACT_DIR/server-renderer.log" 2>&1 & SERVER_PID=$!
 wait_http "http://127.0.0.1:$SERVER_PORT/health"
 
 URL="http://127.0.0.1:$WEB_PORT/tests/browser/view-phase03-e2e.html?server=ws%3A%2F%2F127.0.0.1%3A$SERVER_PORT%2Fws"
@@ -90,15 +91,16 @@ extract_metric() {
   echo "toponym_labels=$(extract_metric toponym-labels)"
 } | tee "$ARTIFACT_DIR/rendering-baseline.txt"
 
-# User-visible runtime observation: restart the real Server without replacing the normal InitialAgentCount.
-# This intentionally goes through Application -> MachiVerseConnection -> Server/Simulation rather than injecting test entities.
+# User-visible runtime contract: restart the real Server with its normal default-world bootstrap.
+# This path goes through Application -> MachiVerseConnection -> Server/Simulation and does not inject View fixtures.
 stop_server
 env Server__Port="$SERVER_PORT" Simulation__TickRate=30 Simulation__Seed=29027 Simulation__SpatialCellSize=4096 Server__SnapshotRate=2 Server__MaximumSubscriptionCellCount=524288 Server__AllowedWebSocketOrigins="http://127.0.0.1:$WEB_PORT" dotnet run --project "$ROOT_DIR/src/server/MachiVerseWorks.Server.csproj" --configuration Release --no-build >"$RUNTIME_ARTIFACT_DIR/server-runtime.log" 2>&1 & SERVER_PID=$!
 wait_http "http://127.0.0.1:$SERVER_PORT/health"
 
 RUNTIME_URL="http://127.0.0.1:$WEB_PORT/?visualTest=runtime"
 node "$ROOT_DIR/scripts/run-headless-runtime-visual-e2e.mjs" "$CHROME" "$RUNTIME_URL" "$RUNTIME_ARTIFACT_DIR"
+node "$ROOT_DIR/scripts/check-runtime-visual-golden.mjs" "$RUNTIME_ARTIFACT_DIR" "$RUNTIME_GOLDEN_FILE"
 
 cat "$ARTIFACT_DIR/browser.html"
 cat "$RUNTIME_ARTIFACT_DIR/summary.json"
-echo "View Phase 3 Physical World visual regression + actual runtime user-view observation passed."
+echo "View Phase 3 Physical World visual regression + required actual runtime integrated Golden passed."
