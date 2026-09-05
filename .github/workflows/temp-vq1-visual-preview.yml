@@ -12,7 +12,6 @@ permissions:
 
 jobs:
   preview:
-    if: github.event.head_commit.message == 'ci: preview VQ-1 visual goldens'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -49,6 +48,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends "fonts-noto-cjk=$MVW_VISUAL_FONT_PACKAGE_VERSION"
+          test "$(dpkg-query -W -f='${Version}' fonts-noto-cjk)" = "$MVW_VISUAL_FONT_PACKAGE_VERSION"
           mkdir -p "$HOME/.config/fontconfig"
           cat > "$HOME/.config/fontconfig/fonts.conf" <<'EOF'
           <?xml version="1.0"?>
@@ -61,6 +61,7 @@ jobs:
           </fontconfig>
           EOF
           fc-cache -f
+          test "$(fc-match -f '%{family}\n' sans-serif | head -n 1 | cut -d, -f1)" = 'Noto Sans CJK JP'
           echo "MVW_VISUAL_FONT_FAMILY=Noto Sans CJK JP" >> "$GITHUB_ENV"
           echo "MVW_VISUAL_FONT_PACKAGE_VERSION=$MVW_VISUAL_FONT_PACKAGE_VERSION" >> "$GITHUB_ENV"
 
