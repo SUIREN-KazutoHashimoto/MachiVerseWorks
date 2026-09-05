@@ -61,17 +61,12 @@ const EMPTY_METRICS: PhysicalWorldRenderingMetrics = Object.freeze({
 
 export class PhysicalWorldRenderer {
   private readonly root = new THREE.Group();
-  private readonly hemisphereLight = new THREE.HemisphereLight(0xe0f2fe, 0x243044, 1.15);
-  private readonly directionalLight = new THREE.DirectionalLight(0xffffff, 1.25);
   private renderedRevision = -1;
   private currentMetrics = EMPTY_METRICS;
 
   public constructor(private readonly scene: THREE.Scene) {
     this.root.name = 'physical-world';
-    this.hemisphereLight.name = 'physical-world-hemisphere-light';
-    this.directionalLight.name = 'physical-world-directional-light';
-    this.directionalLight.position.set(-600, 900, 450);
-    this.scene.add(this.hemisphereLight, this.directionalLight, this.root);
+    this.scene.add(this.root);
   }
 
   public get metrics(): PhysicalWorldRenderingMetrics { return this.currentMetrics; }
@@ -105,7 +100,7 @@ export class PhysicalWorldRenderer {
 
   public dispose(): void {
     this.clearRoot();
-    this.scene.remove(this.root, this.hemisphereLight, this.directionalLight);
+    this.scene.remove(this.root);
   }
 
   private addTerrain(surface: TriangulatedTerrainSurface): void {
@@ -125,9 +120,16 @@ export class PhysicalWorldRenderer {
     }
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geometry.computeBoundingSphere();
-    const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    const material = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      side: THREE.DoubleSide,
+      roughness: 0.88,
+      metalness: 0,
+    });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.name = 'terrain-surface';
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     this.root.add(mesh);
   }
 
@@ -136,21 +138,40 @@ export class PhysicalWorldRenderer {
       if (batch.pointCount === 0) continue;
       const visual = resolveSurfaceWaterVisual(batch.kind);
       if (visual === null) continue;
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.BufferAttribute(batch.positions, 3));
-      const material = new THREE.PointsMaterial({
+
+      // Authoritative water samples stay points in the observation model, but presentation uses
+      // small horizontal surface patches so water reads as a material instead of debug markers.
+      const radius = Math.max(2.5, visual.pointSize * 0.52);
+      const geometry = new THREE.CircleGeometry(radius, 20);
+      geometry.rotateX(-Math.PI / 2);
+      const material = new THREE.MeshStandardMaterial({
         color: visual.color,
-        size: visual.pointSize,
-        sizeAttenuation: true,
+        roughness: batch.kind === SurfaceWaterKind.Ocean ? 0.32 : 0.24,
+        metalness: 0.04,
         transparent: true,
-        opacity: 0.88,
+        opacity: batch.kind === SurfaceWaterKind.Floodplain ? 0.66 : 0.84,
         depthTest: true,
         depthWrite: false,
+        side: THREE.DoubleSide,
       });
-      const points = new THREE.Points(geometry, material);
-      points.name = `surface-water-${visual.label}`;
-      points.renderOrder = 2;
-      this.root.add(points);
+      const mesh = new THREE.InstancedMesh(geometry, material, batch.pointCount);
+      const matrix = new THREE.Matrix4();
+      for (let index = 0; index < batch.pointCount; index += 1) {
+        const offset = index * 3;
+        matrix.makeTranslation(
+          batch.positions[offset]!,
+          batch.positions[offset + 1]!,
+          batch.positions[offset + 2]!,
+        );
+        mesh.setMatrixAt(index, matrix);
+      }
+      mesh.name = `surface-water-${visual.label}`;
+      mesh.count = batch.pointCount;
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.castShadow = false;
+      mesh.receiveShadow = true;
+      mesh.renderOrder = 2;
+      this.root.add(mesh);
     }
   }
 
