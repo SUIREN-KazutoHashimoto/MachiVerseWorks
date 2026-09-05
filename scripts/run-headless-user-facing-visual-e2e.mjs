@@ -241,7 +241,7 @@ async function captureScene(client, browserProcess, browserVersion, expectedBrow
 
 async function waitForCheckpointSettle(client, browserProcess, previousSequence, timeout) {
   const deadline = Date.now() + timeout;
-  const stableAfter = Date.now() + 1_500;
+  const stableAfter = Date.now() + 2_000;
   let latest = null;
   let stableSignature = null;
   let stablePolls = 0;
@@ -255,12 +255,14 @@ async function waitForCheckpointSettle(client, browserProcess, previousSequence,
         stableSignature = signature;
         stablePolls = 1;
       }
-      if (latest.roadSnapshotSequence > previousSequence && stablePolls >= 3) return latest;
-      if (Date.now() >= stableAfter && stablePolls >= 6) return latest;
+      // A new subscription is emitted after the camera moves. Never let a late snapshot from
+      // the previous composition satisfy this wait early: require both a new road snapshot and
+      // a full settle window before the next scene is allowed to choose an observation anchor.
+      if (Date.now() >= stableAfter && latest.roadSnapshotSequence > previousSequence && stablePolls >= 6) return latest;
     }
     await sleep(100);
   }
-  throw new Error(`Timed out waiting for user-facing checkpoint to settle. Previous road sequence=${String(previousSequence)}, latest=${JSON.stringify(latest)}.`);
+  throw new Error(`Timed out waiting for user-facing checkpoint subscription to settle. Previous road sequence=${String(previousSequence)}, latest=${JSON.stringify(latest)}.`);
 }
 
 async function waitForDevToolsPort(profileDirectoryValue, browserProcess, timeout) {
