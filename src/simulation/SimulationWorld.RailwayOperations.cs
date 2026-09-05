@@ -6,6 +6,7 @@ public sealed partial class SimulationWorld
 {
     private RailwayOperationsStore? _railwayOperations;
 
+    public bool HasRailwayOperations => _railwayOperations is not null;
     public int TrainFormationCount => RailwayOperations.FormationCount;
     public int RailwayRouteCount => RailwayOperations.RouteCount;
     public int TimetableCount => RailwayOperations.TimetableCount;

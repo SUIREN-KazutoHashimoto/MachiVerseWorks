@@ -20,6 +20,8 @@ export interface ReadonlyViewObservationState {
   readonly worldEnvironment: ReadonlyWorldEnvironmentStore;
   readonly regionalGeneration: ReadonlyRegionalGenerationStore;
   readonly persistentRegionalEvolution: ReadonlyPersistentRegionalEvolutionStore;
+  /** Monotonic connection-local sequence incremented whenever a complete Road snapshot is applied. */
+  readonly roadSnapshotSequence: number;
 }
 
 /** Single writable ingress for observation messages used by the View. */
@@ -32,6 +34,7 @@ export class ViewObservationState implements ReadonlyViewObservationState {
   private readonly worldEnvironmentStore = new WorldEnvironmentStore();
   private readonly regionalGenerationStore = new RegionalGenerationStore();
   private readonly persistentRegionalEvolutionStore = new PersistentRegionalEvolutionStore();
+  private roadSnapshotSequenceValue = 0;
 
   public get entities(): ReadonlyEntityStore { return this.entityStore; }
   public get pedestrians(): ReadonlyPedestrianStore { return this.pedestrianStore; }
@@ -41,6 +44,7 @@ export class ViewObservationState implements ReadonlyViewObservationState {
   public get worldEnvironment(): ReadonlyWorldEnvironmentStore { return this.worldEnvironmentStore; }
   public get regionalGeneration(): ReadonlyRegionalGenerationStore { return this.regionalGenerationStore; }
   public get persistentRegionalEvolution(): ReadonlyPersistentRegionalEvolutionStore { return this.persistentRegionalEvolutionStore; }
+  public get roadSnapshotSequence(): number { return this.roadSnapshotSequenceValue; }
 
   public apply(message: ProtocolMessage | TrafficProtocolMessage | WorldEnvironmentSnapshotMessage | RegionalGenerationSnapshotMessage | PersistentRegionalEvolutionSnapshotMessage, receivedAt = performance.now()): boolean {
     switch (message.type) {
@@ -64,6 +68,7 @@ export class ViewObservationState implements ReadonlyViewObservationState {
         return true;
       case MessageType.RoadNetworkSnapshot:
         this.roadNetworkStore.replace(message);
+        this.roadSnapshotSequenceValue += 1;
         return true;
       case TrafficMessageType.VehicleSpawn:
         this.vehicleStore.spawn(message, receivedAt);
@@ -101,5 +106,6 @@ export class ViewObservationState implements ReadonlyViewObservationState {
     this.worldEnvironmentStore.clear();
     this.regionalGenerationStore.clear();
     this.persistentRegionalEvolutionStore.clear();
+    this.roadSnapshotSequenceValue = 0;
   }
 }

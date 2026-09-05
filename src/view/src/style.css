@@ -10,7 +10,7 @@ body {
   overflow: hidden;
   background: #0b1020;
   color: #f5f7ff;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Noto Sans JP", "Noto Sans CJK JP", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 button,
@@ -153,6 +153,17 @@ input {
   color: #cbd5e1;
   font-size: 0.7rem;
   pointer-events: none;
+}
+
+/* Normal user startup intentionally keeps diagnostics out of the scene. Append ?debug=1 to opt in. */
+#app:not([data-debug-overlays="visible"]) .performance-overlay,
+#app:not([data-debug-overlays="visible"]) [data-logistics-debug="true"],
+#app:not([data-debug-overlays="visible"]) [data-gas-debug="true"],
+#app:not([data-debug-overlays="visible"]) [data-power-debug="true"],
+#app:not([data-debug-overlays="visible"]) [data-optical-debug="true"],
+#app:not([data-debug-overlays="visible"]) [data-water-sewer-debug="true"],
+#app:not([data-debug-overlays="visible"]) [data-radio-debug="true"] {
+  display: none !important;
 }
 
 /* Utility diagnostics share one collision-free matrix instead of competing for the four UI corners. */

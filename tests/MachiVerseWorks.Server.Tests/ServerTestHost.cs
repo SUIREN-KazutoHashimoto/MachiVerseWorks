@@ -40,6 +40,7 @@ internal sealed class ServerTestHost : IAsyncDisposable
                 ["Server:SnapshotRate"] = snapshotRate.ToString(CultureInfo.InvariantCulture),
                 ["Simulation:TickRate"] = tickRate.ToString(CultureInfo.InvariantCulture),
                 ["Simulation:InitialAgentCount"] = initialAgentCount.ToString(CultureInfo.InvariantCulture),
+                ["Simulation:DefaultWorldBootstrap:Enabled"] = "false",
                 ["Simulation:SpawnVolume:MinX"] = (-spawnHalfExtent).ToString(CultureInfo.InvariantCulture),
                 ["Simulation:SpawnVolume:MinY"] = (-spawnHalfExtent).ToString(CultureInfo.InvariantCulture),
                 ["Simulation:SpawnVolume:MinZ"] = (-spawnHalfExtent).ToString(CultureInfo.InvariantCulture),

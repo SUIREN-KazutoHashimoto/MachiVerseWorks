@@ -60,24 +60,26 @@ try {
   }
 
   const defaultDiagnostics = await waitForRuntimeReady(devToolsSocket, browser, timeoutMs);
-  await captureCheckpoint(devToolsSocket, browserVersion, expectedBrowserVersion, 'runtime-default', null);
-  await captureCheckpoint(devToolsSocket, browserVersion, expectedBrowserVersion, 'runtime-agent-cloud', 'agent-cloud');
-  await captureCheckpoint(devToolsSocket, browserVersion, expectedBrowserVersion, 'runtime-worst-grounding', 'worst-grounding');
+  await captureCheckpoint(devToolsSocket, browser, browserVersion, expectedBrowserVersion, 'runtime-default', null);
+  await captureCheckpoint(devToolsSocket, browser, browserVersion, expectedBrowserVersion, 'runtime-city-overview', 'city-overview');
+  await captureCheckpoint(devToolsSocket, browser, browserVersion, expectedBrowserVersion, 'runtime-street-activity', 'street-activity');
 
   const summary = {
     status: 'passed',
     source: 'actual Application -> MachiVerseConnection -> Server/Simulation runtime',
     goldenComparisonEnabled: false,
-    note: 'Observation-only bootstrap. Review actual screenshots before creating a Golden baseline.',
+    note: 'Runtime screenshots and structural diagnostics captured; the integrated Golden checker validates the required city contract next.',
     initialDiagnostics: defaultDiagnostics,
   };
   await writeFile(join(artifactDirectory, 'summary.json'), `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
 
-  const delta = defaultDiagnostics.agentTerrainDelta;
   console.log(
-    `Runtime user-view observation passed: agents=${String(defaultDiagnostics.agentCount)}, terrainSamples=${String(defaultDiagnostics.terrainSampleCount)}, `
-      + `within0.5m=${String(delta.withinHalfMeterCount)}, above5m=${String(delta.aboveFiveMetersCount)}, below-5m=${String(delta.belowFiveMetersCount)}, `
-      + `maxAbsDelta=${String(delta.maximumAbsoluteMeters)}m.`,
+    `Runtime user-view capture passed: genericAgents=${String(defaultDiagnostics.genericAgentCount)}, `
+      + `terrainSamples=${String(defaultDiagnostics.terrainSampleCount)}, settlements=${String(defaultDiagnostics.settlementCount)}, `
+      + `buildings=${String(defaultDiagnostics.buildingCount)}, roads=${String(defaultDiagnostics.roadSegmentCount)}, `
+      + `pedestrians=${String(defaultDiagnostics.pedestrianCount)}, vehicles=${String(defaultDiagnostics.vehicleCount)}, `
+      + `trains=${String(defaultDiagnostics.trainCount)}, visibleDebugOverlays=${String(defaultDiagnostics.visibleDebugOverlayCount)}, `
+      + `japaneseFontReady=${String(defaultDiagnostics.japaneseFontReady)}.`,
   );
 } catch (error) {
   const normalized = error instanceof Error ? error : new Error(String(error));
@@ -98,7 +100,7 @@ try {
 
 async function waitForRuntimeReady(client, browserProcess, timeout) {
   const deadline = Date.now() + timeout;
-  let stableAgentCount = null;
+  let stableSignature = null;
   let stablePolls = 0;
   let latest = null;
 
@@ -106,16 +108,26 @@ async function waitForRuntimeReady(client, browserProcess, timeout) {
     ensureBrowserRunning(browserProcess);
     latest = await client.evaluate('window.__MACHIVERSE_RUNTIME_VISUAL_TEST__?.getDiagnostics?.() ?? null');
     if (latest?.ready === true) {
-      if (latest.agentCount === stableAgentCount) stablePolls += 1;
+      const signature = [
+        latest.terrainSampleCount,
+        latest.settlementCount,
+        latest.buildingCount,
+        latest.roadSegmentCount,
+        latest.pedestrianCount,
+        latest.vehicleCount,
+        latest.trainCount,
+        latest.visibleDebugOverlayCount,
+      ].join(':');
+      if (signature === stableSignature) stablePolls += 1;
       else {
-        stableAgentCount = latest.agentCount;
+        stableSignature = signature;
         stablePolls = 1;
       }
-      // Initial snapshots can arrive in batches. Require five seconds of an unchanged Agent count
-      // so runtime-default represents the settled user-visible state instead of a partial delivery.
+      // Initial runtime snapshots can arrive in batches. Require five seconds of unchanged
+      // city-layer counts so runtime-default represents a settled user-visible state.
       if (stablePolls >= 20) return latest;
     } else {
-      stableAgentCount = null;
+      stableSignature = null;
       stablePolls = 0;
     }
     await sleep(250);
@@ -124,14 +136,21 @@ async function waitForRuntimeReady(client, browserProcess, timeout) {
   throw new Error(`Timed out waiting for the actual runtime View to become stable. Last diagnostics: ${JSON.stringify(latest)}`);
 }
 
-async function captureCheckpoint(client, browserVersion, expectedBrowserVersion, inspectionName, checkpoint) {
+async function captureCheckpoint(client, browserProcess, browserVersion, expectedBrowserVersion, inspectionName, checkpoint) {
+  let previousRoadSnapshotSequence = null;
   if (checkpoint !== null) {
+    const before = await client.evaluate('window.__MACHIVERSE_RUNTIME_VISUAL_TEST__?.getDiagnostics?.() ?? null');
+    previousRoadSnapshotSequence = before?.roadSnapshotSequence ?? null;
+    if (!Number.isInteger(previousRoadSnapshotSequence)) {
+      throw new Error(`Runtime road snapshot sequence is unavailable before checkpoint: ${inspectionName}.`);
+    }
+
     const positioned = await client.evaluate(`window.__MACHIVERSE_RUNTIME_VISUAL_TEST__?.setCheckpoint?.(${JSON.stringify(checkpoint)}) ?? false`);
     if (positioned !== true) throw new Error(`Failed to position actual runtime View checkpoint: ${checkpoint}.`);
+    await waitForRoadSnapshotAfter(client, browserProcess, previousRoadSnapshotSequence, commandTimeoutMs, checkpoint);
   }
 
-  await client.evaluate(`new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))))`);
-  await sleep(250);
+  await client.evaluate('new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))))');
 
   const diagnostics = await client.evaluate(`(() => ({
     runtime: window.__MACHIVERSE_RUNTIME_VISUAL_TEST__?.getDiagnostics?.() ?? null,
@@ -155,6 +174,21 @@ async function captureCheckpoint(client, browserVersion, expectedBrowserVersion,
     captureBeyondViewport: false,
   });
   await writeFile(join(actualDirectory, `${inspectionName}.png`), Buffer.from(screenshot.data, 'base64'));
+}
+
+async function waitForRoadSnapshotAfter(client, browserProcess, previousSequence, timeout, checkpoint) {
+  const deadline = Date.now() + timeout;
+  let latest = null;
+  while (Date.now() < deadline) {
+    ensureBrowserRunning(browserProcess);
+    latest = await client.evaluate('window.__MACHIVERSE_RUNTIME_VISUAL_TEST__?.getDiagnostics?.() ?? null');
+    if (latest?.roadSnapshotSequence > previousSequence && latest.ready === true) return latest;
+    await sleep(100);
+  }
+  throw new Error(
+    `Timed out waiting for a Road snapshot from the ${checkpoint} subscription. `
+      + `Previous sequence=${String(previousSequence)}, latest=${JSON.stringify(latest)}.`,
+  );
 }
 
 async function waitForDevToolsPort(profileDirectoryValue, browserProcess, timeout) {

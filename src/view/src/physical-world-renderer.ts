@@ -18,6 +18,7 @@ import {
 } from './world-environment-protocol.ts';
 
 export const SURFACE_WATER_PRESENTATION_OFFSET_METERS = 0.25;
+const TOPONYM_FONT = '600 28px "Noto Sans JP", "Noto Sans CJK JP", sans-serif';
 
 export interface WaterPointBatch {
   readonly kind: SurfaceWaterKind;
@@ -60,12 +61,17 @@ const EMPTY_METRICS: PhysicalWorldRenderingMetrics = Object.freeze({
 
 export class PhysicalWorldRenderer {
   private readonly root = new THREE.Group();
+  private readonly hemisphereLight = new THREE.HemisphereLight(0xe0f2fe, 0x243044, 1.15);
+  private readonly directionalLight = new THREE.DirectionalLight(0xffffff, 1.25);
   private renderedRevision = -1;
   private currentMetrics = EMPTY_METRICS;
 
   public constructor(private readonly scene: THREE.Scene) {
     this.root.name = 'physical-world';
-    this.scene.add(this.root);
+    this.hemisphereLight.name = 'physical-world-hemisphere-light';
+    this.directionalLight.name = 'physical-world-directional-light';
+    this.directionalLight.position.set(-600, 900, 450);
+    this.scene.add(this.hemisphereLight, this.directionalLight, this.root);
   }
 
   public get metrics(): PhysicalWorldRenderingMetrics { return this.currentMetrics; }
@@ -99,7 +105,7 @@ export class PhysicalWorldRenderer {
 
   public dispose(): void {
     this.clearRoot();
-    this.scene.remove(this.root);
+    this.scene.remove(this.root, this.hemisphereLight, this.directionalLight);
   }
 
   private addTerrain(surface: TriangulatedTerrainSurface): void {
@@ -119,7 +125,7 @@ export class PhysicalWorldRenderer {
     }
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geometry.computeBoundingSphere();
-    const material = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.name = 'terrain-surface';
     this.root.add(mesh);
@@ -137,7 +143,7 @@ export class PhysicalWorldRenderer {
         size: visual.pointSize,
         sizeAttenuation: true,
         transparent: true,
-        opacity: 0.78,
+        opacity: 0.88,
         depthTest: true,
         depthWrite: false,
       });
@@ -154,7 +160,7 @@ export class PhysicalWorldRenderer {
       const visual = resolveGeographicFeatureVisual(batch.featureType);
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute('position', new THREE.BufferAttribute(batch.positions, 3));
-      const material = new THREE.LineBasicMaterial({ color: visual.color, transparent: true, opacity: 0.9 });
+      const material = new THREE.LineBasicMaterial({ color: visual.color, transparent: true, opacity: 0.95 });
       const lines = new THREE.LineSegments(geometry, material);
       lines.name = `geographic-feature-${visual.label}`;
       lines.renderOrder = 3;
@@ -243,11 +249,11 @@ function createTextSprite(text: string): THREE.Sprite {
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d');
   if (context === null) throw new Error('2D canvas context is required for WorldEnvironment toponyms.');
-  context.font = '600 28px sans-serif';
+  context.font = TOPONYM_FONT;
   const width = Math.max(96, Math.ceil(context.measureText(text).width + 28));
   canvas.width = width;
   canvas.height = 48;
-  context.font = '600 28px sans-serif';
+  context.font = TOPONYM_FONT;
   context.fillStyle = 'rgba(15, 23, 42, 0.78)';
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.fillStyle = '#f8fafc';
