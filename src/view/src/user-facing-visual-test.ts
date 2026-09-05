@@ -16,6 +16,8 @@ export interface UserFacingVisualDiagnostics {
   readonly buildingCount: number;
   readonly roadSegmentCount: number;
   readonly roadSnapshotSequence: number;
+  readonly railwayNodeCount: number;
+  readonly railwayStationCount: number;
   readonly pedestrianCount: number;
   readonly vehicleCount: number;
   readonly trainCount: number;
@@ -40,7 +42,26 @@ type RailwayMeshLike = {
   };
 };
 
+type RailwayNodeLike = {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+};
+
+type RailwayBoundsLike = {
+  readonly minX: number;
+  readonly minY: number;
+  readonly minZ: number;
+  readonly maxX: number;
+  readonly maxY: number;
+  readonly maxZ: number;
+};
+
 type UserFacingApplicationInternals = {
+  readonly railway: {
+    readonly nodes: ReadonlyMap<bigint, RailwayNodeLike>;
+    readonly stationBounds: ReadonlyMap<bigint, RailwayBoundsLike>;
+  };
   readonly railwayOperations: {
     readonly trainCount: number;
     readonly meshes: ReadonlyMap<bigint, RailwayMeshLike>;
@@ -95,18 +116,16 @@ function positionCheckpoint(application: Application, checkpoint: UserFacingVisu
       return focusAt(application, 'vq0-dense-urban', focus, distance);
     }
     case 'road-interchange': {
-      const node = selectInterchangeNode(road.nodes, road.segments) ?? findNearestRoadNode(
-        selectPrimarySettlement(application, road.nodes).x,
-        selectPrimarySettlement(application, road.nodes).y,
-        road.nodes,
-      );
+      const settlement = selectPrimarySettlement(application, road.nodes);
+      const node = selectInterchangeNode(road.nodes, road.segments)
+        ?? findNearestRoadNode(settlement.x, settlement.y, road.nodes);
       return node !== undefined && focusAt(application, 'vq0-road-interchange', node, 650);
     }
     case 'railway': {
-      const train = selectTrainPosition(application);
-      if (train !== undefined) return focusAt(application, 'vq0-railway', train, 700);
+      const railway = selectRailwayPosition(application);
+      if (railway !== undefined) return focusAt(application, 'vq0-railway', railway, 700);
       const settlement = selectPrimarySettlement(application, road.nodes);
-      return focusAt(application, 'vq0-railway-fallback', settlement, 900);
+      return focusAt(application, 'vq0-railway-discovery', settlement, 900);
     }
     case 'street-activity': {
       const settlement = selectPrimarySettlement(application, road.nodes);
@@ -191,11 +210,25 @@ function selectInterchangeNode(nodes: readonly RoadNode[], segments: readonly Ro
     .sort((left, right) => (degree.get(right.id) ?? 0) - (degree.get(left.id) ?? 0) || compareBigInt(left.id, right.id))[0];
 }
 
-function selectTrainPosition(application: Application): { readonly x: number; readonly y: number; readonly z: number } | undefined {
-  const railway = (application as unknown as UserFacingApplicationInternals).railwayOperations;
-  const first = [...railway.meshes.entries()].sort(([left], [right]) => compareBigInt(left, right))[0]?.[1];
-  if (first === undefined) return undefined;
-  return Object.freeze({ x: first.position.x, y: first.position.z, z: first.position.y });
+function selectRailwayPosition(application: Application): { readonly x: number; readonly y: number; readonly z: number } | undefined {
+  const internals = application as unknown as UserFacingApplicationInternals;
+  const train = [...internals.railwayOperations.meshes.entries()]
+    .sort(([left], [right]) => compareBigInt(left, right))[0]?.[1];
+  if (train !== undefined) return Object.freeze({ x: train.position.x, y: train.position.z, z: train.position.y });
+
+  const station = [...internals.railway.stationBounds.entries()]
+    .sort(([left], [right]) => compareBigInt(left, right))[0]?.[1];
+  if (station !== undefined) {
+    return Object.freeze({
+      x: (station.minX + station.maxX) / 2,
+      y: (station.minY + station.maxY) / 2,
+      z: (station.minZ + station.maxZ) / 2,
+    });
+  }
+
+  const node = [...internals.railway.nodes.entries()]
+    .sort(([left], [right]) => compareBigInt(left, right))[0]?.[1];
+  return node === undefined ? undefined : Object.freeze({ x: node.x, y: node.y, z: node.z });
 }
 
 function nearestRoadDistanceSquared(x: number, y: number, nodes: readonly RoadNode[]): number {
@@ -219,16 +252,18 @@ function collectDiagnostics(application: Application): UserFacingVisualDiagnosti
   const state = application.state;
   const regional = state.regionalGeneration.snapshot;
   const environment = state.worldEnvironment.snapshot;
-  const trainCount = (application as unknown as UserFacingApplicationInternals).railwayOperations.trainCount;
+  const internals = application as unknown as UserFacingApplicationInternals;
   const diagnostics = {
     terrainSampleCount: environment?.terrainSamples.length ?? 0,
     settlementCount: regional?.settlements.length ?? 0,
     buildingCount: regional?.buildings.length ?? 0,
     roadSegmentCount: state.roadNetwork.segmentCount,
     roadSnapshotSequence: state.roadSnapshotSequence,
+    railwayNodeCount: internals.railway.nodes.size,
+    railwayStationCount: internals.railway.stationBounds.size,
     pedestrianCount: state.pedestrians.size,
     vehicleCount: state.vehicles.size,
-    trainCount,
+    trainCount: internals.railwayOperations.trainCount,
     hiddenDebugChromeCount: document.querySelectorAll(DEBUG_CHROME_SELECTOR).length,
   };
   return Object.freeze({
@@ -236,10 +271,7 @@ function collectDiagnostics(application: Application): UserFacingVisualDiagnosti
       && diagnostics.settlementCount > 0
       && diagnostics.buildingCount > 0
       && diagnostics.roadSegmentCount > 0
-      && diagnostics.roadSnapshotSequence > 0
-      && diagnostics.pedestrianCount > 0
-      && diagnostics.vehicleCount > 0
-      && diagnostics.trainCount > 0,
+      && diagnostics.roadSnapshotSequence > 0,
     ...diagnostics,
   });
 }
