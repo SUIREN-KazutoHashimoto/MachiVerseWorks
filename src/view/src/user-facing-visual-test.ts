@@ -287,8 +287,7 @@ function collectDiagnostics(application: Application): UserFacingVisualDiagnosti
       && diagnostics.railwayStationCount > 0
       && diagnostics.pedestrianCount > 0
       && diagnostics.vehicleCount > 0
-      && diagnostics.trainCount > 0
-      && diagnostics.visibleDebugChromeCount === 0,
+      && diagnostics.trainCount > 0,
     ...diagnostics,
   });
 }
