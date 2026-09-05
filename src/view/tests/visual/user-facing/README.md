@@ -2,6 +2,20 @@
 
 このディレクトリは、Legacy Visual Parity の比較を繰り返し実行するための **User-facing Golden** 契約を管理します。
 
+## Legacy参照の固定
+
+Legacy側の参照正本は、archive済み `Machi-Sim_Legacy` の `v1.1.9` / commit `5715ca26d1a7525d89a93c35540f926a720e5386` に固定します。
+
+このcommitでは、Legacyのproduction Viewとして少なくとも次が実装・記録されています。
+
+- Perspective Camera、Fog、Directional Light、Hemisphere Light、PCF Soft Shadow
+- 道路階層、Building / POI、Signal / Crosswalk
+- Railway / Station / Train
+- Vehicle等の都市活動
+- GPU Instancingとdistance LOD
+
+VQ-0のCIはLegacy repository自体をclone / executeしません。参照commitをprovenanceとして固定し、新版側の再現可能な5構図を同一条件で蓄積します。Legacyとの直接的な合否判定はVQ-7で行います。
+
 ## Technical Goldenとの違い
 
 既存の `../golden/` は Technical Golden です。
@@ -33,7 +47,7 @@ Camera targetは固定座標をハードコードせず、固定Seedから得ら
 - Renderer: SwiftShader
 - Font: `Noto Sans CJK JP` / `fonts-noto-cjk 1:20230817+repack1-3`
 
-Person / Railway / Transit / Economy / Performanceの診断専用UIはcapture seamで隠します。通常ユーザー向けstatus chrome、Camera hint、identityは残すため、UIがWorld観測を過度に妨げていないかも画像から確認できます。
+通常起動で非表示となるDebug Overlayに加え、Person / Railway / Transit / Economy / Performance等の診断専用UIもcapture seamで非表示を強制します。通常ユーザー向けstatus chrome、Camera hint、identityは残すため、UIがWorld観測を過度に妨げていないかも画像から確認できます。
 
 ## Golden保存場所
 
@@ -64,4 +78,4 @@ MVW_UPDATE_USER_FACING_GOLDEN=1 bash scripts/run-view-phase03-e2e.sh
 
 User-facing runtimeにはVehicle / Pedestrian / Train等の動的Entityが存在するため、channel thresholdはTechnical Goldenと同じ`8/255`を維持しつつ、changed-pixel ratioは既定`0.5%`まで許容します。大きな構図崩れ・layer消失・UI占有増加を検出しながら、capture timingによる小さなEntity移動を許容するためです。
 
-このpixel baselineは**Legacy parityの合否そのものではありません**。VQ-1〜VQ-6では同じ5構図に対して意図した改善をレビューし、VQ-7でLegacy参照とUser-facing Goldenを正式なParity Gateへ昇格します。
+このpixel baselineは**Legacy parityの合否そのものではありません**。VQ-1〜VQ-6では同じ5構図に対して意図した改善をレビューし、VQ-7で固定したLegacy参照とUser-facing Goldenを正式なParity Gateへ昇格します。
