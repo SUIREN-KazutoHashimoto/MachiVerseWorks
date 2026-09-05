@@ -65,7 +65,7 @@ SCENARIO_CASES = [
 E2E_CROSS_CUTTING_PREFIXES = (
     "src/persistence/",
     "src/protocol/",
-    "src/gateway/",
+    "src/server/",
 )
 
 E2E_CROSS_CUTTING_FILES = {
@@ -80,7 +80,7 @@ E2E_CROSS_CUTTING_FILES = {
 BENCHMARK_CROSS_CUTTING_PREFIXES = (
     "src/persistence/",
     "src/protocol/",
-    "src/gateway/",
+    "src/server/",
 )
 
 BENCHMARK_CROSS_CUTTING_FILES = {
