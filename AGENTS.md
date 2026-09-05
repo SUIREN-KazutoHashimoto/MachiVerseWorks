@@ -211,7 +211,7 @@ PR に伴う A / B の更新コミットは、PR 作成のためのバージョ�
 - Gateway / Protocol の正式契約へ日本語や英語などの翻訳済みエラーメッセージを埋め込まず、stable code と structured parameter を使用する。
 - Save Data には翻訳済みラベルではなく stable ID / enum / code / raw value を保存する。
 - ユーザー向け表示文言の localization と数値・日時・単位 formatting は Client presentation 層の責務とする。
-- locale resource は `src/web/locales/` を正規入口とする。
+- locale resource は `src/view/locales/` を正規入口とする。
 - 本実装開始後は、固定 UI 文言を可能な限り locale resource key 経由で参照する。
 - 翻訳文を単語単位でコード上で連結せず、named parameter を持つ message として扱う。
 - ユーザー入力文字列、固有名詞、外部コンテンツはシステム UI 文言と区別する。
