@@ -121,7 +121,7 @@ Gatewayは現時点では`MachiVerseWorks.Server`内の責務として実装し�
 MachiVerseWorks/
 ├─ src/
 │  ├─ simulation/
-│  ├─ gateway/
+│  ├─ server/
 │  ├─ protocol/
 │  ├─ persistence/
 │  └─ view/
