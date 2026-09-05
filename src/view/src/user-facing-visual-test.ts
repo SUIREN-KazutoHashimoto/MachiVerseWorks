@@ -129,7 +129,7 @@ function positionCheckpoint(application: Application, checkpoint: UserFacingVisu
       return node !== undefined && focusAt(application, 'vq0-road-interchange', node, 650);
     }
     case 'railway': {
-      const railway = selectRailwayPosition(application);
+      const railway = selectStableRailwayPosition(application);
       if (railway !== undefined) return focusAt(application, 'vq0-railway', railway, 700);
       const settlement = selectPrimarySettlement(application, road.nodes);
       return focusAt(application, 'vq0-railway-discovery', settlement, 900);
@@ -217,12 +217,11 @@ function selectInterchangeNode(nodes: readonly RoadNode[], segments: readonly Ro
     .sort((left, right) => (degree.get(right.id) ?? 0) - (degree.get(left.id) ?? 0) || compareBigInt(left.id, right.id))[0];
 }
 
-function selectRailwayPosition(application: Application): { readonly x: number; readonly y: number; readonly z: number } | undefined {
+function selectStableRailwayPosition(application: Application): { readonly x: number; readonly y: number; readonly z: number } | undefined {
   const internals = application as unknown as UserFacingApplicationInternals;
-  const train = [...internals.railwayOperations.meshes.entries()]
-    .sort(([left], [right]) => compareBigInt(left, right))[0]?.[1];
-  if (train !== undefined) return Object.freeze({ x: train.position.x, y: train.position.z, z: train.position.y });
 
+  // User-facing Golden camera composition must not follow a moving train. Use stable
+  // infrastructure as the anchor while still requiring a live train in readiness.
   const station = [...internals.railway.stationBounds.entries()]
     .sort(([left], [right]) => compareBigInt(left, right))[0]?.[1];
   if (station !== undefined) {
@@ -235,7 +234,11 @@ function selectRailwayPosition(application: Application): { readonly x: number; 
 
   const node = [...internals.railway.nodes.entries()]
     .sort(([left], [right]) => compareBigInt(left, right))[0]?.[1];
-  return node === undefined ? undefined : Object.freeze({ x: node.x, y: node.y, z: node.z });
+  if (node !== undefined) return Object.freeze({ x: node.x, y: node.y, z: node.z });
+
+  const train = [...internals.railwayOperations.meshes.entries()]
+    .sort(([left], [right]) => compareBigInt(left, right))[0]?.[1];
+  return train === undefined ? undefined : Object.freeze({ x: train.position.x, y: train.position.z, z: train.position.y });
 }
 
 function nearestRoadDistanceSquared(x: number, y: number, nodes: readonly RoadNode[]): number {
