@@ -8,7 +8,7 @@ public sealed class AdminCommandCancellationCommitPolicyTests
     [TestMethod]
     public void ExecutorDoesNotRecheckRequestCancellationAfterSuccessfulExecution()
     {
-        var sourcePath = Path.Combine(FindRepositoryRoot(), "src", "gateway", "AdminCommandExecutorV2.cs");
+        var sourcePath = Path.Combine(FindRepositoryRoot(), "src", "server", "AdminCommandExecutorV2.cs");
         var source = File.ReadAllText(sourcePath);
         var execute = source.IndexOf("var result = await ExecuteCoreAsync(request.Command, executionCancellation.Token);", StringComparison.Ordinal);
         var complete = source.IndexOf("request.Completion.TrySetResult(result);", execute, StringComparison.Ordinal);
@@ -27,7 +27,7 @@ public sealed class AdminCommandCancellationCommitPolicyTests
     [TestMethod]
     public void RemoteMcpAwaitsAuthoritativeCompletionInsteadOfRecancelingTheResponse()
     {
-        var sourcePath = Path.Combine(FindRepositoryRoot(), "src", "gateway", "RemoteMcp.cs");
+        var sourcePath = Path.Combine(FindRepositoryRoot(), "src", "server", "RemoteMcp.cs");
         var source = File.ReadAllText(sourcePath);
         var gatewayStart = source.IndexOf("internal sealed class RemoteMcpAdminGateway", StringComparison.Ordinal);
         var toolsStart = source.IndexOf("internal sealed class RemoteMcpTools", gatewayStart, StringComparison.Ordinal);
