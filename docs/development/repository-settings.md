@@ -9,16 +9,32 @@ MachiVerseWorks のGitHub側設定の基準です。コードやworkflowから�
 現在のRuleset `Protect main and develop` では次を適用しています。
 
 - Pull Requestを経由しない通常変更を禁止する。
-- required status checkとして `CI / ci-gate` を指定する。`ci-gate` は通常CI・対象PRのE2E・Dependency Review（high以上でfail）を集約する。
-- merge前にbranchを最新状態へ更新する設定を有効にする。
-- unresolved conversation がある場合のmergeを禁止する。
+- required status checkとして `CI / ci-gate` を指定する。`ci-gate` は通常CI・対象PRのE2E・Dependency Review（High以上でfail）を集約する。
+- required status checkはstrict modeとし、merge前にbranchを最新baseへ追従させる。
+- unresolved review conversation / review thread がある場合のmergeを禁止する。
+- required approval数は0とする。
+- unattributed changesに対する追加approval設定を有効にする。GitHubが追加approvalを要求する状態を表示した場合は、その要求を満たすまでmergeしない。
+- Copilot Code Reviewをpush時に自動実行し、draft Pull Requestもreview対象とする。
 - force pushを禁止する。
 - branch deletionを禁止する。
-- required approval数は0とし、レビュー運用が必要になった時点で追加する。
 - merge方式はmerge commitのみ許可する。
 - bypass actorは設定しない。
 
 `main` はリリース系統なので、運用上は `develop -> main` PR だけを使用します。
+
+### 自動レビューの運用
+
+Copilot / Codex等の自動レビューでinline threadが作成された場合、指摘を修正しただけではmerge条件を満たさないことがあります。
+
+対応後は次を確認します。
+
+1. 指摘内容へ必要な修正を行う。
+2. fresh CIを確認する。
+3. 対応済みのreview threadをResolveする。
+4. 新しいpushで追加reviewが発生していないか確認する。
+5. `ci-gate`成功・branch最新・未解決thread 0件を確認してmergeする。
+
+Benchmark workflowの失敗は現時点ではRuleset requiredではありません。性能へ影響する変更では調査・説明が必要ですが、required checkとして扱うのは`ci-gate`です。
 
 ## 2. Pull Request / Merge
 
@@ -33,7 +49,7 @@ RepositoryのPull Requests設定は次を基準とし、現在この設定を適
 | Automatically delete head branches | ON |
 | Allow auto-merge | OFF |
 
-merge commitを採用する理由は、個々のコミットと `A.B.C` version推移を保持するためです。
+merge commitを採用する理由は、個々の開発コミットとPR境界を保持し、並行開発の統合履歴を追跡しやすくするためです。Application `VERSION`はPR単位の履歴番号ではなくRelease versionとして別管理します。
 
 ## 3. Security
 
@@ -82,7 +98,10 @@ GitHub設定を変更したら、少なくとも次を確認します。
 
 1. `main` / `develop` のrulesetまたはbranch protectionが有効である。
 2. PRで `CI / ci-gate` がrequired checkとして認識され、Dependency Review失敗も `ci-gate` の失敗へ反映される。
-3. direct push / force push / branch deletionが意図した通り制限される。
-4. merge画面でmerge commitだけが標準方式として使用できる。
-5. merge後に短命branchが自動削除される。
-6. Securityページで有効化した機能が表示される。
+3. branch最新化がrequiredとして機能する。
+4. unresolved review threadがあるPRをmergeできないことを確認する。
+5. Copilot Code Reviewのpush時自動reviewが意図した通り動作する。
+6. direct push / force push / branch deletionが意図した通り制限される。
+7. merge画面でmerge commitだけが標準方式として使用できる。
+8. merge後に短命branchが自動削除される。
+9. Securityページで有効化した機能が表示される。
