@@ -9,6 +9,6 @@
   <ItemGroup>
     <ProjectReference Include="../../src/protocol/MachiVerseWorks.Protocol.csproj" />
     <ProjectReference Include="../../src/simulation/MachiVerseWorks.Simulation.csproj" />
-    <ProjectReference Include="../../src/gateway/MachiVerseWorks.Server.csproj" />
+    <ProjectReference Include="../../src/server/MachiVerseWorks.Server.csproj" />
   </ItemGroup>
 </Project>
