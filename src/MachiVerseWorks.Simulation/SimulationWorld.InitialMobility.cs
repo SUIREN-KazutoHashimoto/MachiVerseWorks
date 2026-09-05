@@ -9,13 +9,19 @@ public sealed partial class SimulationWorld
 {
     private const int InitialMobilityRouteCandidateLimit = 64;
     private const double PreferredInitialWalkingDistanceMeters = 100d;
-    private const double PreferredInitialVehicleDistanceMeters = 300d;
+    private const double PreferredInitialVehicleDistanceMeters = 1_000d;
     private const double MinimumInitialWalkingStreetLengthMeters = 25d;
     private const ulong InitialMobilityTripRequestBase = 9_000_000_000UL;
     private readonly HashSet<PedestrianId> _initialMobilityPedestrianIds = [];
     private readonly HashSet<VehicleId> _initialMobilityVehicleIds = [];
 
-    public InitialMobilitySummary SeedInitialMobility(int participantCount)
+    public InitialMobilitySummary SeedInitialMobility(int participantCount) =>
+        SeedInitialMobilityCore(participantCount, preferredCenter: null);
+
+    public InitialMobilitySummary SeedInitialMobility(int participantCount, WorldPoint preferredCenter) =>
+        SeedInitialMobilityCore(participantCount, preferredCenter);
+
+    private InitialMobilitySummary SeedInitialMobilityCore(int participantCount, WorldPoint? preferredCenter)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(participantCount);
         if (participantCount == 0) return default;
@@ -27,7 +33,7 @@ public sealed partial class SimulationWorld
             roadSnapshot = CreateRoadNetworkSnapshot();
         }
 
-        var pedestrianAccessPoints = CreateInitialPedestrianAccessCandidates(roadSnapshot);
+        var pedestrianAccessPoints = CreateInitialPedestrianAccessCandidates(roadSnapshot, preferredCenter);
         var pedestrianPair = pedestrianAccessPoints.Length >= 2
             ? FindInitialWalkingPair(pedestrianAccessPoints)
             : null;
@@ -35,19 +41,12 @@ public sealed partial class SimulationWorld
 
         if (pedestrianPair is null && HasRegionalGeneration)
         {
-            pedestrianPair = TryCreateInitialStreet(roadSnapshot, out starterStreetVehicleRoute);
+            pedestrianPair = TryCreateInitialStreet(roadSnapshot, preferredCenter, out starterStreetVehicleRoute);
             if (pedestrianPair is not null)
                 roadSnapshot = CreateRoadNetworkSnapshot();
         }
 
-        var vehicleAccessPoints = roadSnapshot.AccessPoints
-            .Where(static access => access.BuildingId is not null && (access.Mode & RoadAccessMode.Motor) != 0)
-            .OrderBy(static access => access.Id.Value)
-            .GroupBy(static access => access.SegmentId)
-            .Select(static group => group.First())
-            .Take(InitialMobilityRouteCandidateLimit)
-            .ToArray();
-
+        var vehicleAccessPoints = CreateInitialVehicleAccessCandidates(roadSnapshot, preferredCenter);
         var vehicleRoute = starterStreetVehicleRoute
             ?? (vehicleAccessPoints.Length >= 2
                 ? FindInitialVehicleRoute(roadSnapshot, vehicleAccessPoints)
@@ -88,19 +87,63 @@ public sealed partial class SimulationWorld
             vehiclesCreated);
     }
 
-    private static RoadAccessPointSnapshot[] CreateInitialPedestrianAccessCandidates(RoadNetworkSnapshot roadSnapshot)
+    private static RoadAccessPointSnapshot[] CreateInitialPedestrianAccessCandidates(
+        RoadNetworkSnapshot roadSnapshot,
+        WorldPoint? preferredCenter)
     {
         var walkableSegmentIds = roadSnapshot.Segments
             .Where(static segment => segment.Kind != RoadKind.Highway)
             .Select(static segment => segment.Id)
             .ToHashSet();
-        return roadSnapshot.AccessPoints
+        var candidates = roadSnapshot.AccessPoints
             .Where(access =>
                 access.BuildingId is not null
                 && (access.Mode & RoadAccessMode.Foot) != 0
                 && walkableSegmentIds.Contains(access.SegmentId))
+            .ToArray();
+        return OrderInitialAccessCandidates(roadSnapshot, candidates, preferredCenter);
+    }
+
+    private static RoadAccessPointSnapshot[] CreateInitialVehicleAccessCandidates(
+        RoadNetworkSnapshot roadSnapshot,
+        WorldPoint? preferredCenter)
+    {
+        var candidates = roadSnapshot.AccessPoints
+            .Where(static access => access.BuildingId is not null && (access.Mode & RoadAccessMode.Motor) != 0)
             .OrderBy(static access => access.Id.Value)
+            .GroupBy(static access => access.SegmentId)
+            .Select(static group => group.First())
+            .ToArray();
+        return OrderInitialAccessCandidates(roadSnapshot, candidates, preferredCenter);
+    }
+
+    private static RoadAccessPointSnapshot[] OrderInitialAccessCandidates(
+        RoadNetworkSnapshot roadSnapshot,
+        RoadAccessPointSnapshot[] candidates,
+        WorldPoint? preferredCenter)
+    {
+        if (preferredCenter is not { } center)
+        {
+            return candidates
+                .OrderBy(static access => access.Id.Value)
+                .Take(InitialMobilityRouteCandidateLimit)
+                .ToArray();
+        }
+
+        var segments = roadSnapshot.Segments.ToDictionary(static segment => segment.Id);
+        var nodes = roadSnapshot.Nodes.ToDictionary(static node => node.Id);
+        return candidates
+            .Select(access => new
+            {
+                Access = access,
+                Distance = TryResolveAccessPosition(access, segments, nodes, out var position)
+                    ? Distance2D(position, center)
+                    : double.PositiveInfinity,
+            })
+            .OrderBy(static item => item.Distance)
+            .ThenBy(static item => item.Access.Id.Value)
             .Take(InitialMobilityRouteCandidateLimit)
+            .Select(static item => item.Access)
             .ToArray();
     }
 
@@ -133,16 +176,11 @@ public sealed partial class SimulationWorld
 
     private (TripEndpoint Origin, TripEndpoint Destination)? TryCreateInitialStreet(
         RoadNetworkSnapshot roadSnapshot,
+        WorldPoint? preferredCenter,
         out RouteResult? vehicleRoute)
     {
         vehicleRoute = null;
-        var buildingIds = roadSnapshot.AccessPoints
-            .Where(static access => access.BuildingId is not null)
-            .Select(static access => access.BuildingId!.Value)
-            .Distinct()
-            .OrderBy(static id => id.Value)
-            .Take(InitialMobilityRouteCandidateLimit)
-            .ToArray();
+        var buildingIds = CreateInitialBuildingCandidates(roadSnapshot, preferredCenter);
         if (buildingIds.Length < 2) return null;
 
         BuildingId? selectedFirst = null;
@@ -205,6 +243,38 @@ public sealed partial class SimulationWorld
             vehicleRoute = null;
             return null;
         }
+    }
+
+    private BuildingId[] CreateInitialBuildingCandidates(
+        RoadNetworkSnapshot roadSnapshot,
+        WorldPoint? preferredCenter)
+    {
+        var candidates = roadSnapshot.AccessPoints
+            .Where(static access => access.BuildingId is not null)
+            .Select(static access => access.BuildingId!.Value)
+            .Distinct()
+            .ToArray();
+        if (preferredCenter is not { } center)
+        {
+            return candidates
+                .OrderBy(static id => id.Value)
+                .Take(InitialMobilityRouteCandidateLimit)
+                .ToArray();
+        }
+
+        return candidates
+            .Select(id => new
+            {
+                Id = id,
+                Distance = TryGetBuildingSnapshot(id, out var building)
+                    ? Distance2D(Center(building.Bounds), center)
+                    : double.PositiveInfinity,
+            })
+            .OrderBy(static item => item.Distance)
+            .ThenBy(static item => item.Id.Value)
+            .Take(InitialMobilityRouteCandidateLimit)
+            .Select(static item => item.Id)
+            .ToArray();
     }
 
     private (TripEndpoint Origin, TripEndpoint Destination)? FindInitialWalkingPair(RoadAccessPointSnapshot[] accessPoints)
