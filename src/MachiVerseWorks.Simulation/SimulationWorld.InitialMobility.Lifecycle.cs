@@ -37,5 +37,24 @@ public sealed partial class SimulationWorld
         }
     }
 
-    private void RetireTransientInitialMobilityForCheckpoint() => RetireInitialMobilityForRoadTopologyMutation();
+    private void RestoreInitialMobilityCheckpoint(SimulationCheckpoint checkpoint)
+    {
+        var storedPedestrians = (checkpoint.Pedestrians ?? Array.Empty<SimulationPedestrianCheckpoint>())
+            .Select(static item => item.Id)
+            .ToHashSet();
+        foreach (var pedestrianId in checkpoint.InitialMobilityPedestrianIds ?? Array.Empty<PedestrianId>())
+        {
+            if (pedestrianId.Value == 0 || !storedPedestrians.Contains(pedestrianId) || !_initialMobilityPedestrianIds.Add(pedestrianId))
+                throw new ArgumentException($"Initial mobility Pedestrian ID {pedestrianId.Value} is zero, duplicated, or missing from the checkpoint.", nameof(checkpoint));
+        }
+
+        var storedVehicles = (checkpoint.Vehicles ?? Array.Empty<SimulationVehicleCheckpoint>())
+            .Select(static item => item.Id)
+            .ToHashSet();
+        foreach (var vehicleId in checkpoint.InitialMobilityVehicleIds ?? Array.Empty<VehicleId>())
+        {
+            if (vehicleId.Value == 0 || !storedVehicles.Contains(vehicleId) || !_initialMobilityVehicleIds.Add(vehicleId))
+                throw new ArgumentException($"Initial mobility Vehicle ID {vehicleId.Value} is zero, duplicated, or missing from the checkpoint.", nameof(checkpoint));
+        }
+    }
 }
