@@ -7,7 +7,7 @@ set "TOOLS_DIR=%REPO_ROOT%\.tools"
 set "GLOBAL_JSON=%REPO_ROOT%\global.json"
 set "NODE_VERSION_FILE=%REPO_ROOT%\src\view\.node-version"
 set "WEB_DIR=%REPO_ROOT%\src\view"
-set "SERVER_PROJECT=%REPO_ROOT%\src\gateway\MachiVerseWorks.Server.csproj"
+set "SERVER_PROJECT=%REPO_ROOT%\src\server\MachiVerseWorks.Server.csproj"
 
 where powershell.exe >nul 2>&1
 if errorlevel 1 (
