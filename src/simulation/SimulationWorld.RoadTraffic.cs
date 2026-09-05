@@ -76,6 +76,7 @@ public sealed partial class SimulationWorld
     {
         EnsureRoadTrafficTopology();
         _vehicles.Step(deltaSeconds, tickCount, _roadTrafficTopology, _intersectionControl);
+        RetireCompletedInitialMobility();
     }
 
     private void EnsureRoadTrafficTopology()

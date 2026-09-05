@@ -25,6 +25,7 @@ public static class ServerApplication
         builder.Services.AddSingleton<SimulationRuntime>();
         builder.Services.AddSingleton<AdminCommandQueue>();
         builder.Services.AddSingleton<E2eMetrics>();
+        builder.Services.AddHostedService<DefaultWorldBootstrapService>();
         builder.Services.AddHostedService<LogisticsFixtureHostedService>();
         builder.Services.AddHostedService<PowerFixtureHostedService>();
         builder.Services.AddHostedService<WaterSewerFixtureHostedService>();

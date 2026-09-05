@@ -18,15 +18,18 @@ public sealed record RailwayOperationsFixture(
 
 public static class RailwayOperationsFixtures
 {
-    public static RailwayOperationsFixture SeedDeterministic(SimulationWorld world)
+    public static RailwayOperationsFixture SeedDeterministic(SimulationWorld world) =>
+        SeedDeterministic(world, new WorldPoint(0d, 0d, 0d));
+
+    public static RailwayOperationsFixture SeedDeterministic(SimulationWorld world, WorldPoint anchor)
     {
         ArgumentNullException.ThrowIfNull(world);
 
-        var n0 = world.CreateTrackNode(new WorldPoint(-100d, 24d, 2d));
-        var n1 = world.CreateTrackNode(new WorldPoint(-60d, 24d, 2d), TrackNodeKind.Junction);
-        var n2 = world.CreateTrackNode(new WorldPoint(0d, 24d, 2d), TrackNodeKind.Junction);
-        var n3 = world.CreateTrackNode(new WorldPoint(60d, 24d, 2d), TrackNodeKind.Junction);
-        var n4 = world.CreateTrackNode(new WorldPoint(100d, 24d, 2d));
+        var n0 = world.CreateTrackNode(Offset(anchor, -100d, 24d, 2d));
+        var n1 = world.CreateTrackNode(Offset(anchor, -60d, 24d, 2d), TrackNodeKind.Junction);
+        var n2 = world.CreateTrackNode(Offset(anchor, 0d, 24d, 2d), TrackNodeKind.Junction);
+        var n3 = world.CreateTrackNode(Offset(anchor, 60d, 24d, 2d), TrackNodeKind.Junction);
+        var n4 = world.CreateTrackNode(Offset(anchor, 100d, 24d, 2d));
         var depotOut = world.CreateTrackSegment(n0, n1, TrackDirection.StartToEnd, 1.067d, 10d, TrackElectrification.Overhead, TrackUsage.Depot);
         var westMain = world.CreateTrackSegment(n1, n2, TrackDirection.StartToEnd, 1.067d, 18d, TrackElectrification.Overhead, TrackUsage.Mainline);
         var eastMain = world.CreateTrackSegment(n2, n3, TrackDirection.StartToEnd, 1.067d, 18d, TrackElectrification.Overhead, TrackUsage.Mainline);
@@ -39,12 +42,12 @@ public static class RailwayOperationsFixtures
         world.CreateBlockSection([eastMain]);
         world.CreateBlockSection([depotIn]);
 
-        var stationA = world.CreateStation(new WorldVolume(-38d, 18d, 0d, -12d, 30d, 7d));
-        var platformA = world.CreatePlatform(stationA, westMain, 0.55d, 0.85d, new WorldVolume(-30d, 20d, 1d, -8d, 22d, 3d));
-        var stationB = world.CreateStation(new WorldVolume(22d, 18d, 0d, 50d, 30d, 7d));
-        var platformB = world.CreatePlatform(stationB, eastMain, 0.45d, 0.75d, new WorldVolume(24d, 20d, 1d, 48d, 22d, 3d));
-        var originDepot = world.CreateDepot(new WorldVolume(-105d, 16d, 0d, -55d, 32d, 7d), [depotOut]);
-        var destinationDepot = world.CreateDepot(new WorldVolume(55d, 16d, 0d, 105d, 32d, 7d), [depotIn]);
+        var stationA = world.CreateStation(Offset(anchor, -38d, 18d, 0d, -12d, 30d, 7d));
+        var platformA = world.CreatePlatform(stationA, westMain, 0.55d, 0.85d, Offset(anchor, -30d, 20d, 1d, -8d, 22d, 3d));
+        var stationB = world.CreateStation(Offset(anchor, 22d, 18d, 0d, 50d, 30d, 7d));
+        var platformB = world.CreatePlatform(stationB, eastMain, 0.45d, 0.75d, Offset(anchor, 24d, 20d, 1d, 48d, 22d, 3d));
+        var originDepot = world.CreateDepot(Offset(anchor, -105d, 16d, 0d, -55d, 32d, 7d), [depotOut]);
+        var destinationDepot = world.CreateDepot(Offset(anchor, 55d, 16d, 0d, 105d, 32d, 7d), [depotIn]);
 
         var formation = world.CreateTrainFormation(42d, 18d, 1.4d, 1.8d, 180);
         var route = world.CreateRailwayRoute([depotOut, westMain, eastMain, depotIn]);
@@ -63,4 +66,23 @@ public static class RailwayOperationsFixtures
 
         return new RailwayOperationsFixture(formation, route, timetable1, timetable2, service1, service2, train1, train2, stationA, stationB, platformA, platformB, originDepot, destinationDepot);
     }
+
+    private static WorldPoint Offset(WorldPoint anchor, double x, double y, double z) =>
+        new(anchor.X + x, anchor.Y + y, anchor.Z + z);
+
+    private static WorldVolume Offset(
+        WorldPoint anchor,
+        double minX,
+        double minY,
+        double minZ,
+        double maxX,
+        double maxY,
+        double maxZ) =>
+        new(
+            anchor.X + minX,
+            anchor.Y + minY,
+            anchor.Z + minZ,
+            anchor.X + maxX,
+            anchor.Y + maxY,
+            anchor.Z + maxZ);
 }

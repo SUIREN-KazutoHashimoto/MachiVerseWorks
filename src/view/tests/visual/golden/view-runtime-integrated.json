@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "description": "Normal Application -> Server/Simulation user-view integrated Golden contract.",
+  "required": {
+    "genericAgentCount": 0,
+    "minimumTerrainSamples": 1,
+    "minimumSettlements": 2,
+    "minimumBuildings": 1,
+    "minimumRoadSegments": 1,
+    "minimumPedestrians": 1,
+    "minimumVehicles": 1,
+    "minimumTrains": 1,
+    "maximumVisibleDebugOverlays": 0,
+    "requireJapaneseFont": true
+  }
+}

@@ -88,6 +88,7 @@ public sealed partial class SimulationWorld
             _pedestrianNetwork,
             _pedestrianSpatialIndex,
             crossingId => _pedestrianNetwork.IsCrossingOpen(crossingId) && IsPedestrianCrossingControlOpen(crossingId));
+        RetireCompletedInitialMobility();
     }
 
     private void RefreshPedestrianCrossingControl(ulong tickCount)
@@ -124,6 +125,7 @@ public sealed partial class SimulationWorld
 
     private void InvalidatePedestrianNetwork()
     {
+        RetireInitialPedestriansForNetworkMutation();
         if (_pedestrians.Count > 0)
             throw new InvalidOperationException("Road topology cannot be changed while stored Pedestrians reference derived routes. Remove them before mutating the walk network.");
         _pedestrianNetworkDirty = true;

@@ -6,6 +6,9 @@ if (appRoot === null) {
   throw new Error('Application root was not found.');
 }
 
+const query = new URLSearchParams(window.location.search);
+appRoot.dataset.debugOverlays = query.get('debug') === '1' ? 'visible' : 'hidden';
+
 const identity = document.createElement('div');
 identity.className = 'identity';
 const name = document.createElement('strong');
@@ -18,7 +21,7 @@ appRoot.append(identity);
 const application = new Application(appRoot);
 application.start();
 
-if (new URLSearchParams(window.location.search).get('visualTest') === 'runtime') {
+if (query.get('visualTest') === 'runtime') {
   void import('./runtime-visual-test.ts').then(({ installRuntimeVisualTest }) => {
     installRuntimeVisualTest(application);
   }).catch((error: unknown) => {
