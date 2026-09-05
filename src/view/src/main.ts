@@ -21,11 +21,18 @@ appRoot.append(identity);
 const application = new Application(appRoot);
 application.start();
 
-if (query.get('visualTest') === 'runtime') {
+const visualTest = query.get('visualTest');
+if (visualTest === 'runtime') {
   void import('./runtime-visual-test.ts').then(({ installRuntimeVisualTest }) => {
     installRuntimeVisualTest(application);
   }).catch((error: unknown) => {
     console.error('Failed to install runtime visual test diagnostics.', error);
+  });
+} else if (visualTest === 'user-facing') {
+  void import('./user-facing-visual-test.ts').then(({ installUserFacingVisualTest }) => {
+    installUserFacingVisualTest(application);
+  }).catch((error: unknown) => {
+    console.error('Failed to install user-facing visual test diagnostics.', error);
   });
 }
 
