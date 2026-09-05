@@ -9,7 +9,33 @@ fi
 ROOT_DIR="$1"
 ARTIFACT_DIR="$2"
 GOLDEN_DIR="$ROOT_DIR/src/view/tests/visual/user-facing-golden"
+MANIFEST="$ROOT_DIR/src/view/tests/visual/user-facing/manifest.json"
 SCENES=(world-overview dense-urban road-interchange railway street-activity)
+LEGACY_REFERENCE_COMMIT="5715ca26d1a7525d89a93c35540f926a720e5386"
+
+python - "$MANIFEST" "$LEGACY_REFERENCE_COMMIT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+manifest_path = Path(sys.argv[1])
+expected_commit = sys.argv[2]
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+expected_scenes = ["world-overview", "dense-urban", "road-interchange", "railway", "street-activity"]
+actual_scenes = [scene.get("id") for scene in manifest.get("scenes", [])]
+if manifest.get("schemaVersion") != 1:
+    raise SystemExit("VQ-0 user-facing manifest schemaVersion must be 1.")
+if manifest.get("legacyReference", {}).get("commit") != expected_commit:
+    raise SystemExit("VQ-0 Legacy reference commit is not pinned to the reviewed Legacy baseline.")
+if actual_scenes != expected_scenes:
+    raise SystemExit(f"VQ-0 scene contract mismatch: expected {expected_scenes}, actual {actual_scenes}.")
+capture = manifest.get("capture", {})
+viewport = capture.get("viewport", {})
+if viewport != {"width": 1920, "height": 1080, "devicePixelRatio": 1}:
+    raise SystemExit(f"VQ-0 viewport contract mismatch: {viewport}.")
+if capture.get("renderer") != "SwiftShader" or capture.get("fontFamily") != "Noto Sans CJK JP":
+    raise SystemExit("VQ-0 fixed renderer/font contract is missing.")
+PY
 
 # Runtime entities can move by a small number of pixels between otherwise equivalent
 # captures. Keep the channel threshold strict while allowing up to 0.5% changed pixels.
