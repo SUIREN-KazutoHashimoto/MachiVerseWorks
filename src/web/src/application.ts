@@ -15,7 +15,7 @@ import { SettlementStructureRenderer } from './settlement-structure-renderer.ts'
 import { isRetryableSubscriptionDetailCode } from './subscription-error-policy.ts';
 import { ClientUi } from './ui.ts';
 import { TrafficMessageType, type TrafficProtocolMessage } from './traffic-protocol.ts';
-import { ViewNavigationController, getCameraFocusAtSimulationAltitude, type ViewNavigationTarget } from './view-navigation.ts';
+import { ViewNavigationController, createStaticNavigationTarget, getCameraFocusAtSimulationAltitude, type ViewNavigationTarget } from './view-navigation.ts';
 import { WorldView } from './world-view.ts';
 import { ECONOMY_SNAPSHOT_MESSAGE_TYPE, type EconomyProtocolMessage, type EconomySnapshotMessage } from './economy-protocol.ts';
 import { LogisticsDebugOverlay } from './logistics-debug.ts';
@@ -61,6 +61,7 @@ export class Application {
   private audioSyncPending = false;
   private started = false;
   private terrainCameraInitialized = false;
+  private regionalCameraInitialized = false;
   private disposed = false;
 
   public constructor(host: HTMLElement) {
@@ -166,6 +167,7 @@ export class Application {
       case WORLD_ENVIRONMENT_SNAPSHOT_MESSAGE_TYPE:
         this.observation.apply(message); this.initializeTerrainCamera(); return;
       case REGIONAL_GENERATION_SNAPSHOT_MESSAGE_TYPE:
+        this.observation.apply(message); this.initializeRegionalCamera(message); return;
       case PERSISTENT_REGIONAL_EVOLUTION_SNAPSHOT_MESSAGE_TYPE:
         this.observation.apply(message); return;
       case PopulationMessageType.PopulationStatistics: this.applyPopulationStatistics(message); return;
@@ -195,6 +197,22 @@ export class Application {
     const elevation = this.observation.worldEnvironment.getNearestTerrainElevation(focus.x, focus.y);
     if (elevation === undefined || !this.navigation.rebaseFocusAltitude(0, elevation)) return;
     this.terrainCameraInitialized = true;
+    this.lastSubscription = null;
+    this.lastSubscriptionAt = Number.NEGATIVE_INFINITY;
+  }
+
+  private initializeRegionalCamera(message: RegionalGenerationSnapshotMessage): void {
+    if (this.regionalCameraInitialized || message.settlements.length === 0) return;
+    const settlement = [...message.settlements].sort((left, right) =>
+      right.population - left.population
+        || (left.settlementId < right.settlementId ? -1 : left.settlementId > right.settlementId ? 1 : 0))[0]!;
+    if (!this.navigation.focus(createStaticNavigationTarget(
+      'position',
+      'initial-regional-settlement',
+      { x: settlement.x, y: settlement.y, z: settlement.z },
+      0.45,
+    ))) return;
+    this.regionalCameraInitialized = true;
     this.lastSubscription = null;
     this.lastSubscriptionAt = Number.NEGATIVE_INFINITY;
   }
