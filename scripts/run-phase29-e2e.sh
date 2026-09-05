@@ -41,7 +41,7 @@ wait_http() {
 
 start_server() {
   local suffix="$1"
-  env Server__Port="$SERVER_PORT" Simulation__TickRate=30 Simulation__Seed=29027 Simulation__SpatialCellSize=4096 Server__SnapshotRate=2 Server__MaximumSubscriptionCellCount=524288 Server__AllowedWebSocketOrigins="http://127.0.0.1:$WEB_PORT" Simulation__InitialAgentCount=0 dotnet run --project "$ROOT_DIR/src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj" --configuration Release --no-build >"$ARTIFACT_DIR/server-$suffix.log" 2>&1 & SERVER_PID=$!
+  env Server__Port="$SERVER_PORT" Simulation__TickRate=30 Simulation__Seed=29027 Simulation__SpatialCellSize=4096 Server__SnapshotRate=2 Server__MaximumSubscriptionCellCount=524288 Server__AllowedWebSocketOrigins="http://127.0.0.1:$WEB_PORT" Simulation__InitialAgentCount=0 dotnet run --project "$ROOT_DIR/src/gateway/MachiVerseWorks.Server.csproj" --configuration Release --no-build >"$ARTIFACT_DIR/server-$suffix.log" 2>&1 & SERVER_PID=$!
   wait_http "http://127.0.0.1:$SERVER_PORT/health"
 }
 
@@ -60,7 +60,7 @@ capture_snapshot() {
 
 CHROME="$(find_chrome)"
 source "$ROOT_DIR/scripts/prepare-e2e.sh"
-npm --prefix "$ROOT_DIR/src/web" run dev -- --host 127.0.0.1 --port "$WEB_PORT" --strictPort >"$ARTIFACT_DIR/vite.log" 2>&1 & WEB_PID=$!
+npm --prefix "$ROOT_DIR/src/view" run dev -- --host 127.0.0.1 --port "$WEB_PORT" --strictPort >"$ARTIFACT_DIR/vite.log" 2>&1 & WEB_PID=$!
 wait_http "http://127.0.0.1:$WEB_PORT/tests/browser/phase29-e2e.html"
 
 start_server before-restart
