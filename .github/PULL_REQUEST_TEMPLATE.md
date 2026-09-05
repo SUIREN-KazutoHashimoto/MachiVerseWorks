@@ -2,6 +2,12 @@
 
 この PR で何を変更するかを簡潔に記載してください。
 
+## 対象コンポーネント
+
+原則として1つだけ選びます。Repository全体のCI / 運用 / 共通ドキュメントだけを変更する場合は `Repository-wide tooling/docs` とします。
+
+- Simulation / Gateway / Server / Protocol / Persistence / View / Management / Repository-wide tooling/docs:
+
 ## 目的 / 原因
 
 新機能なら解決したい問題、不具合修正なら確認した原因を記載してください。
@@ -10,8 +16,15 @@
 
 - 
 
+## 他コンポーネントへのFollow-up
+
+このPRの変更によって別コンポーネントの修正が必要な場合、同じPRで跨いで実装せずIssueへ切り出します。
+
+- Follow-up Issue: なし / #...
+
 ## 検証
 
+- [ ] 実装変更は対象コンポーネント1つに限定した、またはRepository-wide作業であることを明記した
 - [ ] 必要な build が成功している
 - [ ] 必要な test が成功している
 - [ ] 性能へ影響する変更では必要な benchmark を確認した
@@ -25,7 +38,9 @@
 
 ## バージョン
 
-通常開発では `AGENTS.md` の `A.B.C` ルールに従います。リポジトリ初期セットアップ期間中は、明示された例外に従いバージョンを更新しません。
+`VERSION`はRelease versionです。通常PRでは原則として変更しません。Release準備で変更した場合だけ、意図した公開versionを記載してください。
+
+- VERSION変更: なし / `A.B.C -> A.B.C`
 
 ## 未確認事項 / 既知の制約
 
