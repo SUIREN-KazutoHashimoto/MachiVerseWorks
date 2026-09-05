@@ -22,6 +22,7 @@ export interface UserFacingVisualDiagnostics {
   readonly vehicleCount: number;
   readonly trainCount: number;
   readonly hiddenDebugChromeCount: number;
+  readonly visibleDebugChromeCount: number;
 }
 
 export interface UserFacingVisualTestApi {
@@ -75,6 +76,12 @@ const DEBUG_CHROME_SELECTOR = [
   '.transit-debug',
   '.economy-debug',
   '.performance-overlay',
+  '[data-logistics-debug="true"]',
+  '[data-power-debug="true"]',
+  '[data-water-sewer-debug="true"]',
+  '[data-gas-debug="true"]',
+  '[data-optical-debug="true"]',
+  '[data-radio-debug="true"]',
 ].join(',');
 const CAPTURE_STYLE_ID = 'machiverse-user-facing-visual-capture-style';
 
@@ -265,15 +272,31 @@ function collectDiagnostics(application: Application): UserFacingVisualDiagnosti
     vehicleCount: state.vehicles.size,
     trainCount: internals.railwayOperations.trainCount,
     hiddenDebugChromeCount: document.querySelectorAll(DEBUG_CHROME_SELECTOR).length,
+    visibleDebugChromeCount: countVisibleElements(DEBUG_CHROME_SELECTOR),
   };
   return Object.freeze({
     ready: diagnostics.terrainSampleCount > 0
       && diagnostics.settlementCount > 0
       && diagnostics.buildingCount > 0
       && diagnostics.roadSegmentCount > 0
-      && diagnostics.roadSnapshotSequence > 0,
+      && diagnostics.roadSnapshotSequence > 0
+      && diagnostics.railwayNodeCount > 0
+      && diagnostics.railwayStationCount > 0
+      && diagnostics.pedestrianCount > 0
+      && diagnostics.vehicleCount > 0
+      && diagnostics.trainCount > 0
+      && diagnostics.visibleDebugChromeCount === 0,
     ...diagnostics,
   });
+}
+
+function countVisibleElements(selector: string): number {
+  let count = 0;
+  for (const element of document.querySelectorAll<HTMLElement>(selector)) {
+    const style = getComputedStyle(element);
+    if (style.display !== 'none' && style.visibility !== 'hidden' && Number.parseFloat(style.opacity || '1') > 0) count += 1;
+  }
+  return count;
 }
 
 function squaredDistance(leftX: number, leftY: number, rightX: number, rightY: number): number {
