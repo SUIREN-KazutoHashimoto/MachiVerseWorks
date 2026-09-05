@@ -5,7 +5,7 @@ on:
     branches:
       - develop
     paths:
-      - 'src/gateway/**'
+      - 'src/server/**'
       - 'src/protocol/**'
       - 'tests/MachiVerseWorks.Server.Tests/**'
       - 'Directory.Build.props'
