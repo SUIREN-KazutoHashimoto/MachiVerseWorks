@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "role": "Reproducible user-facing visual baseline for Legacy comparison. Passing this baseline is not a Legacy parity decision; VQ-7 owns the parity gate.",
+  "runtime": {
+    "simulationSeed": 29027,
+    "tickRate": 30,
+    "snapshotRate": 2,
+    "defaultWorldBootstrap": true
+  },
+  "capture": {
+    "viewport": {
+      "width": 1920,
+      "height": 1080,
+      "devicePixelRatio": 1
+    },
+    "browser": "Chrome for Testing 152.0.7977.75",
+    "renderer": "SwiftShader",
+    "fontFamily": "Noto Sans CJK JP",
+    "fontPackageVersion": "1:20230817+repack1-3",
+    "debugChrome": "hidden for person/railway/transit/economy/performance diagnostic sections; normal user status chrome remains visible"
+  },
+  "goldenPolicy": {
+    "technicalGolden": "Renderer fixture and runtime structural contracts detect pipeline/layer regressions. They do not prove user-facing visual quality.",
+    "userFacingGolden": "Five fixed runtime compositions provide a reproducible baseline for visual review and intentional VQ-1+ improvements.",
+    "updateRule": "Update only after reviewing actual/diff artifacts and confirming the visual change is intentional. Never update only to make CI pass.",
+    "legacyParity": "Legacy remains the minimum quality floor, but parity is reviewed and enforced by VQ-7 rather than inferred from these current-baseline pixels."
+  },
+  "scenes": [
+    {
+      "id": "world-overview",
+      "purpose": "Read the broad settlement silhouette, terrain/water separation and overall city presence.",
+      "legacyReviewCriteria": ["city silhouette", "terrain/water readability", "lighting depth", "UI obstruction"]
+    },
+    {
+      "id": "dense-urban",
+      "purpose": "Read building mass, skyline and dense urban structure around the primary settlement.",
+      "legacyReviewCriteria": ["building density", "skyline", "road/building relationship", "lighting depth"]
+    },
+    {
+      "id": "road-interchange",
+      "purpose": "Read the highest-degree delivered road intersection/interchange and road hierarchy.",
+      "legacyReviewCriteria": ["road hierarchy", "intersection legibility", "bridge/elevation readiness", "traffic context"]
+    },
+    {
+      "id": "railway",
+      "purpose": "Read railway/train presence using an authoritative active train position when available.",
+      "legacyReviewCriteria": ["railway presence", "train visibility", "rail/road context", "scale continuity"]
+    },
+    {
+      "id": "street-activity",
+      "purpose": "Read pedestrian/vehicle activity at street-biased range around the primary settlement.",
+      "legacyReviewCriteria": ["vehicle visibility", "pedestrian visibility", "signal/traffic context", "near-range readability"]
+    }
+  ]
+}
