@@ -147,7 +147,8 @@ main
 - `develop` への統合は PR を使用する。
 - リリースは `develop` から `main` への PR を使用する。
 - PR の標準マージ方式は merge commit とし、通常は squash / rebase merge を使用しない。
-- GitHub が PR マージ時に生成する merge commit は管理上のコミットとして扱い、バージョン `C` を別途加算しない。
+- GitHub が PR マージ時に生成する merge commit は管理上の統合コミットとして扱う。
+- Application `VERSION` はPRやmerge commitの回数に連動させず、Release時だけ更新する。
 - マージ済みの短命ブランチは原則として削除する。
 - 実験コードは実験ブランチに閉じ込め、採用しない場合は本流へ混ぜない。
 - PR をマージする前に、必要な build / test / benchmark / static analysis を確認する。
@@ -156,46 +157,43 @@ main
 
 ## 6. バージョン運用
 
-バージョンは `A.B.C` 形式で管理する。
+ルート `VERSION` はGit運用の番号ではなく、**公開成果物のRelease versionの唯一の正本**とする。
 
-- `A`: releaseとして`main`へ統合する明示的なversion更新で`+1`し、`B = 0`, `C = 0`にリセットする。
-- `B`: `develop`上の統合versionを進める明示的なversion更新で`+1`し、`C = 0`にリセットする。
-- `C`: 必要に応じた通常のversion更新で`+1`する。
-- 並行worker branchや通常PRでは`VERSION`を据え置いてよく、version更新を各PRへ機械的に要求しない。`VERSION`を変更したPRだけbranch別transitionを厳密に検証する。
+- 通常のfeature / fix / perf / refactor / docs作業では原則として`VERSION`を変更しない。
+- worker branchや`develop`向けPRをmergeしても、Releaseを決めるまでは既存`VERSION`を維持してよい。
+- `develop`向けPRだから`B+1`、`main`向けPRだから`A+1`、通常コミットだから`C+1`といったbranch / commit依存のincrement規則は設けない。
+- Releaseとして公開するversionを決めたときだけ、`VERSION`を意図した`A.B.C`へ明示的に変更する。
+- `develop -> main`のRelease PRには、公開したいversionが設定済みの状態で含める。
+- A / B / Cのどこを変更するかはReleaseの互換性・規模・公開方針で決定し、Git branch名から機械的に決めない。
+- 公開済みversionを別内容のReleaseへ再利用しない。
 
-例: `1.4.12`
+通常CIは`VERSION`の存在と`A.B.C`形式だけを検証し、PR baseとのversion transitionは強制しない。
 
-```text
-通常コミット       -> 1.4.13
-develop 向け PR   -> 1.5.0
-その後のコミット   -> 1.5.1
-main 向け PR      -> 2.0.0
-```
-
-PR に伴う A / B の更新コミットは、PR 作成のためのバージョン更新として扱い、同じ操作で C を別途加算しない。PR マージ時に GitHub が生成する merge commit も C の加算対象外とする。
-
-通常開発開始後は、ルート `VERSION` をアプリケーションバージョンの唯一の正本とする。C# Server / Web Client など各成果物は `VERSION` から値を取得し、個別に同じバージョン文字列を手管理しない。Protocol version と Save format version は互換性の意味が異なるため、アプリケーションバージョンとは独立して管理する。
+C# Server / Web Client など各成果物は `VERSION` から値を取得し、個別に同じバージョン文字列を手管理しない。Protocol version と Save format version は互換性の意味が異なるため、アプリケーションバージョンとは独立して管理する。
 
 詳細は `docs/development/versioning.md` を参照する。
-
-### 初期セットアップ例外
-
-リポジトリ初期セットアップ期間中は、明示的に通常開発へ移行するまでバージョンをカウントアップしない。初期セットアップのためだけに `VERSION` を作成・更新しない。
 
 ## 7. 完了条件
 
 作業を Done とするには、対象に応じて次を満たすこと。
 
 - 実装またはドキュメント変更が完了している。
-- 必要な build / test / benchmark が成功している。
+- 必要な build / test / benchmark が成功している、またはnon-blocking benchmarkの未解決事項が明記されている。
 - 仕様を変更した場合は関連ドキュメントが更新されている。
 - 新しい設計判断が重要な場合は ADR が追加または更新されている。
 - 一時的なデバッグコード、不要なログ、実験用フラグが本流に残っていない。
 - 対応する`roadmap/SIMULATION_ROADMAP.md`、`roadmap/GATEWAY_ROADMAP.md`、`roadmap/VIEW_ROADMAP.md`、`roadmap/MANAGEMENT_ROADMAP.md`の対象Taskがある場合は、実際の完了状態と状態記号が一致している。
 - Markdownを追加・移動・改名した場合は、ローカルリンクとheading anchorの検証が成功している。
+- 実装変更は対象コンポーネント1つに限定し、必要な他コンポーネント作業はIssueへ切り出している。
 
 ## 8. エージェント向け注意
 
+- **1 AGENT = 1コンポーネント**を原則とする。1つの作業でSimulation / Gateway / Server / Protocol / Persistence / View / Managementの複数コンポーネントを跨いで実装しない。
+- 作業開始時に対象コンポーネントを1つ決める。Gatewayは物理的に`src/server/`内へ実装されていても、責務上は独立した対象コンポーネントとして扱う。
+- 対象コンポーネントの変更によって別コンポーネントの修正が必要になった場合、同じAGENTが続けて修正しない。必要な変更・理由・依存関係をIssueへ追加し、別AGENTへ引き継ぐ。
+- Protocolなどの共有contract変更も、Protocol側の作業として分割する。利用側コンポーネントと同じAGENTが便宜上まとめて変更しない。
+- Repository全体のCI、運用ルール、共通ドキュメントだけを変更する作業は`Repository-wide tooling/docs`として扱える。この例外を機能実装の跨ぎ変更に使用しない。
+- PR本文には対象コンポーネントと、必要な他コンポーネントfollow-up Issueを明記する。
 - 依頼されていない破壊的変更、ブランチ削除、Release 削除、Repository 設定変更を勝手に行わない。
 - PR のマージは、ユーザーが明示的に依頼した場合、または現在の作業指示から明確にマージまで求められている場合のみ行う。
 - 既に会話やリポジトリから判明している情報を再質問しない。
