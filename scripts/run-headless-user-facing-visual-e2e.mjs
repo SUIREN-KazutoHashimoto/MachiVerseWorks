@@ -59,6 +59,17 @@ try {
   devToolsSocket = await createDevToolsClient(page.webSocketDebuggerUrl, commandTimeoutMs);
   await devToolsSocket.command('Page.enable');
   await devToolsSocket.command('Runtime.enable');
+  await devToolsSocket.command('Emulation.setDeviceMetricsOverride', {
+    width: 1920,
+    height: 1080,
+    deviceScaleFactor: 1,
+    mobile: false,
+    screenWidth: 1920,
+    screenHeight: 1080,
+    positionX: 0,
+    positionY: 0,
+    dontSetVisibleSize: false,
+  });
 
   const browserVersion = await devToolsSocket.command('Browser.getVersion');
   const expectedBrowserVersion = process.env.MVW_VISUAL_BROWSER_VERSION;
