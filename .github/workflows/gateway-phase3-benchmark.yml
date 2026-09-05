@@ -5,7 +5,7 @@ on:
     branches:
       - develop
     paths:
-      - 'src/gateway/**'
+      - 'src/server/**'
       - 'src/protocol/**'
       - 'benchmarks/MachiVerseWorks.Benchmarks/GatewayDeliveryBenchmarks.cs'
       - '.github/workflows/gateway-phase3-benchmark.yml'
