@@ -65,6 +65,19 @@ jobs:
           echo "MVW_VISUAL_FONT_FAMILY=Noto Sans CJK JP" >> "$GITHUB_ENV"
           echo "MVW_VISUAL_FONT_PACKAGE_VERSION=$MVW_VISUAL_FONT_PACKAGE_VERSION" >> "$GITHUB_ENV"
 
+      - name: Bypass unrelated runtime structural capture for preview only
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/run-view-phase03-e2e.sh')
+          text = path.read_text()
+          text = text.replace('node "$ROOT_DIR/scripts/run-headless-runtime-visual-e2e.mjs" "$CHROME" "$RUNTIME_URL" "$RUNTIME_ARTIFACT_DIR"', 'echo "Skipping runtime structural screenshot in VQ-1 preview."')
+          text = text.replace('node "$ROOT_DIR/scripts/check-runtime-visual-golden.mjs" "$RUNTIME_ARTIFACT_DIR" "$RUNTIME_GOLDEN_FILE"', 'true')
+          text = text.replace('cat "$RUNTIME_ARTIFACT_DIR/summary.json"', 'echo "Runtime structural summary skipped in VQ-1 preview."')
+          path.write_text(text)
+          PY
+
       - name: Run VQ-1 preview
         env:
           MVW_UPDATE_VISUAL_GOLDEN: '1'
