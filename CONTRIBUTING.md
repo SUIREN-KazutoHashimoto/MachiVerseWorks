@@ -6,7 +6,6 @@ MachiVerseWorks への貢献に関心を持っていただきありがとうご�
 
 - 通常開発は最新の `develop` を基準にします。
 - `main` はリリース系統として扱い、通常開発では直接更新しません。
-- リポジトリ初期セットアップ期間だけは、明示された作業に限り `main` を直接整備する場合があります。
 - 変更は目的ごとに小さくまとめ、維持する挙動と意図的に変更する挙動を分けて説明してください。
 - 不具合修正では症状を隠す回避策より、原因を持つ責務での修正を優先してください。
 - 仕様変更時は `docs/specifications/`、設計変更時は `docs/architecture/` を同期してください。
@@ -31,12 +30,21 @@ MachiVerseWorks への貢献に関心を持っていただきありがとうご�
 
 - **Simulation**: authoritative World、rule、意味的state、schedule / history、semantic observation source、authoritative command contractを所有します。
 - **Gateway**: read-only Observation Request、subscription、filtering、cache、deduplication、delivery、Protocol adaptation、reconnect / resyncを担当します。現在は主に`MachiVerseWorks.Server`内へ実装します。
+- **Server**: headless host、transport integration、Administration / Management command boundaryを担当します。
+- **Protocol**: Client / Server間の共有wire contractです。
+- **Persistence**: Simulation checkpointとversioned Save Dataの変換・検証を担当します。
 - **View**: Gatewayから受け取ったauthoritative observationの描画、Camera、Selection、Inspector、Rendering LOD等を担当する完全read-only clientです。
 - **Management**: World / City / Serverを明示的に変更するcommand client / UIです。mutationはSimulationのserver-authoritative command境界を必ず通します。
-- `MachiVerseWorks.Persistence`: Simulation checkpointとversioned Save Dataの変換・検証を担当します。
-- `MachiVerseWorks.Protocol`: 共有wire componentです。domain semantic payloadはSimulation、Observation control / deliveryはGateway、mutation command semanticsはSimulationという責務分離を維持します。
 
 責務を跨ぐ近道を作るより、必要なsemantic source、Observation contract、command、presentationを各Roadmapへ明示的に追加してください。
+
+### 並行AGENT開発
+
+開発AGENTは原則として1つの作業で1コンポーネントだけを実装します。
+
+別コンポーネントの修正が必要になった場合は、その場で跨いで実装せず、必要な変更をIssueへ切り出し、別AGENTへ引き継ぎます。Protocolなどの共有contract変更も、実装責務ごとに分割します。
+
+Repository全体のCI、運用ルール、共通ドキュメントだけを変更する作業は`Repository-wide tooling/docs`として扱えます。この例外を機能実装の跨ぎ変更に使用しません。
 
 Roadmapの正本:
 
@@ -50,23 +58,25 @@ Roadmapの正本:
 PR には可能な範囲で次を含めてください。
 
 - 変更の目的
+- 対象コンポーネント
 - 主な変更点
 - 不具合修正の場合は原因
 - 実施した build / test / benchmark
 - UI や描画変更がある場合は必要に応じて画像・動画
 - 未確認事項・既知の制約
 - 仕様・設計ドキュメントの更新範囲
+- 他コンポーネントへ必要なfollow-up Issue
 
 CI 成功と、実際の Simulation / Server / Browser の動作確認は同一ではありません。必要な実機確認を行っていない場合は、その旨を明記してください。
 
-PR の標準マージ方式は **merge commit** です。version履歴と個々のコミットを保持するため、通常は squash / rebase merge を使用しません。マージ済みの短命ブランチは原則として削除します。
+PR の標準マージ方式は **merge commit** です。個々の開発コミットとPR境界を保持するため、通常は squash / rebase merge を使用しません。マージ済みの短命ブランチは原則として削除します。
 
 ## Issue
 
 不具合報告では、可能な範囲で次を記載してください。
 
 - バージョンまたはコミット
-- 発生箇所（Simulation / Gateway / View / Management / Server host / Protocol など）
+- 発生箇所（Simulation / Gateway / Server / Protocol / Persistence / View / Management など）
 - 再現条件
 - 期待する挙動
 - 実際の挙動
@@ -75,17 +85,18 @@ PR の標準マージ方式は **merge commit** です。version履歴と個々�
 
 新機能提案では、実装方法だけでなく、解決したい問題と期待する効果も記載してください。
 
+1つの要求が複数コンポーネントへまたがる場合、要求全体を1 Issueで説明しても構いませんが、実装着手時にはコンポーネントごとの作業Issueへ分割し、依存関係を明記します。
+
 ## バージョン
 
-通常開発へ移行後は `AGENTS.md` と [`docs/development/versioning.md`](docs/development/versioning.md) の `A.B.C` ルールに従います。
+ルート `VERSION` はGit運用の番号ではなく、公開成果物のRelease versionです。
 
-- `A`: `main` 向け PR 作成時に +1。`B` と `C` を 0 にリセット
-- `B`: `develop` 向け PR 作成時に +1。`C` を 0 にリセット
-- `C`: 通常コミット作成時に +1
+- 通常のfeature / fix / refactor / docs PRでは原則として変更しません。
+- `develop`向けPRだからversionを上げる、`main`向けPRだからmajorを上げる、といったbranch依存の規則はありません。
+- Releaseするversionを決めたときだけ`VERSION`を明示的に変更します。
+- `develop -> main`のRelease PRには、公開したいversionが設定済みの状態で含めます。
 
-通常開発開始後はルート `VERSION` をアプリケーションバージョンの正本とします。Protocol version と Save format version は独立して管理します。
-
-初期セットアップ期間は、明示的に終了するまでバージョンを更新せず、`VERSION` も作成しません。
+詳細は [`docs/development/versioning.md`](docs/development/versioning.md) を参照してください。Protocol version と Save format version は独立して管理します。
 
 ## ライセンス
 
