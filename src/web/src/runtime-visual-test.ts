@@ -52,10 +52,12 @@ export function installRuntimeVisualTest(application: Application): void {
 
 function positionCheckpoint(application: Application, checkpoint: RuntimeVisualCheckpoint): boolean {
   const snapshot = application.state.regionalGeneration.snapshot;
-  if (snapshot === null || snapshot.buildings.length === 0) return false;
+  if (snapshot === null || snapshot.buildings.length === 0 || snapshot.settlements.length === 0) return false;
 
-  if (checkpoint === 'street-activity' && snapshot.settlements.length > 0) {
-    const settlement = [...snapshot.settlements].sort((left, right) => right.population - left.population)[0]!;
+  const settlement = [...snapshot.settlements].sort((left, right) =>
+    right.population - left.population
+      || (left.settlementId < right.settlementId ? -1 : left.settlementId > right.settlementId ? 1 : 0))[0]!;
+  if (checkpoint === 'street-activity') {
     return application.focus(createStaticNavigationTarget(
       'position',
       'runtime-street-activity',
@@ -64,13 +66,17 @@ function positionCheckpoint(application: Application, checkpoint: RuntimeVisualC
     ));
   }
 
+  const buildings = snapshot.buildings.filter((building) =>
+    application.state.regionalGeneration.getSettlementForBuilding(building.buildingId)?.settlementId === settlement.settlementId);
+  if (buildings.length === 0) return false;
+
   let minX = Number.POSITIVE_INFINITY;
   let minY = Number.POSITIVE_INFINITY;
   let minZ = Number.POSITIVE_INFINITY;
   let maxX = Number.NEGATIVE_INFINITY;
   let maxY = Number.NEGATIVE_INFINITY;
   let maxZ = Number.NEGATIVE_INFINITY;
-  for (const building of snapshot.buildings) {
+  for (const building of buildings) {
     minX = Math.min(minX, building.minX); minY = Math.min(minY, building.minY); minZ = Math.min(minZ, building.minZ);
     maxX = Math.max(maxX, building.maxX); maxY = Math.max(maxY, building.maxY); maxZ = Math.max(maxZ, building.maxZ);
   }
