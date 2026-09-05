@@ -9,6 +9,8 @@ MachiVerseWorks のドキュメント入口です。
 - Simulation側の現在地と次の作業: [`../roadmap/SIMULATION_ROADMAP.md`](../roadmap/SIMULATION_ROADMAP.md)
 - Gateway側の現在地と次の作業: [`../roadmap/GATEWAY_ROADMAP.md`](../roadmap/GATEWAY_ROADMAP.md)
 - View側の現在地と次の作業: [`../roadmap/VIEW_ROADMAP.md`](../roadmap/VIEW_ROADMAP.md)
+- View P0 Legacy Visual Parityの詳細計画: [`roadmap/view-legacy-visual-parity.md`](roadmap/view-legacy-visual-parity.md)
+- Phase 38 Addon conflict resolution詳細設計: [`roadmap/phase38-addon-conflict-resolution.md`](roadmap/phase38-addon-conflict-resolution.md)
 - Management側の現在地と次の作業: [`../roadmap/MANAGEMENT_ROADMAP.md`](../roadmap/MANAGEMENT_ROADMAP.md)
 - 共通の開発・文書ルール: [`../AGENTS.md`](../AGENTS.md)
 
@@ -21,7 +23,7 @@ MachiVerseWorks のドキュメント入口です。
 | [`specifications/`](specifications/) | Simulation、交通、公共交通、物流、都市Infrastructureなどの現行仕様 | [`specifications/README.md`](specifications/README.md) |
 | [`development/`](development/) | 開発環境、Git、version、CI、テスト、性能計測などの運用 | [`development/README.md`](development/README.md) |
 | [`decisions/`](decisions/) | ADR（Architecture Decision Record） | [`decisions/README.md`](decisions/README.md) |
-| [`roadmap/`](roadmap/) | Phaseを補足する詳細設計・検討資料。進捗状態の正本ではない | [`roadmap/phase38-addon-conflict-resolution.md`](roadmap/phase38-addon-conflict-resolution.md) |
+| [`roadmap/`](roadmap/) | Phaseを補足する詳細設計・検討資料。進捗状態の正本ではない | [`roadmap/view-legacy-visual-parity.md`](roadmap/view-legacy-visual-parity.md)、[`roadmap/phase38-addon-conflict-resolution.md`](roadmap/phase38-addon-conflict-resolution.md) |
 | [`archive/`](archive/) | Legacy資料、完了済みRoadmap履歴、廃止設計、過去の実験記録 | [`archive/README.md`](archive/README.md) |
 
 > [!NOTE]

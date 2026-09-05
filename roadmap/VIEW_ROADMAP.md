@@ -11,6 +11,40 @@
 > **現在:** View Phase 5 — Infrastructure & Dynamic Entity Fidelity  
 > **進め方:** View固有の基盤はPhase 1から進め、Simulationから移管された描画Taskは依存するSimulation semantic sourceとGateway delivery contractが実装できた時点で順次着手する
 
+## P0 Track — Legacy Visual Parity
+
+> **状態: ⏳ VQ-0着手中**  
+> **優先度: P0 / View最優先**  
+> **詳細計画:** [`../docs/roadmap/view-legacy-visual-parity.md`](../docs/roadmap/view-legacy-visual-parity.md)  
+> **Tracking:** #465
+
+既存のView Phase番号は維持したまま、Legacy版を最低品質基準とする横断Visual品質Trackを最優先で進める。VQ Taskは既存Phaseの責務を置き換えず、Legacy parityに必要な成果をPhase横断で前倒し・統合するための正本Task IDとしてこのRoadmapでも状態を管理する。Simulation / Gatewayの並行開発は停止しない。
+
+| VQ | 内容 | 主な対応View Task / Phase | 状態 |
+| --- | --- | --- | --- |
+| VQ-0 | Legacy baseline / User-facing Golden | V4-008 + Visual E2E基盤 | ⬜ #466 |
+| VQ-1 | Environment / Lighting / Fog / Terrain-Water readability | View Phase 3 / V11-004〜V11-005 | ⬜ #467 |
+| VQ-2a | Road surface / hierarchy | V5-001 / V6-005 / V11-002 | ⬜ #468 |
+| VQ-2b | Intersection / Bridge / elevated / grade separation | V5-001 / V6-005 / V11-002 | ⬜ #469 |
+| VQ-3a | Building appearance / height / skyline | View Phase 4 / V6-006 / V11-002 | ⬜ #470 |
+| VQ-3b | Urban block / density / alignment / LOD | V4-005 / V6-006〜V6-008 / V11-009 | ⬜ #471 |
+| VQ-4 | Railway / Station / Train presence | V5-002 / V6-005 / V11-002〜V11-003 | ⬜ #472 |
+| VQ-5 | Vehicle / Pedestrian / Signal / city activity | V5-003 / V5-005〜V5-008 / V11-002〜V11-003 | ⬜ #473 |
+| VQ-6a | Camera preset / continuous scale transition | View Phase 2 / V6-002〜V6-012 | ⬜ #474 |
+| VQ-6b | Label / UI hierarchy / debug suppression | V6-009 / V11-009 | ⬜ #475 |
+| VQ-7 | Legacy parity formal gate | V13 closeout + Visual E2E | ⬜ #476 |
+| VQ-8 | Legacy+ production observation | View Phase 5 / 6 / 11 / 12 | ⬜ #477 |
+
+### P0 Track運用ルール
+
+- **VQ-0〜VQ-3をImmediate wave**として、通常のView Phase 5以降の未着手Taskより優先する。
+- **VQ-7完了まではVisual Foundationを完成扱いにしない。** Technical Golden成功だけではLegacy parity達成とみなさない。
+- VQ Task完了時は、この表・Tracking Issue #465・詳細計画を同期する。
+- VQ実装で新しいSimulation semanticsが必要ならSimulation Roadmapへ、新しいdelivery能力が必要ならGateway RoadmapへTaskを切り出し、View側で意味を捏造しない。
+- VQ-8はVQ-7完了後に着手する。
+
+---
+
 ## 最上位原則
 
 - **Viewは完全read-onlyである。** Viewからauthoritative Simulation stateを変更しない。

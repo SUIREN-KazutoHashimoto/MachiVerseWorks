@@ -9,6 +9,18 @@
 
 このREADME自体はTask状態の正本ではありません。各Taskの状態・依存・完了条件は対応Roadmapを参照します。
 
+## P0 View優先Track — Legacy Visual Parity
+
+Viewのユーザー向けvisual qualityについては、**Legacy版と同等以上を最低品質ライン**とする。既存`VIEW_ROADMAP.md`のPhase番号・責務・依存関係は維持しつつ、Phase 5 / 6 / 11を横断するproduction presentationの必須部分をP0として先行する。
+
+- 詳細計画: [`../docs/roadmap/view-legacy-visual-parity.md`](../docs/roadmap/view-legacy-visual-parity.md)
+- Tracking Issue: #465
+- Immediate: VQ-0〜VQ-3（baseline / environment / road / urban morphology）
+- Required parity: VQ-4〜VQ-7（railway / activity / camera-LOD-UI / user-facing visual gate）
+- After parity: VQ-8（Legacy+）
+
+**VQ-7を通過するまでViewのvisual foundationを完成扱いにしない。** Technical Goldenはrendering pipeline / runtime integrationの回帰検出として維持するが、単独ではユーザー向けvisual qualityの完成を証明しない。Simulation / Gatewayの並行開発はこのP0 Trackによって停止させない。
+
 ## 責務の最上位ルール
 
 | 関心事 | 正本 |
@@ -67,7 +79,7 @@ Phase 37にServer / Gateway / Web artifact統合Taskが存在しても、Gateway
 - public Extension API / package / lifecycle / dependency / compatibility / Save / semantic contract: Simulation Roadmap Phase 38
 - extension observation transportが必要な場合のdelivery contract: Gateway Roadmap
 - read-only model / material / rendering / Inspector extension: View Roadmap Phase 12
-- install / update / enable / disable / trust / settings / conflict操作: Management Roadmap Phase 5
+- install / update / enable / disable / trust / settings / conflict操作: Management Phase 5
 
 ### Localization
 
