@@ -8,7 +8,7 @@ public sealed class WebSocketRateLimitPolicyTests
     [TestMethod]
     public void RateLimitedHandlerPathUsesRecoverableStrikePolicy()
     {
-        var sourcePath = Path.Combine(FindRepositoryRoot(), "src", "MachiVerseWorks.Server", "WebSocketSessionHandler.cs");
+        var sourcePath = Path.Combine(FindRepositoryRoot(), "src", "gateway", "WebSocketSessionHandler.cs");
         var source = File.ReadAllText(sourcePath);
         var rateStart = source.IndexOf("if (!connection.TryConsumeRequest", StringComparison.Ordinal);
         Assert.IsTrue(rateStart >= 0);
