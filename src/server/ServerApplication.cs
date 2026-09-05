@@ -33,7 +33,18 @@ public static class ServerApplication
         builder.Services.AddHostedService<OpticalFixtureHostedService>();
         builder.Services.AddHostedService<RadioFixtureHostedService>();
         builder.Services.AddHostedService<RegionalGenerationFixtureService>();
-        builder.Services.AddHostedService<SimulationTickService>();
+        var pauseAtTickText = builder.Configuration["Simulation:PauseAtTick"];
+        if (string.IsNullOrWhiteSpace(pauseAtTickText))
+        {
+            builder.Services.AddHostedService<SimulationTickService>();
+        }
+        else
+        {
+            if (!ulong.TryParse(pauseAtTickText, out var pauseAtTick) || pauseAtTick == 0)
+                throw new InvalidOperationException("Simulation:PauseAtTick must be a positive integer tick count.");
+            builder.Services.AddSingleton(new FixedTickSimulationOptions(pauseAtTick));
+            builder.Services.AddHostedService<FixedTickSimulationService>();
+        }
         builder.Services.AddHostedService<AdminCommandExecutorV2>();
         builder.Services.AddHostedService<ServerConsoleService>();
         builder.Services.AddObservationGateway();
