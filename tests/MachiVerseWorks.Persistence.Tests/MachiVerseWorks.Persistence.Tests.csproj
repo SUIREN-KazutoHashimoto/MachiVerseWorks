@@ -4,8 +4,8 @@
     <UseVSTest>true</UseVSTest>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/MachiVerseWorks.Persistence/MachiVerseWorks.Persistence.csproj" />
-    <ProjectReference Include="../../src/MachiVerseWorks.Protocol/MachiVerseWorks.Protocol.csproj" />
-    <ProjectReference Include="../../src/MachiVerseWorks.Simulation/MachiVerseWorks.Simulation.csproj" />
+    <ProjectReference Include="../../src/persistence/MachiVerseWorks.Persistence.csproj" />
+    <ProjectReference Include="../../src/protocol/MachiVerseWorks.Protocol.csproj" />
+    <ProjectReference Include="../../src/simulation/MachiVerseWorks.Simulation.csproj" />
   </ItemGroup>
 </Project>

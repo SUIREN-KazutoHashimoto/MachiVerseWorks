@@ -5,8 +5,8 @@ MachiVerseWorks をローカルで build / test / 実行するための手順で
 SDK / runtime の version は個別に手入力して管理せず、Repository 内の固定ファイルを正とします。
 
 - .NET SDK: ルート [`global.json`](../../global.json)
-- Node.js: [`src/web/.node-version`](../../src/web/.node-version)
-- npm dependency: [`src/web/package-lock.json`](../../src/web/package-lock.json)
+- Node.js: [`src/view/.node-version`](../../src/view/.node-version)
+- npm dependency: [`src/view/package-lock.json`](../../src/view/package-lock.json)
 
 実装計画はSimulation側[`../../roadmap/SIMULATION_ROADMAP.md`](../../roadmap/SIMULATION_ROADMAP.md)、Gateway側[`../../roadmap/GATEWAY_ROADMAP.md`](../../roadmap/GATEWAY_ROADMAP.md)、read-only View側[`../../roadmap/VIEW_ROADMAP.md`](../../roadmap/VIEW_ROADMAP.md)、Management側[`../../roadmap/MANAGEMENT_ROADMAP.md`](../../roadmap/MANAGEMENT_ROADMAP.md)を正本とします。4 Roadmapの責務・依存関係は[`../../roadmap/README.md`](../../roadmap/README.md)を参照してください。
 
@@ -54,7 +54,7 @@ scripts\setup-dev.bat
 `setup-dev.bat` は次を順番に行います。
 
 1. `global.json` から必要な .NET SDK version を取得
-2. `src/web/.node-version` から必要な Node.js version を取得
+2. `src/view/.node-version` から必要な Node.js version を取得
 3. Microsoft 公式 `dotnet-install.ps1` を使用して `.tools/dotnet/` へ .NET SDK を配置
 4. Node.js 公式配布 ZIP を `nodejs.org` から取得し `.tools/node/` へ配置
 5. `dotnet restore`
@@ -104,7 +104,7 @@ scripts\setup-dev.bat
 
 新しい version は `.tools/` 配下の別 directory に配置されます。
 
-完全に作り直す場合は MachiVerseWorks の Server / Web View を停止したうえで `.tools/` と `src/web/node_modules/` を削除し、`setup-dev.bat` を再実行します。
+完全に作り直す場合は MachiVerseWorks の Server / Web View を停止したうえで `.tools/` と `src/view/node_modules/` を削除し、`setup-dev.bat` を再実行します。
 
 ## 手動セットアップ / Windows 以外
 
@@ -124,7 +124,7 @@ dotnet test MachiVerseWorks.slnx --configuration Release --no-build
 ### Web View
 
 ```bash
-cd src/web
+cd src/view
 node --version
 npm ci
 npm run lint
@@ -140,13 +140,13 @@ npm run build
 Terminal 1:
 
 ```bash
-dotnet run --project src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj
+dotnet run --project src/server/MachiVerseWorks.Server.csproj
 ```
 
 Terminal 2:
 
 ```bash
-cd src/web
+cd src/view
 npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
 ```
 
@@ -154,7 +154,7 @@ Web View の既定 Server URL は `ws://127.0.0.1:5080/ws` なので、既定構
 
 別 Server へ接続する場合は Web View 起動時に `VITE_SERVER_URL` を指定します。
 
-現時点の`src/web`はread-only Viewです。将来Management Clientが同じWeb stackを利用する場合も、View moduleとは別のcommand client / shellとして実装します。Gatewayは現時点ではServer内でhostされるため、ローカル起動手順として別processを追加する必要はありません。
+現時点の`src/view`はread-only Viewです。将来Management Clientが同じWeb stackを利用する場合も、View moduleとは別のcommand client / shellとして実装します。Gatewayは現時点ではServer内でhostされるため、ローカル起動手順として別processを追加する必要はありません。
 
 ## End-to-End のローカル確認
 
@@ -178,7 +178,7 @@ bash scripts/run-phase6-e2e.sh
 dotnet restore MachiVerseWorks.slnx
 dotnet build MachiVerseWorks.slnx --configuration Release --no-restore
 dotnet test MachiVerseWorks.slnx --configuration Release --no-build
-cd src/web
+cd src/view
 npm ci
 npm run lint
 npm run typecheck

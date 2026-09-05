@@ -28,7 +28,7 @@ updates:
           - "*"
 
   - package-ecosystem: npm
-    directory: /src/web
+    directory: /src/view
     schedule:
       interval: weekly
       day: monday

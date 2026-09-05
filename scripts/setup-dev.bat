@@ -5,9 +5,9 @@ set "SCRIPT_DIR=%~dp0"
 for %%I in ("%SCRIPT_DIR%..") do set "REPO_ROOT=%%~fI"
 set "TOOLS_DIR=%REPO_ROOT%\.tools"
 set "GLOBAL_JSON=%REPO_ROOT%\global.json"
-set "NODE_VERSION_FILE=%REPO_ROOT%\src\web\.node-version"
+set "NODE_VERSION_FILE=%REPO_ROOT%\src\view\.node-version"
 set "SOLUTION=%REPO_ROOT%\MachiVerseWorks.slnx"
-set "WEB_DIR=%REPO_ROOT%\src\web"
+set "WEB_DIR=%REPO_ROOT%\src\view"
 
 where powershell.exe >nul 2>&1
 if errorlevel 1 (

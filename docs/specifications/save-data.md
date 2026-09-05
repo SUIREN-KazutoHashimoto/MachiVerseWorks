@@ -12,7 +12,7 @@ MachiVerseWorksのauthoritativeな`SimulationWorld`を停止点から同じstate
 
 ## Save format version
 
-current formatは **`formatVersion = 11`** とする。Save format versionはルート`VERSION`とProtocol versionから独立する。実装上の正本は [`SaveFormatVersion.Current`](../../src/MachiVerseWorks.Persistence/SaveFormatVersion.cs) である。
+current formatは **`formatVersion = 11`** とする。Save format versionはルート`VERSION`とProtocol versionから独立する。実装上の正本は [`SaveFormatVersion.Current`](../../src/persistence/SaveFormatVersion.cs) である。
 
 migration対象:
 

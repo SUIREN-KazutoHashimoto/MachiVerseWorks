@@ -8,7 +8,7 @@ public sealed class ObservationDeliveryTimeoutPolicyTests
     [TestMethod]
     public void MultiMessageDeliveryCreatesTimeoutBudgetInsideEachSendIteration()
     {
-        var sourcePath = Path.Combine(FindRepositoryRoot(), "src", "MachiVerseWorks.Server", "ObservationDeliveryCoordinator.cs");
+        var sourcePath = Path.Combine(FindRepositoryRoot(), "src", "server", "ObservationDeliveryCoordinator.cs");
         var source = File.ReadAllText(sourcePath);
 
         var plainLoop = source.IndexOf("foreach (var message in messages)", StringComparison.Ordinal);

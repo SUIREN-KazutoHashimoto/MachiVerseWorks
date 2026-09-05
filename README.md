@@ -32,8 +32,8 @@ MachiVerseWorks は、市民・道路交通・公共交通・物流・産業・�
 ## Current baseline
 
 - Application version: ルート[`VERSION`](VERSION)を正本とする
-- Protocol: **2.16**（正本: [`ProtocolVersion.Current`](src/MachiVerseWorks.Protocol/ProtocolVersion.cs)）
-- Save format: **11**（正本: [`SaveFormatVersion.Current`](src/MachiVerseWorks.Persistence/SaveFormatVersion.cs)）
+- Protocol: **2.16**（正本: [`ProtocolVersion.Current`](src/protocol/ProtocolVersion.cs)）
+- Save format: **11**（正本: [`SaveFormatVersion.Current`](src/persistence/SaveFormatVersion.cs)）
 - Simulation Phase 28 Radio & Spectrum Foundation: ✅ 完了
 - Simulation Phase 29 World & Physical Environment Generation: ▶️ 次
 - Gateway Roadmap: Phase 1 Observation Boundary Foundationから開始し、Simulation Phase 29 / View Phase 1と並行可能
@@ -120,11 +120,11 @@ Gatewayは現時点では`MachiVerseWorks.Server`内の責務として実装し�
 ```text
 MachiVerseWorks/
 ├─ src/
-│  ├─ MachiVerseWorks.Simulation/
-│  ├─ MachiVerseWorks.Persistence/
-│  ├─ MachiVerseWorks.Server/
-│  ├─ MachiVerseWorks.Protocol/
-│  └─ web/
+│  ├─ simulation/
+│  ├─ server/
+│  ├─ protocol/
+│  ├─ persistence/
+│  └─ view/
 ├─ tests/
 ├─ benchmarks/
 ├─ assets/

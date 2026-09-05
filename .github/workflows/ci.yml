@@ -73,14 +73,14 @@ jobs:
         run: |
           import json
           from pathlib import Path
-          package = json.loads(Path('src/web/package.json').read_text(encoding='utf-8'))
+          package = json.loads(Path('src/view/package.json').read_text(encoding='utf-8'))
           scripts = package.get('scripts')
           if not isinstance(scripts, dict):
-              raise SystemExit('src/web/package.json must contain a scripts object')
+              raise SystemExit('src/view/package.json must contain a scripts object')
           for name in ('lint', 'typecheck', 'test', 'build'):
               value = scripts.get(name)
               if not isinstance(value, str) or not value.strip():
-                  raise SystemExit(f'src/web/package.json requires a non-empty scripts.{name}')
+                  raise SystemExit(f'src/view/package.json requires a non-empty scripts.{name}')
 
       - name: Validate Markdown links
         run: python scripts/check-markdown-links.py
@@ -193,7 +193,7 @@ jobs:
           import re
           from pathlib import Path
 
-          path = Path("src/web/locales/manifest.json")
+          path = Path("src/view/locales/manifest.json")
           data = json.loads(path.read_text(encoding="utf-8"))
 
           default = data.get("defaultLocale")
@@ -247,7 +247,7 @@ jobs:
             echo "dotnet=false" >> "$GITHUB_OUTPUT"
           fi
 
-          if [[ -f src/web/package.json ]]; then
+          if [[ -f src/view/package.json ]]; then
             echo "web=true" >> "$GITHUB_OUTPUT"
           else
             echo "web=false" >> "$GITHUB_OUTPUT"
@@ -326,7 +326,7 @@ jobs:
     timeout-minutes: 15
     defaults:
       run:
-        working-directory: src/web
+        working-directory: src/view
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -335,16 +335,16 @@ jobs:
         shell: bash
         run: |
           if [[ ! -f package-lock.json ]]; then
-            echo "::error::src/web/package.json exists, but package-lock.json is missing."
+            echo "::error::src/view/package.json exists, but package-lock.json is missing."
             exit 1
           fi
 
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version-file: src/web/.node-version
+          node-version-file: src/view/.node-version
           cache: npm
-          cache-dependency-path: src/web/package-lock.json
+          cache-dependency-path: src/view/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -362,11 +362,11 @@ jobs:
         run: npm run build
 
       - name: Upload web build
-        if: ${{ hashFiles('src/web/dist/**') != '' }}
+        if: ${{ hashFiles('src/view/dist/**') != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: web-dist
-          path: src/web/dist
+          path: src/view/dist
           retention-days: 7
 
   dependency_review:

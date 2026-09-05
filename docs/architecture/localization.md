@@ -90,7 +90,7 @@ Management Clientが同じWeb presentation stackを使う場合は共通i18n ser
 
 ## 3. Locale resource
 
-Web presentation の locale resource は `src/web/locales/` を入口とします。
+Web presentation の locale resource は `src/view/locales/` を入口とします。
 
 初期段階では `ja-JP` のみを supported locale とし、実際の UI 実装を開始した時点からユーザー向け固定文言を resource key 経由にします。
 

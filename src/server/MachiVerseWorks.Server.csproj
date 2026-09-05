@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../simulation/MachiVerseWorks.Simulation.csproj" />
+    <ProjectReference Include="../protocol/MachiVerseWorks.Protocol.csproj" />
+    <ProjectReference Include="../persistence/MachiVerseWorks.Persistence.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol.AspNetCore" />
+  </ItemGroup>
+</Project>

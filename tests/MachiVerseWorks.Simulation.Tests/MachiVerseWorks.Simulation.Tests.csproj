@@ -4,6 +4,6 @@
     <UseVSTest>true</UseVSTest>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/MachiVerseWorks.Simulation/MachiVerseWorks.Simulation.csproj" />
+    <ProjectReference Include="../../src/simulation/MachiVerseWorks.Simulation.csproj" />
   </ItemGroup>
 </Project>

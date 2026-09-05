@@ -3,6 +3,6 @@
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../MachiVerseWorks.Simulation/MachiVerseWorks.Simulation.csproj" />
+    <ProjectReference Include="../simulation/MachiVerseWorks.Simulation.csproj" />
   </ItemGroup>
 </Project>

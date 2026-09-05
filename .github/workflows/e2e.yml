@@ -64,9 +64,9 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version-file: src/web/.node-version
+          node-version-file: src/view/.node-version
           cache: npm
-          cache-dependency-path: src/web/package-lock.json
+          cache-dependency-path: src/view/package-lock.json
       - name: Build shared E2E inputs
         run: source scripts/prepare-e2e.sh
       - name: Pack shared E2E inputs
@@ -75,7 +75,7 @@ jobs:
           set -euo pipefail
           mkdir -p .artifacts
           printf '%s\n' "$GITHUB_SHA" > .e2e-prepared-commit
-          tar -cf .artifacts/e2e-prepared.tar .e2e-prepared-commit src/*/bin src/*/obj src/web/node_modules src/web/dist
+          tar -cf .artifacts/e2e-prepared.tar .e2e-prepared-commit src/*/bin src/*/obj src/view/node_modules src/view/dist
       - name: Upload shared E2E inputs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -102,9 +102,9 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version-file: src/web/.node-version
+          node-version-file: src/view/.node-version
           cache: npm
-          cache-dependency-path: src/web/package-lock.json
+          cache-dependency-path: src/view/package-lock.json
       - name: Download shared E2E inputs
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:

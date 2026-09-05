@@ -25,7 +25,7 @@ Branch protection / Rulesetのrequired checkは **`CI / ci-gate`** を正本と�
 - `develop`向けPRはbase `A.B.C`から厳密に`A.(B+1).0`へ更新
 - `main`向けPRはbase `A.B.C`から厳密に`(A+1).0.0`へ更新
 - その他のPR targetはbaseより大きい`VERSION`を要求
-- `src/web/locales/manifest.json`のlocale/default整合
+- `src/view/locales/manifest.json`のlocale/default整合
 
 MarkdownやRoadmapを移動・改名した場合は、CIのMarkdown link validationを必ず通し、旧相対リンクを残さない。Roadmap責務を変更した場合は4 Roadmapと`roadmap/README.md`の依存索引も同期する。
 
@@ -145,11 +145,11 @@ license allow/deny policyは`THIRD_PARTY_NOTICES.txt`運用と合わせて定義
 | --- | --- | --- | --- |
 | GitHub Actions | `/` | Monday 09:00 JST | `github-actions` |
 | NuGet | `/` | Monday 09:10 JST | `nuget` |
-| npm | `/src/web` | Monday 09:20 JST | `npm` |
+| npm | `/src/view` | Monday 09:20 JST | `npm` |
 
 各ecosystemは`open-pull-requests-limit: 5`で、同ecosystem内updateをgroup化する。
 
-GitHub Actions update PRはfull SHA pinを更新する。NuGet / npmは`Directory.Packages.props` / project filesと`src/web/package.json` / lockfileをdependency sourceとして扱う。
+GitHub Actions update PRはfull SHA pinを更新する。NuGet / npmは`Directory.Packages.props` / project filesと`src/view/package.json` / lockfileをdependency sourceとして扱う。
 
 GitHub Code Security側のDependabot alerts / security updates等とは、version update PRを作るDependabot configurationを区別する。
 

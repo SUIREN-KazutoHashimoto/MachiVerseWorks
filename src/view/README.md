@@ -35,7 +35,7 @@ WebSocket / Protocol 2.16
                                               -> Web Audio
 ```
 
-Protocol wire layoutはC# object graphへ依存せずTypeScript側にもstable contractとして実装します。現在のnegotiation versionは[`WEB_CURRENT_PROTOCOL_VERSION`](src/person-inspection-protocol.ts)の **Protocol 2.16** です。C#側のcurrentは[`../MachiVerseWorks.Protocol/ProtocolVersion.cs`](../MachiVerseWorks.Protocol/ProtocolVersion.cs)、binary契約は[`../../docs/architecture/protocol.md`](../../docs/architecture/protocol.md)を正本とします。
+Protocol wire layoutはC# object graphへ依存せずTypeScript側にもstable contractとして実装します。現在のnegotiation versionは[`WEB_CURRENT_PROTOCOL_VERSION`](src/person-inspection-protocol.ts)の **Protocol 2.16** です。C#側のcurrentは[`../protocol/ProtocolVersion.cs`](../protocol/ProtocolVersion.cs)、binary契約は[`../../docs/architecture/protocol.md`](../../docs/architecture/protocol.md)を正本とします。
 
 ## 起動
 

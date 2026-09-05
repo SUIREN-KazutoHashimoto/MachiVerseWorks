@@ -35,7 +35,7 @@ Master mute / master volume / category volumeはAudioEngineのAPIで制御しま
 
 ## Asset ownership
 
-`src/web/audio/manifest.json` がcue metadataの正本です。Applicationはfile pathを受け取らず `audio.play("train.door.open")` のようなcue IDだけを使います。実assetは `src/web/public/audio/` から配信します。Short SFXはdecode後の`AudioBuffer`をcue ID単位でcacheします。
+`src/view/audio/manifest.json` がcue metadataの正本です。Applicationはfile pathを受け取らず `audio.play("train.door.open")` のようなcue IDだけを使います。実assetは `src/view/public/audio/` から配信します。Short SFXはdecode後の`AudioBuffer`をcue ID単位でcacheします。
 
 ## Positional audio / virtualization
 

@@ -26,11 +26,11 @@ wait_connection() { for ((index = 0; index < 300; index += 1)); do local count; 
 CHROME="$(find_chrome)"
 
 source "$ROOT_DIR/scripts/prepare-e2e.sh"
-npm --prefix "$ROOT_DIR/src/web" run dev -- --host 127.0.0.1 --port "$WEB_PORT" --strictPort >"$ARTIFACT_DIR/vite.log" 2>&1 & WEB_PID=$!
+npm --prefix "$ROOT_DIR/src/view" run dev -- --host 127.0.0.1 --port "$WEB_PORT" --strictPort >"$ARTIFACT_DIR/vite.log" 2>&1 & WEB_PID=$!
 wait_http "http://127.0.0.1:$WEB_PORT/tests/browser/phase20-e2e.html"
 
 mkfifo "$FIFO_PATH"
-env Server__Port="$SERVER_PORT" Server__SnapshotRate=10 Server__AllowedWebSocketOrigins="http://127.0.0.1:$WEB_PORT" Server__Console__Enabled=true Simulation__TickRate=30 Simulation__InitialAgentCount=0 dotnet run --project "$ROOT_DIR/src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj" --configuration Release --no-build <"$FIFO_PATH" >"$ARTIFACT_DIR/server.log" 2>&1 & SERVER_PID=$!
+env Server__Port="$SERVER_PORT" Server__SnapshotRate=10 Server__AllowedWebSocketOrigins="http://127.0.0.1:$WEB_PORT" Server__Console__Enabled=true Simulation__TickRate=30 Simulation__InitialAgentCount=0 dotnet run --project "$ROOT_DIR/src/server/MachiVerseWorks.Server.csproj" --configuration Release --no-build <"$FIFO_PATH" >"$ARTIFACT_DIR/server.log" 2>&1 & SERVER_PID=$!
 exec 3>"$FIFO_PATH"
 wait_http "http://127.0.0.1:$SERVER_PORT/health"
 

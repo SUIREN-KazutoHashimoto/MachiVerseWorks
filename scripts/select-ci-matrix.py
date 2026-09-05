@@ -63,9 +63,9 @@ SCENARIO_CASES = [
 ]
 
 E2E_CROSS_CUTTING_PREFIXES = (
-    "src/MachiVerseWorks.Persistence/",
-    "src/MachiVerseWorks.Protocol/",
-    "src/MachiVerseWorks.Server/",
+    "src/persistence/",
+    "src/protocol/",
+    "src/server/",
 )
 
 E2E_CROSS_CUTTING_FILES = {
@@ -78,9 +78,9 @@ E2E_CROSS_CUTTING_FILES = {
 }
 
 BENCHMARK_CROSS_CUTTING_PREFIXES = (
-    "src/MachiVerseWorks.Persistence/",
-    "src/MachiVerseWorks.Protocol/",
-    "src/MachiVerseWorks.Server/",
+    "src/persistence/",
+    "src/protocol/",
+    "src/server/",
 )
 
 BENCHMARK_CROSS_CUTTING_FILES = {
@@ -91,7 +91,7 @@ BENCHMARK_CROSS_CUTTING_FILES = {
     "global.json",
     "scripts/compare-benchmark-results.py",
     "scripts/select-ci-matrix.py",
-    "src/MachiVerseWorks.Simulation/Geometry.cs",
+    "src/simulation/Geometry.cs",
 }
 
 DEDICATED_BENCHMARK_FILES = {
@@ -162,11 +162,11 @@ def select_e2e(files: list[str], full: bool) -> dict[str, object]:
             selected.add(script_map[path])
             continue
 
-        if path.startswith("src/web/tests/browser/"):
+        if path.startswith("src/view/tests/browser/"):
             uncertain = True
             continue
 
-        if path.startswith("src/web/"):
+        if path.startswith("src/view/"):
             matched = False
             web_mappings = [
                 (("road", "routing"), {"road-network", "road-traffic", "signal-traffic", "multimodal-transit", "logistics", "gas"}),
@@ -195,7 +195,7 @@ def select_e2e(files: list[str], full: bool) -> dict[str, object]:
                 uncertain = True
             continue
 
-        if path.startswith("src/MachiVerseWorks.Simulation/"):
+        if path.startswith("src/simulation/"):
             if contains_any(path, ("building",)):
                 uncertain = True
                 continue
@@ -263,7 +263,7 @@ def select_benchmarks(files: list[str], full: bool) -> dict[str, object]:
     uncertain = False
 
     for path in files:
-        if path.startswith("src/web/"):
+        if path.startswith("src/view/"):
             continue
 
         if path.startswith("benchmarks/MachiVerseWorks.Benchmarks/"):
@@ -290,7 +290,7 @@ def select_benchmarks(files: list[str], full: bool) -> dict[str, object]:
                 uncertain = True
             continue
 
-        if path.startswith("src/MachiVerseWorks.Simulation/"):
+        if path.startswith("src/simulation/"):
             matched = False
             mappings = [
                 (("roadnetwork", "road-network"), {"road-network", "routing", "multimodal-transit", "logistics", "gas"}, set()),

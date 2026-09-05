@@ -133,7 +133,7 @@ Spatial cell keyも `(X,Y)` から `(X,Y,Z)` へ増えるため、cell dictionar
 ### Snapshot
 
 | Agent | 2D mean | 3D mean | 差 | Allocation |
-| ---: | ---: | ---: | ---: |
+| ---: | ---: | ---: | ---: | ---: |
 | 1,000 | 1.648 μs | 1.646 μs | -0.1% | 296 B → 296 B |
 | 10,000 | 16.246 μs | 16.281 μs | +0.2% | 6,344 B → 6,344 B |
 | 100,000 | 48.304 μs | 48.843 μs | +1.1% | 51,600 B → 51,600 B |
@@ -168,7 +168,7 @@ Phase 9の3D化による明確な実行時回帰は100,000 Agent tickで確認�
 
 ```bash
 Logging__LogLevel__MachiVerseWorks.Server.SnapshotPublishService=Debug \
-  dotnet run --project src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj
+  dotnet run --project src/server/MachiVerseWorks.Server.csproj
 ```
 
 ## 7. Web Client development overlay

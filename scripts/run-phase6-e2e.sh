@@ -59,7 +59,7 @@ CHROME="$(find_chrome)"
 echo "Preparing .NET and Web Client dependencies..."
 source "$ROOT_DIR/scripts/prepare-e2e.sh"
 
-npm --prefix "$ROOT_DIR/src/web" run dev -- --host 127.0.0.1 --port "$WEB_PORT" --strictPort \
+npm --prefix "$ROOT_DIR/src/view" run dev -- --host 127.0.0.1 --port "$WEB_PORT" --strictPort \
   >"$ARTIFACT_DIR/vite.log" 2>&1 &
 WEB_PID=$!
 wait_http "http://127.0.0.1:$WEB_PORT/tests/browser/e2e.html"
@@ -103,7 +103,7 @@ run_scenario() {
     Simulation__SpawnVolume__MaxY="$spawn_max_y" \
     Simulation__SpawnVolume__MaxZ="$spawn_max_z" \
     dotnet run \
-      --project "$ROOT_DIR/src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj" \
+      --project "$ROOT_DIR/src/server/MachiVerseWorks.Server.csproj" \
       --configuration Release --no-build \
       >"$server_log" 2>&1 &
   SERVER_PID=$!

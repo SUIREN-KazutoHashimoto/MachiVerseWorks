@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACT_DIR="$ROOT_DIR/.artifacts/view-phase04-e2e"
 BASELINE_FILE="$ROOT_DIR/docs/development/baselines/view-phase04-rendering-baseline.json"
-GOLDEN_FILE="$ROOT_DIR/src/web/tests/visual/golden/view-settlement-structure.png"
+GOLDEN_FILE="$ROOT_DIR/src/view/tests/visual/golden/view-settlement-structure.png"
 WEB_PORT=5188
 WEB_PID=""
 mkdir -p "$ARTIFACT_DIR"; rm -rf "$ARTIFACT_DIR"/*
@@ -41,13 +41,13 @@ else
 fi
 
 if [[ "${MVW_E2E_PREPARED:-0}" != "1" ]]; then
-  npm --prefix "$ROOT_DIR/src/web" ci
-  npm --prefix "$ROOT_DIR/src/web" run lint
-  npm --prefix "$ROOT_DIR/src/web" run typecheck
-  npm --prefix "$ROOT_DIR/src/web" test
-  npm --prefix "$ROOT_DIR/src/web" run build
+  npm --prefix "$ROOT_DIR/src/view" ci
+  npm --prefix "$ROOT_DIR/src/view" run lint
+  npm --prefix "$ROOT_DIR/src/view" run typecheck
+  npm --prefix "$ROOT_DIR/src/view" test
+  npm --prefix "$ROOT_DIR/src/view" run build
 fi
-npm --prefix "$ROOT_DIR/src/web" run dev -- --host 127.0.0.1 --port "$WEB_PORT" --strictPort >"$ARTIFACT_DIR/vite.log" 2>&1 & WEB_PID=$!
+npm --prefix "$ROOT_DIR/src/view" run dev -- --host 127.0.0.1 --port "$WEB_PORT" --strictPort >"$ARTIFACT_DIR/vite.log" 2>&1 & WEB_PID=$!
 
 BASELINE_URL="http://127.0.0.1:$WEB_PORT/tests/browser/view-phase04-e2e.html"
 EVOLUTION_URL="http://127.0.0.1:$WEB_PORT/tests/browser/view-phase04-evolution-e2e.html"

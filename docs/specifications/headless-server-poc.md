@@ -9,10 +9,10 @@ Headless Server は Simulation Core と Protocol を実プロセスへ接続し�
 Server は `MachiVerseWorks.Server` を単独実行できます。
 
 ```bash
-dotnet run --project src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj
+dotnet run --project src/server/MachiVerseWorks.Server.csproj
 ```
 
-既定値は `src/MachiVerseWorks.Server/appsettings.json` から読みます。
+既定値は `src/server/appsettings.json` から読みます。
 
 - listen address: `127.0.0.1`
 - port: `5080`

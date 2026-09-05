@@ -42,7 +42,7 @@ WebSocket
                                       -> Web Audio
 ```
 
-`connection.ts`はconnection lifecycle、Hello / HelloAck、binary frame decode、reconnectを所有する。現行Web Clientのnegotiation versionは[`WEB_CURRENT_PROTOCOL_VERSION`](../../src/web/src/person-inspection-protocol.ts) = **2.16**。wire contractはC# object graphへ依存せず、TypeScript側にもversioned decoderとして実装する。
+`connection.ts`はconnection lifecycle、Hello / HelloAck、binary frame decode、reconnectを所有する。現行Web Clientのnegotiation versionは[`WEB_CURRENT_PROTOCOL_VERSION`](../../src/view/src/person-inspection-protocol.ts) = **2.16**。wire contractはC# object graphへ依存せず、TypeScript側にもversioned decoderとして実装する。
 
 C#側Protocolの正本は[`protocol.md`](protocol.md)と`MachiVerseWorks.Protocol`実装である。Web側はnegotiated minorより新しいmessageを前提にせず、各specialized decoderが対応minimum versionを検証する。
 
