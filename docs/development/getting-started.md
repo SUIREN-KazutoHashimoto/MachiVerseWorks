@@ -140,7 +140,7 @@ npm run build
 Terminal 1:
 
 ```bash
-dotnet run --project src/gateway/MachiVerseWorks.Server.csproj
+dotnet run --project src/server/MachiVerseWorks.Server.csproj
 ```
 
 Terminal 2:
