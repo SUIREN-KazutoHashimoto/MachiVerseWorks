@@ -7,6 +7,7 @@ import type { ReadonlyRoadNetworkStore } from './road-network-store.ts';
 import { LaneDirection, RoadNodeKind, type Lane, type WorldVolume } from './protocol.ts';
 import type { ReadonlyIntersectionControlStore, ReadonlyVehicleStore } from './traffic-store.ts';
 import { SignalIndication } from './traffic-protocol.ts';
+import { configureRendererPresentation, installEnvironmentLighting } from './view-rendering-quality.ts';
 import type { ReadonlyWorldEnvironmentStore } from './world-environment-store.ts';
 
 const CAMERA_FOV_DEGREES = 55;
@@ -40,6 +41,7 @@ export class WorldView {
   public readonly camera = new THREE.PerspectiveCamera(CAMERA_FOV_DEGREES, 1, CAMERA_NEAR, CAMERA_FAR);
   public readonly renderer = new THREE.WebGLRenderer({ antialias: true });
 
+  private readonly environmentLighting: ReturnType<typeof installEnvironmentLighting>;
   private readonly physicalWorldRenderer: PhysicalWorldRenderer;
   private readonly agentRenderer: AgentRenderer;
   private readonly pedestrianRenderer: PedestrianRenderer;
@@ -50,11 +52,12 @@ export class WorldView {
   private maximumObservationDistance = DEFAULT_OBSERVATION_DISTANCE;
 
   public constructor(private readonly host: HTMLElement) {
-    this.scene.background = new THREE.Color(0x0b1020);
     this.camera.position.set(0, CAMERA_HEIGHT, 0);
     this.camera.up.set(0, 1, 0);
     this.camera.lookAt(0, 0, -CAMERA_TILT_DISTANCE);
 
+    configureRendererPresentation(this.renderer);
+    this.environmentLighting = installEnvironmentLighting(this.scene);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.domElement.setAttribute('aria-label', 'MachiVerseWorks world view');
     this.host.append(this.renderer.domElement);
@@ -136,6 +139,7 @@ export class WorldView {
     this.pedestrianRenderer.dispose();
     this.vehicleRenderer.dispose();
     this.intersectionRenderer.dispose();
+    this.scene.remove(this.environmentLighting.hemisphere, this.environmentLighting.sun);
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
@@ -237,9 +241,9 @@ export function computeLaneCenterOffsets(lanes: readonly Lane[]): ReadonlyMap<bi
 export function simulationToThreePosition(x: number, y: number, z: number, target = new THREE.Vector3()): THREE.Vector3 { return target.set(x, z, y); }
 
 class RoadNetworkRenderer {
-  private readonly roadMaterial = new THREE.LineBasicMaterial({ color: 0x94a3b8 });
+  private readonly roadMaterial = new THREE.LineBasicMaterial({ color: 0x334155 });
   private readonly laneMaterial = new THREE.LineBasicMaterial({ color: 0xf8fafc });
-  private readonly intersectionMaterial = new THREE.PointsMaterial({ color: 0xf59e0b, size: 9, sizeAttenuation: false });
+  private readonly intersectionMaterial = new THREE.PointsMaterial({ color: 0xd97706, size: 9, sizeAttenuation: false });
   private readonly roadLines = new THREE.LineSegments(new THREE.BufferGeometry(), this.roadMaterial);
   private readonly laneLines = new THREE.LineSegments(new THREE.BufferGeometry(), this.laneMaterial);
   private readonly intersections = new THREE.Points(new THREE.BufferGeometry(), this.intersectionMaterial);

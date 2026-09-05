@@ -22,23 +22,23 @@ export interface GeographicFeatureVisual {
 
 export function resolveTerrainMaterialVisual(kind: TerrainMaterialKind): TerrainMaterialVisual {
   switch (kind) {
-    case TerrainMaterialKind.Water: return { color: 0x1d4ed8, label: 'water' };
-    case TerrainMaterialKind.Sand: return { color: 0xe0bd72, label: 'sand' };
-    case TerrainMaterialKind.Soil: return { color: 0x4f7a3a, label: 'soil' };
-    case TerrainMaterialKind.Rock: return { color: 0x6b7280, label: 'rock' };
-    case TerrainMaterialKind.Snow: return { color: 0xf1f5f9, label: 'snow' };
-    case TerrainMaterialKind.Gravel: return { color: 0x94a3b8, label: 'gravel' };
+    case TerrainMaterialKind.Water: return { color: 0x4f88b5, label: 'water' };
+    case TerrainMaterialKind.Sand: return { color: 0xd6c18b, label: 'sand' };
+    case TerrainMaterialKind.Soil: return { color: 0x6f8d55, label: 'soil' };
+    case TerrainMaterialKind.Rock: return { color: 0x7c8387, label: 'rock' };
+    case TerrainMaterialKind.Snow: return { color: 0xf5f7f8, label: 'snow' };
+    case TerrainMaterialKind.Gravel: return { color: 0xa5a9a6, label: 'gravel' };
   }
 }
 
 export function resolveSurfaceWaterVisual(kind: SurfaceWaterKind): SurfaceWaterVisual | null {
   switch (kind) {
     case SurfaceWaterKind.None: return null;
-    case SurfaceWaterKind.Ocean: return { color: 0x1d4ed8, pointSize: 18, label: 'ocean' };
-    case SurfaceWaterKind.Lake: return { color: 0x2563eb, pointSize: 16, label: 'lake' };
-    case SurfaceWaterKind.River: return { color: 0x0ea5e9, pointSize: 14, label: 'river' };
-    case SurfaceWaterKind.Tributary: return { color: 0x38bdf8, pointSize: 12, label: 'tributary' };
-    case SurfaceWaterKind.Floodplain: return { color: 0x67e8f9, pointSize: 10, label: 'floodplain' };
+    case SurfaceWaterKind.Ocean: return { color: 0x2f6f9f, pointSize: 18, label: 'ocean' };
+    case SurfaceWaterKind.Lake: return { color: 0x3a82b5, pointSize: 16, label: 'lake' };
+    case SurfaceWaterKind.River: return { color: 0x2f92c7, pointSize: 14, label: 'river' };
+    case SurfaceWaterKind.Tributary: return { color: 0x54add3, pointSize: 12, label: 'tributary' };
+    case SurfaceWaterKind.Floodplain: return { color: 0x76bfc4, pointSize: 10, label: 'floodplain' };
   }
 }
 
