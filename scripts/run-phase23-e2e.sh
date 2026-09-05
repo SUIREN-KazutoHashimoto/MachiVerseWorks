@@ -18,10 +18,10 @@ wait_http() { local url="$1"; for ((index = 0; index < 300; index += 1)); do if 
 CHROME="$(find_chrome)"
 
 source "$ROOT_DIR/scripts/prepare-e2e.sh"
-npm --prefix "$ROOT_DIR/src/web" run dev -- --host 127.0.0.1 --port "$WEB_PORT" --strictPort >"$ARTIFACT_DIR/vite.log" 2>&1 & WEB_PID=$!
+npm --prefix "$ROOT_DIR/src/view" run dev -- --host 127.0.0.1 --port "$WEB_PORT" --strictPort >"$ARTIFACT_DIR/vite.log" 2>&1 & WEB_PID=$!
 wait_http "http://127.0.0.1:$WEB_PORT/tests/browser/phase23-e2e.html"
 
-env Server__Port="$SERVER_PORT" Server__TickRate=120 Server__SnapshotRate=30 Server__AllowedWebSocketOrigins="http://127.0.0.1:$WEB_PORT" Simulation__InitialAgentCount=0 Simulation__PowerFixture=true dotnet run --project "$ROOT_DIR/src/MachiVerseWorks.Server/MachiVerseWorks.Server.csproj" --configuration Release --no-build >"$ARTIFACT_DIR/server.log" 2>&1 & SERVER_PID=$!
+env Server__Port="$SERVER_PORT" Server__TickRate=120 Server__SnapshotRate=30 Server__AllowedWebSocketOrigins="http://127.0.0.1:$WEB_PORT" Simulation__InitialAgentCount=0 Simulation__PowerFixture=true dotnet run --project "$ROOT_DIR/src/gateway/MachiVerseWorks.Server.csproj" --configuration Release --no-build >"$ARTIFACT_DIR/server.log" 2>&1 & SERVER_PID=$!
 wait_http "http://127.0.0.1:$SERVER_PORT/health"
 BROWSER_URL="http://127.0.0.1:$WEB_PORT/tests/browser/phase23-e2e.html?server=ws%3A%2F%2F127.0.0.1%3A$SERVER_PORT%2Fws"
 node "$ROOT_DIR/scripts/run-headless-browser-e2e.mjs" "$CHROME" "$BROWSER_URL" "$ARTIFACT_DIR/browser.html" "$ARTIFACT_DIR/chrome.log"
