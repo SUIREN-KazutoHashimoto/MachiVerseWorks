@@ -103,7 +103,7 @@ run_scenario() {
     Simulation__SpawnVolume__MaxY="$spawn_max_y" \
     Simulation__SpawnVolume__MaxZ="$spawn_max_z" \
     dotnet run \
-      --project "$ROOT_DIR/src/gateway/MachiVerseWorks.Server.csproj" \
+      --project "$ROOT_DIR/src/server/MachiVerseWorks.Server.csproj" \
       --configuration Release --no-build \
       >"$server_log" 2>&1 &
   SERVER_PID=$!
