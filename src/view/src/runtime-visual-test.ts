@@ -43,6 +43,11 @@ const DEBUG_OVERLAY_SELECTOR = [
   '[data-radio-debug="true"]',
 ].join(',');
 
+// WorldView currently observes up to 3,000 simulation units. Keep deterministic
+// checkpoints comfortably inside that depth so moving the camera cannot put the
+// checkpoint target itself outside the next subscription volume.
+const MAXIMUM_RUNTIME_CHECKPOINT_FOCUS_DISTANCE = 2_400;
+
 export function installRuntimeVisualTest(application: Application): void {
   const api: RuntimeVisualTestApi = Object.freeze({
     getDiagnostics: () => collectRuntimeDiagnostics(application),
@@ -82,24 +87,23 @@ function positionCheckpoint(application: Application, checkpoint: RuntimeVisualC
 
   let minX = Number.POSITIVE_INFINITY;
   let minY = Number.POSITIVE_INFINITY;
-  let minZ = Number.POSITIVE_INFINITY;
   let maxX = Number.NEGATIVE_INFINITY;
   let maxY = Number.NEGATIVE_INFINITY;
-  let maxZ = Number.NEGATIVE_INFINITY;
   for (const building of buildings) {
-    minX = Math.min(minX, building.minX); minY = Math.min(minY, building.minY); minZ = Math.min(minZ, building.minZ);
-    maxX = Math.max(maxX, building.maxX); maxY = Math.max(maxY, building.maxY); maxZ = Math.max(maxZ, building.maxZ);
-  }
-  if (nearestRoadNode !== undefined) {
-    minX = Math.min(minX, nearestRoadNode.x); minY = Math.min(minY, nearestRoadNode.y); minZ = Math.min(minZ, nearestRoadNode.z);
-    maxX = Math.max(maxX, nearestRoadNode.x); maxY = Math.max(maxY, nearestRoadNode.y); maxZ = Math.max(maxZ, nearestRoadNode.z);
+    minX = Math.min(minX, building.minX); minY = Math.min(minY, building.minY);
+    maxX = Math.max(maxX, building.maxX); maxY = Math.max(maxY, building.maxY);
   }
   const span = Math.max(maxX - minX, maxY - minY, 250);
-  const distance = clamp(span * 1.15, 450, 8_000);
+  const distance = clamp(span * 1.15, 450, MAXIMUM_RUNTIME_CHECKPOINT_FOCUS_DISTANCE);
+  // Anchor the overview on delivered road activity instead of the potentially
+  // kilometre-wide building bounds. The selected settlement is already the one
+  // nearest to the current Road snapshot, so this keeps both the city and its
+  // transport activity inside the deterministic runtime subscription.
+  const focus = nearestRoadNode ?? settlement;
   return application.focus(createStaticNavigationTarget(
     'position',
     'runtime-city-overview',
-    { x: (minX + maxX) * 0.5, y: (minY + maxY) * 0.5, z: (minZ + maxZ) * 0.5 },
+    { x: focus.x, y: focus.y, z: focus.z },
     250 / distance,
   ));
 }
